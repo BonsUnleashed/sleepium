@@ -24,6 +24,10 @@ public final class ProbeMod {
 
     public ProbeMod(IEventBus modBus) {
         IEventBus gameBus = NeoForge.EVENT_BUS;
+        // Which layer/loader owns the bus? Mixin can only transform classes of the GAME layer (TransformingClassLoader).
+        LOGGER.info("probe: bus class {} module {} loader {}; game class loader {}", gameBus.getClass().getName(),
+                gameBus.getClass().getModule(), gameBus.getClass().getClassLoader(),
+                net.minecraft.server.MinecraftServer.class.getClassLoader());
         TickTimer.INSTANCE.register(gameBus);
         EventCounter.INSTANCE.attach(gameBus);
         EventBench.registerListeners(gameBus);

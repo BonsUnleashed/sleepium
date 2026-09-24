@@ -40,6 +40,8 @@ final class EventBench {
         gameBus.addListener(OneListenerEvent.class, e -> sink++);
         gameBus.addListener(CancellableEvent.class, e -> sink++);
         gameBus.register(ScaleListeners.class);   // 211 distinct static listener methods
+        ScaleListeners.registerConsumers(gameBus); // 100 distinct lambda listeners
+        BusEquivalence.register(gameBus);
     }
 
     record Result(String name, double nsPerOp, double bytesPerOp) {
