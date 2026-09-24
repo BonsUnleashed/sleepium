@@ -1,9 +1,12 @@
 package dev.lab.runtime;
 
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.VarHandle;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.AbstractExecutorService;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.LongAdder;
@@ -14,19 +17,23 @@ import java.util.function.IntConsumer;
  * One elastic, persistent worker pool per entry point (client, server).
  *
  * <ul>
- *   <li><b>Threads</b>: {@code maxWorkers} are created once in the constructor and never die until {@link #shutdown()}.
- *       "Elastic" means woken on demand, not created: idle workers are parked and cost nothing.</li>
- *   <li><b>Lanes</b>: three preallocated MPMC rings, checked in priority order TICK → (own deque) → CHUNK → BACKGROUND.
- *       Submissions from a worker of this runtime go to its own Chase–Lev deque (LIFO, cache-hot; others steal FIFO).
- *       Rings never block: when full, a task goes to an unbounded overflow queue (counted, should stay ~0).</li>
- *   <li><b>Wake protocol</b>: at most {@code maxSpinners} workers spin for {@code spinNanos} looking for work before
- *       parking. A submitter wakes one parked worker only if nobody is spinning. A worker that finds work while more
- *       remains wakes one more (wake chaining), so the active count follows the backlog: 1 for a trickle, all under load.
- *       Park: set own bit in {@code parkedMask} → re-check for work → park. Wake: CAS-clear a bit → unpark that thread.
- *       No lost wake-ups: both sides use sequentially consistent CAS on the mask around the queue check.</li>
- *   <li><b>OS priority</b>: workers run BELOW_NORMAL, so they never take time from the server/render thread.</li>
- *   <li><b>Tick fan-out</b>: {@link #forRange} splits an index range across the caller and woken workers with a shared
- *       claim counter (chunks), a preallocated job object and a spin-then-park barrier. No allocation per call.</li>
+ *   <li><b>Threads</b>: {@code maxWorkers} {@link LabThread}s are created once in the constructor and live until
+ *       {@link #shutdown()}. "Elastic" = woken on demand, never created on demand. Parked workers cost nothing.</li>
+ *   <li><b>Lanes, sharded</b>: each priority lane (TICK, CHUNK, BACKGROUND) has {@code shards} preallocated MPMC rings.
+ *       An external submitter always uses the shard picked by its thread id, so different producers do not fight
+ *       over one head/tail cache line. A worker scans shards starting at its own index. When a ring is full the task
+ *       goes to a per-lane overflow queue (counted; should stay ~0).</li>
+ *   <li><b>Local deques</b>: a task submitted by a worker of this runtime goes to that worker's Chase–Lev deque
+ *       (LIFO, cache-hot); idle workers steal FIFO. The current worker is found through the {@link LabThread} field,
+ *       not a ThreadLocal lookup.</li>
+ *   <li><b>Wake protocol</b>: at most {@code maxSpinners} workers spin for {@code spinNanos} before parking. A submitter
+ *       wakes one parked worker only if nobody spins. A worker that takes a task from a shared source that still has a
+ *       backlog wakes one more (wake chaining), so the active count follows the load. Park: set own bit → re-check →
+ *       park. Wake: CAS-clear a bit → unpark. No lost wake-ups (sequentially consistent CAS around the queue check).</li>
+ *   <li><b>OS priority</b>: BELOW_NORMAL by default ({@code -Dlab.runtime.priority}), so the pool yields to the server
+ *       and render threads.</li>
+ *   <li><b>Tick fan-out</b>: {@link #forRange} runs an index range on the caller plus woken workers with a shared claim
+ *       counter and a spin-then-park barrier.</li>
  * </ul>
  */
 public final class LabRuntime extends AbstractExecutorService {
@@ -35,41 +42,59 @@ public final class LabRuntime extends AbstractExecutorService {
     public record Config(String name, int maxWorkers, int maxSpinners, long spinNanos, int osPriority,
                          int laneCapacity, int dequeCapacity, boolean daemon) {
         public static Config of(String name, int maxWorkers) {
-            return new Config(name, maxWorkers, 1, 20_000, Integer.getInteger("lab.runtime.priority", OsThreads.BELOW_NORMAL), 1 << 16, 1 << 12, true);
+            return new Config(name, maxWorkers, 1, 20_000, Integer.getInteger("lab.runtime.priority", OsThreads.BELOW_NORMAL),
+                    1 << 14, 1 << 12, true);
+        }
+    }
+
+    /** Worker thread carrying its own state: "thread-local by construction", no ThreadLocal lookups. */
+    public static final class LabThread extends Thread {
+        final LabRuntime owner;
+        final Worker worker;
+
+        LabThread(LabRuntime owner, Worker worker, String name) {
+            super(worker, name);
+            this.owner = owner;
+            this.worker = worker;
+        }
+    }
+
+    private static final VarHandle MASK;
+
+    static {
+        try {
+            MASK = MethodHandles.lookup().findVarHandle(LabRuntime.class, "parkedMask", long.class);
+        } catch (ReflectiveOperationException e) {
+            throw new ExceptionInInitializerError(e);
         }
     }
 
     final Config cfg;
     private final Worker[] workers;
-    private final MpmcRing[] lanes = new MpmcRing[3];
-    @SuppressWarnings("unchecked")
+    private final int shardMask;
+    /** rings[lane * shards + shard] */
+    private final MpmcRing[] rings;
+    @SuppressWarnings({"unchecked", "rawtypes"})
     private final ConcurrentLinkedQueue<Runnable>[] overflow = new ConcurrentLinkedQueue[3];
-    /** bit i set = worker i is parked (or about to park). Accessed only via MASK (CAS / atomic or/and). */
+    /** bit i set = worker i parked (or about to park). */
     private volatile long parkedMask;
-    private static final java.lang.invoke.VarHandle MASK;
-
-    static {
-        try {
-            MASK = java.lang.invoke.MethodHandles.lookup().findVarHandle(LabRuntime.class, "parkedMask", long.class);
-        } catch (ReflectiveOperationException e) {
-            throw new ExceptionInInitializerError(e);
-        }
-    }
     private final AtomicInteger spinners = new AtomicInteger();
     private volatile boolean shutdown;
-    private final ThreadLocal<Worker> current = new ThreadLocal<>();
+    private volatile RangeJob tickJob;
+    /** set by TICK-lane submitters; lets workers skip scanning the (usually empty) TICK rings */
+    private volatile boolean tickLaneHint;
 
-    // metrics (LongAdder: per-thread cells, no shared cache line on the hot path)
     public final LongAdder executed = new LongAdder(), localPushes = new LongAdder(), steals = new LongAdder(),
             parks = new LongAdder(), wakes = new LongAdder(), overflowed = new LongAdder(), failures = new LongAdder();
 
     public LabRuntime(Config cfg) {
         if (cfg.maxWorkers < 1 || cfg.maxWorkers > 63) throw new IllegalArgumentException("1..63 workers");
         this.cfg = cfg;
-        for (int i = 0; i < 3; i++) {
-            lanes[i] = new MpmcRing(cfg.laneCapacity);
-            overflow[i] = new ConcurrentLinkedQueue<>();
-        }
+        int shards = Integer.highestOneBit(Math.max(1, cfg.maxWorkers) * 2 - 1);   // next power of two >= workers
+        this.shardMask = shards - 1;
+        this.rings = new MpmcRing[3 * shards];
+        for (int i = 0; i < rings.length; i++) rings[i] = new MpmcRing(cfg.laneCapacity);
+        for (int i = 0; i < 3; i++) overflow[i] = new ConcurrentLinkedQueue<>();
         workers = new Worker[cfg.maxWorkers];
         for (int i = 0; i < workers.length; i++) workers[i] = new Worker(i);
         for (Worker w : workers) w.thread.start();
@@ -85,10 +110,8 @@ public final class LabRuntime extends AbstractExecutorService {
         return l;
     }
 
-    /** True if the calling thread is a worker of this runtime. */
     public boolean inWorker() {
-        Worker w = current.get();
-        return w != null && w.owner == this;
+        return Thread.currentThread() instanceof LabThread t && t.owner == this;
     }
 
     // ------------------------------------------------------------------ submission
@@ -100,25 +123,26 @@ public final class LabRuntime extends AbstractExecutorService {
 
     public void execute(Runnable task, Lane lane) {
         if (task == null) throw new NullPointerException();
-        if (shutdown) throw new java.util.concurrent.RejectedExecutionException(cfg.name + " is shut down");
-        Worker w = current.get();
-        if (w != null && w.owner == this && lane != Lane.TICK) {
-            boolean surplus = !w.deque.isEmpty();          // the owner will run the newest task itself (LIFO)
-            if (w.deque.push(task)) {
-                localPushes.increment();
-                if (surplus) signalWork();                 // only extra work justifies waking a sibling
-                return;
-            }
-        }
-        if (!lanes[lane.ordinal()].offer(task)) {
-            overflow[lane.ordinal()].add(task);
-            overflowed.increment();
-        }
-        signalWork();
+        Thread ct = Thread.currentThread();
+        if (ct instanceof LabThread lt && lt.owner == this && lane != Lane.TICK && pushLocal(lt.worker, task)) return;
+        int shard = (int) ct.threadId() & shardMask;
+        if (!rings[lane.ordinal() * (shardMask + 1) + shard].offer(task)) submitSlow(task, lane);
+        if (lane == Lane.TICK && !tickLaneHint) tickLaneHint = true;
+        if (spinners.get() == 0) wakeOne();
     }
 
-    private void signalWork() {
-        if (spinners.get() == 0) wakeOne();
+    private boolean pushLocal(Worker w, Runnable task) {
+        boolean surplus = !w.deque.isEmpty();   // the owner runs the newest task itself next (LIFO)
+        if (!w.deque.push(task)) return false;
+        localPushes.increment();
+        if (surplus && spinners.get() == 0) wakeOne();
+        return true;
+    }
+
+    private void submitSlow(Runnable task, Lane lane) {
+        if (shutdown) throw new RejectedExecutionException(cfg.name + " is shut down");
+        overflow[lane.ordinal()].add(task);
+        overflowed.increment();
     }
 
     private boolean wakeOne() {
@@ -135,125 +159,148 @@ public final class LabRuntime extends AbstractExecutorService {
     }
 
     boolean hasWork() {
-        for (int i = 0; i < 3; i++) {
-            if (!lanes[i].isEmpty() || !overflow[i].isEmpty()) return true;
-        }
-        for (Worker w : workers) {
-            if (!w.deque.isEmpty()) return true;
-        }
-        return tickPending();
+        for (MpmcRing r : rings) if (!r.isEmpty()) return true;
+        for (int i = 0; i < 3; i++) if (!overflow[i].isEmpty()) return true;
+        for (Worker w : workers) if (!w.deque.isEmpty()) return true;
+        RangeJob j = tickJob;
+        return j != null && j.hasUnclaimed();
     }
 
     // ------------------------------------------------------------------ workers
 
-    private final class Worker implements Runnable {
+    final class Worker implements Runnable {
         final int id;
         final long bit;
         final WorkDeque deque;
-        final Thread thread;
-        final LabRuntime owner = LabRuntime.this;
+        final LabThread thread;
         boolean spinning;
         int stealStart;
-        /** Where find() took the last task from: -1 own deque, 0..2 lane, 3 stolen (victim in lastVictim). */
-        int lastSource;
-        Worker lastVictim;
-        boolean lastSourceShared;
-
-        boolean lastSourceNonEmpty() {
-            if (lastSource >= 0 && lastSource <= 2) return !lanes[lastSource].isEmpty() || !overflow[lastSource].isEmpty();
-            return lastSource == 3 && lastVictim != null && !lastVictim.deque.isEmpty();
-        }
+        /** true if the last task came from a shared source (ring/overflow/steal) that may still hold more */
+        boolean lastShared;
+        Object lastSource;
 
         Worker(int id) {
             this.id = id;
             this.bit = 1L << id;
             this.deque = new WorkDeque(cfg.dequeCapacity);
-            this.thread = new Thread(this, cfg.name + "-" + id);
+            this.thread = new LabThread(LabRuntime.this, this, cfg.name + "-" + id);
             this.thread.setDaemon(cfg.daemon);
             this.stealStart = id + 1;
         }
 
         @Override
         public void run() {
-            current.set(this);
             OsThreads.setCurrentPriority(cfg.osPriority);
             while (!shutdown || hasWork()) {
-                if (helpTick()) continue;                    // TICK fan-out has absolute priority
+                RangeJob j = tickJob;
+                if (j != null && j.hasUnclaimed()) {       // TICK fan-out has absolute priority
+                    j.drain();
+                    continue;
+                }
                 Runnable t = find();
                 if (t != null) {
                     if (spinning) {
                         spinning = false;
                         spinners.decrementAndGet();
                     }
-                    // wake chaining: the source we took from still has a backlog -> one more worker (cheap check)
-                    if (lastSourceShared && spinners.get() == 0 && parkedMask != 0 && lastSourceNonEmpty()) wakeOne();
+                    if (lastShared && parkedMask != 0 && spinners.get() == 0 && sourceHasMore()) wakeOne();
                     runTask(t);
                     continue;
                 }
-                // spin phase: at most cfg.maxSpinners workers spin, the rest go straight to park
-                if (!spinning) {
-                    if (spinners.incrementAndGet() <= cfg.maxSpinners) spinning = true;
-                    else spinners.decrementAndGet();
-                }
-                if (spinning) {
-                    long deadline = System.nanoTime() + cfg.spinNanos;
-                    boolean found = false;
-                    while (System.nanoTime() < deadline) {
-                        if (hasWork()) {
-                            found = true;
-                            break;
-                        }
-                        Thread.onSpinWait();
-                    }
-                    if (found) continue;
-                    spinning = false;
-                    spinners.decrementAndGet();
-                }
-                // park phase: publish "parked" -> re-check -> park (no lost wake-ups)
-                MASK.getAndBitwiseOr(LabRuntime.this, bit);
-                if (hasWork() || shutdown) {
-                    clearOwnBit();
-                    continue;
-                }
-                parks.increment();
-                LockSupport.park(owner);
-                clearOwnBit();   // spurious wake-ups leave the bit set
+                idle();
             }
         }
 
-        private void clearOwnBit() {
-            MASK.getAndBitwiseAnd(LabRuntime.this, ~bit);
+        private boolean sourceHasMore() {
+            Object s = lastSource;
+            if (s instanceof MpmcRing r) return !r.isEmpty();
+            if (s instanceof WorkDeque d) return !d.isEmpty();
+            if (s instanceof ConcurrentLinkedQueue<?> q) return !q.isEmpty();
+            return false;
         }
 
+        /** Priority order: TICK lane, own deque, CHUNK lane, BACKGROUND lane, then steal. */
         private Runnable find() {
-            lastSourceShared = true;
-            lastSource = 0;
-            Object t = lanes[0].poll();
-            if (t == null) t = overflow[0].poll();
-            if (t == null) {
-                t = deque.pop();
-                if (t != null) { lastSource = -1; lastSourceShared = false; return (Runnable) t; }
+            Object t = null;
+            if (tickLaneHint) {
+                t = pollLane(0);
+                if (t != null) return (Runnable) t;
+                tickLaneHint = false;                        // drained (a racing submitter sets it again)
+                t = pollLane(0);                             // re-check after clearing: no lost TICK task
+                if (t != null) return (Runnable) t;
             }
-            if (t == null) { lastSource = 1; t = lanes[1].poll(); }
-            if (t == null) t = overflow[1].poll();
-            if (t == null) { lastSource = 2; t = lanes[2].poll(); }
-            if (t == null) t = overflow[2].poll();
-            if (t == null && workers.length > 1) {
-                lastSource = 3;
-                int n = workers.length;
-                for (int k = 0; k < n; k++) {
-                    Worker v = workers[(stealStart + k) % n];
-                    if (v == this) continue;
-                    t = v.deque.steal();
-                    if (t != null) {
-                        steals.increment();
-                        stealStart = v.id;   // stay on a productive victim
-                        lastVictim = v;
-                        break;
-                    }
+            if (!deque.isEmpty()) {                          // pop() has a full fence: skip it when empty
+                t = deque.pop();
+                if (t != null) {
+                    lastShared = false;
+                    return (Runnable) t;
                 }
             }
+            t = pollLane(1);
+            if (t == null) t = pollLane(2);
+            if (t == null) t = steal();
             return (Runnable) t;
+        }
+
+        private Object pollLane(int lane) {
+            int n = shardMask + 1, base = lane * n;
+            for (int k = 0; k < n; k++) {
+                MpmcRing r = rings[base + ((id + k) & shardMask)];
+                Object t = r.poll();
+                if (t != null) {
+                    lastShared = true;
+                    lastSource = r;
+                    return t;
+                }
+            }
+            Object t = overflow[lane].poll();
+            if (t != null) {
+                lastShared = true;
+                lastSource = overflow[lane];
+            }
+            return t;
+        }
+
+        private Object steal() {
+            int n = workers.length;
+            if (n < 2) return null;
+            for (int k = 0; k < n; k++) {
+                Worker v = workers[(stealStart + k) % n];
+                if (v == this) continue;
+                Object t = v.deque.steal();
+                if (t != null) {
+                    steals.increment();
+                    stealStart = v.id;
+                    lastShared = true;
+                    lastSource = v.deque;
+                    return t;
+                }
+            }
+            return null;
+        }
+
+        private void idle() {
+            if (!spinning) {
+                if (spinners.incrementAndGet() <= cfg.maxSpinners) spinning = true;
+                else spinners.decrementAndGet();
+            }
+            if (spinning) {
+                long deadline = System.nanoTime() + cfg.spinNanos;
+                while (System.nanoTime() < deadline) {
+                    if (hasWork()) return;
+                    Thread.onSpinWait();
+                }
+                spinning = false;
+                spinners.decrementAndGet();
+            }
+            MASK.getAndBitwiseOr(LabRuntime.this, bit);   // publish "parked"
+            if (hasWork() || shutdown) {                   // re-check: a submitter may have missed our bit
+                MASK.getAndBitwiseAnd(LabRuntime.this, ~bit);
+                return;
+            }
+            parks.increment();
+            LockSupport.park(LabRuntime.this);
+            MASK.getAndBitwiseAnd(LabRuntime.this, ~bit);  // spurious wake-ups leave the bit set
         }
     }
 
@@ -272,25 +319,10 @@ public final class LabRuntime extends AbstractExecutorService {
 
     // ------------------------------------------------------------------ tick fan-out (TICK lane)
 
-    /** The job currently being fanned out (null = none). One immutable object per forRange call. */
-    private volatile RangeJob tickJob;
-
-    boolean tickPending() {
-        RangeJob j = tickJob;
-        return j != null && j.hasUnclaimed();
-    }
-
-    private boolean helpTick() {
-        RangeJob j = tickJob;
-        if (j == null || !j.hasUnclaimed()) return false;
-        j.drain();
-        return true;
-    }
-
     /**
      * Runs {@code body.accept(i)} for every i in [0, n) on the calling thread plus up to {@code helpers} workers and
-     * returns when all indices are done (barrier). Indices are claimed in chunks from one shared counter.
-     * One call at a time (the server thread). Exceptions from the body are rethrown after the barrier.
+     * returns when all indices are done (barrier). One call at a time (the server thread). Exceptions from the body
+     * are rethrown on the caller after the barrier.
      */
     public void forRange(int n, int chunk, int helpers, IntConsumer body) {
         if (n <= 0) return;
@@ -298,10 +330,8 @@ public final class LabRuntime extends AbstractExecutorService {
         RangeJob job = new RangeJob(n, c, body, Thread.currentThread());
         tickJob = job;
         int wake = Math.min(Math.min(helpers, workers.length), (n + c - 1) / c - 1);
-        for (int i = 0; i < wake; i++) {
-            if (!wakeOne()) break;   // spinners (if any) pick the job up anyway
-        }
-        job.drain();                 // the caller participates
+        for (int i = 0; i < wake; i++) if (!wakeOne()) break;
+        job.drain();
         job.await(cfg.spinNanos);
         tickJob = null;
         Throwable t = job.error;
@@ -343,9 +373,7 @@ public final class LabRuntime extends AbstractExecutorService {
                 }
                 done += e - s;
             }
-            if (done > 0 && remaining.addAndGet(-done) == 0 && Thread.currentThread() != waiter) {
-                LockSupport.unpark(waiter);
-            }
+            if (done > 0 && remaining.addAndGet(-done) == 0 && Thread.currentThread() != waiter) LockSupport.unpark(waiter);
         }
 
         void await(long spinNanos) {
@@ -369,10 +397,8 @@ public final class LabRuntime extends AbstractExecutorService {
     public List<Runnable> shutdownNow() {
         shutdown();
         List<Runnable> left = new ArrayList<>();
-        for (int i = 0; i < 3; i++) {
-            for (Object t; (t = lanes[i].poll()) != null; ) left.add((Runnable) t);
-            for (Runnable t; (t = overflow[i].poll()) != null; ) left.add(t);
-        }
+        for (MpmcRing r : rings) for (Object t; (t = r.poll()) != null; ) left.add((Runnable) t);
+        for (int i = 0; i < 3; i++) for (Runnable t; (t = overflow[i].poll()) != null; ) left.add(t);
         return left;
     }
 
@@ -401,8 +427,8 @@ public final class LabRuntime extends AbstractExecutorService {
 
     public String stats() {
         return String.format(java.util.Locale.ROOT,
-                "%s: workers %d, executed %d, local %d, steals %d, parks %d, wakes %d, overflow %d, failures %d",
-                cfg.name, workers.length, executed.sum(), localPushes.sum(), steals.sum(), parks.sum(), wakes.sum(),
-                overflowed.sum(), failures.sum());
+                "%s: workers %d, shards %d, executed %d, local %d, steals %d, parks %d, wakes %d, overflow %d, failures %d",
+                cfg.name, workers.length, shardMask + 1, executed.sum(), localPushes.sum(), steals.sum(), parks.sum(),
+                wakes.sum(), overflowed.sum(), failures.sum());
     }
 }

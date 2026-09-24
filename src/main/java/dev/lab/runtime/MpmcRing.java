@@ -65,7 +65,20 @@ final class MpmcRing {
         }
     }
 
+    /** Fast path kept small so C2 inlines it into the worker loop; the retry loop lives in pollSlow(). */
     Object poll() {
+        long pos = (long) HEAD.getVolatile(this);
+        int i = (int) pos & mask;
+        long s = (long) SEQ.getAcquire(seq, i);
+        if (s != pos + 1) return s < pos + 1 ? null : pollSlow();
+        if (!HEAD.compareAndSet(this, pos, pos + 1)) return pollSlow();
+        Object x = items[i];
+        items[i] = null;
+        SEQ.setRelease(seq, i, pos + mask + 1);
+        return x;
+    }
+
+    private Object pollSlow() {
         long pos = (long) HEAD.getVolatile(this);
         for (;;) {
             int i = (int) pos & mask;
@@ -75,13 +88,13 @@ final class MpmcRing {
                 long witness = (long) HEAD.compareAndExchange(this, pos, pos + 1);
                 if (witness == pos) {
                     Object x = items[i];
-                    items[i] = null;                       // do not retain the task for GC
+                    items[i] = null;
                     SEQ.setRelease(seq, i, pos + mask + 1);
                     return x;
                 }
                 pos = witness;
             } else if (dif < 0) {
-                return null;    // empty
+                return null;
             } else {
                 pos = (long) HEAD.getVolatile(this);
             }
