@@ -40,6 +40,14 @@ final class ProbeCommand {
                                 .then(Commands.argument("label", StringArgumentType.word())
                                         .executes(ctx -> run(ctx, IntegerArgumentType.getInteger(ctx, "seconds"),
                                                 StringArgumentType.getString(ctx, "label"))))))
+                .then(Commands.literal("genbench")
+                        .then(Commands.argument("side", IntegerArgumentType.integer(2, 64))
+                                .then(Commands.argument("label", StringArgumentType.word()).executes(ctx -> {
+                                    GenBench.start(ctx.getSource().getServer(), IntegerArgumentType.getInteger(ctx, "side"),
+                                            StringArgumentType.getString(ctx, "label"));
+                                    say(ctx, "probe: genbench started");
+                                    return 1;
+                                }))))
                 .then(Commands.literal("status").executes(ProbeCommand::status))
                 .then(Commands.literal("world").executes(ctx -> {
                     say(ctx, worldStats(ctx.getSource().getServer()));
@@ -51,10 +59,22 @@ final class ProbeCommand {
                                 .executes(ctx -> bench(ctx, IntegerArgumentType.getInteger(ctx, "n"))))));
     }
 
-    private static int start(CommandContext<CommandSourceStack> ctx) {
+    static void startRecording() {
         TickTimer.INSTANCE.reset();
         TaskStats.reset();
         EventCounter.INSTANCE.start();
+    }
+
+    /** Stops recording and writes report-<label>; {@code headline} goes on top of the report. */
+    static Path finishRecording(MinecraftServer server, String label, String headline) {
+        EventCounter.INSTANCE.stop();
+        Path file = write(server, "report-" + label, headline + "\n" + fullReport(server, label));
+        appendCsv(server, label);
+        return file;
+    }
+
+    private static int start(CommandContext<CommandSourceStack> ctx) {
+        startRecording();
         say(ctx, EventCounter.INSTANCE.available()
                 ? "probe: recording. Tick stats reset, counting " + EventCounter.INSTANCE.trackedTypes() + " event types (more are discovered every second)."
                 : "probe: recording tick stats only (EventBus internals not reachable, see log).");
@@ -83,6 +103,7 @@ final class ProbeCommand {
 
     /** From ServerTickEvent.Post (LOWEST). */
     static void onTickEnd(MinecraftServer server) {
+        GenBench.onTickEnd(server);
         if (autoStopAtTick >= 0 && TickTimer.INSTANCE.ticks() >= autoStopAtTick) {
             autoStopAtTick = -1;
             Path file = finish(server, autoLabel);
