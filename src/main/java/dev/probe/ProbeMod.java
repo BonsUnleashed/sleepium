@@ -32,6 +32,7 @@ public final class ProbeMod {
         EventCounter.INSTANCE.attach(gameBus);
         EventBench.registerListeners(gameBus);
         gameBus.addListener(ProbeCommand::register);
+        gameBus.addListener(net.neoforged.neoforge.event.level.ChunkEvent.Load.class, GenBench::onChunkLoad);
         if (FMLEnvironment.dist.isClient()) {
             ClientProbe.register(gameBus);   // class is only loaded on the physical client
         }
