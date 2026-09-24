@@ -32,6 +32,18 @@ final class JvmStats {
     private static long processCpuAtStart, wallAtStart, startedAtStart, jitAtStart;
     private static final Map<String, long[]> gcAtStart = new HashMap<>();
 
+    /** Per-PROCESS OS counters via OSHI (on the game classpath): kernel/user ms, page faults, context switches. */
+    private static long[] procAtStart = new long[5];
+
+    private static long[] procCounters() {
+        try {
+            oshi.software.os.OSProcess p = new oshi.SystemInfo().getOperatingSystem().getCurrentProcess();
+            return new long[] {p.getKernelTime(), p.getUserTime(), p.getMinorFaults(), p.getMajorFaults(), p.getContextSwitches()};
+        } catch (Throwable t) {
+            return new long[] {-1, -1, -1, -1, -1};
+        }
+    }
+
     private JvmStats() {}
 
     static {
@@ -59,6 +71,7 @@ final class JvmStats {
 
     static void start() {
         threadsAtStart = sampleThreads();
+        procAtStart = procCounters();
         processCpuAtStart = OS.getProcessCpuTime();
         wallAtStart = System.nanoTime();
         startedAtStart = THREADS.getTotalStartedThreadCount();
@@ -71,7 +84,8 @@ final class JvmStats {
     }
 
     /** Summary numbers for the CSV row. */
-    record Totals(double cores, double kernelShare, double gcMsPerSec, long gcCount, long jitMs, long threadsStarted) {}
+    record Totals(double cores, double kernelShare, double gcMsPerSec, long gcCount, long jitMs, long threadsStarted,
+                  double procKernelShare, double faultsPerSec, double csPerSec) {}
 
     static Totals totals() {
         double wallS = (System.nanoTime() - wallAtStart) / 1e9;
@@ -90,8 +104,14 @@ final class JvmStats {
         }
         CompilationMXBean jit = ManagementFactory.getCompilationMXBean();
         long jitMs = jit != null && jit.isCompilationTimeMonitoringSupported() ? jit.getTotalCompilationTime() - jitAtStart : 0;
+        long[] p1 = procCounters(), p0 = procAtStart;
+        boolean procOk = p1[0] >= 0 && p0[0] >= 0;
+        double pk = procOk ? p1[0] - p0[0] : 0, pu = procOk ? p1[1] - p0[1] : 0;
         return new Totals(procCpuS / wallS, cpu == 0 ? 0 : (double) (cpu - user) / cpu, gcMs / wallS, gcCount, jitMs,
-                THREADS.getTotalStartedThreadCount() - startedAtStart);
+                THREADS.getTotalStartedThreadCount() - startedAtStart,
+                procOk && pk + pu > 0 ? pk / (pk + pu) : Double.NaN,
+                procOk ? (p1[2] + p1[3] - p0[2] - p0[3]) / wallS : Double.NaN,
+                procOk ? (p1[4] - p0[4]) / wallS : Double.NaN);
     }
 
     static String report() {
@@ -110,6 +130,8 @@ final class JvmStats {
                 t.cores(), 100 * t.kernelShare()));
         sb.append(String.format(Locale.ROOT, "GC: %d collections, %.1f ms/s   JIT: %d ms compiling   threads started in window: %d%n",
                 t.gcCount(), t.gcMsPerSec(), t.jitMs(), t.threadsStarted()));
+        sb.append(String.format(Locale.ROOT, "process (OS, via OSHI): kernel share %.1f %%, page faults %.0f/s, context switches %.0f/s%n",
+                100 * t.procKernelShare(), t.faultsPerSec(), t.csPerSec()));
         for (GarbageCollectorMXBean gc : ManagementFactory.getGarbageCollectorMXBeans()) {
             long[] s0 = gcAtStart.getOrDefault(gc.getName(), new long[2]);
             sb.append(String.format(Locale.ROOT, "  %-28s %6d collections %8d ms%n", gc.getName(),
@@ -128,11 +150,13 @@ final class JvmStats {
     }
 
     static List<String> csvHeader() {
-        return List.of("cpu_cores", "kernel_share", "gc_ms_per_s", "gc_count", "jit_ms", "threads_started");
+        return List.of("cpu_cores", "kernel_share", "gc_ms_per_s", "gc_count", "jit_ms", "threads_started",
+                "proc_kernel_share", "proc_faults_per_s", "proc_cs_per_s");
     }
 
     static String csvRow() {
         Totals t = totals();
-        return String.format(Locale.ROOT, "%.3f,%.3f,%.2f,%d,%d,%d", t.cores(), t.kernelShare(), t.gcMsPerSec(), t.gcCount(), t.jitMs(), t.threadsStarted());
+        return String.format(Locale.ROOT, "%.3f,%.3f,%.2f,%d,%d,%d,%.3f,%.0f,%.0f", t.cores(), t.kernelShare(), t.gcMsPerSec(),
+                t.gcCount(), t.jitMs(), t.threadsStarted(), t.procKernelShare(), t.faultsPerSec(), t.csPerSec());
     }
 }
