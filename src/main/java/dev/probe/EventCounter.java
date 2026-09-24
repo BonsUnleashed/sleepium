@@ -64,9 +64,10 @@ final class EventCounter {
     void attach(IEventBus bus) {
         this.bus = bus;
         try {
-            Field f = bus.getClass().getDeclaredField("listenerLists");
+            Object real = bus instanceof dev.probe.optsupport.CompositeEventBus c ? c.delegate() : bus;
+            Field f = real.getClass().getDeclaredField("listenerLists");
             f.setAccessible(true);
-            listenerLists = f.get(bus);
+            listenerLists = f.get(real);
             getReadMap = listenerLists.getClass().getDeclaredMethod("getReadMap");
             getReadMap.setAccessible(true);
         } catch (ReflectiveOperationException | RuntimeException e) {

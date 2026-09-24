@@ -22,6 +22,7 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.level.Level;
+import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.event.RegisterCommandsEvent;
 
 final class ProbeCommand {
@@ -48,6 +49,27 @@ final class ProbeCommand {
                                     say(ctx, "probe: genbench started");
                                     return 1;
                                 }))))
+                .then(Commands.literal("busbench").executes(ctx -> {
+                    if (EventCounter.INSTANCE.enabled()) {
+                        say(ctx, "probe: run /probe stop first");
+                        return 0;
+                    }
+                    try {
+                        List<String> fails = new java.util.ArrayList<>(BusEquivalence.check(NeoForge.EVENT_BUS));
+                        fails.addAll(BusAnatomy.sinkEquivalence(NeoForge.EVENT_BUS));
+                        String eq = fails.isEmpty()
+                                ? "equivalence: OK (" + BusEquivalence.expected() + "; per-listener sink counts match)\n"
+                                : "equivalence: FAILED\n  " + String.join("\n  ", fails) + "\n";
+                        String out = "# bus anatomy (in-game, server thread, best of 5)\n" + jvmLine() + "\n" + eq + "\n"
+                                + BusAnatomy.format(BusAnatomy.run(400_000));
+                        Path file = write(ctx.getSource().getServer(), "busbench", out);
+                        say(ctx, out);
+                        say(ctx, "probe: written to " + file);
+                    } catch (ReflectiveOperationException e) {
+                        say(ctx, "probe: busbench failed: " + e);
+                    }
+                    return 1;
+                }))
                 .then(Commands.literal("status").executes(ProbeCommand::status))
                 .then(Commands.literal("world").executes(ctx -> {
                     say(ctx, worldStats(ctx.getSource().getServer()));

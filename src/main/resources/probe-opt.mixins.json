@@ -7,7 +7,8 @@
   "mixins": [
     "GoalSelectorMixin",
     "CondWakeMixin",
-    "MailboxBatchMixin"
+    "MailboxBatchMixin",
+    "NeoForgeBusMixin"
   ],
   "injectors": {
     "defaultRequire": 1

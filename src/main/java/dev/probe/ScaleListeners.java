@@ -18,6 +18,9 @@ public final class ScaleListeners {
     public static final class Scale50 extends ScaleEvent {}
     public static final class Scale100 extends ScaleEvent {}
     public static final class Scale50Cancellable extends ScaleEvent implements ICancellableEvent {}
+    /** 50 distinct lambda listeners (addListener), plain and cancellable. */
+    public static final class Scale50Consumer extends ScaleEvent {}
+    public static final class Scale50ConsumerCancellable extends ScaleEvent implements ICancellableEvent {}
 
     @SubscribeEvent
     public static void on1_0(Scale1 e) {
@@ -862,5 +865,107 @@ public final class ScaleListeners {
     @SubscribeEvent
     public static void onC50_49(Scale50Cancellable e) {
         if (e.id == 5049) sink++;
+    }
+    public static void registerConsumers(net.neoforged.bus.api.IEventBus bus) {
+        bus.addListener(Scale50Consumer.class, e -> { if (e.id == 7000) sink++; });
+        bus.addListener(Scale50ConsumerCancellable.class, e -> { if (e.id == 8000) sink++; });
+        bus.addListener(Scale50Consumer.class, e -> { if (e.id == 7001) sink++; });
+        bus.addListener(Scale50ConsumerCancellable.class, e -> { if (e.id == 8001) sink++; });
+        bus.addListener(Scale50Consumer.class, e -> { if (e.id == 7002) sink++; });
+        bus.addListener(Scale50ConsumerCancellable.class, e -> { if (e.id == 8002) sink++; });
+        bus.addListener(Scale50Consumer.class, e -> { if (e.id == 7003) sink++; });
+        bus.addListener(Scale50ConsumerCancellable.class, e -> { if (e.id == 8003) sink++; });
+        bus.addListener(Scale50Consumer.class, e -> { if (e.id == 7004) sink++; });
+        bus.addListener(Scale50ConsumerCancellable.class, e -> { if (e.id == 8004) sink++; });
+        bus.addListener(Scale50Consumer.class, e -> { if (e.id == 7005) sink++; });
+        bus.addListener(Scale50ConsumerCancellable.class, e -> { if (e.id == 8005) sink++; });
+        bus.addListener(Scale50Consumer.class, e -> { if (e.id == 7006) sink++; });
+        bus.addListener(Scale50ConsumerCancellable.class, e -> { if (e.id == 8006) sink++; });
+        bus.addListener(Scale50Consumer.class, e -> { if (e.id == 7007) sink++; });
+        bus.addListener(Scale50ConsumerCancellable.class, e -> { if (e.id == 8007) sink++; });
+        bus.addListener(Scale50Consumer.class, e -> { if (e.id == 7008) sink++; });
+        bus.addListener(Scale50ConsumerCancellable.class, e -> { if (e.id == 8008) sink++; });
+        bus.addListener(Scale50Consumer.class, e -> { if (e.id == 7009) sink++; });
+        bus.addListener(Scale50ConsumerCancellable.class, e -> { if (e.id == 8009) sink++; });
+        bus.addListener(Scale50Consumer.class, e -> { if (e.id == 7010) sink++; });
+        bus.addListener(Scale50ConsumerCancellable.class, e -> { if (e.id == 8010) sink++; });
+        bus.addListener(Scale50Consumer.class, e -> { if (e.id == 7011) sink++; });
+        bus.addListener(Scale50ConsumerCancellable.class, e -> { if (e.id == 8011) sink++; });
+        bus.addListener(Scale50Consumer.class, e -> { if (e.id == 7012) sink++; });
+        bus.addListener(Scale50ConsumerCancellable.class, e -> { if (e.id == 8012) sink++; });
+        bus.addListener(Scale50Consumer.class, e -> { if (e.id == 7013) sink++; });
+        bus.addListener(Scale50ConsumerCancellable.class, e -> { if (e.id == 8013) sink++; });
+        bus.addListener(Scale50Consumer.class, e -> { if (e.id == 7014) sink++; });
+        bus.addListener(Scale50ConsumerCancellable.class, e -> { if (e.id == 8014) sink++; });
+        bus.addListener(Scale50Consumer.class, e -> { if (e.id == 7015) sink++; });
+        bus.addListener(Scale50ConsumerCancellable.class, e -> { if (e.id == 8015) sink++; });
+        bus.addListener(Scale50Consumer.class, e -> { if (e.id == 7016) sink++; });
+        bus.addListener(Scale50ConsumerCancellable.class, e -> { if (e.id == 8016) sink++; });
+        bus.addListener(Scale50Consumer.class, e -> { if (e.id == 7017) sink++; });
+        bus.addListener(Scale50ConsumerCancellable.class, e -> { if (e.id == 8017) sink++; });
+        bus.addListener(Scale50Consumer.class, e -> { if (e.id == 7018) sink++; });
+        bus.addListener(Scale50ConsumerCancellable.class, e -> { if (e.id == 8018) sink++; });
+        bus.addListener(Scale50Consumer.class, e -> { if (e.id == 7019) sink++; });
+        bus.addListener(Scale50ConsumerCancellable.class, e -> { if (e.id == 8019) sink++; });
+        bus.addListener(Scale50Consumer.class, e -> { if (e.id == 7020) sink++; });
+        bus.addListener(Scale50ConsumerCancellable.class, e -> { if (e.id == 8020) sink++; });
+        bus.addListener(Scale50Consumer.class, e -> { if (e.id == 7021) sink++; });
+        bus.addListener(Scale50ConsumerCancellable.class, e -> { if (e.id == 8021) sink++; });
+        bus.addListener(Scale50Consumer.class, e -> { if (e.id == 7022) sink++; });
+        bus.addListener(Scale50ConsumerCancellable.class, e -> { if (e.id == 8022) sink++; });
+        bus.addListener(Scale50Consumer.class, e -> { if (e.id == 7023) sink++; });
+        bus.addListener(Scale50ConsumerCancellable.class, e -> { if (e.id == 8023) sink++; });
+        bus.addListener(Scale50Consumer.class, e -> { if (e.id == 7024) sink++; });
+        bus.addListener(Scale50ConsumerCancellable.class, e -> { if (e.id == 8024) sink++; });
+        bus.addListener(Scale50Consumer.class, e -> { if (e.id == 7025) sink++; });
+        bus.addListener(Scale50ConsumerCancellable.class, e -> { if (e.id == 8025) sink++; });
+        bus.addListener(Scale50Consumer.class, e -> { if (e.id == 7026) sink++; });
+        bus.addListener(Scale50ConsumerCancellable.class, e -> { if (e.id == 8026) sink++; });
+        bus.addListener(Scale50Consumer.class, e -> { if (e.id == 7027) sink++; });
+        bus.addListener(Scale50ConsumerCancellable.class, e -> { if (e.id == 8027) sink++; });
+        bus.addListener(Scale50Consumer.class, e -> { if (e.id == 7028) sink++; });
+        bus.addListener(Scale50ConsumerCancellable.class, e -> { if (e.id == 8028) sink++; });
+        bus.addListener(Scale50Consumer.class, e -> { if (e.id == 7029) sink++; });
+        bus.addListener(Scale50ConsumerCancellable.class, e -> { if (e.id == 8029) sink++; });
+        bus.addListener(Scale50Consumer.class, e -> { if (e.id == 7030) sink++; });
+        bus.addListener(Scale50ConsumerCancellable.class, e -> { if (e.id == 8030) sink++; });
+        bus.addListener(Scale50Consumer.class, e -> { if (e.id == 7031) sink++; });
+        bus.addListener(Scale50ConsumerCancellable.class, e -> { if (e.id == 8031) sink++; });
+        bus.addListener(Scale50Consumer.class, e -> { if (e.id == 7032) sink++; });
+        bus.addListener(Scale50ConsumerCancellable.class, e -> { if (e.id == 8032) sink++; });
+        bus.addListener(Scale50Consumer.class, e -> { if (e.id == 7033) sink++; });
+        bus.addListener(Scale50ConsumerCancellable.class, e -> { if (e.id == 8033) sink++; });
+        bus.addListener(Scale50Consumer.class, e -> { if (e.id == 7034) sink++; });
+        bus.addListener(Scale50ConsumerCancellable.class, e -> { if (e.id == 8034) sink++; });
+        bus.addListener(Scale50Consumer.class, e -> { if (e.id == 7035) sink++; });
+        bus.addListener(Scale50ConsumerCancellable.class, e -> { if (e.id == 8035) sink++; });
+        bus.addListener(Scale50Consumer.class, e -> { if (e.id == 7036) sink++; });
+        bus.addListener(Scale50ConsumerCancellable.class, e -> { if (e.id == 8036) sink++; });
+        bus.addListener(Scale50Consumer.class, e -> { if (e.id == 7037) sink++; });
+        bus.addListener(Scale50ConsumerCancellable.class, e -> { if (e.id == 8037) sink++; });
+        bus.addListener(Scale50Consumer.class, e -> { if (e.id == 7038) sink++; });
+        bus.addListener(Scale50ConsumerCancellable.class, e -> { if (e.id == 8038) sink++; });
+        bus.addListener(Scale50Consumer.class, e -> { if (e.id == 7039) sink++; });
+        bus.addListener(Scale50ConsumerCancellable.class, e -> { if (e.id == 8039) sink++; });
+        bus.addListener(Scale50Consumer.class, e -> { if (e.id == 7040) sink++; });
+        bus.addListener(Scale50ConsumerCancellable.class, e -> { if (e.id == 8040) sink++; });
+        bus.addListener(Scale50Consumer.class, e -> { if (e.id == 7041) sink++; });
+        bus.addListener(Scale50ConsumerCancellable.class, e -> { if (e.id == 8041) sink++; });
+        bus.addListener(Scale50Consumer.class, e -> { if (e.id == 7042) sink++; });
+        bus.addListener(Scale50ConsumerCancellable.class, e -> { if (e.id == 8042) sink++; });
+        bus.addListener(Scale50Consumer.class, e -> { if (e.id == 7043) sink++; });
+        bus.addListener(Scale50ConsumerCancellable.class, e -> { if (e.id == 8043) sink++; });
+        bus.addListener(Scale50Consumer.class, e -> { if (e.id == 7044) sink++; });
+        bus.addListener(Scale50ConsumerCancellable.class, e -> { if (e.id == 8044) sink++; });
+        bus.addListener(Scale50Consumer.class, e -> { if (e.id == 7045) sink++; });
+        bus.addListener(Scale50ConsumerCancellable.class, e -> { if (e.id == 8045) sink++; });
+        bus.addListener(Scale50Consumer.class, e -> { if (e.id == 7046) sink++; });
+        bus.addListener(Scale50ConsumerCancellable.class, e -> { if (e.id == 8046) sink++; });
+        bus.addListener(Scale50Consumer.class, e -> { if (e.id == 7047) sink++; });
+        bus.addListener(Scale50ConsumerCancellable.class, e -> { if (e.id == 8047) sink++; });
+        bus.addListener(Scale50Consumer.class, e -> { if (e.id == 7048) sink++; });
+        bus.addListener(Scale50ConsumerCancellable.class, e -> { if (e.id == 8048) sink++; });
+        bus.addListener(Scale50Consumer.class, e -> { if (e.id == 7049) sink++; });
+        bus.addListener(Scale50ConsumerCancellable.class, e -> { if (e.id == 8049) sink++; });
     }
 }
