@@ -30,9 +30,10 @@ final class BusAnatomy {
     private BusAnatomy() {}
 
     static ListenerList listenerList(IEventBus bus, Class<?> type) throws ReflectiveOperationException {
-        Field f = bus.getClass().getDeclaredField("listenerLists");
+        Object real = bus instanceof dev.probe.optsupport.CompositeEventBus c ? c.delegate() : bus;
+        Field f = real.getClass().getDeclaredField("listenerLists");
         f.setAccessible(true);
-        Object helper = f.get(bus);
+        Object helper = f.get(real);
         Method m = helper.getClass().getDeclaredMethod("getReadMap");
         m.setAccessible(true);
         return (ListenerList) ((Map<?, ?>) m.invoke(helper)).get(type);
