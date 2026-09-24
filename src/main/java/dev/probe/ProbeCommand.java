@@ -53,6 +53,7 @@ final class ProbeCommand {
 
     private static int start(CommandContext<CommandSourceStack> ctx) {
         TickTimer.INSTANCE.reset();
+        TaskStats.reset();
         EventCounter.INSTANCE.start();
         say(ctx, EventCounter.INSTANCE.available()
                 ? "probe: recording. Tick stats reset, counting " + EventCounter.INSTANCE.trackedTypes() + " event types (more are discovered every second)."
@@ -116,10 +117,11 @@ final class ProbeCommand {
             tickers += bt.equals("?") ? 0 : Integer.parseInt(bt);
         }
         Path csv = server.getServerDirectory().resolve("probe").resolve("summary.csv");
-        String header = "time,label,ticks,mspt_mean,mspt_p50,mspt_p99,mspt_max,interval_p99,alloc_kib_mean,alloc_kib_p99,events_per_tick,entities,ticking_block_entities\n";
-        String row = String.format(Locale.ROOT, "%s,%s,%d,%.3f,%.3f,%.3f,%.3f,%.3f,%.1f,%.1f,%.1f,%d,%d%n",
+        String header = "time,label,ticks,mspt_mean,mspt_p50,mspt_p99,mspt_max,interval_p99,alloc_kib_mean,alloc_kib_p99,events_per_tick,entities,ticking_block_entities,loop_tells_per_tick,mailbox_tasks_per_tick\n";
+        String row = String.format(Locale.ROOT, "%s,%s,%d,%.3f,%.3f,%.3f,%.3f,%.3f,%.1f,%.1f,%.1f,%d,%d,%.1f,%.1f%n",
                 LocalDateTime.now().withNano(0), label, t.ticks(), d.mean() / 1e6, d.p50() / 1e6, d.p99() / 1e6,
-                d.max() / 1e6, iv.p99() / 1e6, a.mean() / 1024, a.p99() / 1024.0, (double) events / ticks, entities, tickers);
+                d.max() / 1e6, iv.p99() / 1e6, a.mean() / 1024, a.p99() / 1024.0, (double) events / ticks, entities, tickers,
+                (double) TaskStats.totalLoopTells() / ticks, (double) TaskStats.totalMailboxTasks() / ticks);
         try {
             Files.createDirectories(csv.getParent());
             if (!Files.exists(csv)) {
@@ -195,6 +197,7 @@ final class ProbeCommand {
         }
 
         sb.append('\n').append(worldStats(server)).append('\n');
+        sb.append(TaskStats.report(Math.max(1e-9, t.windowSeconds()), Math.max(1, t.ticks()))).append('\n');
 
         List<EventCounter.Counter> counters = EventCounter.INSTANCE.snapshotSorted();
         double secs = EventCounter.INSTANCE.windowSeconds();
