@@ -5,7 +5,9 @@
   "plugin": "dev.probe.opt.OptMixinPlugin",
   "compatibilityLevel": "JAVA_21",
   "mixins": [
-    "GoalSelectorMixin"
+    "GoalSelectorMixin",
+    "CondWakeMixin",
+    "MailboxBatchMixin"
   ],
   "injectors": {
     "defaultRequire": 1

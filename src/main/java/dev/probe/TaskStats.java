@@ -52,6 +52,8 @@ public final class TaskStats {
             m.tasks.reset();
             m.runs.reset();
         }
+        dev.probe.optsupport.WakeFlags.UNPARKED.reset();
+        dev.probe.optsupport.WakeFlags.SKIPPED.reset();
     }
 
     static String report(double seconds, long ticks) {
@@ -74,7 +76,12 @@ public final class TaskStats {
             sb.append(String.format(java.util.Locale.ROOT, "%-28s %,12.0f %,12.1f %,12.0f %12.2f%n",
                     e.getKey(), tasks / seconds, (double) tasks / ticks, runs / seconds, runs == 0 ? 0.0 : (double) tasks / runs));
         }
-        sb.append("'tells' on an event loop = unconditional LockSupport.unpark calls (SetEvent on Windows).\n");
+        long up = dev.probe.optsupport.WakeFlags.UNPARKED.sum(), sk = dev.probe.optsupport.WakeFlags.SKIPPED.sum();
+        if (up + sk > 0) {
+            sb.append(String.format(java.util.Locale.ROOT, "CondWake active: real unparks %,d, skipped %,d (%.1f %% saved)%n",
+                    up, sk, 100.0 * sk / (up + sk)));
+        }
+        sb.append("'tells' on an event loop = LockSupport.unpark calls (SetEvent on Windows), unconditional unless CondWake is on.\n");
         return sb.toString();
     }
 
