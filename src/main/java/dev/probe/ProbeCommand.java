@@ -70,6 +70,26 @@ final class ProbeCommand {
                     }
                     return 1;
                 }))
+                .then(Commands.literal("threads").executes(ctx -> {
+                    // live threads by group + highest index seen per group + JVM-wide started count
+                    var mx = ManagementFactory.getThreadMXBean();
+                    java.util.TreeMap<String, int[]> g = new java.util.TreeMap<>();
+                    for (Thread t : Thread.getAllStackTraces().keySet()) {
+                        String n = t.getName();
+                        var m = java.util.regex.Pattern.compile("^(.*?)[-# ]?(\\d+)$").matcher(n);
+                        String key = m.matches() ? m.group(1) : n;
+                        int idx = m.matches() ? Integer.parseInt(m.group(2)) : 0;
+                        int[] v = g.computeIfAbsent(key, k -> new int[2]);
+                        v[0]++;
+                        v[1] = Math.max(v[1], idx);
+                    }
+                    StringBuilder sb = new StringBuilder(String.format(Locale.ROOT,
+                            "threads: live %d, peak %d, total started since JVM start %d%n", mx.getThreadCount(), mx.getPeakThreadCount(), mx.getTotalStartedThreadCount()));
+                    g.forEach((k, v) -> sb.append(String.format(Locale.ROOT, "  %-44s live %3d   highest index %4d%n", k, v[0], v[1])));
+                    ProbeMod.LOGGER.info("\n{}", sb);
+                    say(ctx, sb.toString());
+                    return 1;
+                }))
                 .then(Commands.literal("status").executes(ProbeCommand::status))
                 .then(Commands.literal("world").executes(ctx -> {
                     say(ctx, worldStats(ctx.getSource().getServer()));

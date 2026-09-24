@@ -9,7 +9,8 @@
     "CondWakeMixin",
     "MailboxBatchMixin",
     "NeoForgeBusMixin",
-    "ParallelWorldgenMixin"
+    "ParallelWorldgenMixin",
+    "PersistentPoolsMixin"
   ],
   "injectors": {
     "defaultRequire": 1
