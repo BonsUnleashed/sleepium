@@ -23,3 +23,6 @@ Measurement probe: counts NeoForge events per type, times server ticks, benchmar
     versionRange="${minecraft_version_range}"
     ordering="NONE"
     side="BOTH"
+
+[[mixins]]
+config="${mod_id}.mixins.json"

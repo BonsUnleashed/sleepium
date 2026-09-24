@@ -1,0 +1,13 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "dev.probe.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "mixins": [
+    "BlockableEventLoopMixin",
+    "ProcessorMailboxMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}
