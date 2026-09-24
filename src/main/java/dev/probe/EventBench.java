@@ -39,12 +39,13 @@ final class EventBench {
         bus = gameBus;
         gameBus.addListener(OneListenerEvent.class, e -> sink++);
         gameBus.addListener(CancellableEvent.class, e -> sink++);
+        gameBus.register(ScaleListeners.class);   // 211 distinct static listener methods
     }
 
     record Result(String name, double nsPerOp, double bytesPerOp) {
         @Override
         public String toString() {
-            return String.format(Locale.ROOT, "%-44s %8.1f ns/op %8.1f B/op", name, nsPerOp, bytesPerOp);
+            return String.format(Locale.ROOT, "%-46s %9.1f ns/op %8.1f B/op", name, nsPerOp, bytesPerOp);
         }
     }
 
@@ -75,6 +76,25 @@ final class EventBench {
                 }},
                 new Object[] {"post(new CancellableEvent())  1 listener", (Case) k -> {
                     for (int i = 0; i < k; i++) bus.post(new CancellableEvent());
+                }},
+                // N distinct listener classes (like N mods), each a cheap "is this mine?" filter
+                new Object[] {"post  1 distinct listeners", (Case) k -> {
+                    for (int i = 0; i < k; i++) { var e = new ScaleListeners.Scale1(); e.id = i; bus.post(e); }
+                }},
+                new Object[] {"post 10 distinct listeners", (Case) k -> {
+                    for (int i = 0; i < k; i++) { var e = new ScaleListeners.Scale10(); e.id = i; bus.post(e); }
+                }},
+                new Object[] {"post 50 distinct listeners", (Case) k -> {
+                    for (int i = 0; i < k; i++) { var e = new ScaleListeners.Scale50(); e.id = i; bus.post(e); }
+                }},
+                new Object[] {"post 100 distinct listeners", (Case) k -> {
+                    for (int i = 0; i < k; i++) { var e = new ScaleListeners.Scale100(); e.id = i; bus.post(e); }
+                }},
+                new Object[] {"post 50 distinct listeners, cancellable", (Case) k -> {
+                    for (int i = 0; i < k; i++) { var e = new ScaleListeners.Scale50Cancellable(); e.id = i; bus.post(e); }
+                }},
+                new Object[] {"baseline: 100 direct static calls", (Case) k -> {
+                    for (int i = 0; i < k; i++) { for (int j = 0; j < 100; j++) if (i == 1000 + j) sink++; }
                 }});
 
         // Warm-up: let C2 compile every loop before measuring.

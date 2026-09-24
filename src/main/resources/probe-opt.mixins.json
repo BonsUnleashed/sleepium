@@ -1,0 +1,13 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "dev.probe.opt",
+  "plugin": "dev.probe.opt.OptMixinPlugin",
+  "compatibilityLevel": "JAVA_21",
+  "mixins": [
+    "GoalSelectorMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}
