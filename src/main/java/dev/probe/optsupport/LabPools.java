@@ -27,6 +27,11 @@ public final class LabPools {
                 .withPriority(OsThreads.BELOW_NORMAL).withHandler(handler));
         System.out.println("[probe/opt] LabRuntime background pool 'Worker-" + serviceName + "': " + BG
                 + " workers, BELOW_NORMAL, native priorities: " + OsThreads.nativeAvailable());
+        // commonPool cannot be redirected: its only user is NeoForge's bootstrap (JarModuleFinder parallel stream),
+        // which runs before any mod or mixin exists. Cap it with a JVM flag instead.
+        int cp = java.util.concurrent.ForkJoinPool.getCommonPoolParallelism();
+        if (cp > 2) System.out.println("[probe/opt] commonPool parallelism " + cp
+                + ": add -Djava.util.concurrent.ForkJoinPool.common.parallelism=2 (bootstrap spawns " + cp + " idle threads)");
         return rt;
     }
 
