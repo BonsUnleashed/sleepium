@@ -26,7 +26,7 @@ final class JvmStats {
     private static final com.sun.management.OperatingSystemMXBean OS =
             (com.sun.management.OperatingSystemMXBean) ManagementFactory.getOperatingSystemMXBean();
 
-    private record ThreadSample(String group, long cpu, long user) {}
+    private record ThreadSample(String group, long cpu, long user, long alloc) {}
 
     private static Map<Long, ThreadSample> threadsAtStart = Map.of();
     private static long processCpuAtStart, wallAtStart, startedAtStart, jitAtStart;
@@ -61,10 +61,11 @@ final class JvmStats {
         long[] ids = THREADS.getAllThreadIds();
         long[] cpu = THREADS.getThreadCpuTime(ids);
         long[] user = THREADS.getThreadUserTime(ids);
+        long[] alloc = THREADS.getThreadAllocatedBytes(ids);
         var infos = THREADS.getThreadInfo(ids);
         Map<Long, ThreadSample> m = new HashMap<>(ids.length * 2);
         for (int i = 0; i < ids.length; i++) {
-            if (infos[i] != null && cpu[i] >= 0) m.put(ids[i], new ThreadSample(group(infos[i].getThreadName()), cpu[i], user[i]));
+            if (infos[i] != null && cpu[i] >= 0) m.put(ids[i], new ThreadSample(group(infos[i].getThreadName()), cpu[i], user[i], alloc[i]));
         }
         return m;
     }
@@ -132,6 +133,22 @@ final class JvmStats {
                 t.gcCount(), t.gcMsPerSec(), t.jitMs(), t.threadsStarted()));
         sb.append(String.format(Locale.ROOT, "process (OS, via OSHI): kernel share %.1f %%, page faults %.0f/s, context switches %.0f/s%n",
                 100 * t.procKernelShare(), t.faultsPerSec(), t.csPerSec()));
+        long allAlloc = 0, serverAlloc = 0;
+        for (Map.Entry<Long, ThreadSample> e : sampleThreads().entrySet()) {
+            ThreadSample s0 = threadsAtStart.get(e.getKey());
+            long d = e.getValue().alloc() - (s0 == null ? 0 : s0.alloc());
+            if (d > 0) allAlloc += d;
+            if (e.getValue().group().equals("Server thread") && d > 0) serverAlloc += d;
+        }
+        long oldUsed = -1, oldAfterGc = -1;
+        for (var pool : ManagementFactory.getMemoryPoolMXBeans()) {
+            if (pool.getName().contains("Old Gen")) {
+                oldUsed = pool.getUsage().getUsed();
+                if (pool.getCollectionUsage() != null) oldAfterGc = pool.getCollectionUsage().getUsed();
+            }
+        }
+        sb.append(String.format(Locale.ROOT, "allocation, all Java threads: %.1f MB/s (server thread %.1f MB/s); old gen used %.0f MB (after last collection %.0f MB)%n",
+                allAlloc / 1e6 / wallS, serverAlloc / 1e6 / wallS, oldUsed / 1e6, oldAfterGc / 1e6));
         for (GarbageCollectorMXBean gc : ManagementFactory.getGarbageCollectorMXBeans()) {
             long[] s0 = gcAtStart.getOrDefault(gc.getName(), new long[2]);
             sb.append(String.format(Locale.ROOT, "  %-28s %6d collections %8d ms%n", gc.getName(),
