@@ -29,3 +29,6 @@ config="${mod_id}.mixins.json"
 
 [[mixins]]
 config="${mod_id}-opt.mixins.json"
+
+[[mixins]]
+config="foreign-test.mixins.json"

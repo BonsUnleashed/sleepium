@@ -1,5 +1,7 @@
 package dev.probe.optsupport.sleep;
 
+import dev.probe.optsupport.MixinTouch;
+
 import java.io.InputStream;
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
@@ -79,13 +81,19 @@ final class SleepAnalysis {
         for (Class<?> c = blockClass; c != null && c != Object.class; c = c.getSuperclass()) {
             ClassNode cn = node(internal(c));
             if (cn == null) continue;
+            if (MixinTouch.touched(internal(c), "getTicker"))
+                return new Plan(false, "mixin-changed " + c.getSimpleName() + ".getTicker", List.of(), List.of());
             for (MethodNode m : cn.methods) {
                 for (AbstractInsnNode in : m.instructions) {
                     if (!(in instanceof InvokeDynamicInsnNode indy) || !indy.desc.endsWith(TICKER_RET) || indy.bsmArgs.length < 2
                             || !(indy.bsmArgs[1] instanceof Handle h)) continue;
                     Type[] args = Type.getArgumentTypes(h.getDesc());
                     Type beArg = args.length == 4 ? args[3] : null;
-                    if (beArg != null && beChain.contains(beArg.getInternalName())) tickers.add(new String[] {h.getOwner(), h.getName(), h.getDesc()});
+                    if (beArg != null && beChain.contains(beArg.getInternalName())) {
+                        if (MixinTouch.touched(internal(c), m.name))
+                            return new Plan(false, "mixin-changed " + c.getSimpleName() + "." + m.name, List.of(), List.of());
+                        tickers.add(new String[] {h.getOwner(), h.getName(), h.getDesc()});
+                    }
                 }
             }
         }
@@ -112,6 +120,10 @@ final class SleepAnalysis {
 
     private void follow(String owner, MethodNode m, int depth, Set<String> seen, Set<String> beChain, Class<?> beClass) throws AnalyzerException {
         if (reject != null || !seen.add(owner + "." + m.name + m.desc)) return;
+        if (MixinTouch.touched(owner, m.name)) {   // the resource bytes are not the code that runs
+            reject = "mixin-changed " + simple(owner) + "." + m.name;
+            return;
+        }
         Frame<SourceValue>[] fr = new Analyzer<>(new SourceInterpreter()).analyze(owner, m);
         AbstractInsnNode[] in = m.instructions.toArray();
         for (int i = 0; i < in.length && reject == null; i++) {
@@ -133,7 +145,7 @@ final class SleepAnalysis {
                     String decl = mi.getOpcode() == Opcodes.INVOKESTATIC || mi.getOpcode() == Opcodes.INVOKESPECIAL ? ownerOf(mi.owner, mi.name, mi.desc) : ownerOf(internal(beClass), mi.name, mi.desc);
                     MethodNode target = decl == null ? null : method(decl, mi.name, mi.desc);
                     if (target != null && (target.access & Opcodes.ACC_ABSTRACT) == 0) follow(decl, target, depth + 1, seen, beChain, beClass);
-                    else reject = "unresolved own method " + mi.name;
+                    else if (reject == null) reject = "unresolved own method " + mi.name;
                     continue;
                 }
                 // a call on (or with) an object owned by the block entity may change hidden state
@@ -376,6 +388,10 @@ final class SleepAnalysis {
     private String ownerOf(String owner, String name, String desc) {
         List<String> ifaces = new ArrayList<>();
         for (String c = owner; c != null; ) {
+            if (MixinTouch.touched(c, name)) {   // a mixin may add or change this method here: resolution unknown
+                if (reject == null) reject = "mixin-changed " + simple(c) + "." + name;
+                return null;
+            }
             MethodNode found = method(c, name, desc);
             if (found != null && (found.access & Opcodes.ACC_ABSTRACT) == 0) return c;
             ClassNode cn = node(c);
@@ -387,6 +403,10 @@ final class SleepAnalysis {
         while (!ifaces.isEmpty()) {
             String i = ifaces.remove(ifaces.size() - 1);
             if (!seen.add(i)) continue;
+            if (MixinTouch.touched(i, name)) {
+                if (reject == null) reject = "mixin-changed " + simple(i) + "." + name;
+                return null;
+            }
             MethodNode m = method(i, name, desc);
             if (m != null && (m.access & Opcodes.ACC_ABSTRACT) == 0) return i;
             ClassNode cn = node(i);

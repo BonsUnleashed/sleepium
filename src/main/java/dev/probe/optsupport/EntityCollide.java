@@ -1,7 +1,5 @@
 package dev.probe.optsupport;
 
-import java.io.InputStream;
-import java.nio.charset.StandardCharsets;
 import net.minecraft.world.entity.Entity;
 
 /**
@@ -36,32 +34,11 @@ public final class EntityCollide {
         }
     };
 
-    public static final boolean ENTITY_UNTOUCHED = !mixinsMention(Entity.class, "canBeCollidedWith", "canCollideWith");
+    public static final boolean ENTITY_UNTOUCHED = !MixinTouch.touched("net/minecraft/world/entity/Entity", "canBeCollidedWith")
+            && !MixinTouch.touched("net/minecraft/world/entity/Entity", "canCollideWith");
 
     public static volatile long skipped, full;
 
     private EntityCollide() {}
 
-    /** Whether any mixin applied to {@code target} names one of the methods anywhere in its constant pool. */
-    static boolean mixinsMention(Class<?> target, String... names) {
-        try {
-            var info = org.spongepowered.asm.mixin.transformer.ClassInfo.fromCache(target.getName().replace('.', '/'));
-            if (info == null) return false;
-            for (var mixin : info.getAppliedMixins()) {
-                String res = mixin.getClassName().replace('.', '/') + ".class";
-                ClassLoader l = target.getClassLoader();
-                try (InputStream in = l.getResourceAsStream(res)) {
-                    if (in == null) return true;
-                    String pool = new String(in.readAllBytes(), StandardCharsets.ISO_8859_1);
-                    for (String n : names) if (pool.contains(n)) {
-                        System.out.println("[probe/opt] entity collision skip disabled: " + mixin.getClassName() + " touches " + n);
-                        return true;
-                    }
-                }
-            }
-            return false;
-        } catch (Throwable t) {
-            return true;
-        }
-    }
 }
