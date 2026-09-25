@@ -250,7 +250,24 @@ final class ProbeCommand {
                         h = h * 31 + be.saveWithoutMetadata(reg).toString().hashCode();
                     }
                 }
-        return String.format(Locale.ROOT, "region hash %016x (block entities %d, game time %d)", h, bes, level.getGameTime());
+        // -Dprobe.hashEntities=true: also every entity in the region (type, exact position and motion, NBT without
+        // UUIDs), sorted, so the hash does not depend on iteration order but does on every value
+        int ents = 0;
+        if (Boolean.getBoolean("probe.hashEntities")) {
+            var box = new net.minecraft.world.phys.AABB(Math.min(x1, x2), Math.min(y1, y2), Math.min(z1, z2), Math.max(x1, x2) + 1, Math.max(y1, y2) + 1, Math.max(z1, z2) + 1);
+            java.util.List<String> rows = new java.util.ArrayList<>();
+            for (var e : level.getEntities((net.minecraft.world.entity.Entity) null, box, x -> !(x instanceof net.minecraft.world.entity.player.Player))) {
+                var tag = new net.minecraft.nbt.CompoundTag();
+                e.saveWithoutId(tag);
+                tag.remove("UUID");
+                rows.add(net.minecraft.core.registries.BuiltInRegistries.ENTITY_TYPE.getKey(e.getType()) + " " + Double.doubleToLongBits(e.getX()) + " "
+                        + Double.doubleToLongBits(e.getY()) + " " + Double.doubleToLongBits(e.getZ()) + " " + e.getDeltaMovement() + " " + tag);
+            }
+            java.util.Collections.sort(rows);
+            for (String r : rows) h = h * 31 + r.hashCode();
+            ents = rows.size();
+        }
+        return String.format(Locale.ROOT, "region hash %016x (block entities %d, entities %d, game time %d)", h, bes, ents, level.getGameTime());
     }
 
     static void startRecording() {
