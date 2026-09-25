@@ -21,7 +21,11 @@
     "ChunkCacheMixin",
     "ChunkCacheClearMixin",
     "NeighborReactStateMixin",
-    "NeighborReactMixin"
+    "NeighborReactMixin",
+    "EntitySectionIndexMixin",
+    "EntitySectionKeyMixin",
+    "EntityCallbackAccessor",
+    "EntityBoxIndexMixin"
   ],
   "injectors": {
     "defaultRequire": 1
