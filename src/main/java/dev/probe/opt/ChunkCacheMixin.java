@@ -37,22 +37,31 @@ public abstract class ChunkCacheMixin implements ChunkCacheHolder {
         probe$ccChunk = null;
     }
 
+    /** Hot path kept tiny so getBlockState stays inlinable (escape analysis of callers' BlockPos depends on it). */
     @Unique
     private LevelChunk probe$cached(int x, int z) {
-        if (Thread.currentThread() != thread || !((Object) this instanceof ServerLevel)) return getChunk(x, z);
         long key = ChunkPos.asLong(x, z);
-        LevelChunk c = probe$ccChunk;
-        if (key == probe$ccKey && c != null) {
-            if (CHECK) {
-                OptCounters.CHUNK_CHECKED.incrementAndGet();
-                if (getChunk(x, z) != c) OptCounters.CHUNK_MISMATCHES.incrementAndGet();
-            }
-            return c;
+        if (key == probe$ccKey && Thread.currentThread() == thread) {
+            if (CHECK) probe$check(x, z);
+            return probe$ccChunk;
         }
-        c = getChunk(x, z);
-        probe$ccKey = key;
-        probe$ccChunk = c;
+        return probe$miss(x, z, key);
+    }
+
+    @Unique
+    private LevelChunk probe$miss(int x, int z, long key) {
+        LevelChunk c = getChunk(x, z);
+        if (Thread.currentThread() == thread && (Object) this instanceof ServerLevel) {
+            probe$ccKey = key;
+            probe$ccChunk = c;
+        }
         return c;
+    }
+
+    @Unique
+    private void probe$check(int x, int z) {
+        OptCounters.CHUNK_CHECKED.incrementAndGet();
+        if (getChunk(x, z) != probe$ccChunk) OptCounters.CHUNK_MISMATCHES.incrementAndGet();
     }
 
     @Redirect(method = "getBlockState", at = @At(value = "INVOKE", target = "Lnet/minecraft/world/level/Level;getChunk(II)Lnet/minecraft/world/level/chunk/LevelChunk;"))

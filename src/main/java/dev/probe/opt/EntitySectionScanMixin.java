@@ -49,6 +49,11 @@ public abstract class EntitySectionScanMixin<T extends EntityAccess> {
             ci.cancel();   // vanilla's filter admits nothing
             return;
         }
+        if (sections.isEmpty()) {
+            ci.cancel();   // no section at all: nothing to visit
+            return;
+        }
+        if (sections.size() <= ny * nz * (x1 - x0 + 1)) return;   // sparse world: vanilla's walk over a tiny set is cheaper
         if (ny * nz > MAX_CANDIDATES) {
             if (CHECK) OptCounters.SECTION_FALLBACK.incrementAndGet();
             return;   // huge box: vanilla walk

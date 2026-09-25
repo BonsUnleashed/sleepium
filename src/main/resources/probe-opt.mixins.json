@@ -19,7 +19,9 @@
     "LevelNeighborUpdaterAccessor",
     "NeighborNotifySkipMixin",
     "ChunkCacheMixin",
-    "ChunkCacheClearMixin"
+    "ChunkCacheClearMixin",
+    "NeighborReactStateMixin",
+    "NeighborReactMixin"
   ],
   "injectors": {
     "defaultRequire": 1
