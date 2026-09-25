@@ -52,7 +52,7 @@ public final class LabRuntime extends AbstractExecutorService {
     public record Config(String name, int maxWorkers, int maxSpinners, long spinNanos, int osPriority,
                          int laneCapacity, int dequeCapacity, boolean daemon) {
         public static Config of(String name, int maxWorkers) {
-            return new Config(name, maxWorkers, Integer.getInteger("lab.runtime.spinners", 1), 20_000, Integer.getInteger("lab.runtime.priority", OsThreads.BELOW_NORMAL),
+            return new Config(name, maxWorkers, Integer.getInteger("lab.runtime.spinners", 1), Long.getLong("lab.runtime.spinNanos", 20_000), Integer.getInteger("lab.runtime.priority", OsThreads.BELOW_NORMAL),
                     1 << 14, 1 << 12, true);
         }
     }
@@ -342,7 +342,8 @@ public final class LabRuntime extends AbstractExecutorService {
             }
             // surplus now sits in our deque: without a helper, long tasks would run one after another on this thread
             // (measured: 4 x 1 ms took 4 ms on one worker). Wake one; it steals and chains further only if more remain.
-            if (got > 1 && parkedMask != 0 && spinners.get() == 0) wakeOne();
+            // (this worker may still be counted as the spinner here: find() runs before the flag is cleared)
+            if (got > 1 && parkedMask != 0 && spinners.get() == (spinning ? 1 : 0)) wakeOne();
             return t;
         }
 
