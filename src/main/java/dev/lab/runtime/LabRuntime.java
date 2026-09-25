@@ -340,6 +340,9 @@ public final class LabRuntime extends AbstractExecutorService {
                 claimBuf[i] = null;
                 if (!deque.push(x)) overflow[ri].offer(x);
             }
+            // surplus now sits in our deque: without a helper, long tasks would run one after another on this thread
+            // (measured: 4 x 1 ms took 4 ms on one worker). Wake one; it steals and chains further only if more remain.
+            if (got > 1 && parkedMask != 0 && spinners.get() == 0) wakeOne();
             return t;
         }
 
