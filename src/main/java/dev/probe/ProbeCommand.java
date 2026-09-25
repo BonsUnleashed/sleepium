@@ -91,6 +91,13 @@ final class ProbeCommand {
                     return 1;
                 }))
                 .then(Commands.literal("status").executes(ProbeCommand::status))
+                .then(Commands.literal("events").executes(ctx -> {
+                    // per-tick rates of every event mechanism since the previous call (vanilla + our bus)
+                    String r = EventSources.report(ctx.getSource().getServer());
+                    ProbeMod.LOGGER.info("\n{}", r);
+                    say(ctx, r);
+                    return 1;
+                }))
                 .then(Commands.literal("world").executes(ctx -> {
                     say(ctx, worldStats(ctx.getSource().getServer()));
                     return 1;

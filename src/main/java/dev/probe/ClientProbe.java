@@ -42,6 +42,7 @@ final class ClientProbe {
     private ClientProbe() {}
 
     static void register(IEventBus bus) {
+        if (System.getProperty("probe.clientAuto") != null) ClientAuto.register(bus);
         bus.addListener(EventPriority.HIGHEST, RenderFrameEvent.Pre.class, e -> onPre());
         bus.addListener(EventPriority.LOWEST, RenderFrameEvent.Post.class, e -> onPost());
         bus.addListener(RegisterClientCommandsEvent.class, e -> e.getDispatcher().register(
@@ -54,7 +55,11 @@ final class ClientProbe {
                                 }))))));
     }
 
-    private static void start(int seconds, String l) {
+    static boolean running() {
+        return stopAtNanos >= 0;
+    }
+
+    static void start(int seconds, String l) {
         n = 0;
         lastPre = 0;
         label = l;

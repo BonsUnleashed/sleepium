@@ -6,7 +6,11 @@
   "mixins": [
     "BlockableEventLoopMixin",
     "ProcessorMailboxMixin",
-    "ChunkStepHashMixin"
+    "ChunkStepHashMixin",
+    "EventSourcesMixin",
+    "TickSourcesMixin",
+    "NeighborSourcesMixin",
+    "LevelTicksSourcesMixin"
   ],
   "injectors": {
     "defaultRequire": 1
