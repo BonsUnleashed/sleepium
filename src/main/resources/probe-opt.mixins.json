@@ -39,7 +39,8 @@
     "BlockCollisionMemoMixin",
     "SectionModCountMixin",
     "EntityCollisionMemoMixin",
-    "EventSiteMixin"
+    "EventSiteMixin",
+    "NeighborQueueMixin"
   ],
   "injectors": {
     "defaultRequire": 1
