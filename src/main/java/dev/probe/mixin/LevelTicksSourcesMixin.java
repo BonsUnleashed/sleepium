@@ -14,5 +14,6 @@ public abstract class LevelTicksSourcesMixin {
     @Inject(method = "schedule", at = @At("HEAD"))
     private void probe$schedule(ScheduledTick<?> tick, CallbackInfo ci) {
         EventSources.scheduledTicks++;
+        dev.probe.BeTickStats.writes++;
     }
 }

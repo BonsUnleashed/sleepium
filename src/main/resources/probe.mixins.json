@@ -10,7 +10,14 @@
     "EventSourcesMixin",
     "TickSourcesMixin",
     "NeighborSourcesMixin",
-    "LevelTicksSourcesMixin"
+    "LevelTicksSourcesMixin",
+    "BeTickMixin",
+    "WriteProbeMixin",
+    "WriteProbeBlockEntityMixin",
+    "WriteProbeEntityMixin",
+    "WriteProbeItemMixin",
+    "WriteProbeLivingMixin",
+    "WriteProbeServerLevelMixin"
   ],
   "injectors": {
     "defaultRequire": 1

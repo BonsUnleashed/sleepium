@@ -91,6 +91,13 @@ final class ProbeCommand {
                     return 1;
                 }))
                 .then(Commands.literal("status").executes(ProbeCommand::status))
+                .then(Commands.literal("betypes").executes(ctx -> {
+                    // per block-entity type: ticks, time, share of idle / sleepable ticks since the previous call
+                    String r = BeTickStats.report(ctx.getSource().getServer());
+                    ProbeMod.LOGGER.info("{}", r);
+                    say(ctx, r);
+                    return 1;
+                }))
                 .then(Commands.literal("events").executes(ctx -> {
                     // per-tick rates of every event mechanism since the previous call (vanilla + our bus)
                     String r = EventSources.report(ctx.getSource().getServer());
