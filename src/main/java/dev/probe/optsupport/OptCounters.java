@@ -19,11 +19,14 @@ public final class OptCounters {
     public static final AtomicLong BRAIN_REBUILDS = new AtomicLong(), BRAIN_CHECKED = new AtomicLong(), BRAIN_MISMATCHES = new AtomicLong(),
             BRAIN_RESUMES = new AtomicLong();
 
+    /** PoiColumnMixin shadow check: complete columns compared with the vanilla section walk */
+    public static final AtomicLong POI_CHECKED = new AtomicLong(), POI_MISMATCHES = new AtomicLong();
+
     private OptCounters() {}
 
     public static String report() {
-        return String.format(java.util.Locale.ROOT, "  -- opt counters: section scan fast %d, fallback %d, shadow-checked %d, MISMATCHES %d; chunk cache checked %d, MISMATCHES %d; section index checked %d, MISMATCHES %d (rebuilds %d, updates %d, queries %d); brain rebuilds %d, checked %d, MISMATCHES %d, resumes %d%n",
+        return String.format(java.util.Locale.ROOT, "  -- opt counters: section scan fast %d, fallback %d, shadow-checked %d, MISMATCHES %d; chunk cache checked %d, MISMATCHES %d; section index checked %d, MISMATCHES %d (rebuilds %d, updates %d, queries %d); brain rebuilds %d, checked %d, MISMATCHES %d, resumes %d; poi columns checked %d, MISMATCHES %d%n",
                 SECTION_FAST.get(), SECTION_FALLBACK.get(), SECTION_CHECKED.get(), SECTION_MISMATCHES.get(), CHUNK_CHECKED.get(), CHUNK_MISMATCHES.get(), INDEX_CHECKED.get(), INDEX_MISMATCHES.get(), SectionIndex.rebuilds, SectionIndex.updates, SectionIndex.queries,
-                BRAIN_REBUILDS.get(), BRAIN_CHECKED.get(), BRAIN_MISMATCHES.get(), BRAIN_RESUMES.get());
+                BRAIN_REBUILDS.get(), BRAIN_CHECKED.get(), BRAIN_MISMATCHES.get(), BRAIN_RESUMES.get(), POI_CHECKED.get(), POI_MISMATCHES.get());
     }
 }

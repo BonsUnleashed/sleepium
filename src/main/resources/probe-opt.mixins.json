@@ -27,7 +27,9 @@
     "EntityCallbackAccessor",
     "EntityBoxIndexMixin",
     "TagCacheMixin",
-    "BrainFlatMixin"
+    "BrainFlatMixin",
+    "SectionStorageIndexMixin",
+    "PoiColumnMixin"
   ],
   "injectors": {
     "defaultRequire": 1
