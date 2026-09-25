@@ -18,4 +18,9 @@ public interface SleeperHolder {
     long probe$skipped();
 
     void probe$setSkipped(long skipped);
+
+    /** Ticks observed before a Sleeper is created (short-lived block entities never get one). */
+    int probe$age();
+
+    void probe$setAge(int age);
 }

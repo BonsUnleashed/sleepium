@@ -38,6 +38,8 @@ public final class SleepEngine {
     static final int MARGIN = Integer.getInteger("lab.sleep.margin", 2);
     static final int MIN_SLEEP = Integer.getInteger("lab.sleep.min", 4);
     static final int MAX_BACKOFF = Integer.getInteger("lab.sleep.backoff", 64);
+    /** A block entity must have ticked this many times before the engine tracks it. */
+    static final int MIN_AGE = Integer.getInteger("lab.sleep.minAge", 40);
     /** Optional region filter for A/B-in-one-world tests: only x in [minX, maxX) may sleep. */
     static final int MIN_X = Integer.getInteger("lab.sleep.minX", Integer.MIN_VALUE), MAX_X = Integer.getInteger("lab.sleep.maxX", Integer.MAX_VALUE);
 
@@ -181,7 +183,14 @@ public final class SleepEngine {
         Level level = be.getLevel();
         if (level == null || level.isClientSide) return;
         Sleeper s = sleeper(be);
-        if (s == null) s = create(be);
+        if (s == null) {
+            // short-lived block entities (moving pistons: thousands, a few ticks each) never get a Sleeper
+            SleeperHolder h = (SleeperHolder) be;
+            int age = h.probe$age() + 1;
+            h.probe$setAge(age);
+            if (age < MIN_AGE) return;
+            s = create(be);
+        }
         if (s.state == State.NEVER) return;
         if (level.getGameTime() < s.observeFrom) {
             s.prevValid = false;   // not observed: the next observation starts a fresh sequence
@@ -213,6 +222,7 @@ public final class SleepEngine {
         if (!info.plan.eligible() || x < MIN_X || x >= MAX_X) s.state = State.NEVER;
         ((SleeperHolder) be).probe$setSleeper(s);
         ALL.add(s);
+        if ((ALL.size() & 4095) == 0) ALL.removeIf(o -> o.be.isRemoved() && o.state != State.ASLEEP);   // bounded bookkeeping
         return s;
     }
 

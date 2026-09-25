@@ -38,7 +38,20 @@ public final class OptMixinPlugin implements IMixinConfigPlugin {
         return on;
     }
 
-    @Override public void onLoad(String mixinPackage) {}
+    /**
+     * {@code -Dlab.opt.universal=true}: every universal, exactness-checked optimisation at once (not the sleep engine,
+     * not the experimental worldgen/pool ones). Expanded into the individual flags before any of them is read.
+     */
+    static final String[] UNIVERSAL = {"TickMemoMixin", "ChunkCacheMixin", "EntitySectionScanMixin", "EntitySectionIndexMixin",
+            "NeighborNotifySkipMixin", "NeoForgeBusMixin", "NeighborReactMixin", "TagCacheMixin"};
+
+    @Override
+    public void onLoad(String mixinPackage) {
+        if (Boolean.getBoolean("lab.opt.universal")) {
+            for (String f : UNIVERSAL) System.setProperty("lab.opt." + f, "true");
+            System.out.println("[probe/opt] lab.opt.universal: " + String.join(", ", UNIVERSAL));
+        }
+    }
     @Override public String getRefMapperConfig() { return null; }
     @Override public void acceptTargets(Set<String> myTargets, Set<String> otherTargets) {}
     @Override public List<String> getMixins() { return null; }
