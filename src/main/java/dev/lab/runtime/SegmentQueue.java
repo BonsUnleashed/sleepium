@@ -98,9 +98,24 @@ final class SegmentQueue {
         }
     }
 
+    /** Takes one element (one CAS), no allocation; null if empty or the oldest claimed slot is not written yet. */
     Object poll() {
-        Object[] one = new Object[1];   // cold path only (shutdown drain / tests)
-        return pollBatch(one, 1) == 1 ? one[0] : null;
+        for (;;) {
+            Segment h = head;
+            int pos = h.head;
+            if (pos >= SEG) {
+                Segment n = h.next;
+                if (n == null) return null;
+                HEAD.compareAndSet(this, h, n);
+                continue;
+            }
+            Object x = SLOT.getAcquire(h.slots, pos);
+            if (x == null) return null;
+            if (S_HEAD.compareAndSet(h, pos, pos + 1)) {
+                h.slots[pos] = null;
+                return x;
+            }
+        }
     }
 
     /** Racy hint: true if nothing was ever claimed past the consumers' position. */
