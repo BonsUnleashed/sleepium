@@ -31,7 +31,11 @@
     "SectionStorageIndexMixin",
     "PoiColumnMixin",
     "BlockBehaviourInvoker",
-    "ShapeCacheMixin"
+    "ShapeCacheMixin",
+    "EntityCollisionSkipMixin",
+    "EntitySectionCollidableMixin",
+    "EntityStorageCollidableMixin",
+    "LevelEntityGetterAdapterAccessor"
   ],
   "injectors": {
     "defaultRequire": 1

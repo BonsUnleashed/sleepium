@@ -19,3 +19,5 @@ gamerule maxEntityCramming 24
 kill @e[type=minecraft:item]
 kill @e[type=!minecraft:player,x=800,y=-61,z=100,dx=32,dy=10,dz=32]
 fill 800 -60 100 832 -52 132 minecraft:air
+kill @e[type=!minecraft:player,x=900,y=-61,z=100,dx=32,dy=8,dz=32]
+fill 900 -60 100 932 -54 132 minecraft:air
