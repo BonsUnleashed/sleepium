@@ -93,6 +93,20 @@ public final class FieldDiff {
             return h;
         }
         if (r instanceof ItemStack s) return stack(s);
+        // arrays by content: element writes (a campfire's cooking progress) must show up
+        if (r instanceof int[] a) return System.identityHashCode(a) * 31L + java.util.Arrays.hashCode(a);
+        if (r instanceof long[] a) return System.identityHashCode(a) * 31L + java.util.Arrays.hashCode(a);
+        if (r instanceof boolean[] a) return System.identityHashCode(a) * 31L + java.util.Arrays.hashCode(a);
+        if (r instanceof byte[] a) return System.identityHashCode(a) * 31L + java.util.Arrays.hashCode(a);
+        if (r instanceof short[] a) return System.identityHashCode(a) * 31L + java.util.Arrays.hashCode(a);
+        if (r instanceof char[] a) return System.identityHashCode(a) * 31L + java.util.Arrays.hashCode(a);
+        if (r instanceof float[] a) return System.identityHashCode(a) * 31L + java.util.Arrays.hashCode(a);
+        if (r instanceof double[] a) return System.identityHashCode(a) * 31L + java.util.Arrays.hashCode(a);
+        if (r instanceof Object[] a) {
+            long h = System.identityHashCode(a);
+            for (Object e : a) h = h * 31 + (e instanceof ItemStack st ? stack(st) : System.identityHashCode(e));
+            return h;
+        }
         // collections and maps are snapshotted by content (size and hash), so hidden bookkeeping such as a
         // furnace's recipesUsed map shows up as a change
         if (r instanceof java.util.Map<?, ?> m) return System.identityHashCode(m) * 31L + m.size() * 7919L + m.hashCode();
@@ -102,6 +116,7 @@ public final class FieldDiff {
 
     private static long stack(Object e) {
         if (!(e instanceof ItemStack s) || s.isEmpty()) return 0;
-        return System.identityHashCode(s.getItem()) * 1_000_003L + s.getCount() * 7919L + System.identityHashCode(s);
+        // components too: they can be changed in place (stack.set(...)) without replacing the stack
+        return System.identityHashCode(s.getItem()) * 1_000_003L + s.getCount() * 7919L + System.identityHashCode(s) + s.getComponents().hashCode() * 31L;
     }
 }

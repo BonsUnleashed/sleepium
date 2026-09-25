@@ -21,3 +21,7 @@ kill @e[type=!minecraft:player,x=800,y=-61,z=100,dx=32,dy=10,dz=32]
 fill 800 -60 100 832 -52 132 minecraft:air
 kill @e[type=!minecraft:player,x=900,y=-61,z=100,dx=32,dy=8,dz=32]
 fill 900 -60 100 932 -54 132 minecraft:air
+kill @e[type=!minecraft:player,x=1000,y=-61,z=100,dx=52,dy=8,dz=32]
+fill 1000 -60 100 1052 -54 132 minecraft:air
+kill @e[type=!minecraft:player,x=1000,y=-61,z=140,dx=30,dy=8,dz=32]
+fill 1000 -60 140 1030 -54 172 minecraft:air

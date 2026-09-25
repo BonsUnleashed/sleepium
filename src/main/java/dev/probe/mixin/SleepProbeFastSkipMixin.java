@@ -50,6 +50,7 @@ public abstract class SleepProbeFastSkipMixin {
             memo.probe$setMemo(now, ticking);
         }
         if (!ticking) return;   // vanilla returns without ticking; nothing to count
+        if (!SleepEngine.verifyAsleep(be)) return;   // changed from outside: let it tick (and wake) now
         h.probe$setSkipped(h.probe$skipped() + 1);
         SleepEngine.fastSkipped++;
         ci.cancel();

@@ -59,6 +59,8 @@ final class SleepAnalysis {
     /** fields the followed code writes, plus owned containers whose contents it may change in place */
     private final Map<String, Field> watch = new LinkedHashMap<>();
     private String reject;
+    private Set<String> chain;      // the block entity's class chain (internal names), for provenance of values
+    private Class<?> beCls;
 
     private SleepAnalysis(ClassLoader loader) {
         this.loader = loader;
@@ -76,6 +78,8 @@ final class SleepAnalysis {
     private Plan run(Class<?> beClass, Class<?> blockClass) throws AnalyzerException {
         Set<String> beChain = new HashSet<>();
         for (Class<?> c = beClass; c != null && c != Object.class; c = c.getSuperclass()) beChain.add(internal(c));
+        this.chain = beChain;
+        this.beCls = beClass;
         // ticker candidates: lambdas producing a BlockEntityTicker in the block class chain whose 4th parameter fits this BE
         List<String[]> tickers = new ArrayList<>();
         for (Class<?> c = blockClass; c != null && c != Object.class; c = c.getSuperclass()) {
@@ -138,9 +142,21 @@ final class SleepAnalysis {
             if (op == Opcodes.PUTFIELD && in[i] instanceof FieldInsnNode f && beChain.contains(f.owner)) {
                 String kind = clockKind(f, fr, m, i);
                 if (kind != null) clocks.putIfAbsent(f.owner + "." + f.name, field(beClass, f.name));
-            } else if ((op == Opcodes.IASTORE || op == Opcodes.LASTORE || op == Opcodes.AASTORE) && isOwnField(operand(fr[i], 3, fr, m, 0), beChain)) {
-                reject = "writes an array owned by the block entity (state not visible to the snapshot)";
+            } else if (op >= Opcodes.IASTORE && op <= Opcodes.SASTORE) {
+                Operand arr = operand(fr[i], 3, fr, m, 0);
+                if (arr.kind == Kind.FIELD && beChain.contains(arr.owner) && !BASE_FIELDS.contains(arr.name)) {
+                    Field af = field(beClass, arr.name);   // snapshotted by content (FieldDiff), so the write is visible
+                    if (af == null) reject = "field not accessible: " + arr.name;
+                    else watch.putIfAbsent(arr.name, af);
+                } else if (arr.kind == Kind.OWNCALL) {
+                    reject = "writes an array owned by the block entity that the snapshot cannot see (" + arr.name + ")";
+                }
             } else if (in[i] instanceof MethodInsnNode mi) {
+                // game time handed to a call: the comparison would happen where the analysis cannot see it
+                int argc = Type.getArgumentTypes(mi.desc).length;
+                for (int k = 1; k <= argc && reject == null; k++)
+                    if (containsGameTime(operand(fr[i], k, fr, m, 0))) reject = "game time passed to " + simple(mi.owner) + "." + mi.name;
+                if (reject != null) break;
                 if (depth < MAX_DEPTH && beChain.contains(mi.owner)) {
                     String decl = mi.getOpcode() == Opcodes.INVOKESTATIC || mi.getOpcode() == Opcodes.INVOKESPECIAL ? ownerOf(mi.owner, mi.name, mi.desc) : ownerOf(internal(beClass), mi.name, mi.desc);
                     MethodNode target = decl == null ? null : method(decl, mi.name, mi.desc);
@@ -151,12 +167,12 @@ final class SleepAnalysis {
                 // a call on (or with) an object owned by the block entity may change hidden state
                 // instance calls: only the receiver matters (arguments like a RecipeType are registry objects);
                 // static calls: any owned argument could be mutated by the helper
-                int nargs = op == Opcodes.INVOKESTATIC ? Type.getArgumentTypes(mi.desc).length : 1;
-                int depthOfFirst = op == Opcodes.INVOKESTATIC ? nargs : Type.getArgumentTypes(mi.desc).length + 1;
+                // receiver and every argument; registry objects (the RecipeType of a furnace) are shared constants, not state
+                int nargs = Type.getArgumentTypes(mi.desc).length + (op == Opcodes.INVOKESTATIC ? 0 : 1);
                 for (int k = 0; k < nargs; k++) {
-                    Operand o = operand(fr[i], depthOfFirst - k, fr, m, 0);
-                    if (isOwnField(o, beChain) && !safeOwned(o.type)) {
-                        reject = "calls " + simple(mi.owner) + "." + mi.name + " on owned state " + o.name;
+                    Operand o = operand(fr[i], nargs - k, fr, m, 0);
+                    if (isOwnField(o, beChain) && !safeOwned(o.type) && !registryType(o.type) && !pureReader(mi)) {
+                        reject = "calls " + simple(mi.owner) + "." + mi.name + (k == 0 && op != Opcodes.INVOKESTATIC ? " on" : " with") + " owned state " + o.name;
                         break;
                     }
                 }
@@ -223,6 +239,7 @@ final class SleepAnalysis {
         boolean xg = x != null && x.kind == Kind.GAMEMOD, yg = y != null && y.kind == Kind.GAMEMOD;
         if (!xc && !yc && !xg && !yg) {
             if ((x != null && x.kind == Kind.GAMETIME) || (y != null && y.kind == Kind.GAMETIME)) reject = "game time compared without modulo";
+            else if (containsGameTime(x) || containsGameTime(y)) reject = "game time in an expression the analysis does not model";
             return;   // not a time condition: its inputs are covered by the read set / own state
         }
         if (xg || yg) {
@@ -249,8 +266,20 @@ final class SleepAnalysis {
         }
     }
 
-    /** Fields whose referenced object changes in place (inventories, maps, collections, stacks). */
+    /** Read-only JDK helpers: they cannot change what they are given. */
+    private static final Set<String> PURE_READERS = Set.of("java/util/Arrays.equals", "java/util/Arrays.hashCode", "java/util/Arrays.deepEquals",
+            "java/util/Arrays.deepHashCode", "java/util/Arrays.copyOf", "java/util/Arrays.copyOfRange", "java/util/Arrays.toString",
+            "java/util/Arrays.mismatch", "java/util/Arrays.compare", "java/util/Arrays.binarySearch", "java/util/Objects.equals",
+            "java/util/Objects.hash", "java/util/Objects.hashCode", "java/util/Objects.isNull", "java/util/Objects.nonNull",
+            "java/util/Objects.requireNonNull", "java/lang/System.identityHashCode");
+
+    private static boolean pureReader(MethodInsnNode mi) {
+        return mi.getOpcode() == Opcodes.INVOKESTATIC && PURE_READERS.contains(mi.owner + "." + mi.name);
+    }
+
+    /** Fields whose referenced object changes in place (inventories, maps, collections, stacks, arrays). */
     private boolean containerType(String desc) {
+        if (desc.startsWith("[")) return true;
         if (!desc.startsWith("L")) return false;
         String t = desc.substring(1, desc.length() - 1);
         if (t.equals("net/minecraft/core/NonNullList") || t.equals("net/minecraft/world/item/ItemStack")) return true;
@@ -268,10 +297,36 @@ final class SleepAnalysis {
         if (type.length() == 1) return true;   // primitive field: passed by value, cannot be mutated by the callee
         try {
             Class<?> c = Class.forName(type.replace('/', '.'), false, loader);
+            if (deeplyImmutable(c, new HashSet<>())) return true;   // nothing to change: the reference is the whole state
             return java.util.Map.class.isAssignableFrom(c) || java.util.Collection.class.isAssignableFrom(c);
         } catch (ClassNotFoundException | LinkageError e) {
             return false;
         }
+    }
+
+    /**
+     * Every instance field of the class and its superclasses is final and itself deeply immutable (primitives, String,
+     * boxed values, such classes). Enums without state, records of values. Final classes only (a subclass could add
+     * mutable state), except enums, whose constant bodies are checked the same way.
+     */
+    private static boolean deeplyImmutable(Class<?> c, Set<Class<?>> seen) {
+        if (c.isPrimitive() || c == String.class || c == Integer.class || c == Long.class || c == Boolean.class || c == Short.class
+                || c == Byte.class || c == Character.class || c == Float.class || c == Double.class) return true;
+        if (c.isArray() || c.isInterface()) return false;
+        if (!seen.add(c)) return true;
+        if (!Modifier.isFinal(c.getModifiers()) && !c.isEnum()) return false;
+        if (c.isEnum()) for (Object k : c.getEnumConstants()) if (k.getClass() != c && !fieldsImmutable(k.getClass(), seen)) return false;
+        return fieldsImmutable(c, seen);
+    }
+
+    private static boolean fieldsImmutable(Class<?> c, Set<Class<?>> seen) {
+        for (Class<?> k = c; k != null && k != Object.class && k != Enum.class && k != Record.class; k = k.getSuperclass()) {
+            for (Field f : k.getDeclaredFields()) {
+                if (Modifier.isStatic(f.getModifiers())) continue;
+                if (!Modifier.isFinal(f.getModifiers()) || !deeplyImmutable(f.getType(), seen)) return false;
+            }
+        }
+        return true;
     }
 
     private boolean isClock(Operand o) {
@@ -279,12 +334,37 @@ final class SleepAnalysis {
     }
 
     private boolean isOwnField(Operand o, Set<String> beChain) {
-        return o != null && o.kind == Kind.FIELD && beChain.contains(o.owner) && !BASE_FIELDS.contains(o.name);
+        return o != null && (o.kind == Kind.OWNCALL || o.kind == Kind.FIELD && beChain.contains(o.owner) && !BASE_FIELDS.contains(o.name));
+    }
+
+    private static boolean containsGameTime(Operand o) {
+        if (o == null) return false;
+        if (o.kind == Kind.GAMETIME || o.kind == Kind.GAMEMOD) return true;
+        return containsGameTime(o.a) || containsGameTime(o.b);
+    }
+
+    /** Types whose instances are registry entries (shared, immutable in practice): RecipeType, Block, Item, SoundEvent, ... */
+    private static final Map<String, Boolean> REGISTRY_TYPE = new java.util.concurrent.ConcurrentHashMap<>();
+
+    private boolean registryType(String type) {
+        if (type == null || type.length() == 1) return false;
+        return REGISTRY_TYPE.computeIfAbsent(type, t -> {
+            try {
+                Class<?> c = Class.forName(t.replace('/', '.'), false, loader);
+                for (var reg : net.minecraft.core.registries.BuiltInRegistries.REGISTRY) {
+                    var it = reg.iterator();
+                    if (it.hasNext() && c.isInstance(it.next())) return true;
+                }
+            } catch (Throwable ignored) {
+            }
+            return false;
+        });
     }
 
     // ---------------------------------------------------------------- operand model
 
-    enum Kind { FIELD, CONST, GAMETIME, GAMEMOD, ARITH, CMP, CALL, LOCAL, OTHER }
+    /** OWNCALL: an object returned by a method of the block entity itself (other than a plain field getter). */
+    enum Kind { FIELD, CONST, GAMETIME, GAMEMOD, ARITH, CMP, CALL, OWNCALL, LOCAL, OTHER }
 
     static final class Operand {
         Kind kind = Kind.OTHER;
@@ -328,12 +408,37 @@ final class SleepAnalysis {
             o = Operand.constant(((Number) l.cst).longValue());
         } else if (src instanceof MethodInsnNode mi) {
             if (mi.name.equals("getGameTime") && mi.desc.equals("()J")) o.kind = Kind.GAMETIME;
-            else {
+            else if (chain != null && chain.contains(mi.owner) && op != Opcodes.INVOKESTATIC && Type.getReturnType(mi.desc).getSort() >= Type.ARRAY) {
+                // an object handed out by the block entity itself: a plain getter is that field, anything else is owned
+                String decl = ownerOf(internal(beCls), mi.name, mi.desc);
+                MethodNode t = decl == null ? null : method(decl, mi.name, mi.desc);
+                FieldInsnNode got = t == null ? null : getterField(t);
+                Type rt = Type.getReturnType(mi.desc);
+                if (got != null) {
+                    o.kind = Kind.FIELD;
+                    o.owner = got.owner;
+                    o.name = got.name;
+                } else {
+                    o.kind = Kind.OWNCALL;
+                    o.name = "result of " + mi.name;
+                }
+                o.type = rt.getSort() == Type.OBJECT ? rt.getInternalName() : rt.getDescriptor();
+            } else {
                 o.kind = Kind.CALL;
                 o.name = mi.owner + "." + mi.name;
             }
-        } else if (src instanceof VarInsnNode) {
+        } else if (src instanceof VarInsnNode vi && (op == Opcodes.ALOAD || op == Opcodes.LLOAD || op == Opcodes.ILOAD)) {
+            // follow the local back to what was stored in it (any owned store makes it owned)
+            SourceValue lv = f == null ? null : f.getLocal(vi.var);
             o.kind = Kind.LOCAL;
+            if (lv != null) {
+                for (AbstractInsnNode st : lv.insns) {
+                    if (!(st instanceof VarInsnNode) || st.getOpcode() < Opcodes.ISTORE || st.getOpcode() > Opcodes.ASTORE) continue;
+                    Frame<SourceValue> sf = frames[m.instructions.indexOf(st)];
+                    Operand stored = sf == null ? null : operand(sf, 1, frames, m, depth + 1);
+                    if (stored != null && (stored.kind == Kind.OWNCALL || stored.kind == Kind.FIELD || containsGameTime(stored))) return stored;
+                }
+            }
         } else if (op == Opcodes.DUP || op == Opcodes.DUP2 || op == Opcodes.DUP_X1 || op == Opcodes.DUP_X2) {
             if (op == Opcodes.DUP2 && f != null && f.getStackSize() >= 2) {
                 Operand lower = operand(f, 2, frames, m, depth + 1);
@@ -370,6 +475,15 @@ final class SleepAnalysis {
                 return null;
             }
         });
+    }
+
+    /** ALOAD 0; GETFIELD f; xRETURN (ignoring labels and line numbers) -> f */
+    private static FieldInsnNode getterField(MethodNode t) {
+        AbstractInsnNode[] real = java.util.Arrays.stream(t.instructions.toArray()).filter(x -> x.getOpcode() >= 0).toArray(AbstractInsnNode[]::new);
+        if (real.length == 3 && real[0] instanceof VarInsnNode a && a.getOpcode() == Opcodes.ALOAD && a.var == 0
+                && real[1] instanceof FieldInsnNode g && g.getOpcode() == Opcodes.GETFIELD && real[2].getOpcode() >= Opcodes.IRETURN && real[2].getOpcode() <= Opcodes.ARETURN)
+            return g;
+        return null;
     }
 
     private MethodNode method(String owner, String name, String desc) {

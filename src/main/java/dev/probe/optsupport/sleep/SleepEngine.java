@@ -40,6 +40,8 @@ public final class SleepEngine {
     static final int MAX_BACKOFF = Integer.getInteger("lab.sleep.backoff", 64);
     /** A block entity must have ticked this many times before the engine tracks it. */
     static final int MIN_AGE = Integer.getInteger("lab.sleep.minAge", 40);
+    /** verifyAsleep on every skipped tick (external field changes); off only for measurements */
+    static final boolean VERIFY = !Boolean.getBoolean("lab.sleep.noVerify");
     /** Optional region filter for A/B-in-one-world tests: only x in [minX, maxX) may sleep. */
     static final int MIN_X = Integer.getInteger("lab.sleep.minX", Integer.MIN_VALUE), MAX_X = Integer.getInteger("lab.sleep.maxX", Integer.MAX_VALUE);
 
@@ -70,6 +72,7 @@ public final class SleepEngine {
         final ClassInfo info;
         State state = State.AWAKE;
         long[] prev, cur;                        // two snapshot buffers, swapped every observed tick
+        Object[] refs;                           // asleep: the referenced objects of the reference slots, for verifyAsleep
         long[] rates, prevRates;
         boolean prevValid;
         long prevTick = Long.MIN_VALUE, prevReadHash;
@@ -91,6 +94,7 @@ public final class SleepEngine {
             int n = info.plan.watch().size();
             prev = new long[n];
             cur = new long[n];
+            refs = new Object[n];
             rates = new long[info.clockSlot.length];
             prevRates = new long[info.clockSlot.length];
         }
@@ -105,6 +109,33 @@ public final class SleepEngine {
     private static Sleeper obs;
     private static Thread obsThread;
     private static long w0, seed0, readHash;
+    /** Reads of world state no subscription covers (fluids, light, weather, time of day, players, ...), counted by SleepProbeUnobservedMixin */
+    static long unobserved, u0;
+    static long verifiedSkips, externalWakes;
+
+    /** From SleepProbeUnobservedMixin: the observed tick read something a sleeping block entity could not be woken by. */
+    public static void unobservedRead() {
+        if (obs != null && Thread.currentThread() == obsThread) unobserved++;
+    }
+
+    /**
+     * Before every skipped tick: the watched fields must still equal the snapshot taken when it fell asleep.
+     * Anything changed from outside (a bell hit, a menu, another mod calling a setter) wakes it for this very tick.
+     */
+    public static boolean verifyAsleep(BlockEntity be) {
+        if (!VERIFY) return true;
+        Sleeper s = sleeper(be);
+        if (s == null || s.state != State.ASLEEP) return true;
+        // only the block entity's own fields (the cache lines the skip reads anyway): primitives by value, references by
+        // identity. Changes inside referenced containers arrive as events (container hooks, setChanged, block updates).
+        if (s.info.snapper.same(be, s.prev, s.refs)) {
+            verifiedSkips++;
+            return true;
+        }
+        externalWakes++;
+        request(s, "external change");
+        return false;
+    }
 
     // stats
     static long skipped, entered, resleeps, observedTicks, backedOff, materialized;
@@ -131,7 +162,7 @@ public final class SleepEngine {
         if (s == null || s.state != State.ASLEEP) return false;
         Level level = be.getLevel();
         long now = level.getGameTime();
-        if (!s.woken && now < s.wakeAt) {
+        if (!s.woken && now < s.wakeAt && verifyAsleep(be)) {
             skipped++;
             h(s).probe$setSkipped(h(s).probe$skipped() + 1);
             return true;
@@ -146,6 +177,7 @@ public final class SleepEngine {
         s.state = State.AWAKE;
         s.woken = false;
         h(s).probe$setWakeAt(Long.MIN_VALUE);
+        java.util.Arrays.fill(s.refs, null);   // do not keep replaced objects alive
         // the snapshot taken now is the "before" of this tick: one verifying tick may put it back to sleep
         s.info.snapper.snap(s.be, s.prev);
         s.prevValid = true;
@@ -200,6 +232,7 @@ public final class SleepEngine {
         obsThread = Thread.currentThread();
         w0 = BeTickStats.writes;
         seed0 = seed(level);
+        u0 = unobserved;
         readHash = 17;
         s.readPos.clear();
         s.readBoxes.clear();
@@ -238,7 +271,7 @@ public final class SleepEngine {
         long[] cur = s.cur;
         s.info.snapper.snap(be, cur);
         boolean clockOnly = s.prevValid && s.prevTick == now - 1 && BeTickStats.writes == w0 && seed(level) == seed0
-                && readHash == s.prevReadHash;
+                && readHash == s.prevReadHash && unobserved == u0;
         if (clockOnly) {
             long[] prev = s.prev;
             boolean[] isClock = s.info.isClock;
@@ -317,6 +350,7 @@ public final class SleepEngine {
         s.sleepReadHash = s.prevReadHash;
         s.state = State.ASLEEP;
         s.woken = false;
+        s.info.snapper.refs(s.be, s.refs);   // reference for verifyAsleep (s.prev holds the primitive slots)
         subscribe(s);
         entered++;
     }
@@ -360,6 +394,7 @@ public final class SleepEngine {
         Sleeper s = sleeper(be);
         if (s != null && s.state == State.ASLEEP && h(s).probe$skipped() > 0) {
             advance(s);
+            s.info.snapper.snap(s.be, s.prev);   // the clocks moved on: this is the new reference for verifyAsleep
             materialized++;
         }
     }
@@ -527,8 +562,9 @@ public final class SleepEngine {
             if (s.state == State.NEVER) v[2]++;
         }
         StringBuilder sb = new StringBuilder(String.format(Locale.ROOT,
-                "sleep engine: %s; tracked %d, asleep now %d; skipped ticks %d (fast path %d), sleeps entered %d (re-sleeps %d), observed ticks %d, backed off %d, materialized %d%n",
-                ON ? "ON" : "OFF", ALL.size(), asleep, skipped + fastSkipped, fastSkipped, entered, resleeps, observedTicks, backedOff, materialized));
+                "sleep engine: %s; tracked %d, asleep now %d; skipped ticks %d (fast path %d), sleeps entered %d (re-sleeps %d), observed ticks %d, backed off %d, materialized %d; verified skips %d, external-change wakes %d, unobserved reads %d%n",
+                ON ? "ON" : "OFF", ALL.size(), asleep, skipped + fastSkipped, fastSkipped, entered, resleeps, observedTicks, backedOff, materialized,
+                verifiedSkips, externalWakes, unobserved));
         byType.forEach((k, v) -> sb.append(String.format(Locale.ROOT, "  %-34s tracked %6d  asleep %6d  never %6d%n", k, v[0], v[1], v[2])));
         sb.append("  wakes: ").append(WAKES).append(System.lineSeparator());
         sb.append("  refused: ").append(REFUSED).append(System.lineSeparator());
