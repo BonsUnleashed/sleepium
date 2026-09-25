@@ -17,9 +17,11 @@
     "WriteProbeEntityMixin",
     "WriteProbeItemMixin",
     "WriteProbeLivingMixin",
-    "WriteProbeServerLevelMixin"
+    "WriteProbeServerLevelMixin",
+    "ReadProbeMixin"
   ],
   "injectors": {
     "defaultRequire": 1
-  }
+  },
+  "plugin": "dev.probe.mixin.ProbeMixinPlugin"
 }

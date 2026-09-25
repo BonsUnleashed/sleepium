@@ -23,9 +23,12 @@ import net.minecraft.world.level.block.entity.BlockEntityType;
  * seen, so "idle" means "nothing the world could observe happened", not "the object did not change".
  */
 public final class BeTickStats {
-    public static final boolean ON = Boolean.getBoolean("probe.beStats") || Boolean.getBoolean("probe.beFields");
+    public static final boolean ON = Boolean.getBoolean("probe.beStats") || Boolean.getBoolean("probe.beFields")
+            || Boolean.getBoolean("probe.beReads");
     /** Also diff every field of the block entity before/after its tick (FieldDiff). */
     public static final boolean FIELDS = Boolean.getBoolean("probe.beFields");
+    /** Record world reads during each tick (ReadProbeMixin, applied only with this flag). */
+    public static final boolean READS = Boolean.getBoolean("probe.beReads");
     static final int STREAK = 20;
 
     /** World-visible writes, bumped by the write hooks (server thread). */
@@ -38,6 +41,8 @@ public final class BeTickStats {
         long[] asTimestamp, asCounter;   // per field: changes that looked like "= game time" / "+-1 per tick"
         long[] fieldChanges;   // per field of the layout: ticks in which it changed
         FieldDiff.Layout layout;
+        long reads, readStable, readCompared;   // reads per tick, ticks whose read set equals the previous tick's
+        String example;                          // read set of one instance, relative to its position
     }
 
     private static final Map<BlockEntityType<?>, Stat> STATS = new HashMap<>();
@@ -46,12 +51,22 @@ public final class BeTickStats {
     private static BlockEntity current;
     private static FieldDiff.Layout curLayout;
     private static long[] snapA, snapB;
+    private static Thread curThread;
+    private static long readHash;
+    private static int readCount;
+    private static StringBuilder readLog;
+    private static final Map<BlockEntity, long[]> LAST_READS = new IdentityHashMap<>();
 
     private BeTickStats() {}
 
     public static void before(BlockEntity be) {
         if (be.getLevel() == null || be.getLevel().isClientSide) return;
         current = be;
+        curThread = Thread.currentThread();
+        readHash = 17;
+        readCount = 0;
+        Stat st = READS ? STATS.get(be.getType()) : null;
+        readLog = READS && (st == null || st.example == null) ? new StringBuilder() : null;
         if (FIELDS) {
             curLayout = FieldDiff.layout(be.getClass());
             snapA = FieldDiff.snapshot(be, curLayout, snapA);
@@ -65,6 +80,7 @@ public final class BeTickStats {
         if (be == null) return;
         long dt = System.nanoTime() - t0;
         current = null;
+        curThread = null;
         Stat s = STATS.computeIfAbsent(be.getType(), k -> new Stat());
         s.ticks++;
         s.nanos += dt;
@@ -95,12 +111,48 @@ public final class BeTickStats {
             if (memChanged && allClock && writes == w0) s.clockOnly++;
         }
         if (writes == w0 && !memChanged) s.memIdle++;
+        if (READS) {
+            s.reads += readCount;
+            long[] last = LAST_READS.computeIfAbsent(be, k -> new long[] {0, 0});
+            if (last[1] != 0) {
+                s.readCompared++;
+                if (last[0] == readHash) s.readStable++;
+            }
+            last[0] = readHash;
+            last[1] = 1;
+            if (readLog != null && s.example == null) s.example = readCount + " reads: " + readLog;
+        }
         int[] streak = STREAKS.computeIfAbsent(be, k -> new int[1]);
         if (writes == w0) {
             s.idle++;
             if (++streak[0] >= STREAK) s.sleepable++;
         } else {
             streak[0] = 0;
+        }
+    }
+
+    /** A world read at a block position during the current tick ('B' block state, 'E' block entity). */
+    public static void readPos(char kind, net.minecraft.core.BlockPos pos) {
+        if (current == null || Thread.currentThread() != curThread) return;
+        readCount++;
+        readHash = readHash * 1_000_003L + kind * 31L + pos.asLong();
+        if (readLog != null && readLog.length() < 400) {
+            net.minecraft.core.BlockPos o = current.getBlockPos();
+            readLog.append(kind).append('(').append(pos.getX() - o.getX()).append(',').append(pos.getY() - o.getY())
+                    .append(',').append(pos.getZ() - o.getZ()).append(") ");
+        }
+    }
+
+    /** An entity query over a box during the current tick ('A' any entity, 'T' by type/class). */
+    public static void readBox(char kind, net.minecraft.world.phys.AABB box) {
+        if (current == null || Thread.currentThread() != curThread) return;
+        readCount++;
+        readHash = readHash * 1_000_003L + kind * 31L + Double.doubleToLongBits(box.minX) * 7 + Double.doubleToLongBits(box.minY) * 13
+                + Double.doubleToLongBits(box.minZ) * 17 + Double.doubleToLongBits(box.maxX + box.maxY + box.maxZ);
+        if (readLog != null && readLog.length() < 400) {
+            net.minecraft.core.BlockPos o = current.getBlockPos();
+            readLog.append(kind).append(String.format(Locale.ROOT, "[%.2f..%.2f, %.2f..%.2f, %.2f..%.2f] ", box.minX - o.getX(), box.maxX - o.getX(),
+                    box.minY - o.getY(), box.maxY - o.getY(), box.minZ - o.getZ(), box.maxZ - o.getZ()));
         }
     }
 
@@ -140,6 +192,11 @@ public final class BeTickStats {
                 }
                 if (!any) sb.append("        (none)%n".formatted());
             }
+            if (READS) {
+                sb.append(String.format(Locale.ROOT, "      reads per tick %.1f; read set identical to the previous tick: %.1f%%%n",
+                        s.reads / (double) Math.max(1, s.ticks), 100.0 * s.readStable / Math.max(1, s.readCompared)));
+                if (s.example != null) sb.append("      example: ").append(s.example).append(System.lineSeparator());
+            }
             allTicks += s.ticks;
             allIdle += s.idle;
             allSleep += s.sleepable;
@@ -151,6 +208,7 @@ public final class BeTickStats {
         if (FIELDS && FieldDiff.failure != null) sb.append("  reflection failure (first): ").append(FieldDiff.failure).append(System.lineSeparator());
         STATS.clear();
         STREAKS.entrySet().removeIf(en -> en.getKey().isRemoved());
+        LAST_READS.entrySet().removeIf(en -> en.getKey().isRemoved());
         return sb.toString();
     }
 }
