@@ -34,16 +34,20 @@ public final class OptCounters {
     /** SignalPathMixin shadow check */
     public static final AtomicLong SIGNAL_CHECKED = new AtomicLong(), SIGNAL_MISMATCHES = new AtomicLong();
 
+    /** CubeShapeMixin shadow check */
+    public static final AtomicLong CUBE_CHECKED = new AtomicLong(), CUBE_MISMATCHES = new AtomicLong();
+
     private OptCounters() {}
 
     public static String report() {
-        return String.format(java.util.Locale.ROOT, "  -- opt counters: section scan fast %d, fallback %d, shadow-checked %d, MISMATCHES %d; chunk cache checked %d, MISMATCHES %d; section index checked %d, MISMATCHES %d (rebuilds %d, updates %d, queries %d); brain rebuilds %d, checked %d, MISMATCHES %d, resumes %d; poi columns checked %d, MISMATCHES %d; shapes checked %d, MISMATCHES %d (static classes %d, vanilla %d); collide skips checked %d, MISMATCHES %d; collision memo hits %d, misses %d, unmemoizable %d, collide %d/%d, support %d/%d, checked %d, MISMATCHES %d; %s; signal checked %d, MISMATCHES %d, %s%n",
+        return String.format(java.util.Locale.ROOT, "  -- opt counters: section scan fast %d, fallback %d, shadow-checked %d, MISMATCHES %d; chunk cache checked %d, MISMATCHES %d; section index checked %d, MISMATCHES %d (rebuilds %d, updates %d, queries %d); brain rebuilds %d, checked %d, MISMATCHES %d, resumes %d; poi columns checked %d, MISMATCHES %d; shapes checked %d, MISMATCHES %d (static classes %d, vanilla %d); collide skips checked %d, MISMATCHES %d; collision memo hits %d, misses %d, unmemoizable %d, collide %d/%d, support %d/%d, checked %d, MISMATCHES %d; %s; signal checked %d, MISMATCHES %d, %s; cube collides %d, checked %d, MISMATCHES %d%n",
                 SECTION_FAST.get(), SECTION_FALLBACK.get(), SECTION_CHECKED.get(), SECTION_MISMATCHES.get(), CHUNK_CHECKED.get(), CHUNK_MISMATCHES.get(), INDEX_CHECKED.get(), INDEX_MISMATCHES.get(), SectionIndex.rebuilds, SectionIndex.updates, SectionIndex.queries,
                 BRAIN_REBUILDS.get(), BRAIN_CHECKED.get(), BRAIN_MISMATCHES.get(), BRAIN_RESUMES.get(), POI_CHECKED.get(), POI_MISMATCHES.get(),
                 SHAPE_CHECKED.get(), SHAPE_MISMATCHES.get(), ShapePurity.accepted, ShapePurity.rejected,
                 COLLIDE_CHECKED.get(), COLLIDE_MISMATCHES.get(),
                 BlockCollisionMemo.hits, BlockCollisionMemo.misses, BlockCollisionMemo.unmemoizable, BlockCollisionMemo.collideHits, BlockCollisionMemo.collideMisses,
                 BlockCollisionMemo.supportHits, BlockCollisionMemo.supportMisses, MEMO_CHECKED.get(), MEMO_MISMATCHES.get(),
-                EventSites.report(), SIGNAL_CHECKED.get(), SIGNAL_MISMATCHES.get(), SignalProof.report());
+                EventSites.report(), SIGNAL_CHECKED.get(), SIGNAL_MISMATCHES.get(), SignalProof.report(),
+                CubeAt.collides, CUBE_CHECKED.get(), CUBE_MISMATCHES.get());
     }
 }

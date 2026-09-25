@@ -43,7 +43,9 @@
     "NeighborQueueMixin",
     "SignalPathMixin",
     "SignalProofStateMixin",
-    "EntityCollideMemoMixin"
+    "EntityCollideMemoMixin",
+    "CubeShapeMixin",
+    "VoxelShapeAccessor"
   ],
   "injectors": {
     "defaultRequire": 1
