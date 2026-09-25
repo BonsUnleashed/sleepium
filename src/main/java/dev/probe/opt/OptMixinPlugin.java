@@ -35,6 +35,8 @@ public final class OptMixinPlugin implements IMixinConfigPlugin {
             on = Boolean.getBoolean("lab.opt.all") || Boolean.getBoolean("lab.opt.BlockCollisionMemoMixin");
         if (simple.equals("EntitySectionCollidableMixin") || simple.equals("EntityStorageCollidableMixin") || simple.equals("LevelEntityGetterAdapterAccessor"))
             on = Boolean.getBoolean("lab.opt.all") || Boolean.getBoolean("lab.opt.EntityCollisionSkipMixin");
+        if (simple.equals("SignalProofStateMixin"))
+            on = Boolean.getBoolean("lab.opt.all") || Boolean.getBoolean("lab.opt.SignalPathMixin");
         if (simple.equals("LevelNeighborUpdaterAccessor"))
             on = Boolean.getBoolean("lab.opt.all") || Boolean.getBoolean("lab.opt.NeighborNotifySkipMixin");
         // both replace Util's pools: LabPools wins when both are requested
@@ -51,7 +53,7 @@ public final class OptMixinPlugin implements IMixinConfigPlugin {
      * not the experimental worldgen/pool ones). Expanded into the individual flags before any of them is read.
      */
     static final String[] UNIVERSAL = {"TickMemoMixin", "ChunkCacheMixin", "EntitySectionScanMixin", "EntitySectionIndexMixin",
-            "NeighborNotifySkipMixin", "NeoForgeBusMixin", "NeighborReactMixin", "TagCacheMixin", "BrainFlatMixin", "PoiColumnMixin", "EntityCollisionSkipMixin", "BlockCollisionMemoMixin", "EventSiteMixin", "NeighborQueueMixin"};
+            "NeighborNotifySkipMixin", "NeoForgeBusMixin", "NeighborReactMixin", "TagCacheMixin", "BrainFlatMixin", "PoiColumnMixin", "EntityCollisionSkipMixin", "BlockCollisionMemoMixin", "EventSiteMixin", "NeighborQueueMixin", "SignalPathMixin"};
 
     @Override
     public void onLoad(String mixinPackage) {

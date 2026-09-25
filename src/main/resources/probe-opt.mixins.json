@@ -40,7 +40,9 @@
     "SectionModCountMixin",
     "EntityCollisionMemoMixin",
     "EventSiteMixin",
-    "NeighborQueueMixin"
+    "NeighborQueueMixin",
+    "SignalPathMixin",
+    "SignalProofStateMixin"
   ],
   "injectors": {
     "defaultRequire": 1
