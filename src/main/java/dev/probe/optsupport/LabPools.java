@@ -1,0 +1,41 @@
+package dev.probe.optsupport;
+
+import dev.lab.runtime.LabRuntime;
+import dev.lab.runtime.OsThreads;
+import java.util.concurrent.ExecutorService;
+
+/**
+ * Pool factories for LabPoolsMixin: vanilla's worker pools replaced by {@link LabRuntime} (persistent threads,
+ * woken on demand, never created on demand).
+ * <ul>
+ *   <li>background ("Worker-Main"): {@code lab.opt.bgThreads} workers (default 4), BELOW_NORMAL, so the server
+ *       thread and the OS win any contention;</li>
+ *   <li>IO ("IO-Worker"): {@code lab.opt.ioThreads} (default 4), ABOVE_NORMAL: disk and network wait on the OS, and
+ *       when their data arrives they should run at once;</li>
+ *   <li>Download: 2 workers, ABOVE_NORMAL, daemon (as vanilla).</li>
+ * </ul>
+ * Thread names keep vanilla's prefixes, so profiles and thread dumps stay comparable.
+ */
+public final class LabPools {
+    private static final int BG = Integer.getInteger("lab.opt.bgThreads", 4);
+    private static final int IO = Integer.getInteger("lab.opt.ioThreads", 4);
+
+    private LabPools() {}
+
+    public static ExecutorService background(String serviceName, Thread.UncaughtExceptionHandler handler) {
+        LabRuntime rt = new LabRuntime(LabRuntime.Config.of("Worker-" + serviceName, BG)
+                .withPriority(OsThreads.BELOW_NORMAL).withHandler(handler));
+        System.out.println("[probe/opt] LabRuntime background pool 'Worker-" + serviceName + "': " + BG
+                + " workers, BELOW_NORMAL, native priorities: " + OsThreads.nativeAvailable());
+        return rt;
+    }
+
+    public static ExecutorService io(String name, boolean daemon, Thread.UncaughtExceptionHandler handler) {
+        String base = name.endsWith("-") ? name.substring(0, name.length() - 1) : name;
+        int n = base.startsWith("Download") ? 2 : IO;
+        LabRuntime rt = new LabRuntime(LabRuntime.Config.of(base, n)
+                .withPriority(OsThreads.ABOVE_NORMAL).withDaemon(daemon).withHandler(handler));
+        System.out.println("[probe/opt] LabRuntime IO pool '" + base + "': " + n + " workers, ABOVE_NORMAL, daemon " + daemon);
+        return rt;
+    }
+}

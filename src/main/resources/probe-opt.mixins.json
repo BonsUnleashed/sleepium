@@ -10,7 +10,8 @@
     "MailboxBatchMixin",
     "NeoForgeBusMixin",
     "ParallelWorldgenMixin",
-    "PersistentPoolsMixin"
+    "PersistentPoolsMixin",
+    "LabPoolsMixin"
   ],
   "injectors": {
     "defaultRequire": 1

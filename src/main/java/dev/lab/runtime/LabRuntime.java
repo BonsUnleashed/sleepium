@@ -50,10 +50,22 @@ public final class LabRuntime extends AbstractExecutorService {
     static final int CHAIN_BACKLOG = Integer.getInteger("lab.runtime.chainBacklog", 1);
 
     public record Config(String name, int maxWorkers, int maxSpinners, long spinNanos, int osPriority,
-                         int laneCapacity, int dequeCapacity, boolean daemon) {
+                         int laneCapacity, int dequeCapacity, boolean daemon, Thread.UncaughtExceptionHandler handler) {
         public static Config of(String name, int maxWorkers) {
             return new Config(name, maxWorkers, Integer.getInteger("lab.runtime.spinners", 1), Long.getLong("lab.runtime.spinNanos", 20_000), Integer.getInteger("lab.runtime.priority", OsThreads.BELOW_NORMAL),
-                    1 << 14, 1 << 12, true);
+                    1 << 14, 1 << 12, true, null);
+        }
+
+        public Config withPriority(int osPriority) {
+            return new Config(name, maxWorkers, maxSpinners, spinNanos, osPriority, laneCapacity, dequeCapacity, daemon, handler);
+        }
+
+        public Config withDaemon(boolean daemon) {
+            return new Config(name, maxWorkers, maxSpinners, spinNanos, osPriority, laneCapacity, dequeCapacity, daemon, handler);
+        }
+
+        public Config withHandler(Thread.UncaughtExceptionHandler handler) {
+            return new Config(name, maxWorkers, maxSpinners, spinNanos, osPriority, laneCapacity, dequeCapacity, daemon, handler);
         }
     }
 
@@ -163,10 +175,13 @@ public final class LabRuntime extends AbstractExecutorService {
     }
 
     private boolean pushLocal(Worker w, Runnable task) {
-        boolean surplus = !w.deque.isEmpty();   // the owner runs the newest task itself next (LIFO)
         if (!w.deque.push(task)) return false;
         localPushes.increment();
-        if (surplus && spinners.get() == 0) wakeOne();
+        // Always make sure someone else can take it: the submitting task may block right after this call waiting for
+        // the very task it submitted (vanilla does CompletableFuture.supplyAsync(.., backgroundExecutor).join() inside
+        // worldgen: IOWorker.isOldChunkAround). "The owner runs it next" deadlocked the server on world creation.
+        // A spinner, if any, steals it; otherwise one parked worker is woken.
+        if (parkedMask != 0 && spinners.get() == (w.spinning ? 1 : 0)) wakeOne();
         return true;
     }
 
@@ -220,8 +235,9 @@ public final class LabRuntime extends AbstractExecutorService {
             this.id = id;
             this.bit = 1L << id;
             this.deque = new WorkDeque(cfg.dequeCapacity);
-            this.thread = new LabThread(LabRuntime.this, this, cfg.name + "-" + id);
+            this.thread = new LabThread(LabRuntime.this, this, cfg.name + "-" + (id + 1));
             this.thread.setDaemon(cfg.daemon);
+            if (cfg.handler != null) this.thread.setUncaughtExceptionHandler(cfg.handler);
             this.stealStart = id + 1;
         }
 
