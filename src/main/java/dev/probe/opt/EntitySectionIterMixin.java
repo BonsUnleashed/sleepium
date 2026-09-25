@@ -84,11 +84,42 @@ public abstract class EntitySectionIterMixin<T extends EntityAccess> {
     }
 
     @SuppressWarnings({"unchecked", "rawtypes"})
+    private void probe$checkTyped(SectionIndex idx, List<T> list, AABB bounds, EntityTypeTest test) {
+        List<Object> a = new java.util.ArrayList<>(), b = new java.util.ArrayList<>();
+        for (int i = 0; i < list.size(); i++) {
+            Object u = test.tryCast(list.get(i));
+            if (u != null && list.get(i).getBoundingBox().intersects(bounds)) a.add(u);
+        }
+        idx.queryTyped(list, bounds, test, e -> {
+            b.add(e);
+            return AbortableIterationConsumer.Continuation.CONTINUE;
+        });
+        OptCounters.INDEX_CHECKED.incrementAndGet();
+        if (!a.equals(b) && OptCounters.INDEX_MISMATCHES.incrementAndGet() <= 5)
+            System.out.println("[probe/opt] typed section index MISMATCH: vanilla " + a.size() + " vs index " + b.size());
+    }
+
+    @SuppressWarnings({"unchecked", "rawtypes"})
     @Inject(method = "getEntities(Lnet/minecraft/world/level/entity/EntityTypeTest;Lnet/minecraft/world/phys/AABB;Lnet/minecraft/util/AbortableIterationConsumer;)Lnet/minecraft/util/AbortableIterationConsumer$Continuation;",
             at = @At("HEAD"), cancellable = true)
     private void probe$typed(EntityTypeTest test, AABB bounds, AbortableIterationConsumer consumer, CallbackInfoReturnable<AbortableIterationConsumer.Continuation> cir) {
         List<T> list = ((ClassInstanceMultiMapAccessor<T>) storage).probe$byClass().get(test.getBaseClass());
         if (list == null) return;   // first query for this class: vanilla find() builds the list
+        if (INDEX && list.size() >= INDEX_MIN) {
+            IndexedSection is = (IndexedSection) this;
+            Class<?> base = test.getBaseClass();
+            SectionIndex idx = is.probe$typedIndex(base);
+            Thread th = Thread.currentThread();
+            if (idx == null && is.probe$key() != Long.MIN_VALUE && th == serverThread()) {
+                idx = new SectionIndex(is.probe$key());
+                is.probe$putTypedIndex(base, idx);
+            }
+            if (idx != null && idx.owner == th) {
+                if (INDEX_CHECK) probe$checkTyped(idx, list, bounds, test);
+                cir.setReturnValue(idx.queryTyped(list, bounds, test, consumer));
+                return;
+            }
+        }
         for (int i = 0; i < list.size(); i++) {
             T t = list.get(i);
             Object u = test.tryCast(t);

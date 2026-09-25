@@ -101,6 +101,13 @@ public final class SectionIndex {
 
     /** Same result, same order as vanilla's scan of {@code list} with bounds.intersects. */
     public <T extends EntityAccess> AbortableIterationConsumer.Continuation query(List<T> list, AABB bounds, AbortableIterationConsumer<T> consumer) {
+        return queryTyped(list, bounds, null, consumer);
+    }
+
+    /** Typed variant: vanilla tests tryCast then intersects; both are pure, so the accepted set and order are the same. */
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    public <T extends EntityAccess> AbortableIterationConsumer.Continuation queryTyped(List<T> list, AABB bounds,
+            net.minecraft.world.level.entity.EntityTypeTest test, AbortableIterationConsumer consumer) {
         if (dirty || recs.size() != list.size()) rebuild(list);
         queries++;
         int x1 = cell(bounds.minX, ox), x2 = cell(bounds.maxX, ox), y1 = cell(bounds.minY, oy), y2 = cell(bounds.maxY, oy), z1 = cell(bounds.minZ, oz), z2 = cell(bounds.maxZ, oz);
@@ -109,13 +116,15 @@ public final class SectionIndex {
             if (d >= pool.length) pool = java.util.Arrays.copyOf(pool, pool.length * 2);
             long[] acc = pool[d];
             if (acc == null || acc.length < words) pool[d] = acc = new long[Math.max(words, 8)];
-            return scan(list, bounds, consumer, acc, x1, x2, y1, y2, z1, z2);
+            return scan(list, bounds, test, consumer, acc, x1, x2, y1, y2, z1, z2);
         } finally {
             depth--;
         }
     }
 
-    private <T extends EntityAccess> AbortableIterationConsumer.Continuation scan(List<T> list, AABB bounds, AbortableIterationConsumer<T> consumer,
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private <T extends EntityAccess> AbortableIterationConsumer.Continuation scan(List<T> list, AABB bounds,
+                                                                                net.minecraft.world.level.entity.EntityTypeTest test, AbortableIterationConsumer consumer,
                                                                                 long[] acc, int x1, int x2, int y1, int y2, int z1, int z2) {
         java.util.Arrays.fill(acc, 0, words, 0L);
         for (int x = x1; x <= x2; x++)
@@ -132,7 +141,8 @@ public final class SectionIndex {
                 v &= v - 1;
                 if (idx >= n) return AbortableIterationConsumer.Continuation.CONTINUE;
                 T t = list.get(idx);
-                if (t.getBoundingBox().intersects(bounds) && consumer.accept(t).shouldAbort()) return AbortableIterationConsumer.Continuation.ABORT;
+                Object u = test == null ? t : test.tryCast(t);
+                if (u != null && t.getBoundingBox().intersects(bounds) && consumer.accept(u).shouldAbort()) return AbortableIterationConsumer.Continuation.ABORT;
             }
         }
         return AbortableIterationConsumer.Continuation.CONTINUE;

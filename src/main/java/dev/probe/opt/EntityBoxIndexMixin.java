@@ -22,8 +22,10 @@ public abstract class EntityBoxIndexMixin {
         if (levelCallback instanceof EntityCallbackAccessor cb) {
             EntitySection<?> s = cb.probe$section();
             if (s != null) {
-                SectionIndex idx = ((IndexedSection) s).probe$index();
+                IndexedSection is = (IndexedSection) s;
+                SectionIndex idx = is.probe$index();
                 if (idx != null && idx.owner == Thread.currentThread()) idx.update(this, bb);
+                is.probe$forEachTyped(this, bb);
             }
         }
     }
