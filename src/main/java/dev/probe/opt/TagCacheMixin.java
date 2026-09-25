@@ -22,7 +22,6 @@ public abstract class TagCacheMixin<T> {
 
     @Unique private Object probe$set, probe$k1, probe$k2;
     @Unique private boolean probe$v1, probe$v2;
-    @Unique private static Thread probe$server;
 
     /**
      * @author probe (lab.opt.TagCacheMixin)
@@ -31,13 +30,8 @@ public abstract class TagCacheMixin<T> {
     @Overwrite
     public boolean is(TagKey<T> tagKey) {
         Set<TagKey<T>> t = this.tags;
-        Thread server = probe$server;
-        if (server == null) {
-            var s = net.neoforged.neoforge.server.ServerLifecycleHooks.getCurrentServer();
-            if (s == null) return t.contains(tagKey);
-            probe$server = server = s.getRunningThread();
-        }
-        if (Thread.currentThread() != server) return t.contains(tagKey);
+        var server = net.neoforged.neoforge.server.ServerLifecycleHooks.getCurrentServer();   // current one: a client starts a new server per world
+        if (server == null || Thread.currentThread() != server.getRunningThread()) return t.contains(tagKey);
         if (probe$set == t) {
             if (probe$k1 == tagKey) return probe$v1;
             if (probe$k2 == tagKey) return probe$v2;

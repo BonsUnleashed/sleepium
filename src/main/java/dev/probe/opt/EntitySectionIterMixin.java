@@ -77,15 +77,10 @@ public abstract class EntitySectionIterMixin<T extends EntityAccess> {
     private static final boolean INDEX = Boolean.getBoolean("lab.opt.EntitySectionIndexMixin");
     private static final boolean INDEX_CHECK = Boolean.getBoolean("lab.opt.sectionIndexCheck");
     private static final int INDEX_MIN = Integer.getInteger("lab.opt.sectionIndexMin", 48);
-    private static Thread serverThread;
-
+    /** The current server's thread (not cached: a client starts a new integrated server, and thread, per world). */
     private static Thread serverThread() {
-        Thread t = serverThread;
-        if (t == null) {
-            var server = net.neoforged.neoforge.server.ServerLifecycleHooks.getCurrentServer();
-            if (server != null) serverThread = t = server.getRunningThread();
-        }
-        return t;
+        var server = net.neoforged.neoforge.server.ServerLifecycleHooks.getCurrentServer();
+        return server != null ? server.getRunningThread() : null;
     }
 
     /** Shadow check: the index must yield exactly the entities (and order) of the vanilla scan. */
