@@ -1,0 +1,74 @@
+package dev.probe.opt;
+
+import dev.probe.optsupport.BlockCollisionMemo;
+import dev.probe.optsupport.OptCounters;
+import java.util.List;
+import javax.annotation.Nullable;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.Vec3;
+import net.minecraft.world.phys.shapes.VoxelShape;
+import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Overwrite;
+import org.spongepowered.asm.mixin.Shadow;
+
+/**
+ * Goes with BlockCollisionMemoMixin: the block collision of a move (Entity.collideBoundingBox) is a pure function of
+ * the movement, the box and the shapes of the blocks in the range BlockCollisions scans. With no entity colliders,
+ * away from the world border and over provably static shapes in unchanged sections, the same movement and box give
+ * the same answer: memoized per entity (resting items and mobs repeat it every tick). Same object semantics as
+ * vanilla: the movement itself when nothing collides, a new Vec3 otherwise.
+ */
+@Mixin(Entity.class)
+public abstract class EntityCollideMemoMixin {
+    @Shadow
+    private static List<VoxelShape> collectColliders(@Nullable Entity entity, Level level, List<VoxelShape> collisions, AABB boundingBox) {
+        throw new AssertionError();
+    }
+
+    @Shadow
+    private static Vec3 collideWithShapes(Vec3 deltaMovement, AABB entityBB, List<VoxelShape> shapes) {
+        throw new AssertionError();
+    }
+
+    /**
+     * @author probe (lab.opt.BlockCollisionMemoMixin)
+     * @reason memoized block collision for repeated identical moves; vanilla body otherwise
+     */
+    @Overwrite
+    public static Vec3 collideBoundingBox(@Nullable Entity entity, Vec3 vec, AABB collisionBox, Level level, List<VoxelShape> potentialHits) {
+        AABB bb = collisionBox.expandTowards(vec);
+        if (entity == null || !BlockCollisionMemo.MOVE_SLOTS || !potentialHits.isEmpty() || !BlockCollisionMemo.usable(level) || level.getWorldBorder().isInsideCloseToBorder(entity, bb)) {
+            return collideWithShapes(vec, collisionBox, collectColliders(entity, level, potentialHits, bb));
+        }
+        BlockCollisionMemo.Holder holder = (BlockCollisionMemo.Holder) entity;
+        BlockCollisionMemo m = holder.probe$collideMemo();
+        if (m != null && m.valid && m.sameBox(collisionBox) && m.sameKey(vec.x, vec.y, vec.z) && BlockCollisionMemo.unchanged(level, m, bb)) {
+            BlockCollisionMemo.collideHits++;
+            Vec3 r = m.same ? vec : new Vec3(m.r0, m.r1, m.r2);
+            if (BlockCollisionMemo.CHECK) {
+                OptCounters.MEMO_CHECKED.incrementAndGet();
+                Vec3 v = collideWithShapes(vec, collisionBox, collectColliders(entity, level, potentialHits, bb));
+                boolean ok = (v == vec) == m.same && Double.doubleToRawLongBits(v.x) == Double.doubleToRawLongBits(r.x)
+                        && Double.doubleToRawLongBits(v.y) == Double.doubleToRawLongBits(r.y) && Double.doubleToRawLongBits(v.z) == Double.doubleToRawLongBits(r.z);
+                if (!ok && OptCounters.MEMO_MISMATCHES.incrementAndGet() <= 5)
+                    System.out.println("[probe/opt] collide memo MISMATCH for " + entity + ": memo " + r + " vanilla " + v);
+            }
+            return r;
+        }
+        BlockCollisionMemo.collideMisses++;
+        Vec3 r = collideWithShapes(vec, collisionBox, collectColliders(entity, level, potentialHits, bb));
+        if (m == null) holder.probe$setCollideMemo(m = new BlockCollisionMemo());
+        m.valid = BlockCollisionMemo.record(level, m, bb);
+        if (m.valid) {
+            m.setBox(collisionBox);
+            m.setKey(vec.x, vec.y, vec.z);
+            m.same = r == vec;
+            m.r0 = r.x;
+            m.r1 = r.y;
+            m.r2 = r.z;
+        }
+        return r;
+    }
+}

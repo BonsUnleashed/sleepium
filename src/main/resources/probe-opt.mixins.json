@@ -42,7 +42,8 @@
     "EventSiteMixin",
     "NeighborQueueMixin",
     "SignalPathMixin",
-    "SignalProofStateMixin"
+    "SignalProofStateMixin",
+    "EntityCollideMemoMixin"
   ],
   "injectors": {
     "defaultRequire": 1
