@@ -29,7 +29,9 @@
     "TagCacheMixin",
     "BrainFlatMixin",
     "SectionStorageIndexMixin",
-    "PoiColumnMixin"
+    "PoiColumnMixin",
+    "BlockBehaviourInvoker",
+    "ShapeCacheMixin"
   ],
   "injectors": {
     "defaultRequire": 1

@@ -97,6 +97,12 @@ final class ProbeCommand {
                     say(ctx, r);
                     return 1;
                 }))
+                .then(Commands.literal("hashdiag").executes(ctx -> {
+                    String r = hashDiag(ctx.getSource().getLevel());
+                    ProbeMod.LOGGER.info("{}", r);
+                    say(ctx, r);
+                    return 1;
+                }))
                 .then(Commands.literal("hash")
                         .then(Commands.argument("x1", IntegerArgumentType.integer()).then(Commands.argument("y1", IntegerArgumentType.integer())
                         .then(Commands.argument("z1", IntegerArgumentType.integer()).then(Commands.argument("x2", IntegerArgumentType.integer())
@@ -188,6 +194,46 @@ final class ProbeCommand {
     }
 
     /** Deterministic fingerprint of a region: every block state and full block-entity NBT, plus the game time. */
+    /** Bin occupancy of identity-hashed keys (Brain memory types, entity classes) as java.util.HashMap would place them. */
+    static String hashDiag(ServerLevel level) {
+        StringBuilder sb = new StringBuilder("hashdiag:");
+        for (net.minecraft.world.entity.Entity e : level.getAllEntities()) {
+            if (e instanceof net.minecraft.world.entity.LivingEntity le && !le.getBrain().getMemories().isEmpty()) {
+                java.util.Set<?> keys = le.getBrain().getMemories().keySet();
+                sb.append(" brain(").append(e.getType().toShortString()).append(") ").append(bins(keys));
+                break;
+            }
+        }
+        java.util.Set<Object> classes = new java.util.HashSet<>();
+        for (net.minecraft.world.entity.Entity e : level.getAllEntities()) {
+            for (Class<?> c = e.getClass(); c != null; c = c.getSuperclass()) classes.add(c);
+            for (Class<?> c : e.getClass().getInterfaces()) classes.add(c);
+        }
+        sb.append(" classes ").append(bins(classes));
+        StringBuilder h = new StringBuilder();
+        int k = 0;
+        for (Object o : classes) if (k++ < 6) h.append(Integer.toHexString(System.identityHashCode(o))).append(' ');
+        sb.append(" sample ").append(h);
+        return sb.toString();
+    }
+
+    private static String bins(java.util.Set<?> keys) {
+        int n = keys.size(), cap = 1;
+        while (cap * 0.75 < n) cap <<= 1;
+        cap = Math.max(cap, 16);
+        int[] bin = new int[cap];
+        java.util.Set<Integer> distinct = new java.util.HashSet<>();
+        for (Object o : keys) {
+            int h = System.identityHashCode(o);
+            distinct.add(h);
+            bin[(h ^ (h >>> 16)) & (cap - 1)]++;
+        }
+        int max = 0;
+        for (int b : bin) max = Math.max(max, b);
+        return "n=" + n + " cap=" + cap + " distinctHashes=" + distinct.size() + " maxBin=" + max
+                + " realHashCode=" + keys.stream().filter(o -> o.hashCode() != System.identityHashCode(o)).count();
+    }
+
     static String regionHash(ServerLevel level, int x1, int y1, int z1, int x2, int y2, int z2) {
         var reg = level.registryAccess();
         long h = 1125899906842597L;
