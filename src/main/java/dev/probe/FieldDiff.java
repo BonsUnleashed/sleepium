@@ -77,11 +77,19 @@ public final class FieldDiff {
         if (t == char.class) return f.getChar(o);
         if (t == float.class) return Float.floatToRawIntBits(f.getFloat(o));
         if (t == double.class) return Double.doubleToRawLongBits(f.getDouble(o));
-        Object r = f.get(o);
+        return fingerprint(f.get(o));
+    }
+
+    /**
+     * Fingerprint of a referenced object: identity (effectively its address), plus content for the containers that
+     * change in place: NonNullList / ItemStack (item and count) and maps / collections (size and hash).
+     * Called from the compiled snapshot routines of the sleep engine; allocation-free for lists (index loop).
+     */
+    public static long fingerprint(Object r) {
         if (r == null) return 0;
         if (r instanceof NonNullList<?> list) {
             long h = System.identityHashCode(list);
-            for (Object e : list) h = h * 31 + stack(e);
+            for (int i = 0, n = list.size(); i < n; i++) h = h * 31 + stack(list.get(i));
             return h;
         }
         if (r instanceof ItemStack s) return stack(s);

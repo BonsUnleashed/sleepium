@@ -43,12 +43,19 @@ final class SleepAnalysis {
     record Cond(Field clock, Field thresholdField, long thresholdConst, long mod, String text) {}
 
     /** What the engine may do with a class. */
-    record Plan(boolean eligible, String reason, List<Field> clocks, List<Cond> conds) {}
+    /** What the engine may do with a class; {@code watch} = the only fields a tick can change (clocks included). */
+    record Plan(boolean eligible, String reason, List<Field> clocks, List<Cond> conds, List<Field> watch) {
+        Plan(boolean eligible, String reason, List<Field> clocks, List<Cond> conds) {
+            this(eligible, reason, clocks, conds, List.of());
+        }
+    }
 
     private final Map<String, ClassNode> nodes = new HashMap<>();
     private final ClassLoader loader;
     private final Map<String, Field> clocks = new LinkedHashMap<>();
     private final List<Cond> conds = new ArrayList<>();
+    /** fields the followed code writes, plus owned containers whose contents it may change in place */
+    private final Map<String, Field> watch = new LinkedHashMap<>();
     private String reject;
 
     private SleepAnalysis(ClassLoader loader) {
@@ -96,7 +103,9 @@ final class SleepAnalysis {
             for (String[] t : tickers) branches(t[0], method(t[0], t[1], t[2]), 0, seen, beChain, beClass);
         }
         if (reject != null) return new Plan(false, reject, List.copyOf(clocks.values()), List.copyOf(conds));
-        return new Plan(true, "ok: " + tickers.size() + " ticker(s)", List.copyOf(clocks.values()), List.copyOf(conds));
+        for (Field c : clocks.values()) if (c != null) watch.putIfAbsent(c.getName(), c);
+        return new Plan(true, "ok: " + tickers.size() + " ticker(s), watching " + watch.size() + " field(s)", List.copyOf(clocks.values()),
+                List.copyOf(conds), List.copyOf(watch.values()));
     }
 
     // ---------------------------------------------------------------- pass 1: clocks and hidden state
@@ -108,6 +117,12 @@ final class SleepAnalysis {
         for (int i = 0; i < in.length && reject == null; i++) {
             if (fr[i] == null) continue;
             int op = in[i].getOpcode();
+            if ((op == Opcodes.PUTFIELD || op == Opcodes.GETFIELD) && in[i] instanceof FieldInsnNode wf && beChain.contains(wf.owner)
+                    && !BASE_FIELDS.contains(wf.name) && (op == Opcodes.PUTFIELD || containerType(wf.desc))) {
+                Field fld = field(beClass, wf.name);
+                if (fld == null) { reject = "field not accessible: " + wf.name; break; }
+                watch.putIfAbsent(wf.name, fld);
+            }
             if (op == Opcodes.PUTFIELD && in[i] instanceof FieldInsnNode f && beChain.contains(f.owner)) {
                 String kind = clockKind(f, fr, m, i);
                 if (kind != null) clocks.putIfAbsent(f.owner + "." + f.name, field(beClass, f.name));
@@ -219,6 +234,19 @@ final class SleepAnalysis {
                 conds.add(new Cond(clock, tf, 0, 0, c.name + " ? " + t.name));
             }
             default -> reject = "clock " + c.name + " compared with " + t.kind;
+        }
+    }
+
+    /** Fields whose referenced object changes in place (inventories, maps, collections, stacks). */
+    private boolean containerType(String desc) {
+        if (!desc.startsWith("L")) return false;
+        String t = desc.substring(1, desc.length() - 1);
+        if (t.equals("net/minecraft/core/NonNullList") || t.equals("net/minecraft/world/item/ItemStack")) return true;
+        try {
+            Class<?> c = Class.forName(t.replace('/', '.'), false, loader);
+            return java.util.Map.class.isAssignableFrom(c) || java.util.Collection.class.isAssignableFrom(c);
+        } catch (ClassNotFoundException | LinkageError e) {
+            return false;
         }
     }
 

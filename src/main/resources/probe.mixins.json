@@ -22,7 +22,8 @@
     "SleepProbeContainerMixin",
     "SleepProbeEntityMixin",
     "SleepProbeObserveMixin",
-    "SleepProbeViewMixin"
+    "SleepProbeViewMixin",
+    "SleepProbeHolderMixin"
   ],
   "injectors": {
     "defaultRequire": 1
