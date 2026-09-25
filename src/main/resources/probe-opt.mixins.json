@@ -26,7 +26,8 @@
     "EntitySectionKeyMixin",
     "EntityCallbackAccessor",
     "EntityBoxIndexMixin",
-    "TagCacheMixin"
+    "TagCacheMixin",
+    "BrainFlatMixin"
   ],
   "injectors": {
     "defaultRequire": 1

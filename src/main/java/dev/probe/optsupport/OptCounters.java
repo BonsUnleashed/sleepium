@@ -15,10 +15,15 @@ public final class OptCounters {
     /** section index shadow check */
     public static final AtomicLong INDEX_CHECKED = new AtomicLong(), INDEX_MISMATCHES = new AtomicLong();
 
+    /** BrainFlatMixin: flat-array rebuilds, shadow-checked ticks, order differences, mid-tick mutations resumed */
+    public static final AtomicLong BRAIN_REBUILDS = new AtomicLong(), BRAIN_CHECKED = new AtomicLong(), BRAIN_MISMATCHES = new AtomicLong(),
+            BRAIN_RESUMES = new AtomicLong();
+
     private OptCounters() {}
 
     public static String report() {
-        return String.format(java.util.Locale.ROOT, "  -- opt counters: section scan fast %d, fallback %d, shadow-checked %d, MISMATCHES %d; chunk cache checked %d, MISMATCHES %d; section index checked %d, MISMATCHES %d (rebuilds %d, updates %d, queries %d)%n",
-                SECTION_FAST.get(), SECTION_FALLBACK.get(), SECTION_CHECKED.get(), SECTION_MISMATCHES.get(), CHUNK_CHECKED.get(), CHUNK_MISMATCHES.get(), INDEX_CHECKED.get(), INDEX_MISMATCHES.get(), SectionIndex.rebuilds, SectionIndex.updates, SectionIndex.queries);
+        return String.format(java.util.Locale.ROOT, "  -- opt counters: section scan fast %d, fallback %d, shadow-checked %d, MISMATCHES %d; chunk cache checked %d, MISMATCHES %d; section index checked %d, MISMATCHES %d (rebuilds %d, updates %d, queries %d); brain rebuilds %d, checked %d, MISMATCHES %d, resumes %d%n",
+                SECTION_FAST.get(), SECTION_FALLBACK.get(), SECTION_CHECKED.get(), SECTION_MISMATCHES.get(), CHUNK_CHECKED.get(), CHUNK_MISMATCHES.get(), INDEX_CHECKED.get(), INDEX_MISMATCHES.get(), SectionIndex.rebuilds, SectionIndex.updates, SectionIndex.queries,
+                BRAIN_REBUILDS.get(), BRAIN_CHECKED.get(), BRAIN_MISMATCHES.get(), BRAIN_RESUMES.get());
     }
 }
