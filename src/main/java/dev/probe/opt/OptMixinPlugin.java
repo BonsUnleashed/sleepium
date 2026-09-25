@@ -20,6 +20,8 @@ public final class OptMixinPlugin implements IMixinConfigPlugin {
         // helpers that belong to a feature flag
         if (simple.equals("EntitySectionIterMixin") || simple.equals("ClassInstanceMultiMapAccessor"))
             on = Boolean.getBoolean("lab.opt.all") || Boolean.getBoolean("lab.opt.EntitySectionScanMixin");
+        if (simple.equals("ChunkCacheClearMixin"))
+            on = Boolean.getBoolean("lab.opt.all") || Boolean.getBoolean("lab.opt.ChunkCacheMixin");
         if (simple.equals("LevelNeighborUpdaterAccessor"))
             on = Boolean.getBoolean("lab.opt.all") || Boolean.getBoolean("lab.opt.NeighborNotifySkipMixin");
         // both replace Util's pools: LabPools wins when both are requested

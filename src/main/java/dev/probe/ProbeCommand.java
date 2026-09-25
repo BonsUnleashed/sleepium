@@ -97,6 +97,17 @@ final class ProbeCommand {
                     say(ctx, r);
                     return 1;
                 }))
+                .then(Commands.literal("hash")
+                        .then(Commands.argument("x1", IntegerArgumentType.integer()).then(Commands.argument("y1", IntegerArgumentType.integer())
+                        .then(Commands.argument("z1", IntegerArgumentType.integer()).then(Commands.argument("x2", IntegerArgumentType.integer())
+                        .then(Commands.argument("y2", IntegerArgumentType.integer()).then(Commands.argument("z2", IntegerArgumentType.integer()).executes(ctx -> {
+                            String r = regionHash(ctx.getSource().getLevel(), IntegerArgumentType.getInteger(ctx, "x1"), IntegerArgumentType.getInteger(ctx, "y1"),
+                                    IntegerArgumentType.getInteger(ctx, "z1"), IntegerArgumentType.getInteger(ctx, "x2"), IntegerArgumentType.getInteger(ctx, "y2"),
+                                    IntegerArgumentType.getInteger(ctx, "z2"));
+                            ProbeMod.LOGGER.info("{}", r);
+                            say(ctx, r);
+                            return 1;
+                        }))))))))
                 .then(Commands.literal("equiv")
                         .then(Commands.argument("x1", IntegerArgumentType.integer()).then(Commands.argument("y1", IntegerArgumentType.integer())
                         .then(Commands.argument("z1", IntegerArgumentType.integer()).then(Commands.argument("x2", IntegerArgumentType.integer())
@@ -174,6 +185,26 @@ final class ProbeCommand {
                 }
         return String.format(Locale.ROOT, "equivalence A=[%d..%d] vs B=A+%d: blocks %d (different %d), block entities %d (different %d) -> %s%n%s",
                 Math.min(x1, x2), Math.max(x1, x2), dx, blocks, blockDiff, bes, beDiff, blockDiff == 0 && beDiff == 0 ? "IDENTICAL" : "DIFFERENT", diffs);
+    }
+
+    /** Deterministic fingerprint of a region: every block state and full block-entity NBT, plus the game time. */
+    static String regionHash(ServerLevel level, int x1, int y1, int z1, int x2, int y2, int z2) {
+        var reg = level.registryAccess();
+        long h = 1125899906842597L;
+        int bes = 0;
+        var p = new net.minecraft.core.BlockPos.MutableBlockPos();
+        for (int x = Math.min(x1, x2); x <= Math.max(x1, x2); x++)
+            for (int y = Math.min(y1, y2); y <= Math.max(y1, y2); y++)
+                for (int z = Math.min(z1, z2); z <= Math.max(z1, z2); z++) {
+                    p.set(x, y, z);
+                    h = h * 31 + level.getBlockState(p).toString().hashCode();
+                    var be = level.getBlockEntity(p);
+                    if (be != null) {
+                        bes++;
+                        h = h * 31 + be.saveWithoutMetadata(reg).toString().hashCode();
+                    }
+                }
+        return String.format(Locale.ROOT, "region hash %016x (block entities %d, game time %d)", h, bes, level.getGameTime());
     }
 
     static void startRecording() {

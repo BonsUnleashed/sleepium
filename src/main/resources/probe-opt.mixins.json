@@ -17,7 +17,9 @@
     "ClassInstanceMultiMapAccessor",
     "EntitySectionIterMixin",
     "LevelNeighborUpdaterAccessor",
-    "NeighborNotifySkipMixin"
+    "NeighborNotifySkipMixin",
+    "ChunkCacheMixin",
+    "ChunkCacheClearMixin"
   ],
   "injectors": {
     "defaultRequire": 1

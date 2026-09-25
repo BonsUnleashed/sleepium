@@ -9,10 +9,13 @@ public final class OptCounters {
     /** EntitySectionScanMixin: queries served by the direct walk / by the vanilla fallback (huge boxes). */
     public static final AtomicLong SECTION_FAST = new AtomicLong(), SECTION_FALLBACK = new AtomicLong();
 
+    /** ChunkCacheMixin shadow check: cache hits compared with vanilla getChunk, and differences. */
+    public static final AtomicLong CHUNK_CHECKED = new AtomicLong(), CHUNK_MISMATCHES = new AtomicLong();
+
     private OptCounters() {}
 
     public static String report() {
-        return String.format(java.util.Locale.ROOT, "  -- opt counters: section scan fast %d, fallback %d, shadow-checked %d, MISMATCHES %d%n",
-                SECTION_FAST.get(), SECTION_FALLBACK.get(), SECTION_CHECKED.get(), SECTION_MISMATCHES.get());
+        return String.format(java.util.Locale.ROOT, "  -- opt counters: section scan fast %d, fallback %d, shadow-checked %d, MISMATCHES %d; chunk cache checked %d, MISMATCHES %d%n",
+                SECTION_FAST.get(), SECTION_FALLBACK.get(), SECTION_CHECKED.get(), SECTION_MISMATCHES.get(), CHUNK_CHECKED.get(), CHUNK_MISMATCHES.get());
     }
 }
