@@ -51,7 +51,7 @@ public final class OptMixinPlugin implements IMixinConfigPlugin {
      * not the experimental worldgen/pool ones). Expanded into the individual flags before any of them is read.
      */
     static final String[] UNIVERSAL = {"TickMemoMixin", "ChunkCacheMixin", "EntitySectionScanMixin", "EntitySectionIndexMixin",
-            "NeighborNotifySkipMixin", "NeoForgeBusMixin", "NeighborReactMixin", "TagCacheMixin", "BrainFlatMixin", "PoiColumnMixin", "EntityCollisionSkipMixin", "BlockCollisionMemoMixin"};
+            "NeighborNotifySkipMixin", "NeoForgeBusMixin", "NeighborReactMixin", "TagCacheMixin", "BrainFlatMixin", "PoiColumnMixin", "EntityCollisionSkipMixin", "BlockCollisionMemoMixin", "EventSiteMixin"};
 
     @Override
     public void onLoad(String mixinPackage) {
@@ -64,5 +64,7 @@ public final class OptMixinPlugin implements IMixinConfigPlugin {
     @Override public void acceptTargets(Set<String> myTargets, Set<String> otherTargets) {}
     @Override public List<String> getMixins() { return null; }
     @Override public void preApply(String targetClassName, ClassNode targetClass, String mixinClassName, IMixinInfo mixinInfo) {}
-    @Override public void postApply(String targetClassName, ClassNode targetClass, String mixinClassName, IMixinInfo mixinInfo) {}
+    @Override public void postApply(String targetClassName, ClassNode targetClass, String mixinClassName, IMixinInfo mixinInfo) {
+        if (mixinClassName.endsWith(".EventSiteMixin")) dev.probe.optsupport.EventSiteTransformer.transform(targetClass);
+    }
 }

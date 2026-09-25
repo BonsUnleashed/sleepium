@@ -38,7 +38,8 @@
     "LevelEntityGetterAdapterAccessor",
     "BlockCollisionMemoMixin",
     "SectionModCountMixin",
-    "EntityCollisionMemoMixin"
+    "EntityCollisionMemoMixin",
+    "EventSiteMixin"
   ],
   "injectors": {
     "defaultRequire": 1

@@ -212,15 +212,16 @@ public final class CompositeEventBus implements IEventBus {
         if (STATS) count(5, holders.get(event.getClass()));
         return delegate.post(phase, event);
     }
-    @Override public void register(Object target) { delegate.register(target); }
-    @Override public void unregister(Object object) { delegate.unregister(object); }
-    @Override public void start() { delegate.start(); }
-    @Override public <T extends Event> void addListener(Consumer<T> consumer) { delegate.addListener(consumer); }
-    @Override public <T extends Event> void addListener(Class<T> eventType, Consumer<T> consumer) { delegate.addListener(eventType, consumer); }
-    @Override public <T extends Event> void addListener(EventPriority priority, Consumer<T> consumer) { delegate.addListener(priority, consumer); }
-    @Override public <T extends Event> void addListener(EventPriority priority, Class<T> eventType, Consumer<T> consumer) { delegate.addListener(priority, eventType, consumer); }
-    @Override public <T extends Event> void addListener(EventPriority priority, boolean receiveCanceled, Consumer<T> consumer) { delegate.addListener(priority, receiveCanceled, consumer); }
-    @Override public <T extends Event> void addListener(EventPriority priority, boolean receiveCanceled, Class<T> eventType, Consumer<T> consumer) { delegate.addListener(priority, receiveCanceled, eventType, consumer); }
-    @Override public <T extends Event> void addListener(boolean receiveCanceled, Consumer<T> consumer) { delegate.addListener(receiveCanceled, consumer); }
-    @Override public <T extends Event> void addListener(boolean receiveCanceled, Class<T> eventType, Consumer<T> consumer) { delegate.addListener(receiveCanceled, eventType, consumer); }
+    // listener changes: every allocation-free event site back to the normal post, before and after (EventSites)
+    @Override public void register(Object target) { EventSites.invalidate(); delegate.register(target); EventSites.invalidate(); }
+    @Override public void unregister(Object object) { EventSites.invalidate(); delegate.unregister(object); EventSites.invalidate(); }
+    @Override public void start() { EventSites.invalidate(); delegate.start(); EventSites.invalidate(); }
+    @Override public <T extends Event> void addListener(Consumer<T> consumer) { EventSites.invalidate(); delegate.addListener(consumer); EventSites.invalidate(); }
+    @Override public <T extends Event> void addListener(Class<T> eventType, Consumer<T> consumer) { EventSites.invalidate(); delegate.addListener(eventType, consumer); EventSites.invalidate(); }
+    @Override public <T extends Event> void addListener(EventPriority priority, Consumer<T> consumer) { EventSites.invalidate(); delegate.addListener(priority, consumer); EventSites.invalidate(); }
+    @Override public <T extends Event> void addListener(EventPriority priority, Class<T> eventType, Consumer<T> consumer) { EventSites.invalidate(); delegate.addListener(priority, eventType, consumer); EventSites.invalidate(); }
+    @Override public <T extends Event> void addListener(EventPriority priority, boolean receiveCanceled, Consumer<T> consumer) { EventSites.invalidate(); delegate.addListener(priority, receiveCanceled, consumer); EventSites.invalidate(); }
+    @Override public <T extends Event> void addListener(EventPriority priority, boolean receiveCanceled, Class<T> eventType, Consumer<T> consumer) { EventSites.invalidate(); delegate.addListener(priority, receiveCanceled, eventType, consumer); EventSites.invalidate(); }
+    @Override public <T extends Event> void addListener(boolean receiveCanceled, Consumer<T> consumer) { EventSites.invalidate(); delegate.addListener(receiveCanceled, consumer); EventSites.invalidate(); }
+    @Override public <T extends Event> void addListener(boolean receiveCanceled, Class<T> eventType, Consumer<T> consumer) { EventSites.invalidate(); delegate.addListener(receiveCanceled, eventType, consumer); EventSites.invalidate(); }
 }
