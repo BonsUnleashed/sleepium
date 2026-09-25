@@ -11,7 +11,13 @@
     "NeoForgeBusMixin",
     "ParallelWorldgenMixin",
     "PersistentPoolsMixin",
-    "LabPoolsMixin"
+    "LabPoolsMixin",
+    "TickMemoMixin",
+    "EntitySectionScanMixin",
+    "ClassInstanceMultiMapAccessor",
+    "EntitySectionIterMixin",
+    "LevelNeighborUpdaterAccessor",
+    "NeighborNotifySkipMixin"
   ],
   "injectors": {
     "defaultRequire": 1

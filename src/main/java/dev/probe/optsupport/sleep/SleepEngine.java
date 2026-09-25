@@ -74,7 +74,7 @@ public final class SleepEngine {
         int stable, failStreak;
         long observeFrom = Long.MIN_VALUE, noSleepUntil = Long.MIN_VALUE;
         // asleep
-        long wakeAt, skippedTicks, sleepReadHash;
+        long wakeAt, sleepReadHash;
         boolean woken, resleep;
         String wakeReason;
         final LongArrayList watchedPos = new LongArrayList(), watchedSections = new LongArrayList();
@@ -106,6 +106,8 @@ public final class SleepEngine {
 
     // stats
     static long skipped, entered, resleeps, observedTicks, backedOff, materialized;
+    /** ticks skipped by the fast path at the head of BoundTickingBlockEntity.tick (SleepProbeFastSkipMixin) */
+    public static long fastSkipped;
     static final Map<String, Long> WAKES = new TreeMap<>();
     static final Map<String, Long> REFUSED = new TreeMap<>();
 
@@ -113,6 +115,10 @@ public final class SleepEngine {
 
     private static Sleeper sleeper(BlockEntity be) {
         return (Sleeper) ((SleeperHolder) be).probe$sleeper();
+    }
+
+    private static SleeperHolder h(Sleeper s) {
+        return (SleeperHolder) s.be;
     }
 
     // ------------------------------------------------------------------ tick hooks
@@ -125,7 +131,7 @@ public final class SleepEngine {
         long now = level.getGameTime();
         if (!s.woken && now < s.wakeAt) {
             skipped++;
-            s.skippedTicks++;
+            h(s).probe$setSkipped(h(s).probe$skipped() + 1);
             return true;
         }
         wake(s, now, s.woken ? s.wakeReason : "deadline");
@@ -137,6 +143,7 @@ public final class SleepEngine {
         unsubscribe(s);
         s.state = State.AWAKE;
         s.woken = false;
+        h(s).probe$setWakeAt(Long.MIN_VALUE);
         // the snapshot taken now is the "before" of this tick: one verifying tick may put it back to sleep
         s.info.snapper.snap(s.be, s.prev);
         s.prevValid = true;
@@ -151,8 +158,8 @@ public final class SleepEngine {
 
     /** Apply the pending time to the clock fields (rate x skipped ticks); the block entity may keep sleeping. */
     private static void advance(Sleeper s) {
-        long k = s.skippedTicks;
-        s.skippedTicks = 0;
+        long k = h(s).probe$skipped();
+        h(s).probe$setSkipped(0);
         if (k <= 0) return;
         List<Field> clocks = s.info.plan.clocks();
         for (int c = 0; c < clocks.size(); c++) {
@@ -294,8 +301,9 @@ public final class SleepEngine {
             return;
         }
         s.failStreak = 0;
-        s.skippedTicks = 0;
+        h(s).probe$setSkipped(0);
         s.wakeAt = sleep == Long.MAX_VALUE ? Long.MAX_VALUE : now + sleep;
+        h(s).probe$setWakeAt(s.wakeAt);
         s.sleepReadHash = s.prevReadHash;
         s.state = State.ASLEEP;
         s.woken = false;
@@ -340,7 +348,7 @@ public final class SleepEngine {
     /** A save (or any exact read): bring the lazily advanced clocks up to date; the block entity keeps sleeping. */
     public static void materialize(BlockEntity be) {
         Sleeper s = sleeper(be);
-        if (s != null && s.state == State.ASLEEP && s.skippedTicks > 0) {
+        if (s != null && s.state == State.ASLEEP && h(s).probe$skipped() > 0) {
             advance(s);
             materialized++;
         }
@@ -351,7 +359,7 @@ public final class SleepEngine {
         Sleeper s = sleeper(be);
         if (s == null) return;
         if (s.state == State.ASLEEP) {
-            s.skippedTicks = 0;
+            h(s).probe$setSkipped(0);
             request(s, "load");
         }
         s.stable = 0;
@@ -436,6 +444,7 @@ public final class SleepEngine {
         if (s.state == State.ASLEEP && !s.woken) {
             s.woken = true;
             s.wakeReason = reason;
+            h(s).probe$setWakeAt(Long.MIN_VALUE);   // the fast skip lets it through; skip() then wakes it
         }
     }
 
@@ -508,8 +517,8 @@ public final class SleepEngine {
             if (s.state == State.NEVER) v[2]++;
         }
         StringBuilder sb = new StringBuilder(String.format(Locale.ROOT,
-                "sleep engine: %s; tracked %d, asleep now %d; skipped ticks %d, sleeps entered %d (re-sleeps %d), observed ticks %d, backed off %d, materialized %d%n",
-                ON ? "ON" : "OFF", ALL.size(), asleep, skipped, entered, resleeps, observedTicks, backedOff, materialized));
+                "sleep engine: %s; tracked %d, asleep now %d; skipped ticks %d (fast path %d), sleeps entered %d (re-sleeps %d), observed ticks %d, backed off %d, materialized %d%n",
+                ON ? "ON" : "OFF", ALL.size(), asleep, skipped + fastSkipped, fastSkipped, entered, resleeps, observedTicks, backedOff, materialized));
         byType.forEach((k, v) -> sb.append(String.format(Locale.ROOT, "  %-34s tracked %6d  asleep %6d  never %6d%n", k, v[0], v[1], v[2])));
         sb.append("  wakes: ").append(WAKES).append(System.lineSeparator());
         sb.append("  refused: ").append(REFUSED).append(System.lineSeparator());

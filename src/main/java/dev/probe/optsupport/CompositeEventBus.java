@@ -29,6 +29,9 @@ import net.neoforged.bus.api.IEventExceptionHandler;
 public final class CompositeEventBus implements IEventBus {
     private static final CompositeDispatcher.Dispatch EMPTY = e -> {};
 
+    /** Inlinable no-listener fast path in post() ({@code -Dlab.opt.busFastPath=false} disables it for A/B). */
+    static final boolean FAST_PATH = !"false".equals(System.getProperty("lab.opt.busFastPath"));
+
     /** Lists this short use a plain loop (same cost as vanilla); longer ones get a generated composite. */
     static final int COMPOSITE_MIN = Integer.getInteger("lab.opt.compositeMin", 3);
 
@@ -120,6 +123,33 @@ public final class CompositeEventBus implements IEventBus {
 
     @Override
     public <T extends Event> T post(T event) {
+        if (FAST_PATH && !STATS) {
+            // Tiny, inlinable path for the common case "nobody listens" (97-99 % of posts): when the JIT inlines it
+            // into the call site, escape analysis can drop the event allocation entirely. Every condition that
+            // matters for exactness is checked; anything else goes to the full path.
+            Built b = holders.get(event.getClass()).built;
+            if (b != null && b.source().length == 0 && b.list().getListeners() == b.source() && !fallbackAlways
+                    && !(boolean) shutdown.getVolatile(delegate)) {
+                return event;
+            }
+        }
+        return postFull(event);
+    }
+
+    /**
+     * True if posting {@code type} would invoke at least one listener (listeners of parent types included), or if
+     * that is not known yet (type never posted): callers may skip building and posting an event only on false.
+     */
+    public boolean hasListeners(Class<?> type) {
+        if (fallbackAlways || (boolean) shutdown.getVolatile(delegate)) return true;
+        Built b = holders.get(type).built;
+        if (b != null) return b.list().getListeners().length > 0;
+        ListenerList list = lookupList(type);
+        return list == null || list.getListeners().length > 0;
+    }
+
+    /** Full post: first posts, listener changes, dispatch, fallbacks and statistics. */
+    private <T extends Event> T postFull(T event) {
         if (fallbackAlways || (boolean) shutdown.getVolatile(delegate)) {
             if (STATS) count(4, holders.get(event.getClass()));
             return delegate.post(event);   // identical vanilla behaviour (incl. returning early when shut down)

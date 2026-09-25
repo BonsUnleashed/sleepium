@@ -57,6 +57,7 @@ public final class EventSources {
             sb.append("  -- NeoForge.EVENT_BUS is the vanilla bus (" + NeoForge.EVENT_BUS.getClass().getSimpleName()
                     + "): enable -Dlab.opt.NeoForgeBusMixin=true\n");
         }
+        sb.append(dev.probe.optsupport.OptCounters.report());
         last = n;
         lastTick = tick;
         return sb.toString();
