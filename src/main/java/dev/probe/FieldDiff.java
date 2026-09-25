@@ -19,11 +19,11 @@ import net.minecraft.world.level.block.entity.BlockEntity;
  * (item identity and count), because inventories change in place. Comparing the snapshots before and after a tick
  * shows exactly which private fields a tick touched, e.g. a furnace's cooking progress.
  */
-final class FieldDiff {
+public final class FieldDiff {
     /** Field layout of one block-entity class. */
-    static final class Layout {
-        final Field[] fields;
-        final String[] names;
+    public static final class Layout {
+        public final Field[] fields;
+        public final String[] names;
 
         Layout(List<Field> fs) {
             fields = fs.toArray(new Field[0]);
@@ -37,7 +37,7 @@ final class FieldDiff {
 
     private FieldDiff() {}
 
-    static Layout layout(Class<?> c) {
+    public static Layout layout(Class<?> c) {
         return LAYOUTS.computeIfAbsent(c, k -> {
             List<Field> fs = new ArrayList<>();
             for (Class<?> x = k; x != null && x != BlockEntity.class && x != Object.class; x = x.getSuperclass()) {
@@ -55,7 +55,7 @@ final class FieldDiff {
         });
     }
 
-    static long[] snapshot(Object o, Layout l, long[] into) {
+    public static long[] snapshot(Object o, Layout l, long[] into) {
         long[] v = into != null && into.length == l.fields.length ? into : new long[l.fields.length];
         for (int i = 0; i < l.fields.length; i++) {
             try {
@@ -85,6 +85,10 @@ final class FieldDiff {
             return h;
         }
         if (r instanceof ItemStack s) return stack(s);
+        // collections and maps are snapshotted by content (size and hash), so hidden bookkeeping such as a
+        // furnace's recipesUsed map shows up as a change
+        if (r instanceof java.util.Map<?, ?> m) return System.identityHashCode(m) * 31L + m.size() * 7919L + m.hashCode();
+        if (r instanceof java.util.Collection<?> c) return System.identityHashCode(c) * 31L + c.size() * 7919L + c.hashCode();
         return System.identityHashCode(r);   // reference identity: replaced object => changed
     }
 

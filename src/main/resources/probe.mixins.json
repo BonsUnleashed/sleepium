@@ -18,7 +18,11 @@
     "WriteProbeItemMixin",
     "WriteProbeLivingMixin",
     "WriteProbeServerLevelMixin",
-    "ReadProbeMixin"
+    "ReadProbeMixin",
+    "SleepProbeContainerMixin",
+    "SleepProbeEntityMixin",
+    "SleepProbeObserveMixin",
+    "SleepProbeViewMixin"
   ],
   "injectors": {
     "defaultRequire": 1

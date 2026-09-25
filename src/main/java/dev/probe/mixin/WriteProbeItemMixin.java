@@ -14,5 +14,6 @@ public abstract class WriteProbeItemMixin {
     @Inject(method = "setItem", at = @At("HEAD"))
     private void probe$setItem(ItemStack stack, CallbackInfo ci) {
         BeTickStats.writes++;
+        if (dev.probe.optsupport.sleep.SleepEngine.ON) dev.probe.optsupport.sleep.SleepEngine.onEntity((net.minecraft.world.entity.Entity) (Object) this, "item-changed");
     }
 }

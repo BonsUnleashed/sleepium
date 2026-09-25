@@ -13,5 +13,6 @@ public abstract class WriteProbeEntityMixin {
     @Inject(method = "setRemoved", at = @At("HEAD"))
     private void probe$removed(Entity.RemovalReason reason, CallbackInfo ci) {
         BeTickStats.writes++;
+        if (dev.probe.optsupport.sleep.SleepEngine.ON) dev.probe.optsupport.sleep.SleepEngine.onEntity((Entity) (Object) this, "entity-removed");
     }
 }

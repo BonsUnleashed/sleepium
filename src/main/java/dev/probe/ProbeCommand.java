@@ -91,6 +91,24 @@ final class ProbeCommand {
                     return 1;
                 }))
                 .then(Commands.literal("status").executes(ProbeCommand::status))
+                .then(Commands.literal("sleep").executes(ctx -> {
+                    String r = dev.probe.optsupport.sleep.SleepEngine.report();
+                    ProbeMod.LOGGER.info("\n{}", r);
+                    say(ctx, r);
+                    return 1;
+                }))
+                .then(Commands.literal("equiv")
+                        .then(Commands.argument("x1", IntegerArgumentType.integer()).then(Commands.argument("y1", IntegerArgumentType.integer())
+                        .then(Commands.argument("z1", IntegerArgumentType.integer()).then(Commands.argument("x2", IntegerArgumentType.integer())
+                        .then(Commands.argument("y2", IntegerArgumentType.integer()).then(Commands.argument("z2", IntegerArgumentType.integer())
+                        .then(Commands.argument("dx", IntegerArgumentType.integer()).executes(ctx -> {
+                            String r = equiv(ctx.getSource().getLevel(), IntegerArgumentType.getInteger(ctx, "x1"), IntegerArgumentType.getInteger(ctx, "y1"),
+                                    IntegerArgumentType.getInteger(ctx, "z1"), IntegerArgumentType.getInteger(ctx, "x2"), IntegerArgumentType.getInteger(ctx, "y2"),
+                                    IntegerArgumentType.getInteger(ctx, "z2"), IntegerArgumentType.getInteger(ctx, "dx"));
+                            ProbeMod.LOGGER.info("\n{}", r);
+                            say(ctx, r);
+                            return 1;
+                        })))))))))
                 .then(Commands.literal("betypes").executes(ctx -> {
                     // per block-entity type: ticks, time, share of idle / sleepable ticks since the previous call
                     String r = BeTickStats.report(ctx.getSource().getServer());
@@ -113,6 +131,49 @@ final class ProbeCommand {
                         .executes(ctx -> bench(ctx, 2_000_000))
                         .then(Commands.argument("n", IntegerArgumentType.integer(10_000, 100_000_000))
                                 .executes(ctx -> bench(ctx, IntegerArgumentType.getInteger(ctx, "n"))))));
+    }
+
+    /**
+     * Equivalence check for A/B-in-one-world tests: every block and block entity (full NBT) in region A must equal its
+     * twin at +dx. Copy B runs with the optimisation, copy A without, both built and unfrozen in the same tick.
+     */
+    static String equiv(ServerLevel level, int x1, int y1, int z1, int x2, int y2, int z2, int dx) {
+        var reg = level.registryAccess();
+        int blocks = 0, blockDiff = 0, bes = 0, beDiff = 0;
+        StringBuilder diffs = new StringBuilder();
+        var a = new net.minecraft.core.BlockPos.MutableBlockPos();
+        var b = new net.minecraft.core.BlockPos.MutableBlockPos();
+        for (int x = Math.min(x1, x2); x <= Math.max(x1, x2); x++)
+            for (int y = Math.min(y1, y2); y <= Math.max(y1, y2); y++)
+                for (int z = Math.min(z1, z2); z <= Math.max(z1, z2); z++) {
+                    a.set(x, y, z);
+                    b.set(x + dx, y, z);
+                    blocks++;
+                    if (!level.getBlockState(a).equals(level.getBlockState(b))) {
+                        blockDiff++;
+                        if (diffs.length() < 1500) diffs.append(String.format(Locale.ROOT, "  block %s: %s vs %s%n", a.toShortString(), level.getBlockState(a), level.getBlockState(b)));
+                    }
+                    var ea = level.getBlockEntity(a);
+                    var eb = level.getBlockEntity(b);
+                    if (ea == null && eb == null) continue;
+                    bes++;
+                    if (ea == null || eb == null) {
+                        beDiff++;
+                        continue;
+                    }
+                    var ta = ea.saveWithoutMetadata(reg);
+                    var tb = eb.saveWithoutMetadata(reg);
+                    if (!ta.equals(tb)) {
+                        beDiff++;
+                        if (diffs.length() < 1500) {
+                            StringBuilder keys = new StringBuilder();
+                            for (String k : ta.getAllKeys()) if (!java.util.Objects.equals(ta.get(k), tb.get(k))) keys.append(k).append('=').append(ta.get(k)).append('/').append(tb.get(k)).append(' ');
+                            diffs.append(String.format(Locale.ROOT, "  be %s: %s%n", a.toShortString(), keys));
+                        }
+                    }
+                }
+        return String.format(Locale.ROOT, "equivalence A=[%d..%d] vs B=A+%d: blocks %d (different %d), block entities %d (different %d) -> %s%n%s",
+                Math.min(x1, x2), Math.max(x1, x2), dx, blocks, blockDiff, bes, beDiff, blockDiff == 0 && beDiff == 0 ? "IDENTICAL" : "DIFFERENT", diffs);
     }
 
     static void startRecording() {

@@ -13,6 +13,10 @@ public abstract class WriteProbeBlockEntityMixin {
     @Inject(method = "setChanged()V", at = @At("HEAD"))
     private void probe$setChanged(CallbackInfo ci) {
         BeTickStats.writes++;
+        if (dev.probe.optsupport.sleep.SleepEngine.ON) {
+            BlockEntity be = (BlockEntity) (Object) this;
+            dev.probe.optsupport.sleep.SleepEngine.onPos(be.getLevel(), be.getBlockPos(), "changed");
+        }
     }
 
     /** The static variant: hoppers after a transfer, furnaces when a lit state or an item changes. */
@@ -20,5 +24,6 @@ public abstract class WriteProbeBlockEntityMixin {
     private static void probe$setChangedStatic(net.minecraft.world.level.Level level, net.minecraft.core.BlockPos pos,
                                                net.minecraft.world.level.block.state.BlockState state, CallbackInfo ci) {
         BeTickStats.writes++;
+        if (dev.probe.optsupport.sleep.SleepEngine.ON) dev.probe.optsupport.sleep.SleepEngine.onPos(level, pos, "changed");
     }
 }
