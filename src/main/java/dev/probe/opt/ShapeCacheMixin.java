@@ -1,5 +1,6 @@
 package dev.probe.opt;
 
+import dev.probe.optsupport.BlockCollisionMemo;
 import dev.probe.optsupport.OptCounters;
 import dev.probe.optsupport.ShapePurity;
 import net.minecraft.core.BlockPos;
@@ -26,7 +27,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
  * computed by the same pure method, returning the same object.
  */
 @Mixin(BlockBehaviour.BlockStateBase.class)
-public abstract class ShapeCacheMixin {
+public abstract class ShapeCacheMixin implements BlockCollisionMemo.StaticShape {
     @Shadow public abstract Block getBlock();
     @Shadow protected abstract BlockState asState();
     @Shadow public abstract VoxelShape getCollisionShape(BlockGetter level, BlockPos pos);
@@ -40,6 +41,11 @@ public abstract class ShapeCacheMixin {
         OptCounters.SHAPE_CHECKED.incrementAndGet();
         if (v != cached && OptCounters.SHAPE_MISMATCHES.incrementAndGet() <= 5)
             System.out.println("[probe/opt] shape cache MISMATCH " + asState() + " at " + pos + (v.equals(cached) ? " (equal, not same object)" : ""));
+    }
+
+    @Override
+    public boolean probe$staticShape() {
+        return probe$collision != null;
     }
 
     @Inject(method = "initCache", at = @At("TAIL"))

@@ -35,7 +35,10 @@
     "EntityCollisionSkipMixin",
     "EntitySectionCollidableMixin",
     "EntityStorageCollidableMixin",
-    "LevelEntityGetterAdapterAccessor"
+    "LevelEntityGetterAdapterAccessor",
+    "BlockCollisionMemoMixin",
+    "SectionModCountMixin",
+    "EntityCollisionMemoMixin"
   ],
   "injectors": {
     "defaultRequire": 1

@@ -29,8 +29,10 @@ public final class OptMixinPlugin implements IMixinConfigPlugin {
             on = Boolean.getBoolean("lab.opt.all") || Boolean.getBoolean("lab.opt.ChunkCacheMixin");
         if (simple.equals("SectionStorageIndexMixin"))
             on = Boolean.getBoolean("lab.opt.all") || Boolean.getBoolean("lab.opt.PoiColumnMixin");
-        if (simple.equals("BlockBehaviourInvoker"))
-            on = Boolean.getBoolean("lab.opt.all") || Boolean.getBoolean("lab.opt.ShapeCacheMixin");
+        if (simple.equals("BlockBehaviourInvoker") || simple.equals("ShapeCacheMixin"))   // the memo needs the static-shape flags
+            on = Boolean.getBoolean("lab.opt.all") || Boolean.getBoolean("lab.opt.ShapeCacheMixin") || Boolean.getBoolean("lab.opt.BlockCollisionMemoMixin");
+        if (simple.equals("SectionModCountMixin") || simple.equals("EntityCollisionMemoMixin"))
+            on = Boolean.getBoolean("lab.opt.all") || Boolean.getBoolean("lab.opt.BlockCollisionMemoMixin");
         if (simple.equals("EntitySectionCollidableMixin") || simple.equals("EntityStorageCollidableMixin") || simple.equals("LevelEntityGetterAdapterAccessor"))
             on = Boolean.getBoolean("lab.opt.all") || Boolean.getBoolean("lab.opt.EntityCollisionSkipMixin");
         if (simple.equals("LevelNeighborUpdaterAccessor"))
@@ -49,7 +51,7 @@ public final class OptMixinPlugin implements IMixinConfigPlugin {
      * not the experimental worldgen/pool ones). Expanded into the individual flags before any of them is read.
      */
     static final String[] UNIVERSAL = {"TickMemoMixin", "ChunkCacheMixin", "EntitySectionScanMixin", "EntitySectionIndexMixin",
-            "NeighborNotifySkipMixin", "NeoForgeBusMixin", "NeighborReactMixin", "TagCacheMixin", "BrainFlatMixin", "PoiColumnMixin", "EntityCollisionSkipMixin"};
+            "NeighborNotifySkipMixin", "NeoForgeBusMixin", "NeighborReactMixin", "TagCacheMixin", "BrainFlatMixin", "PoiColumnMixin", "EntityCollisionSkipMixin", "BlockCollisionMemoMixin"};
 
     @Override
     public void onLoad(String mixinPackage) {
