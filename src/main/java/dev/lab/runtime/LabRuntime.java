@@ -5,7 +5,6 @@ import java.lang.invoke.VarHandle;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.AbstractExecutorService;
-import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -22,7 +21,9 @@ import java.util.function.IntConsumer;
  *   <li><b>Lanes, sharded</b>: each priority lane (TICK, CHUNK, BACKGROUND) has {@code shards} preallocated MPMC rings.
  *       An external submitter always uses the shard picked by its thread id, so different producers do not fight
  *       over one head/tail cache line. A worker scans shards starting at its own index. When a ring is full the task
- *       goes to a per-lane overflow queue (counted; should stay ~0).</li>
+ *       goes to the lane's {@link SegmentQueue} (lock-free, unbounded, allocates only while in use). While that
+ *       overflow is non-empty every submitter of the lane writes to it too, so rings drain first and then the
+ *       overflow: per-producer FIFO holds and nothing starves behind a continuously refilled ring.</li>
  *   <li><b>Local deques</b>: a task submitted by a worker of this runtime goes to that worker's Chase–Lev deque
  *       (LIFO, cache-hot); idle workers steal FIFO. The current worker is found through the {@link LabThread} field,
  *       not a ThreadLocal lookup.</li>
@@ -39,10 +40,19 @@ import java.util.function.IntConsumer;
 public final class LabRuntime extends AbstractExecutorService {
     public enum Lane { TICK, CHUNK, BACKGROUND }
 
+    /** Tasks taken from a shared ring per CAS (CHUNK/BACKGROUND lanes). 8 measured best for 1..4 consumers. */
+    static final int CLAIM = Integer.getInteger("lab.runtime.claim", 8);
+    /** Submitter wakes a worker only on the empty -> non-empty transition of its ring (ForkJoinPool.signalWork style). */
+    static final boolean WAKE_ON_EMPTY = !"false".equals(System.getProperty("lab.runtime.wakeOnEmpty"));
+    /** Wake chaining: a worker that took from a shared ring wakes one more only if at least this many tasks remain. */
+    /** onSpinWait() calls between hasWork() checks while spinning (read pressure on producers' cache lines). */
+    static final int SPIN_CHECK = Integer.getInteger("lab.runtime.spinCheck", 1);
+    static final int CHAIN_BACKLOG = Integer.getInteger("lab.runtime.chainBacklog", 1);
+
     public record Config(String name, int maxWorkers, int maxSpinners, long spinNanos, int osPriority,
                          int laneCapacity, int dequeCapacity, boolean daemon) {
         public static Config of(String name, int maxWorkers) {
-            return new Config(name, maxWorkers, 1, 20_000, Integer.getInteger("lab.runtime.priority", OsThreads.BELOW_NORMAL),
+            return new Config(name, maxWorkers, Integer.getInteger("lab.runtime.spinners", 1), 20_000, Integer.getInteger("lab.runtime.priority", OsThreads.BELOW_NORMAL),
                     1 << 14, 1 << 12, true);
         }
     }
@@ -59,11 +69,12 @@ public final class LabRuntime extends AbstractExecutorService {
         }
     }
 
-    private static final VarHandle MASK;
+    private static final VarHandle MASK, SPILL;
 
     static {
         try {
             MASK = MethodHandles.lookup().findVarHandle(LabRuntime.class, "parkedMask", long.class);
+            SPILL = MethodHandles.lookup().findVarHandle(LabRuntime.class, "spillMask", long.class);
         } catch (ReflectiveOperationException e) {
             throw new ExceptionInInitializerError(e);
         }
@@ -75,7 +86,10 @@ public final class LabRuntime extends AbstractExecutorService {
     /** rings[lane * shards + shard] */
     private final MpmcRing[] rings;
     @SuppressWarnings({"unchecked", "rawtypes"})
-    private final ConcurrentLinkedQueue<Runnable>[] overflow = new ConcurrentLinkedQueue[3];
+    /** one overflow per ring (same index), so spilling producers stay as separated as the rings are */
+    private final SegmentQueue[] overflow;
+    /** bit per ring: set while that ring's overflow is in use (its submitters bypass the ring) */
+    private volatile long spillMask;
     /** bit i set = worker i parked (or about to park). */
     private volatile long parkedMask;
     private final AtomicInteger spinners = new AtomicInteger();
@@ -83,6 +97,13 @@ public final class LabRuntime extends AbstractExecutorService {
     private volatile RangeJob tickJob;
     /** set by TICK-lane submitters; lets workers skip scanning the (usually empty) TICK rings */
     private volatile boolean tickLaneHint;
+
+    /** {claims, claimedItems, emptyScans} summed over workers (racy snapshot). */
+    public long[] claimStats() {
+        long[] r = new long[3];
+        for (Worker w : workers) { r[0] += w.claims; r[1] += w.claimed; r[2] += w.emptyScans; }
+        return r;
+    }
 
     public final LongAdder executed = new LongAdder(), localPushes = new LongAdder(), steals = new LongAdder(),
             parks = new LongAdder(), wakes = new LongAdder(), overflowed = new LongAdder(), failures = new LongAdder();
@@ -92,9 +113,11 @@ public final class LabRuntime extends AbstractExecutorService {
         this.cfg = cfg;
         int shards = Integer.highestOneBit(Math.max(1, cfg.maxWorkers) * 2 - 1);   // next power of two >= workers
         this.shardMask = shards - 1;
+        if (3 * shards > 64) throw new IllegalArgumentException("at most 16 workers (spill bits)");
         this.rings = new MpmcRing[3 * shards];
         for (int i = 0; i < rings.length; i++) rings[i] = new MpmcRing(cfg.laneCapacity);
-        for (int i = 0; i < 3; i++) overflow[i] = new ConcurrentLinkedQueue<>();
+        this.overflow = new SegmentQueue[rings.length];
+        for (int i = 0; i < overflow.length; i++) overflow[i] = new SegmentQueue();
         workers = new Worker[cfg.maxWorkers];
         for (int i = 0; i < workers.length; i++) workers[i] = new Worker(i);
         for (Worker w : workers) w.thread.start();
@@ -125,9 +148,17 @@ public final class LabRuntime extends AbstractExecutorService {
         if (task == null) throw new NullPointerException();
         Thread ct = Thread.currentThread();
         if (ct instanceof LabThread lt && lt.owner == this && lane != Lane.TICK && pushLocal(lt.worker, task)) return;
-        int shard = (int) ct.threadId() & shardMask;
-        if (!rings[lane.ordinal() * (shardMask + 1) + shard].offer(task)) submitSlow(task, lane);
+        int ri = lane.ordinal() * (shardMask + 1) + ((int) ct.threadId() & shardMask);
+        MpmcRing r = rings[ri];
+        // while the lane spills, keep appending to its overflow (FIFO: rings drain first, then the overflow). The flag
+        // changes only on transitions, so this read hits a Shared line instead of the consumers' hot head line.
+        long pos = (spillMask & (1L << ri)) != 0 ? -1 : r.offerPos(task);
         if (lane == Lane.TICK && !tickLaneHint) tickLaneHint = true;
+        if (pos < 0) {
+            submitSlow(task, ri);
+        } else if (WAKE_ON_EMPTY && r.hasOlderThan(pos)) {
+            return;   // an older task is still queued: a worker is already awake for it (see hasOlderThan)
+        }
         if (spinners.get() == 0) wakeOne();
     }
 
@@ -139,10 +170,12 @@ public final class LabRuntime extends AbstractExecutorService {
         return true;
     }
 
-    private void submitSlow(Runnable task, Lane lane) {
+    private void submitSlow(Runnable task, int ri) {
         if (shutdown) throw new RejectedExecutionException(cfg.name + " is shut down");
-        overflow[lane.ordinal()].add(task);
+        overflow[ri].offer(task);
         overflowed.increment();
+        long bit = 1L << ri;
+        if ((spillMask & bit) == 0) SPILL.getAndBitwiseOr(this, bit);
     }
 
     private boolean wakeOne() {
@@ -160,7 +193,7 @@ public final class LabRuntime extends AbstractExecutorService {
 
     boolean hasWork() {
         for (MpmcRing r : rings) if (!r.isEmpty()) return true;
-        for (int i = 0; i < 3; i++) if (!overflow[i].isEmpty()) return true;
+        for (SegmentQueue q : overflow) if (!q.isEmpty()) return true;
         for (Worker w : workers) if (!w.deque.isEmpty()) return true;
         RangeJob j = tickJob;
         return j != null && j.hasUnclaimed();
@@ -178,6 +211,10 @@ public final class LabRuntime extends AbstractExecutorService {
         /** true if the last task came from a shared source (ring/overflow/steal) that may still hold more */
         boolean lastShared;
         Object lastSource;
+        final Object[] claimBuf = new Object[Math.max(1, CLAIM)];
+        // plain per-worker counters (owner writes, racy reads for stats): no shared line in the hot path
+        long claims, claimed, emptyScans;
+        int laneVisits;
 
         Worker(int id) {
             this.id = id;
@@ -213,9 +250,9 @@ public final class LabRuntime extends AbstractExecutorService {
 
         private boolean sourceHasMore() {
             Object s = lastSource;
-            if (s instanceof MpmcRing r) return !r.isEmpty();
+            if (s instanceof MpmcRing r) return r.sizeEstimate() >= CHAIN_BACKLOG;
             if (s instanceof WorkDeque d) return !d.isEmpty();
-            if (s instanceof ConcurrentLinkedQueue<?> q) return !q.isEmpty();
+            if (s instanceof SegmentQueue q) return !q.isEmpty();
             return false;
         }
 
@@ -239,24 +276,69 @@ public final class LabRuntime extends AbstractExecutorService {
             t = pollLane(1);
             if (t == null) t = pollLane(2);
             if (t == null) t = steal();
+            if (t == null) emptyScans++;
             return (Runnable) t;
         }
 
         private Object pollLane(int lane) {
+            // every 64th visit look at the overflows before the rings: bounds the wait of a task that slipped into an
+            // overflow right as its spill bit was being cleared (its submitter then feeds the ring again)
+            boolean sweep = (++laneVisits & 63) == 0;
             int n = shardMask + 1, base = lane * n;
             for (int k = 0; k < n; k++) {
-                MpmcRing r = rings[base + ((id + k) & shardMask)];
-                Object t = r.poll();
+                int ri = base + ((id + k) & shardMask);
+                Object t;
+                if (sweep && (t = pollOverflow(ri, lane)) != null) return t;
+                MpmcRing r = rings[ri];
+                if (lane == 0 || CLAIM <= 1) {
+                    t = r.poll();
+                } else {
+                    // Batch claim: ONE CAS on the ring head for up to CLAIM tasks. With a single producer the head
+                    // line is what all consumers fight over; per-item CAS made 4 consumers ~7x slower than 1.
+                    t = spread(r.pollBatch(claimBuf, CLAIM), ri);
+                }
                 if (t != null) {
                     lastShared = true;
                     lastSource = r;
                     return t;
                 }
+                if ((spillMask & (1L << ri)) != 0) {        // ring drained: its overflow holds the newer tasks
+                    if ((t = pollOverflow(ri, lane)) != null) return t;
+                    endSpill(ri);
+                }
             }
-            Object t = overflow[lane].poll();
+            return null;
+        }
+
+        private Object pollOverflow(int ri, int lane) {
+            SegmentQueue q = overflow[ri];
+            Object t = spread(q.pollBatch(claimBuf, lane == 0 ? 1 : Math.max(1, CLAIM)), ri);
             if (t != null) {
                 lastShared = true;
-                lastSource = overflow[lane];
+                lastSource = q;
+            }
+            return t;
+        }
+
+        /** Ring and its overflow looked empty: let submitters use the ring again (re-arm if one raced us). */
+        private void endSpill(int ri) {
+            long bit = 1L << ri;
+            if (!overflow[ri].isEmpty()) return;
+            SPILL.getAndBitwiseAnd(LabRuntime.this, ~bit);
+            if (!overflow[ri].isEmpty()) SPILL.getAndBitwiseOr(LabRuntime.this, bit);
+        }
+
+        /** Returns the first claimed task; the rest go to our deque in reverse (pop() keeps FIFO, thieves take the tail). */
+        private Object spread(int got, int ri) {
+            if (got == 0) return null;
+            claims++;
+            claimed += got;
+            Object t = claimBuf[0];
+            claimBuf[0] = null;
+            for (int i = got - 1; i >= 1; i--) {
+                Object x = claimBuf[i];
+                claimBuf[i] = null;
+                if (!deque.push(x)) overflow[ri].offer(x);
             }
             return t;
         }
@@ -288,7 +370,9 @@ public final class LabRuntime extends AbstractExecutorService {
                 long deadline = System.nanoTime() + cfg.spinNanos;
                 while (System.nanoTime() < deadline) {
                     if (hasWork()) return;
-                    Thread.onSpinWait();
+                    // back off between checks: hasWork() reads every ring's tail, and hammering it pulls the
+                    // producer's tail line into Shared state so each of its CASes misses (feedback into a slow mode)
+                    for (int i = 0; i < SPIN_CHECK; i++) Thread.onSpinWait();
                 }
                 spinning = false;
                 spinners.decrementAndGet();
@@ -398,7 +482,7 @@ public final class LabRuntime extends AbstractExecutorService {
         shutdown();
         List<Runnable> left = new ArrayList<>();
         for (MpmcRing r : rings) for (Object t; (t = r.poll()) != null; ) left.add((Runnable) t);
-        for (int i = 0; i < 3; i++) for (Runnable t; (t = overflow[i].poll()) != null; ) left.add(t);
+        for (SegmentQueue q : overflow) for (Object t; (t = q.poll()) != null; ) left.add((Runnable) t);
         return left;
     }
 

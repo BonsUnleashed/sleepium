@@ -44,6 +44,11 @@ final class MpmcRing {
     }
 
     boolean offer(Object x) {
+        return offerPos(x) >= 0;
+    }
+
+    /** Like offer, returns the claimed position or -1 when full. */
+    long offerPos(Object x) {
         long pos = (long) TAIL.getVolatile(this);
         for (;;) {
             int i = (int) pos & mask;
@@ -54,15 +59,29 @@ final class MpmcRing {
                 if (witness == pos) {
                     items[i] = x;
                     SEQ.setRelease(seq, i, pos + 1);
-                    return true;
+                    return pos;
                 }
                 pos = witness;
             } else if (dif < 0) {
-                return false;   // full
+                return -1;      // full
             } else {
                 pos = (long) TAIL.getVolatile(this);
             }
         }
+    }
+
+    /**
+     * Offer for a ring that is known to have exactly ONE producer thread (e.g. a per-submitter ring): no CAS, the tail
+     * is a plain field of the owner published with a release store. Consumers still use poll/pollBatch.
+     */
+    boolean offerOwned(Object x) {
+        long pos = (long) TAIL.getOpaque(this);
+        int i = (int) pos & mask;
+        if ((long) SEQ.getAcquire(seq, i) != pos) return false;   // full
+        items[i] = x;
+        SEQ.setRelease(seq, i, pos + 1);
+        TAIL.setRelease(this, pos + 1);
+        return true;
     }
 
     /** Fast path kept small so C2 inlines it into the worker loop; the retry loop lives in pollSlow(). */
@@ -99,6 +118,47 @@ final class MpmcRing {
                 pos = (long) HEAD.getVolatile(this);
             }
         }
+    }
+
+    /**
+     * Batch claim: take up to {@code max} consecutive published slots with ONE CAS on head.
+     * Returns the number of items written to {@code out}. Consumers contend max-times less on the head line.
+     */
+    int pollBatch(Object[] out, int max) {
+        for (;;) {
+            long pos = (long) HEAD.getVolatile(this);
+            int n = 0;
+            while (n < max) {
+                long s = (long) SEQ.getAcquire(seq, (int) (pos + n) & mask);
+                if (s != pos + n + 1) break;
+                n++;
+            }
+            if (n == 0) {
+                long s = (long) SEQ.getAcquire(seq, (int) pos & mask);
+                if (s < pos + 1) return 0;   // empty
+                continue;                     // stale head: another consumer moved it
+            }
+            if (HEAD.compareAndSet(this, pos, pos + n)) {
+                for (int k = 0; k < n; k++) {
+                    int i = (int) (pos + k) & mask;
+                    out[k] = items[i];
+                    items[i] = null;
+                    SEQ.setRelease(seq, i, pos + k + mask + 1);
+                }
+                return n;
+            }
+        }
+    }
+
+    /**
+     * True if the item right before {@code pos} is still in the ring (published, not yet freed by a consumer). Used by
+     * a submitter to skip the wake-up: whoever published that older item already woke (or saw) a worker, and a worker
+     * never parks while items are visible (it re-checks after publishing its parked bit). Reads the neighbouring
+     * sequence slot, which is on the cache line the producer just wrote 7 times out of 8 (ForkJoinPool's trick),
+     * instead of the consumers' head line.
+     */
+    boolean hasOlderThan(long pos) {
+        return (long) SEQ.getVolatile(seq, (int) (pos - 1) & mask) == pos;
     }
 
     /** Racy hint, exact enough for "is there work?" decisions (callers re-check). */
