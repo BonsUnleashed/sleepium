@@ -1,0 +1,95 @@
+package dev.probe;
+
+import java.lang.reflect.Field;
+import java.lang.reflect.Modifier;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import net.minecraft.core.NonNullList;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.block.entity.BlockEntity;
+
+/**
+ * "Did the object change in memory?" for any block-entity class, without knowing the class.
+ *
+ * <p>Per class, once: every instance field declared below {@link BlockEntity} (the subclass chain, vanilla or modded).
+ * Per tick: a snapshot of each field as a long. Primitives are their bits; references are the identity of the object
+ * (effectively its address); a {@code NonNullList<ItemStack>} / {@code ItemStack} goes one level deeper
+ * (item identity and count), because inventories change in place. Comparing the snapshots before and after a tick
+ * shows exactly which private fields a tick touched, e.g. a furnace's cooking progress.
+ */
+final class FieldDiff {
+    /** Field layout of one block-entity class. */
+    static final class Layout {
+        final Field[] fields;
+        final String[] names;
+
+        Layout(List<Field> fs) {
+            fields = fs.toArray(new Field[0]);
+            names = new String[fields.length];
+            for (int i = 0; i < fields.length; i++) names[i] = fields[i].getDeclaringClass().getSimpleName() + "." + fields[i].getName();
+        }
+    }
+
+    private static final Map<Class<?>, Layout> LAYOUTS = new HashMap<>();
+    static String failure;   // first reflection failure, reported once
+
+    private FieldDiff() {}
+
+    static Layout layout(Class<?> c) {
+        return LAYOUTS.computeIfAbsent(c, k -> {
+            List<Field> fs = new ArrayList<>();
+            for (Class<?> x = k; x != null && x != BlockEntity.class && x != Object.class; x = x.getSuperclass()) {
+                for (Field f : x.getDeclaredFields()) {
+                    if (Modifier.isStatic(f.getModifiers())) continue;
+                    try {
+                        f.setAccessible(true);
+                        fs.add(f);
+                    } catch (RuntimeException e) {
+                        if (failure == null) failure = f + ": " + e;
+                    }
+                }
+            }
+            return new Layout(fs);
+        });
+    }
+
+    static long[] snapshot(Object o, Layout l, long[] into) {
+        long[] v = into != null && into.length == l.fields.length ? into : new long[l.fields.length];
+        for (int i = 0; i < l.fields.length; i++) {
+            try {
+                v[i] = value(l.fields[i], o);
+            } catch (IllegalAccessException e) {
+                v[i] = 0;
+            }
+        }
+        return v;
+    }
+
+    private static long value(Field f, Object o) throws IllegalAccessException {
+        Class<?> t = f.getType();
+        if (t == int.class) return f.getInt(o);
+        if (t == long.class) return f.getLong(o);
+        if (t == boolean.class) return f.getBoolean(o) ? 1 : 0;
+        if (t == short.class) return f.getShort(o);
+        if (t == byte.class) return f.getByte(o);
+        if (t == char.class) return f.getChar(o);
+        if (t == float.class) return Float.floatToRawIntBits(f.getFloat(o));
+        if (t == double.class) return Double.doubleToRawLongBits(f.getDouble(o));
+        Object r = f.get(o);
+        if (r == null) return 0;
+        if (r instanceof NonNullList<?> list) {
+            long h = System.identityHashCode(list);
+            for (Object e : list) h = h * 31 + stack(e);
+            return h;
+        }
+        if (r instanceof ItemStack s) return stack(s);
+        return System.identityHashCode(r);   // reference identity: replaced object => changed
+    }
+
+    private static long stack(Object e) {
+        if (!(e instanceof ItemStack s) || s.isEmpty()) return 0;
+        return System.identityHashCode(s.getItem()) * 1_000_003L + s.getCount() * 7919L + System.identityHashCode(s);
+    }
+}
