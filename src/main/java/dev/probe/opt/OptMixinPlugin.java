@@ -62,9 +62,11 @@ public final class OptMixinPlugin implements IMixinConfigPlugin {
             "NeighborNotifySkipMixin", "NeoForgeBusMixin", "NeighborReactMixin", "TagCacheMixin", "BrainFlatMixin", "PoiColumnMixin", "EntityCollisionSkipMixin", "BlockCollisionMemoMixin", "EventSiteMixin", "NeighborQueueMixin", "SignalPathMixin", "CubeShapeMixin", "FluidSpreadMixin", "TickSchedulerMixin",
             // client side (applied on the physical client only): event sites, measured -22 % client tick time with the
             // client-thread collision memo (OwnerThread)
-            "ClientEventSiteMixin"};
+            "ClientEventSiteMixin",
+            // sampler locations from updateLocations + sampler names made once: entity scene 64 -> 127 fps
+            "ShaderSamplerCacheMixin"};
     // client side, exact but no measurable fps effect (3 steady A/B pairs): opt-in only
-    //   -Dlab.opt.SectionLayerMaskMixin / AmbientParticleSkipMixin / ShaderSamplerCacheMixin
+    //   -Dlab.opt.SectionLayerMaskMixin / AmbientParticleSkipMixin
 
     @Override
     public void onLoad(String mixinPackage) {

@@ -43,6 +43,8 @@ final class ClientAuto {
     /** -Dprobe.clientAuto.steady=true: after the initial terrain, 30 s of frames standing still, no teleports */
     private static final boolean STEADY = Boolean.getBoolean("probe.clientAuto.steady");
     private static final int SETTLE_S = Integer.getInteger("probe.clientAuto.settle", 0);
+    /** -Dprobe.clientAuto.scene=client_entities: run that probe function after the terrain is ready, then look at it */
+    private static final String SCENE = System.getProperty("probe.clientAuto.scene");
     /** -Dprobe.clientAuto.settleExtra=S: keep waiting S more seconds after the terrain is ready (lighting, stragglers) */
     private static final int SETTLE_EXTRA = Integer.getInteger("probe.clientAuto.settleExtra", 0);
     private static long meshedAt;
@@ -128,6 +130,10 @@ final class ClientAuto {
                 if (mc.level != null && mc.player != null && mc.screen == null) {
                     joinedAt = System.nanoTime();
                     log(String.format(Locale.ROOT, "joined: %.1f s after world creation started, %.1f s since JVM start", since(phaseStart), sinceJvm()));
+                    if (SCENE != null) {   // a rendering scene in the sky, looked at from above; built before the settle wait
+                        command(mc, "function probe:" + SCENE);
+                        command(mc, "tp @s 24 188 4 0 25");
+                    }
                     enter(Phase.SETTLE);
                 }
             }
@@ -140,6 +146,7 @@ final class ClientAuto {
                     log(String.format(Locale.ROOT, "initial terrain meshed in %.1f s (%s)%s", since(phaseStart) - 2.0,
                             mc.levelRenderer.getSectionStatistics(), since(phaseStart) > 90 ? " TIMEOUT" : ""));
                     command(mc, "gamemode spectator");
+
                     if (STEADY) {
                         ClientProbe.start(30, LABEL);   // stationary: rendering only, no loading in the window
                         enter(Phase.FINISH);
