@@ -1,0 +1,21 @@
+package dev.probe.optsupport;
+
+import java.util.Locale;
+
+/** State and counters of the client-side optimisations (render thread unless noted). */
+public final class ClientCounters {
+    public static long biomeSkips, samplerHits;
+    /** changes whenever the set of loaded chunks or their biomes may have changed (AmbientChunksMixin) */
+    public static long ambientVersion;
+
+    /** Implemented by ClientChunkCache (AmbientChunksMixin). */
+    public interface AmbientChunks {
+        boolean probe$anyAmbient();
+    }
+
+    private ClientCounters() {}
+
+    public static String report() {
+        return String.format(Locale.ROOT, "client opts: ambient biome lookups skipped %d, sampler locations from cache %d", biomeSkips, samplerHits);
+    }
+}

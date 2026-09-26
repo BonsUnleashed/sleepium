@@ -49,6 +49,12 @@
     "FluidSpreadMixin",
     "TickSchedulerMixin"
   ],
+  "client": [
+    "SectionLayerMaskMixin",
+    "AmbientChunksMixin",
+    "AmbientParticleSkipMixin",
+    "ShaderSamplerCacheMixin"
+  ],
   "injectors": {
     "defaultRequire": 1
   }

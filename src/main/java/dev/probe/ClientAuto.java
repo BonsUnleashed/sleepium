@@ -40,6 +40,8 @@ final class ClientAuto {
     private static final String LABEL = System.getProperty("probe.clientAuto", "auto");
     private static final String WORLD = "probe-auto";
     private static final long SEED = 20260925L;
+    /** -Dprobe.clientAuto.steady=true: after the initial terrain, 30 s of frames standing still, no teleports */
+    private static final boolean STEADY = Boolean.getBoolean("probe.clientAuto.steady");
 
     private enum Phase { TITLE, JOIN, SETTLE, RECORD, TP_WAIT_START, TP_WAIT_DONE, FINISH, DONE }
 
@@ -125,8 +127,13 @@ final class ClientAuto {
                     log(String.format(Locale.ROOT, "initial terrain meshed in %.1f s (%s)%s", since(phaseStart) - 2.0,
                             mc.levelRenderer.getSectionStatistics(), since(phaseStart) > 90 ? " TIMEOUT" : ""));
                     command(mc, "gamemode spectator");
-                    ClientProbe.start(40, LABEL);
-                    enter(Phase.RECORD);
+                    if (STEADY) {
+                        ClientProbe.start(30, LABEL);   // stationary: rendering only, no loading in the window
+                        enter(Phase.FINISH);
+                    } else {
+                        ClientProbe.start(40, LABEL);
+                        enter(Phase.RECORD);
+                    }
                 }
             }
             case RECORD -> {
@@ -151,6 +158,7 @@ final class ClientAuto {
             }
             case FINISH -> {
                 if (!ClientProbe.running()) {
+                    log(dev.probe.optsupport.ClientCounters.report());
                     log("thread census:\n" + census());
                     enter(Phase.DONE);
                     mc.stop();
