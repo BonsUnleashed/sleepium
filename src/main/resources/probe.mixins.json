@@ -27,7 +27,8 @@
     "SleepProbeFastSkipMixin",
     "SleepProbeChunkMemoMixin",
     "SleepProbeUnobservedMixin",
-    "SleepProbeUnobservedServerMixin"
+    "SleepProbeUnobservedServerMixin",
+    "SleepProbeDeadlineMixin"
   ],
   "injectors": {
     "defaultRequire": 1

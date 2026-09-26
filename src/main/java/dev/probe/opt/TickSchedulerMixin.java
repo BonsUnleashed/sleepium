@@ -76,8 +76,7 @@ public abstract class TickSchedulerMixin<T> {
         LongOpenHashSet seen = probe$seen;
         seen.clear();
         LabScheduler wakes = probe$wakes;
-        while (wakes.peekTime() <= gameTime) {
-            long key = wakes.pollKey();
+        for (long key; (key = wakes.takeDue(gameTime)) != LabScheduler.NONE; ) {
             if (!seen.add(key)) continue;
             long j = nextTickForContainer.get(key);   // default Long.MAX_VALUE: removed
             if (j > gameTime) continue;               // stale: a later wake-up is queued, or none is needed
@@ -99,6 +98,7 @@ public abstract class TickSchedulerMixin<T> {
                 wakes.add(gameTime + 1, key);   // vanilla keeps the entry and looks again next tick
             }
         }
+        wakes.endTick(gameTime);   // later writes for times up to now are due next tick, as vanilla's walk would see them
         if (CHECK) probe$check(expected);
     }
 

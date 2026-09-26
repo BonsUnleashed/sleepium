@@ -67,7 +67,14 @@ public final class SleepEngine {
         }
     }
 
+    /** deadlines in the lab's time queue (key = Sleeper.id), polled at the start of each level's block-entity tick */
+    private static final dev.probe.optsupport.LabScheduler DEADLINES = new dev.probe.optsupport.LabScheduler();
+    private static final it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap<Sleeper> SCHEDULED = new it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap<>();
+    private static long nextId;
+    static long deadlineWakes;
+
     static final class Sleeper {
+        final long id = nextId++;
         final BlockEntity be;
         final ClassInfo info;
         State state = State.AWAKE;
@@ -112,6 +119,24 @@ public final class SleepEngine {
     /** Reads of world state no subscription covers (fluids, light, weather, time of day, players, ...), counted by SleepProbeUnobservedMixin */
     static long unobserved, u0;
     static long verifiedSkips, externalWakes;
+
+    /** Start of a level's block-entity tick: wake every sleeper whose deadline has come (stale entries skipped). */
+    public static void pollDeadlines(Level level) {
+        if (level.isClientSide || DEADLINES.size() == 0) return;
+        long now = level.getGameTime();
+        for (long id; (id = DEADLINES.takeDue(now)) != dev.probe.optsupport.LabScheduler.NONE; ) {
+            Sleeper s = SCHEDULED.get(id);
+            if (s == null) continue;
+            if (s.state != State.ASLEEP) {
+                SCHEDULED.remove(id);
+            } else if (!s.woken && s.wakeAt <= now) {
+                SCHEDULED.remove(id);
+                deadlineWakes++;
+                request(s, "deadline");
+            }
+        }
+        DEADLINES.endTick(now);
+    }
 
     /** From SleepProbeUnobservedMixin: the observed tick read something a sleeping block entity could not be woken by. */
     public static void unobservedRead() {
@@ -346,7 +371,12 @@ public final class SleepEngine {
         s.failStreak = 0;
         h(s).probe$setSkipped(0);
         s.wakeAt = sleep == Long.MAX_VALUE ? Long.MAX_VALUE : now + sleep;
-        h(s).probe$setWakeAt(s.wakeAt);
+        // the deadline lives in the time queue; the fast skip only checks the woken flag (wakeAt MIN_VALUE)
+        if (s.wakeAt != Long.MAX_VALUE) {
+            DEADLINES.add(s.wakeAt, s.id);
+            SCHEDULED.put(s.id, s);
+        }
+        h(s).probe$setWakeAt(Long.MAX_VALUE);
         s.sleepReadHash = s.prevReadHash;
         s.state = State.ASLEEP;
         s.woken = false;
@@ -565,6 +595,7 @@ public final class SleepEngine {
                 "sleep engine: %s; tracked %d, asleep now %d; skipped ticks %d (fast path %d), sleeps entered %d (re-sleeps %d), observed ticks %d, backed off %d, materialized %d; verified skips %d, external-change wakes %d, unobserved reads %d%n",
                 ON ? "ON" : "OFF", ALL.size(), asleep, skipped + fastSkipped, fastSkipped, entered, resleeps, observedTicks, backedOff, materialized,
                 verifiedSkips, externalWakes, unobserved));
+        sb.append(String.format(Locale.ROOT, "  deadline queue: %d pending, %d added, %d woken by the scheduler%n", DEADLINES.size(), DEADLINES.added, deadlineWakes));
         byType.forEach((k, v) -> sb.append(String.format(Locale.ROOT, "  %-34s tracked %6d  asleep %6d  never %6d%n", k, v[0], v[1], v[2])));
         sb.append("  wakes: ").append(WAKES).append(System.lineSeparator());
         sb.append("  refused: ").append(REFUSED).append(System.lineSeparator());
