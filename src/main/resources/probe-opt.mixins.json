@@ -53,7 +53,8 @@
     "SectionLayerMaskMixin",
     "AmbientChunksMixin",
     "AmbientParticleSkipMixin",
-    "ShaderSamplerCacheMixin"
+    "ShaderSamplerCacheMixin",
+    "ClientEventSiteMixin"
   ],
   "injectors": {
     "defaultRequire": 1

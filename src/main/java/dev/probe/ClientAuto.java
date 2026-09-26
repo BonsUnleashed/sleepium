@@ -43,6 +43,9 @@ final class ClientAuto {
     /** -Dprobe.clientAuto.steady=true: after the initial terrain, 30 s of frames standing still, no teleports */
     private static final boolean STEADY = Boolean.getBoolean("probe.clientAuto.steady");
     private static final int SETTLE_S = Integer.getInteger("probe.clientAuto.settle", 0);
+    /** -Dprobe.clientAuto.settleExtra=S: keep waiting S more seconds after the terrain is ready (lighting, stragglers) */
+    private static final int SETTLE_EXTRA = Integer.getInteger("probe.clientAuto.settleExtra", 0);
+    private static long meshedAt;
 
     private enum Phase { TITLE, JOIN, SETTLE, RECORD, TP_WAIT_START, TP_WAIT_DONE, FINISH, DONE }
 
@@ -131,7 +134,9 @@ final class ClientAuto {
             case SETTLE -> {
                 // -Dprobe.clientAuto.settle=S: wait a fixed S seconds instead (renderers that replace vanilla's section
                 // dispatcher, like Sodium, do not show their progress in its counters)
-                if (SETTLE_S > 0 ? since(phaseStart) > SETTLE_S : (meshedStable(mc) || since(phaseStart) > 90)) {
+                boolean meshed = SETTLE_S > 0 ? since(phaseStart) > SETTLE_S : (meshedStable(mc) || since(phaseStart) > 90);
+                if (meshed && meshedAt == 0) meshedAt = System.nanoTime();
+                if (meshed && since(meshedAt) >= SETTLE_EXTRA) {
                     log(String.format(Locale.ROOT, "initial terrain meshed in %.1f s (%s)%s", since(phaseStart) - 2.0,
                             mc.levelRenderer.getSectionStatistics(), since(phaseStart) > 90 ? " TIMEOUT" : ""));
                     command(mc, "gamemode spectator");

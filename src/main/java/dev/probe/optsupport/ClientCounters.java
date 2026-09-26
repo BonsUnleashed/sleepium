@@ -16,6 +16,7 @@ public final class ClientCounters {
     private ClientCounters() {}
 
     public static String report() {
-        return String.format(Locale.ROOT, "client opts: ambient biome lookups skipped %d, sampler locations from cache %d", biomeSkips, samplerHits);
+        return String.format(Locale.ROOT, "client opts: ambient biome lookups skipped %d, sampler locations from cache %d; collision memo hits %d, misses %d; %s",
+                biomeSkips, samplerHits, BlockCollisionMemo.hits, BlockCollisionMemo.misses, EventSites.report());
     }
 }

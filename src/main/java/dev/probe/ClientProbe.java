@@ -34,6 +34,9 @@ final class ClientProbe {
     private static final long[] frames = new long[CAPACITY];
     private static final long[] renders = new long[CAPACITY];
     private static final long[] allocs = new long[CAPACITY];
+    private static final long[] ticks = new long[CAPACITY / 4];   // Minecraft.tick durations (ClientTickEvent Pre -> Post)
+    private static int nt;
+    private static long tickStart;
     private static int n;
     private static long lastPre, preNanos, allocAtPre;
     private static long stopAtNanos = -1, startNanos;
@@ -45,6 +48,10 @@ final class ClientProbe {
         if (System.getProperty("probe.clientAuto") != null) ClientAuto.register(bus);
         bus.addListener(EventPriority.HIGHEST, RenderFrameEvent.Pre.class, e -> onPre());
         bus.addListener(EventPriority.LOWEST, RenderFrameEvent.Post.class, e -> onPost());
+        bus.addListener(EventPriority.HIGHEST, net.neoforged.neoforge.client.event.ClientTickEvent.Pre.class, e -> tickStart = System.nanoTime());
+        bus.addListener(EventPriority.LOWEST, net.neoforged.neoforge.client.event.ClientTickEvent.Post.class, e -> {
+            if (stopAtNanos > 0 && tickStart != 0 && nt < ticks.length) ticks[nt++] = System.nanoTime() - tickStart;
+        });
         bus.addListener(RegisterClientCommandsEvent.class, e -> e.getDispatcher().register(
                 Commands.literal("probeclient").then(Commands.literal("run")
                         .then(Commands.argument("seconds", IntegerArgumentType.integer(5, 3600))
@@ -60,6 +67,7 @@ final class ClientProbe {
     }
 
     static void start(int seconds, String l) {
+        nt = 0;
         n = 0;
         lastPre = 0;
         label = l;
@@ -69,6 +77,7 @@ final class ClientProbe {
     }
 
     private static void onPre() {
+        dev.probe.optsupport.OwnerThread.client = Thread.currentThread();
         long now = System.nanoTime();
         if (stopAtNanos < 0) {
             return;
@@ -99,6 +108,7 @@ final class ClientProbe {
         TickTimer.Stats f = TickTimer.Stats.of(frames, n);
         TickTimer.Stats r = TickTimer.Stats.of(renders, n);
         TickTimer.Stats a = TickTimer.Stats.of(allocs, n);
+        TickTimer.Stats t = TickTimer.Stats.of(ticks, nt);
         int stutters = 0;
         for (int i = 0; i < n; i++) {
             if (frames[i] > 2 * f.p50()) {
@@ -115,6 +125,7 @@ final class ClientProbe {
                 .append("frame   ").append(f.asMillis()).append('\n')
                 .append("render  ").append(r.asMillis()).append("   (GameRenderer.render, CPU side)\n")
                 .append("alloc   ").append(a.asKiB().replace("/tick", "/frame")).append("   (render thread)\n")
+                .append("tick    ").append(t.asMillis()).append("   (Minecraft.tick, 20 Hz)\n")
                 .append(String.format(Locale.ROOT, "stutters (frame > 2x median): %d (%.2f %%)%n", stutters, 100.0 * stutters / Math.max(1, n)))
                 .append(sections).append('\n').append(entities).append("\n\n")
                 .append(TaskStats.report(secs, Math.max(1, n)).replace("per tick", "per frm "));
@@ -139,8 +150,8 @@ final class ClientProbe {
         ProbeMod.LOGGER.info("\n{}", sb);
         if (mc.player != null) {
             mc.player.displayClientMessage(Component.literal(String.format(Locale.ROOT,
-                    "probeclient '%s': %.0f fps, frame p50 %.2f / p99 %.2f ms, %.0f KiB/frame -> %s",
-                    label, n / secs, f.p50() / 1e6, f.p99() / 1e6, a.mean() / 1024, file.getFileName())), false);
+                    "probeclient '%s': %.0f fps, frame p50 %.2f / p99 %.2f ms, %.0f KiB/frame, client tick mean %.3f / p99 %.3f ms -> %s",
+                    label, n / secs, f.p50() / 1e6, f.p99() / 1e6, a.mean() / 1024, t.mean() / 1e6, t.p99() / 1e6, file.getFileName())), false);
         }
     }
 }

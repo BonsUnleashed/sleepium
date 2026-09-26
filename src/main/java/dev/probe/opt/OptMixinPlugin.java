@@ -47,7 +47,7 @@ public final class OptMixinPlugin implements IMixinConfigPlugin {
         if (on && simple.equals("PersistentPoolsMixin")
                 && (Boolean.getBoolean("lab.opt.all") || Boolean.getBoolean("lab.opt.LabPoolsMixin"))) on = false;
         // A/B of the client-side ones with the server-side ones on: -Dlab.opt.noClient=true
-        if (on && Boolean.getBoolean("lab.opt.noClient") && (simple.startsWith("Section") && simple.contains("Layer") || simple.startsWith("Ambient") || simple.startsWith("Shader"))) on = false;
+        if (on && Boolean.getBoolean("lab.opt.noClient") && (simple.startsWith("Section") && simple.contains("Layer") || simple.startsWith("Ambient") || simple.startsWith("Shader") || simple.startsWith("ClientEventSite"))) on = false;
         if (on) {
             System.out.println("[probe/opt] applying " + simple + " -> " + targetClassName);
         }
@@ -59,7 +59,10 @@ public final class OptMixinPlugin implements IMixinConfigPlugin {
      * not the experimental worldgen/pool ones). Expanded into the individual flags before any of them is read.
      */
     static final String[] UNIVERSAL = {"TickMemoMixin", "ChunkCacheMixin", "EntitySectionScanMixin", "EntitySectionIndexMixin",
-            "NeighborNotifySkipMixin", "NeoForgeBusMixin", "NeighborReactMixin", "TagCacheMixin", "BrainFlatMixin", "PoiColumnMixin", "EntityCollisionSkipMixin", "BlockCollisionMemoMixin", "EventSiteMixin", "NeighborQueueMixin", "SignalPathMixin", "CubeShapeMixin", "FluidSpreadMixin", "TickSchedulerMixin"};
+            "NeighborNotifySkipMixin", "NeoForgeBusMixin", "NeighborReactMixin", "TagCacheMixin", "BrainFlatMixin", "PoiColumnMixin", "EntityCollisionSkipMixin", "BlockCollisionMemoMixin", "EventSiteMixin", "NeighborQueueMixin", "SignalPathMixin", "CubeShapeMixin", "FluidSpreadMixin", "TickSchedulerMixin",
+            // client side (applied on the physical client only): event sites, measured -22 % client tick time with the
+            // client-thread collision memo (OwnerThread)
+            "ClientEventSiteMixin"};
     // client side, exact but no measurable fps effect (3 steady A/B pairs): opt-in only
     //   -Dlab.opt.SectionLayerMaskMixin / AmbientParticleSkipMixin / ShaderSamplerCacheMixin
 
@@ -75,6 +78,7 @@ public final class OptMixinPlugin implements IMixinConfigPlugin {
     @Override public List<String> getMixins() { return null; }
     @Override public void preApply(String targetClassName, ClassNode targetClass, String mixinClassName, IMixinInfo mixinInfo) {}
     @Override public void postApply(String targetClassName, ClassNode targetClass, String mixinClassName, IMixinInfo mixinInfo) {
-        if (mixinClassName.endsWith(".EventSiteMixin")) dev.probe.optsupport.EventSiteTransformer.transform(targetClass);
+        if (mixinClassName.endsWith(".EventSiteMixin") || mixinClassName.endsWith(".ClientEventSiteMixin"))
+            dev.probe.optsupport.EventSiteTransformer.transform(targetClass);
     }
 }

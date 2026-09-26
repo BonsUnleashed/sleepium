@@ -101,11 +101,13 @@ public final class BlockCollisionMemo {
         return k == m.n;
     }
 
-    /** Memo use is allowed: server side, on the server thread (one writer and reader per entity). */
+    /**
+     * Memo use is allowed on the thread that owns the level's logic (OwnerThread): the server thread, or the client
+     * main thread for client levels (client entities and sections are separate objects from the server's; one writer
+     * and reader per entity). Chunk-compile workers never call it.
+     */
     public static boolean usable(net.minecraft.world.level.Level level) {
-        if (level.isClientSide()) return false;
-        var server = net.neoforged.neoforge.server.ServerLifecycleHooks.getCurrentServer();
-        return server != null && Thread.currentThread() == server.getRunningThread();
+        return OwnerThread.owns(level);
     }
 
     public boolean sameBox(AABB b) {
