@@ -46,7 +46,8 @@
     "EntityCollideMemoMixin",
     "CubeShapeMixin",
     "VoxelShapeAccessor",
-    "FluidSpreadMixin"
+    "FluidSpreadMixin",
+    "TickSchedulerMixin"
   ],
   "injectors": {
     "defaultRequire": 1
