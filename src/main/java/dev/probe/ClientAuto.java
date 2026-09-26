@@ -42,6 +42,7 @@ final class ClientAuto {
     private static final long SEED = 20260925L;
     /** -Dprobe.clientAuto.steady=true: after the initial terrain, 30 s of frames standing still, no teleports */
     private static final boolean STEADY = Boolean.getBoolean("probe.clientAuto.steady");
+    private static final int SETTLE_S = Integer.getInteger("probe.clientAuto.settle", 0);
 
     private enum Phase { TITLE, JOIN, SETTLE, RECORD, TP_WAIT_START, TP_WAIT_DONE, FINISH, DONE }
 
@@ -106,6 +107,11 @@ final class ClientAuto {
                     log(String.format(Locale.ROOT, "title screen at %.1f s since JVM start", sinceJvm()));
                     mc.options.renderDistance().set(12);
                     mc.options.pauseOnLostFocus = false;
+                    // measure the renderer, not the monitor: no vsync, no frame cap (260 = unlimited)
+                    mc.options.enableVsync().set(false);
+                    mc.options.framerateLimit().set(260);
+                    mc.getWindow().updateVsync(false);
+                    mc.getWindow().setFramerateLimit(260);
                     Path dir = mc.getLevelSource().getBaseDir().resolve(WORLD);
                     deleteTree(dir);
                     LevelSettings settings = new LevelSettings(WORLD, GameType.CREATIVE, false, Difficulty.PEACEFUL, true,
@@ -123,7 +129,9 @@ final class ClientAuto {
                 }
             }
             case SETTLE -> {
-                if (meshedStable(mc) || since(phaseStart) > 90) {
+                // -Dprobe.clientAuto.settle=S: wait a fixed S seconds instead (renderers that replace vanilla's section
+                // dispatcher, like Sodium, do not show their progress in its counters)
+                if (SETTLE_S > 0 ? since(phaseStart) > SETTLE_S : (meshedStable(mc) || since(phaseStart) > 90)) {
                     log(String.format(Locale.ROOT, "initial terrain meshed in %.1f s (%s)%s", since(phaseStart) - 2.0,
                             mc.levelRenderer.getSectionStatistics(), since(phaseStart) > 90 ? " TIMEOUT" : ""));
                     command(mc, "gamemode spectator");
