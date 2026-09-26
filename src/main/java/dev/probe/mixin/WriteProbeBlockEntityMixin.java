@@ -13,7 +13,7 @@ public abstract class WriteProbeBlockEntityMixin {
     @Inject(method = "setChanged()V", at = @At("HEAD"))
     private void probe$setChanged(CallbackInfo ci) {
         BeTickStats.writes++;
-        if (dev.probe.optsupport.sleep.SleepEngine.ON) {
+        if (dev.probe.optsupport.sleep.SleepEngine.HOOKS) {
             BlockEntity be = (BlockEntity) (Object) this;
             dev.probe.optsupport.sleep.SleepEngine.onPos(be.getLevel(), be.getBlockPos(), "changed");
         }
@@ -24,6 +24,6 @@ public abstract class WriteProbeBlockEntityMixin {
     private static void probe$setChangedStatic(net.minecraft.world.level.Level level, net.minecraft.core.BlockPos pos,
                                                net.minecraft.world.level.block.state.BlockState state, CallbackInfo ci) {
         BeTickStats.writes++;
-        if (dev.probe.optsupport.sleep.SleepEngine.ON) dev.probe.optsupport.sleep.SleepEngine.onPos(level, pos, "changed");
+        if (dev.probe.optsupport.sleep.SleepEngine.HOOKS) dev.probe.optsupport.sleep.SleepEngine.onPos(level, pos, "changed");
     }
 }

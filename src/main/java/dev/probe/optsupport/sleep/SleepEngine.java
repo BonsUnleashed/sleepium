@@ -34,6 +34,8 @@ import net.minecraft.world.phys.AABB;
  */
 public final class SleepEngine {
     public static final boolean ON = Boolean.getBoolean("lab.opt.SleepMixin");
+    /** the probes feed the block-entity engine and/or the entity engine */
+    public static final boolean HOOKS = ON || EntitySleep.ON;
     static final int STABLE = Integer.getInteger("lab.sleep.stable", 3);
     static final int MARGIN = Integer.getInteger("lab.sleep.margin", 2);
     static final int MIN_SLEEP = Integer.getInteger("lab.sleep.min", 4);
@@ -140,6 +142,7 @@ public final class SleepEngine {
 
     /** From SleepProbeUnobservedMixin: the observed tick read something a sleeping block entity could not be woken by. */
     public static void unobservedRead() {
+        if (EntitySleep.obs != null && Thread.currentThread() == EntitySleep.obsThread) EntitySleep.unobservedRead();
         if (obs != null && Thread.currentThread() == obsThread) unobserved++;
     }
 
@@ -458,6 +461,7 @@ public final class SleepEngine {
     // ------------------------------------------------------------------ reads (from ReadProbeMixin)
 
     public static void readPos(char kind, BlockPos pos) {
+        if (EntitySleep.obs != null && Thread.currentThread() == EntitySleep.obsThread) EntitySleep.readPos(kind, pos.asLong());
         Sleeper s = obs;
         if (s == null || Thread.currentThread() != obsThread) return;
         long p = pos.asLong();
@@ -465,7 +469,13 @@ public final class SleepEngine {
         readHash = readHash * 1_000_003L + kind * 31L + p;
     }
 
+    /** Block collision / support queries over a box (from the collision memo overrides). */
+    public static void readRegion(AABB box) {
+        if (EntitySleep.obs != null && Thread.currentThread() == EntitySleep.obsThread) EntitySleep.readRegion(box);
+    }
+
     public static void readBox(char kind, AABB box) {
+        if (EntitySleep.obs != null && Thread.currentThread() == EntitySleep.obsThread) EntitySleep.readBox(kind, box);
         Sleeper s = obs;
         if (s == null || Thread.currentThread() != obsThread) return;
         s.readBoxes.add(box);
@@ -526,6 +536,7 @@ public final class SleepEngine {
 
     /** A block changed, a block entity was marked changed, or a container slot was set at this position. */
     public static void onPos(Level level, BlockPos pos, String reason) {
+        if (EntitySleep.ON && level != null && !level.isClientSide) EntitySleep.onPos(level, pos);
         if (BY_POS.isEmpty() || level == null || level.isClientSide) return;
         List<Sleeper> l = BY_POS.get(pos.asLong());
         if (l == null) return;
@@ -537,6 +548,7 @@ public final class SleepEngine {
 
     /** An entity moved, appeared, changed its item or was removed: wake sleepers whose read boxes it touches. */
     public static void onEntity(Entity e, String reason) {
+        if (EntitySleep.ON) EntitySleep.onEntity(e, reason);
         if (BY_SECTION.isEmpty()) return;
         Level level = e.level();
         if (level == null || level.isClientSide) return;
@@ -560,7 +572,7 @@ public final class SleepEngine {
     private static Field seedField;
     private static boolean seedTried;
 
-    private static long seed(Level level) {
+    static long seed(Level level) {
         if (!seedTried) {
             seedTried = true;
             try {
@@ -581,6 +593,30 @@ public final class SleepEngine {
     }
 
     // ------------------------------------------------------------------ report
+
+    /** Static entity-mode analysis of every entity type's class (one instance created per type, then discarded). */
+    public static String entityReport(net.minecraft.server.level.ServerLevel level) {
+        Map<String, String> out = new TreeMap<>();
+        Map<Class<?>, String> done = new java.util.HashMap<>();
+        for (var type : BuiltInRegistries.ENTITY_TYPE) {
+            net.minecraft.world.entity.Entity e;
+            try {
+                e = type.create(level);
+            } catch (RuntimeException ex) {
+                continue;
+            }
+            if (e == null) continue;
+            Class<?> c = e.getClass();
+            String r = done.computeIfAbsent(c, k -> {
+                SleepAnalysis.Plan p = SleepAnalysis.analyzeEntity(k);
+                return (p.eligible() ? "ELIGIBLE " : "no: ") + p.reason() + " clocks=" + p.clocks().stream().map(f -> f == null ? "?" : f.getName()).toList() + " conds=" + p.conds().stream().map(SleepAnalysis.Cond::text).toList();
+            });
+            out.put(BuiltInRegistries.ENTITY_TYPE.getKey(type).toString(), r);
+        }
+        StringBuilder sb = new StringBuilder("entity sleep analysis:" + System.lineSeparator());
+        out.forEach((k, v) -> sb.append(String.format(Locale.ROOT, "  %-36s %s%n", k, v)));
+        return sb.toString();
+    }
 
     public static String report() {
         Map<String, int[]> byType = new TreeMap<>();

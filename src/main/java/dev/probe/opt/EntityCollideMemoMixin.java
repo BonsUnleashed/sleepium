@@ -39,6 +39,7 @@ public abstract class EntityCollideMemoMixin {
     @Overwrite
     public static Vec3 collideBoundingBox(@Nullable Entity entity, Vec3 vec, AABB collisionBox, Level level, List<VoxelShape> potentialHits) {
         AABB bb = collisionBox.expandTowards(vec);
+        if (dev.probe.optsupport.sleep.SleepEngine.HOOKS) dev.probe.optsupport.sleep.SleepEngine.readRegion(bb);
         if (entity == null || !BlockCollisionMemo.MOVE_SLOTS || !potentialHits.isEmpty() || !BlockCollisionMemo.usable(level) || level.getWorldBorder().isInsideCloseToBorder(entity, bb)) {
             return collideWithShapes(vec, collisionBox, collectColliders(entity, level, potentialHits, bb));
         }

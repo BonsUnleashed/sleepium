@@ -20,7 +20,7 @@ import net.minecraft.world.level.lighting.LevelLightEngine;
 public abstract class SleepProbeUnobservedMixin {
     @ModifyVariable(method = "getFluidState", at = @At("HEAD"), argsOnly = true)
     private BlockPos probe$fluid(BlockPos pos) {
-        SleepEngine.unobservedRead();
+        SleepEngine.readPos('F', pos);   // a fluid is part of the block state: block changes at pos wake the sleeper
         return pos;
     }
 

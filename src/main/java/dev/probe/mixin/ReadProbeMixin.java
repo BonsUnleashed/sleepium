@@ -25,24 +25,24 @@ public abstract class ReadProbeMixin {
     @Inject(method = "getBlockState", at = @At("HEAD"))
     private void probe$readBlock(BlockPos pos, CallbackInfoReturnable<BlockState> cir) {
         BeTickStats.readPos('B', pos);
-        if (dev.probe.optsupport.sleep.SleepEngine.ON) dev.probe.optsupport.sleep.SleepEngine.readPos('B', pos);
+        if (dev.probe.optsupport.sleep.SleepEngine.HOOKS) dev.probe.optsupport.sleep.SleepEngine.readPos('B', pos);
     }
 
     @Inject(method = "getBlockEntity", at = @At("HEAD"))
     private void probe$readBlockEntity(BlockPos pos, CallbackInfoReturnable<BlockEntity> cir) {
         BeTickStats.readPos('E', pos);
-        if (dev.probe.optsupport.sleep.SleepEngine.ON) dev.probe.optsupport.sleep.SleepEngine.readPos('E', pos);
+        if (dev.probe.optsupport.sleep.SleepEngine.HOOKS) dev.probe.optsupport.sleep.SleepEngine.readPos('E', pos);
     }
 
     @Inject(method = "getEntities(Lnet/minecraft/world/entity/Entity;Lnet/minecraft/world/phys/AABB;Ljava/util/function/Predicate;)Ljava/util/List;", at = @At("HEAD"))
     private void probe$readEntities(Entity except, AABB box, Predicate<? super Entity> filter, CallbackInfoReturnable<List<Entity>> cir) {
         BeTickStats.readBox('A', box);
-        if (dev.probe.optsupport.sleep.SleepEngine.ON) dev.probe.optsupport.sleep.SleepEngine.readBox('A', box);
+        if (dev.probe.optsupport.sleep.SleepEngine.HOOKS) dev.probe.optsupport.sleep.SleepEngine.readBox('A', box);
     }
 
     @Inject(method = "getEntities(Lnet/minecraft/world/level/entity/EntityTypeTest;Lnet/minecraft/world/phys/AABB;Ljava/util/function/Predicate;Ljava/util/List;I)V", at = @At("HEAD"))
     private void probe$readEntitiesTyped(EntityTypeTest<?, ?> test, AABB box, Predicate<?> filter, List<?> out, int max, CallbackInfo ci) {
         BeTickStats.readBox('T', box);
-        if (dev.probe.optsupport.sleep.SleepEngine.ON) dev.probe.optsupport.sleep.SleepEngine.readBox('T', box);
+        if (dev.probe.optsupport.sleep.SleepEngine.HOOKS) dev.probe.optsupport.sleep.SleepEngine.readBox('T', box);
     }
 }

@@ -92,9 +92,15 @@ final class ProbeCommand {
                 }))
                 .then(Commands.literal("status").executes(ProbeCommand::status))
                 .then(Commands.literal("sleep").executes(ctx -> {
-                    String r = dev.probe.optsupport.sleep.SleepEngine.report();
+                    String r = dev.probe.optsupport.sleep.SleepEngine.report() + dev.probe.optsupport.sleep.EntitySleep.report()
+                            + dev.probe.optsupport.sleep.EntitySleep.census(ctx.getSource().getLevel());
                     ProbeMod.LOGGER.info("\n{}", r);
                     say(ctx, r);
+                    return 1;
+                }))
+                .then(Commands.literal("sleepents").executes(ctx -> {
+                    String r = dev.probe.optsupport.sleep.SleepEngine.entityReport(ctx.getSource().getLevel());
+                    ProbeMod.LOGGER.info("{}{}", System.lineSeparator(), r);
                     return 1;
                 }))
                 .then(Commands.literal("listentest").executes(ctx -> {
@@ -282,9 +288,17 @@ final class ProbeCommand {
                 e.saveWithoutId(tag);
                 tag.remove("UUID");
                 rows.add(net.minecraft.core.registries.BuiltInRegistries.ENTITY_TYPE.getKey(e.getType()) + " " + Double.doubleToLongBits(e.getX()) + " "
-                        + Double.doubleToLongBits(e.getY()) + " " + Double.doubleToLongBits(e.getZ()) + " " + e.getDeltaMovement() + " " + tag);
+                        + Double.doubleToLongBits(e.getY()) + " " + Double.doubleToLongBits(e.getZ()) + " " + e.getDeltaMovement() + " " + tag
+                        + (Boolean.getBoolean("probe.hashEntitiesDeep") ? " deep=" + Long.toHexString(dev.probe.optsupport.sleep.EntitySleep.deepHash(e)) : ""));
             }
             java.util.Collections.sort(rows);
+            if (Boolean.getBoolean("probe.hashDump")) {
+                var list = level.getEntities((net.minecraft.world.entity.Entity) null, box, x -> !(x instanceof net.minecraft.world.entity.player.Player));
+                list.sort(java.util.Comparator.comparingDouble((net.minecraft.world.entity.Entity x) -> x.getX()).thenComparingDouble(x -> x.getY()).thenComparingDouble(x -> x.getZ()));
+                for (int i = 0; i < Math.min(2, list.size()); i++) System.out.println("[probe/hashdump] " + dev.probe.optsupport.sleep.EntitySleep.deepDump(list.get(i)));
+                System.out.println("[probe/hashdump] row0 " + rows.get(0));
+                System.out.println("[probe/hashdump] rowN " + rows.get(rows.size() - 1));
+            }
             for (String r : rows) h = h * 31 + r.hashCode();
             ents = rows.size();
         }

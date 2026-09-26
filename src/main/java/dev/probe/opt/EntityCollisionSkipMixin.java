@@ -39,6 +39,7 @@ public abstract class EntityCollisionSkipMixin {
 
     /** Overrides the EntityGetter/CommonLevelAccessor default for every Level. */
     public List<VoxelShape> getEntityCollisions(@Nullable Entity entity, AABB collisionBox) {
+        if (dev.probe.optsupport.sleep.SleepEngine.HOOKS) dev.probe.optsupport.sleep.SleepEngine.readBox('C', collisionBox);
         if (collisionBox.getSize() < 1.0E-7) return List.of();
         AABB area = collisionBox.inflate(1.0E-7);
         if (EntityCollide.ENTITY_UNTOUCHED && (entity == null || EntityCollide.DEFAULT_COLLIDE.get(entity.getClass())) && probe$none(area)) {

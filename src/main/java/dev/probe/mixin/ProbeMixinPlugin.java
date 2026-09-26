@@ -11,9 +11,10 @@ public final class ProbeMixinPlugin implements IMixinConfigPlugin {
     @Override
     public boolean shouldApplyMixin(String targetClassName, String mixinClassName) {
         String simple = mixinClassName.substring(mixinClassName.lastIndexOf('.') + 1);
-        boolean sleep = Boolean.getBoolean("lab.opt.SleepMixin");
+        boolean sleep = Boolean.getBoolean("lab.opt.SleepMixin") || Boolean.getBoolean("lab.opt.EntitySleep");
         if (simple.startsWith("SleepProbeUnobserved")) return sleep && !Boolean.getBoolean("lab.sleep.noUnobserved");   // off only for measurements
         if (simple.startsWith("SleepProbe")) return sleep;
+        if (simple.startsWith("EntSleep")) return Boolean.getBoolean("lab.opt.EntitySleep") || System.getProperty("lab.entsleep.diag") != null;
         return !simple.startsWith("ReadProbe") || Boolean.getBoolean("probe.beReads") || sleep;
     }
 

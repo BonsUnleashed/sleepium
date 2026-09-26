@@ -28,7 +28,10 @@
     "SleepProbeChunkMemoMixin",
     "SleepProbeUnobservedMixin",
     "SleepProbeUnobservedServerMixin",
-    "SleepProbeDeadlineMixin"
+    "SleepProbeDeadlineMixin",
+    "EntSleepTickMixin",
+    "EntSleepHolderMixin",
+    "EntSleepDataMixin"
   ],
   "injectors": {
     "defaultRequire": 1

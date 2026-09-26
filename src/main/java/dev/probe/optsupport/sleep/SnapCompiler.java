@@ -32,6 +32,42 @@ final class SnapCompiler {
          * reference slots are the very same objects as {@code refs}. Reads only the block entity's own fields.
          */
         boolean same(Object be, long[] prims, Object[] refs);
+
+        /** Write slot i: a primitive from its snapshot encoding ({@code bits}), a reference from {@code ref}. */
+        void put(Object be, int i, long bits, Object ref);
+
+        /** Primitive slot i in the snapshot encoding (no fingerprinting). */
+        long bits(Object be, int i);
+
+        /** Hash of the primitive slots not skipped (same formula as {@link SnapCompiler#hashPrims(long[], boolean[], boolean[])}). */
+        long hashPrims(Object be);
+
+        /** The non-final, non-skipped reference slots, in slot order, are the very objects in {@code refs} (compact). */
+        boolean sameRefs(Object be, Object[] refs);
+    }
+
+    static final long H0 = 0x9E3779B97F4A7C15L, HM = 0xC2B2AE3D27D4EB4FL;
+
+    /** Java twin of the generated hashPrims: {@code v} in the snapshot encoding. */
+    static long hashPrims(long[] v, boolean[] prim, boolean[] skip) {
+        long h = H0;
+        for (int i = 0; i < v.length && i < prim.length; i++) {
+            if (!prim[i] || skip != null && skip[i]) continue;
+            h = (h + v[i]) * HM;
+            h ^= h >>> 31;
+        }
+        return h;
+    }
+
+    /** Slots sameRefs compares, in order. */
+    static int[] refSlots(List<Field> fields, boolean[] skip) {
+        List<Integer> out = new ArrayList<>();
+        for (int i = 0; i < fields.size(); i++) {
+            Field f = fields.get(i);
+            if (f.getType().isPrimitive() || java.lang.reflect.Modifier.isFinal(f.getModifiers()) || skip != null && skip[i]) continue;
+            out.add(i);
+        }
+        return out.stream().mapToInt(Integer::intValue).toArray();
     }
 
     private static final String SNAPPER = Type.getInternalName(Snapper.class);
@@ -48,17 +84,27 @@ final class SnapCompiler {
      * Falls back to reflection on failure.
      */
     static Snapper compile(List<Field> fields) {
+        return compile(fields, false);
+    }
+
+    /** {@code values}: references fingerprinted by value where that is their state (EntityFp: vectors, boxes, synched data, random seeds). */
+    static Snapper compile(List<Field> fields, boolean values) {
+        return compile(fields, values, null);
+    }
+
+    /** {@code skip}: slots same() ignores (checked another way, e.g. clocks). */
+    static Snapper compile(List<Field> fields, boolean values, boolean[] skip) {
         try {
             List<java.lang.invoke.VarHandle> vhs = new ArrayList<>();
             for (Field f : fields) vhs.add(MethodHandles.privateLookupIn(f.getDeclaringClass(), MethodHandles.lookup()).unreflectVarHandle(f));
-            return generate(fields, vhs);
+            return generate(fields, vhs, values, skip);
         } catch (Throwable t) {
             if (failure == null) failure = t.toString();
-            return reflective(fields);
+            return reflective(fields, values, skip);
         }
     }
 
-    private static Snapper generate(List<Field> fields, List<java.lang.invoke.VarHandle> vhs) throws Throwable {
+    private static Snapper generate(List<Field> fields, List<java.lang.invoke.VarHandle> vhs, boolean values, boolean[] skip) throws Throwable {
         String name = "dev/probe/optsupport/sleep/ProbeSnap" + (counter++);
         String VH = "java/lang/invoke/VarHandle", VHD = "Ljava/lang/invoke/VarHandle;";
         // frames are needed for the branches in same(); every merged type here is Object, so no class loading
@@ -117,7 +163,8 @@ final class SnapCompiler {
             } else if (t == double.class) {
                 m.visitMethodInsn(Opcodes.INVOKESTATIC, "java/lang/Double", "doubleToRawLongBits", "(D)J", false);
             } else {
-                m.visitMethodInsn(Opcodes.INVOKESTATIC, FP_OWNER, "fingerprint", "(Ljava/lang/Object;)J", false);
+                if (values) m.visitMethodInsn(Opcodes.INVOKESTATIC, "dev/probe/optsupport/sleep/EntityFp", "fp", "(Ljava/lang/Object;)J", false);
+                else m.visitMethodInsn(Opcodes.INVOKESTATIC, FP_OWNER, "fingerprint", "(Ljava/lang/Object;)J", false);
             }
             m.visitInsn(Opcodes.LASTORE);
         }
@@ -145,6 +192,7 @@ final class SnapCompiler {
         for (int i = 0; i < fields.size(); i++) {
             Field f = fields.get(i);
             Class<?> t = f.getType();
+            if (skip != null && skip[i]) continue;
             if (t.isPrimitive()) {
                 vhGet(q, name, i, f);
                 toBits(q, t);
@@ -168,6 +216,127 @@ final class SnapCompiler {
         q.visitInsn(Opcodes.IRETURN);
         q.visitMaxs(0, 0);
         q.visitEnd();
+        // put(Object be, int i, long bits, Object ref): tableswitch over the slots
+        MethodVisitor w = cw.visitMethod(Opcodes.ACC_PUBLIC, "put", "(Ljava/lang/Object;IJLjava/lang/Object;)V", null, null);
+        w.visitCode();
+        org.objectweb.asm.Label end = new org.objectweb.asm.Label();
+        org.objectweb.asm.Label[] cases = new org.objectweb.asm.Label[Math.max(1, fields.size())];
+        for (int i = 0; i < cases.length; i++) cases[i] = new org.objectweb.asm.Label();
+        w.visitVarInsn(Opcodes.ILOAD, 2);
+        w.visitTableSwitchInsn(0, cases.length - 1, end, cases);
+        for (int i = 0; i < fields.size(); i++) {
+            Field f = fields.get(i);
+            Class<?> t = f.getType();
+            Class<?> owner = f.getDeclaringClass();
+            boolean publicOwner = java.lang.reflect.Modifier.isPublic(owner.getModifiers()) && owner.getEnclosingClass() == null;
+            String coord = publicOwner ? Type.getDescriptor(owner) : "Ljava/lang/Object;";
+            w.visitLabel(cases[i]);
+            if (java.lang.reflect.Modifier.isFinal(f.getModifiers())) {   // never written by a replay
+                w.visitJumpInsn(Opcodes.GOTO, end);
+                continue;
+            }
+            w.visitFieldInsn(Opcodes.GETSTATIC, name, "VH" + i, "Ljava/lang/invoke/VarHandle;");
+            w.visitVarInsn(Opcodes.ALOAD, 1);
+            if (publicOwner) w.visitTypeInsn(Opcodes.CHECKCAST, Type.getInternalName(owner));
+            String valueDesc;
+            if (t.isPrimitive()) {
+                w.visitVarInsn(Opcodes.LLOAD, 3);
+                if (t == long.class) {
+                    valueDesc = "J";
+                } else if (t == double.class) {
+                    w.visitMethodInsn(Opcodes.INVOKESTATIC, "java/lang/Double", "longBitsToDouble", "(J)D", false);
+                    valueDesc = "D";
+                } else {
+                    w.visitInsn(Opcodes.L2I);
+                    if (t == float.class) {
+                        w.visitMethodInsn(Opcodes.INVOKESTATIC, "java/lang/Float", "intBitsToFloat", "(I)F", false);
+                    } else if (t == short.class) {
+                        w.visitInsn(Opcodes.I2S);
+                    } else if (t == byte.class) {
+                        w.visitInsn(Opcodes.I2B);
+                    } else if (t == char.class) {
+                        w.visitInsn(Opcodes.I2C);
+                    }
+                    valueDesc = Type.getDescriptor(t);
+                }
+            } else {
+                w.visitVarInsn(Opcodes.ALOAD, 5);
+                valueDesc = "Ljava/lang/Object;";
+            }
+            w.visitMethodInsn(Opcodes.INVOKEVIRTUAL, "java/lang/invoke/VarHandle", "set", "(" + coord + valueDesc + ")V", false);
+            w.visitJumpInsn(Opcodes.GOTO, end);
+        }
+        w.visitLabel(end);
+        w.visitInsn(Opcodes.RETURN);
+        w.visitMaxs(0, 0);
+        w.visitEnd();
+        // bits(Object be, int i)
+        MethodVisitor g = cw.visitMethod(Opcodes.ACC_PUBLIC, "bits", "(Ljava/lang/Object;I)J", null, null);
+        g.visitCode();
+        org.objectweb.asm.Label none = new org.objectweb.asm.Label();
+        org.objectweb.asm.Label[] gc = new org.objectweb.asm.Label[Math.max(1, fields.size())];
+        for (int i = 0; i < gc.length; i++) gc[i] = new org.objectweb.asm.Label();
+        g.visitVarInsn(Opcodes.ILOAD, 2);
+        g.visitTableSwitchInsn(0, gc.length - 1, none, gc);
+        for (int i = 0; i < fields.size(); i++) {
+            Field f = fields.get(i);
+            g.visitLabel(gc[i]);
+            if (!f.getType().isPrimitive()) {
+                g.visitJumpInsn(Opcodes.GOTO, none);
+                continue;
+            }
+            vhGet(g, name, i, f);
+            toBits(g, f.getType());
+            g.visitInsn(Opcodes.LRETURN);
+        }
+        g.visitLabel(none);
+        g.visitInsn(Opcodes.LCONST_0);
+        g.visitInsn(Opcodes.LRETURN);
+        g.visitMaxs(0, 0);
+        g.visitEnd();
+        // hashPrims(Object be): h = (h + bits) * HM; h ^= h >>> 31 over primitive, non-skipped slots
+        MethodVisitor hp = cw.visitMethod(Opcodes.ACC_PUBLIC, "hashPrims", "(Ljava/lang/Object;)J", null, null);
+        hp.visitCode();
+        hp.visitLdcInsn(H0);
+        hp.visitVarInsn(Opcodes.LSTORE, 2);
+        for (int i = 0; i < fields.size(); i++) {
+            Field f = fields.get(i);
+            if (!f.getType().isPrimitive() || skip != null && skip[i]) continue;
+            hp.visitVarInsn(Opcodes.LLOAD, 2);
+            vhGet(hp, name, i, f);
+            toBits(hp, f.getType());
+            hp.visitInsn(Opcodes.LADD);
+            hp.visitLdcInsn(HM);
+            hp.visitInsn(Opcodes.LMUL);
+            hp.visitInsn(Opcodes.DUP2);
+            hp.visitIntInsn(Opcodes.BIPUSH, 31);
+            hp.visitInsn(Opcodes.LUSHR);
+            hp.visitInsn(Opcodes.LXOR);
+            hp.visitVarInsn(Opcodes.LSTORE, 2);
+        }
+        hp.visitVarInsn(Opcodes.LLOAD, 2);
+        hp.visitInsn(Opcodes.LRETURN);
+        hp.visitMaxs(0, 0);
+        hp.visitEnd();
+        // sameRefs(Object be, Object[] refs)
+        MethodVisitor sr = cw.visitMethod(Opcodes.ACC_PUBLIC, "sameRefs", "(Ljava/lang/Object;[Ljava/lang/Object;)Z", null, null);
+        sr.visitCode();
+        org.objectweb.asm.Label rdiff = new org.objectweb.asm.Label();
+        int[] rs = refSlots(fields, skip);
+        for (int k = 0; k < rs.length; k++) {
+            vhGet(sr, name, rs[k], fields.get(rs[k]));
+            sr.visitVarInsn(Opcodes.ALOAD, 2);
+            pushInt(sr, k);
+            sr.visitInsn(Opcodes.AALOAD);
+            sr.visitJumpInsn(Opcodes.IF_ACMPNE, rdiff);
+        }
+        sr.visitInsn(Opcodes.ICONST_1);
+        sr.visitInsn(Opcodes.IRETURN);
+        sr.visitLabel(rdiff);
+        sr.visitInsn(Opcodes.ICONST_0);
+        sr.visitInsn(Opcodes.IRETURN);
+        sr.visitMaxs(0, 0);
+        sr.visitEnd();
         cw.visitEnd();
         Class<?> c = MethodHandles.lookup().defineHiddenClassWithClassData(cw.toByteArray(), vhs, true).lookupClass();
         return (Snapper) c.getDeclaredConstructor().newInstance();
@@ -206,12 +375,12 @@ final class SnapCompiler {
     }
 
     /** Fallback: reflection (slow, but always works). */
-    private static Snapper reflective(List<Field> fields) {
+    private static Snapper reflective(List<Field> fields, boolean values, boolean[] skip) {
         Field[] fs = fields.toArray(new Field[0]);
         return new Snapper() {
             @Override
             public void snap(Object be, long[] out) {
-                for (int i = 0; i < fs.length; i++) out[i] = bits(fs[i], be);
+                for (int i = 0; i < fs.length; i++) out[i] = SnapCompiler.bits(fs[i], be, values);
             }
 
             @Override
@@ -227,10 +396,59 @@ final class SnapCompiler {
             }
 
             @Override
+            public void put(Object be, int i, long b, Object ref) {
+                Field f = fs[i];
+                try {
+                    Class<?> t = f.getType();
+                    if (t == int.class) f.setInt(be, (int) b);
+                    else if (t == long.class) f.setLong(be, b);
+                    else if (t == boolean.class) f.setBoolean(be, b != 0);
+                    else if (t == short.class) f.setShort(be, (short) b);
+                    else if (t == byte.class) f.setByte(be, (byte) b);
+                    else if (t == char.class) f.setChar(be, (char) b);
+                    else if (t == float.class) f.setFloat(be, Float.intBitsToFloat((int) b));
+                    else if (t == double.class) f.setDouble(be, Double.longBitsToDouble(b));
+                    else f.set(be, ref);
+                } catch (IllegalAccessException e) {
+                    throw new IllegalStateException(e);
+                }
+            }
+
+            @Override
+            public long bits(Object be, int i) {
+                return fs[i].getType().isPrimitive() ? SnapCompiler.bits(fs[i], be, false) : 0;
+            }
+
+            @Override
+            public long hashPrims(Object be) {
+                long[] v = new long[fs.length];
+                boolean[] prim = new boolean[fs.length];
+                for (int i = 0; i < fs.length; i++) {
+                    prim[i] = fs[i].getType().isPrimitive();
+                    if (prim[i]) v[i] = SnapCompiler.bits(fs[i], be, false);
+                }
+                return SnapCompiler.hashPrims(v, prim, skip);
+            }
+
+            @Override
+            public boolean sameRefs(Object be, Object[] refs) {
+                int[] rs = refSlots(fields, skip);
+                for (int k = 0; k < rs.length; k++) {
+                    try {
+                        if (fs[rs[k]].get(be) != refs[k]) return false;
+                    } catch (IllegalAccessException e) {
+                        return false;
+                    }
+                }
+                return true;
+            }
+
+            @Override
             public boolean same(Object be, long[] prims, Object[] refs) {
                 for (int i = 0; i < fs.length; i++) {
+                    if (skip != null && skip[i]) continue;
                     try {
-                        if (fs[i].getType().isPrimitive() ? bits(fs[i], be) != prims[i] : fs[i].get(be) != refs[i]) return false;
+                        if (fs[i].getType().isPrimitive() ? SnapCompiler.bits(fs[i], be, false) != prims[i] : fs[i].get(be) != refs[i]) return false;
                     } catch (IllegalAccessException e) {
                         return false;
                     }
@@ -240,7 +458,7 @@ final class SnapCompiler {
         };
     }
 
-    private static long bits(Field f, Object be) {
+    private static long bits(Field f, Object be, boolean values) {
         try {
             Class<?> t = f.getType();
             if (t == int.class) return f.getInt(be);
@@ -251,7 +469,7 @@ final class SnapCompiler {
             if (t == char.class) return f.getChar(be);
             if (t == float.class) return Float.floatToRawIntBits(f.getFloat(be));
             if (t == double.class) return Double.doubleToRawLongBits(f.getDouble(be));
-            return FieldDiff.fingerprint(f.get(be));
+            return values ? EntityFp.fp(f.get(be)) : FieldDiff.fingerprint(f.get(be));
         } catch (IllegalAccessException e) {
             return 0;
         }

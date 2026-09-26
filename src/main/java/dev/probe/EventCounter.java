@@ -76,8 +76,11 @@ final class EventCounter {
         }
     }
 
+    /** -Dprobe.noEventCount=true: no counting listeners (they force every event site of the bus onto the full post path) */
+    private static final boolean OFF = Boolean.getBoolean("probe.noEventCount");
+
     boolean available() {
-        return listenerLists != null;
+        return listenerLists != null && !OFF;
     }
 
     boolean enabled() {

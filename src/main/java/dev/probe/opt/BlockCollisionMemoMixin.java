@@ -33,6 +33,7 @@ public abstract class BlockCollisionMemoMixin {
 
     /** Overrides the CollisionGetter default: same steps, block part memoized. */
     public boolean noCollision(@Nullable Entity entity, AABB collisionBox) {
+        if (dev.probe.optsupport.sleep.SleepEngine.HOOKS) dev.probe.optsupport.sleep.SleepEngine.readRegion(collisionBox);
         if (!probe$blocksFree(entity, collisionBox)) return false;
         if (!((CollisionGetter) (Object) this).getEntityCollisions(entity, collisionBox).isEmpty()) return false;
         if (entity == null) return true;
@@ -43,6 +44,7 @@ public abstract class BlockCollisionMemoMixin {
 
     /** Overrides the CollisionGetter default. */
     public boolean noBlockCollision(@Nullable Entity entity, AABB boundingBox) {
+        if (dev.probe.optsupport.sleep.SleepEngine.HOOKS) dev.probe.optsupport.sleep.SleepEngine.readRegion(boundingBox);
         return probe$blocksFree(entity, boundingBox);
     }
 
@@ -51,6 +53,7 @@ public abstract class BlockCollisionMemoMixin {
      * keyed also by the entity position (the distances pick the block). Vanilla body on a miss.
      */
     public java.util.Optional<net.minecraft.core.BlockPos> findSupportingBlock(Entity entity, AABB box) {
+        if (dev.probe.optsupport.sleep.SleepEngine.HOOKS) dev.probe.optsupport.sleep.SleepEngine.readRegion(box);
         boolean memo = BlockCollisionMemo.MOVE_SLOTS && BlockCollisionMemo.usable((Level) (Object) this);
         BlockCollisionMemo m = null;
         CollisionGetter self = (CollisionGetter) (Object) this;

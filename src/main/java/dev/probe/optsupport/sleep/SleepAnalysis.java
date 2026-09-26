@@ -32,7 +32,8 @@ import org.objectweb.asm.tree.analysis.SourceValue;
 final class SleepAnalysis {
     static final String BE = "net/minecraft/world/level/block/entity/BlockEntity";
     static final String TICKER_RET = ")Lnet/minecraft/world/level/block/entity/BlockEntityTicker;";
-    static final int MAX_DEPTH = 3;
+    /** own call graph depth; deeper own calls are refused (their conditions would go unseen) */
+    static final int MAX_DEPTH = 64;
     /** Owned-object types whose method calls cannot hide state from the field snapshot (immutable or snapshotted deeply). */
     static final Set<String> SAFE_OWNED = Set.of("net/minecraft/core/NonNullList", "net/minecraft/world/item/ItemStack",
             "net/minecraft/core/Direction", "net/minecraft/core/BlockPos", "net/minecraft/world/level/block/state/BlockState",
@@ -46,17 +47,34 @@ final class SleepAnalysis {
      * clock ? const/field; or gameTime % mod ? const (clock null); or (clock + x) % mod ? y (clock set, mod > 0,
      * {@code clockMod}): a periodic condition on a clock, whose outcome can change every tick.
      */
-    record Cond(Field clock, Field thresholdField, long thresholdConst, long mod, String text, boolean clockMod) {
+    record Cond(Field clock, Field thresholdField, long thresholdConst, long mod, String text, boolean clockMod, boolean peer) {
         Cond(Field clock, Field thresholdField, long thresholdConst, long mod, String text) {
-            this(clock, thresholdField, thresholdConst, mod, text, false);
+            this(clock, thresholdField, thresholdConst, mod, text, false, false);
+        }
+
+        Cond(Field clock, Field thresholdField, long thresholdConst, long mod, String text, boolean clockMod) {
+            this(clock, thresholdField, thresholdConst, mod, text, clockMod, false);
+        }
+
+        /** entity mode: the clock compared with the same field of another instance (a neighbour read by the tick) */
+        static Cond peer(Field clock, String text) {
+            return new Cond(clock, null, 0, 0, text, false, true);
         }
     }
 
     /** What the engine may do with a class. */
     /** What the engine may do with a class; {@code watch} = the only fields a tick can change (clocks included). */
-    record Plan(boolean eligible, String reason, List<Field> clocks, List<Cond> conds, List<Field> watch) {
+    /**
+     * {@code nulls} (entity mode): object fields that must be null while asleep. Code that would only run with such a
+     * field set (behind a null test on it, or after a call on it) is excluded from the analysis.
+     */
+    record Plan(boolean eligible, String reason, List<Field> clocks, List<Cond> conds, List<Field> watch, long period, List<Field> nulls) {
         Plan(boolean eligible, String reason, List<Field> clocks, List<Cond> conds) {
-            this(eligible, reason, clocks, conds, List.of());
+            this(eligible, reason, clocks, conds, List.of(), 1, List.of());
+        }
+
+        Plan(boolean eligible, String reason, List<Field> clocks, List<Cond> conds, List<Field> watch) {
+            this(eligible, reason, clocks, conds, watch, 1, List.of());
         }
     }
 
@@ -70,9 +88,182 @@ final class SleepAnalysis {
     private Set<String> chain;      // the block entity's class chain (internal names), for provenance of values
     private Class<?> beCls;
 
+    /** entity mode: the engine snapshots every field of the entity, so owned objects whose state it sees are allowed */
+    private boolean entityMode;
+    /** diagnostics (-Dlab.sleep.allReasons): keep going after a refusal and collect every reason */
+    private static final boolean ALL_REASONS = Boolean.getBoolean("lab.sleep.allReasons");
+    private final java.util.Map<String, Integer> reasons = new java.util.LinkedHashMap<>();
+
+    private boolean ok() {
+        return ok(null);
+    }
+
+    private boolean ok(String here) {
+        if (ALL_REASONS && reject != null) {
+            reasons.merge(here == null ? reject : reject + " @" + here, 1, Integer::sum);
+            reject = null;
+        }
+        return reject == null;
+    }
+
+    /** entity mode: own object fields assumed null (see Plan.nulls); grown by candidates until a fixpoint */
+    private final Set<String> nullFields = new HashSet<>();
+    private final Set<String> nullCandidates = new HashSet<>();
+
+    private boolean nullField(Operand o) {
+        return entityMode && o != null && o.kind == Kind.FIELD && o.self && chain != null && chain.contains(o.owner) && nullFields.contains(o.name);
+    }
+
+    /** Frames plus the instructions that can run under the null assumptions (all reachable ones without assumptions). */
+    private record Flow(Frame<SourceValue>[] fr, boolean[] live) {}
+
+    private Flow flow(String owner, MethodNode m) throws AnalyzerException {
+        int n = m.instructions.size();
+        List<int[]> edges = new ArrayList<>();
+        Analyzer<SourceValue> an = new Analyzer<>(new SourceInterpreter()) {
+            @Override
+            protected void newControlFlowEdge(int insn, int succ) {
+                edges.add(new int[] {insn, succ});
+            }
+
+            @Override
+            protected boolean newControlFlowExceptionEdge(int insn, int succ) {
+                edges.add(new int[] {insn, succ, 1});
+                return true;
+            }
+        };
+        Frame<SourceValue>[] fr = an.analyze(owner, m);
+        boolean[] live = new boolean[n];
+        if (nullFields.isEmpty()) {
+            for (int i = 0; i < n; i++) live[i] = fr[i] != null;
+            return new Flow(fr, live);
+        }
+        int[] cnt = new int[n + 1];
+        for (int[] e : edges) cnt[e[0] + 1]++;
+        for (int i = 0; i < n; i++) cnt[i + 1] += cnt[i];
+        int[] adj = new int[edges.size()], exc = new int[edges.size()], pos = cnt.clone();
+        for (int[] e : edges) {
+            exc[pos[e[0]]] = e.length > 2 ? 1 : 0;
+            adj[pos[e[0]]++] = e[1];
+        }
+        AbstractInsnNode[] in = m.instructions.toArray();
+        int[] stack = new int[n];
+        int sp = 0;
+        if (n > 0) {
+            live[0] = true;
+            stack[sp++] = 0;
+        }
+        while (sp > 0) {
+            int i = stack[--sp];
+            int op = in[i].getOpcode();
+            int only = -2;   // -2: all normal successors; -1: none; else the only one
+            if ((op == Opcodes.IFNULL || op == Opcodes.IFNONNULL) && nullField(operand(fr[i], 1, fr, m, 0))) {
+                int target = m.instructions.indexOf(((JumpInsnNode) in[i]).label);
+                only = op == Opcodes.IFNULL ? target : i + 1;
+            } else if (in[i] instanceof MethodInsnNode mi && op != Opcodes.INVOKESTATIC
+                    && nullField(operand(fr[i], Type.getArgumentTypes(mi.desc).length + 1, fr, m, 0))) {
+                only = -1;   // a call on a null field: throws
+            } else if ((op == Opcodes.GETFIELD || op == Opcodes.ARRAYLENGTH) && nullField(operand(fr[i], 1, fr, m, 0))) {
+                only = -1;
+            } else if (op == Opcodes.PUTFIELD && nullField(operand(fr[i], 2, fr, m, 0))) {
+                only = -1;
+            }
+            for (int k = cnt[i]; k < cnt[i + 1]; k++) {
+                int t = adj[k];
+                if (exc[k] == 0 && only != -2 && t != only) continue;
+                if (!live[t] && fr[t] != null) {
+                    live[t] = true;
+                    stack[sp++] = t;
+                }
+            }
+        }
+        return new Flow(fr, live);
+    }
+
     private SleepAnalysis(ClassLoader loader) {
         this.loader = loader;
     }
+
+    /**
+     * Entity classes: the root is the class's tick(); Entity.tickCount is a clock advanced by the level's tick wrapper.
+     * The plan's period is the lcm of all clock moduli (1 if none).
+     */
+    static Plan analyzeEntity(Class<?> entityClass) {
+        SleepAnalysis a = new SleepAnalysis(entityClass.getClassLoader());
+        a.entityMode = true;
+        try {
+            return a.runEntity(entityClass);
+        } catch (Exception | LinkageError e) {
+            return new Plan(false, "analysis failed: " + e, List.of(), List.of());
+        }
+    }
+
+    private Plan runEntity(Class<?> ec) throws AnalyzerException {
+        Set<String> chainSet = new HashSet<>();
+        for (Class<?> c = ec; c != null && c != Object.class; c = c.getSuperclass()) chainSet.add(internal(c));
+        this.chain = chainSet;
+        this.beCls = ec;
+        Field tickCount = field(ec, "tickCount");
+        if (tickCount == null) return new Plan(false, "no tickCount", List.of(), List.of());
+        clocks.put(fkey("net/minecraft/world/entity/Entity", "tickCount"), tickCount);
+        String decl = ownerOf(internal(ec), "tick", "()V");
+        MethodNode root = decl == null ? null : method(decl, "tick", "()V");
+        if (root == null) return new Plan(false, reject != null ? reject : "tick() not found", List.of(), List.of());
+        Set<String> seen = new HashSet<>();
+        for (int round = 0; ; round++) {
+            clocks.clear();
+            clocks.put(fkey("net/minecraft/world/entity/Entity", "tickCount"), tickCount);
+            conds.clear();
+            watch.clear();
+            moduli.clear();
+            reasons.clear();
+            reject = null;
+            nullCandidates.clear();
+            seen.clear();
+            follow(decl, root, 0, seen, chainSet, ec);
+            if (ok()) {
+                seen.clear();
+                branches(decl, root, 0, seen, chainSet, ec);
+            }
+            if (nullFields.containsAll(nullCandidates) || round == 8) break;
+            nullFields.addAll(nullCandidates);
+        }
+        ok();
+        if (!reasons.isEmpty()) reject = reasons.size() + " reasons (null: " + nullFields + "): " + String.join(" | ", reasons.keySet());
+        if (reject != null) return new Plan(false, reject, List.copyOf(clocks.values()), List.copyOf(conds));
+        long period = 1;
+        for (long n : moduli) {
+            period = lcm(period, n);
+            if (period > 1_000_000) return new Plan(false, "period too long", List.copyOf(clocks.values()), List.copyOf(conds));
+        }
+        List<Field> nulls = new ArrayList<>();
+        for (String f : nullFields) {
+            Field fld = field(ec, f);
+            if (fld == null) return new Plan(false, "field not accessible: " + f, List.of(), List.of());
+            nulls.add(fld);
+        }
+        return new Plan(true, "ok: period " + period + (nulls.isEmpty() ? "" : ", null: " + nullFields), List.copyOf(clocks.values()), List.copyOf(conds),
+                List.copyOf(watch.values()), period, List.copyOf(nulls));
+    }
+
+    private static long lcm(long a, long b) {
+        long x = a, y = b;
+        while (y != 0) {
+            long t = x % y;
+            x = y;
+            y = t;
+        }
+        return a / x * b;
+    }
+
+    /** Owned objects whose whole state the entity snapshot or the engine's runtime checks see. */
+    private static final Set<String> ENTITY_SAFE = Set.of("net/minecraft/network/syncher/SynchedEntityData", "net/minecraft/util/RandomSource",
+            "net/minecraft/world/level/levelgen/LegacyRandomSource", "net/minecraft/world/level/levelgen/SingleThreadedRandomSource",
+            "net/minecraft/world/phys/Vec3", "net/minecraft/world/phys/AABB", "java/util/Optional", "java/util/stream/Stream",
+            "net/minecraft/world/entity/EntityDimensions", "net/minecraft/core/Rotations", "net/minecraft/world/damagesource/DamageSources",
+            "net/minecraft/network/chat/Component", "net/minecraft/world/item/alchemy/PotionContents",
+            // section bookkeeping keyed by position: a no-op while the position does not change (the engine requires that)
+            "net/minecraft/world/level/entity/EntityInLevelCallback");
 
     static Plan analyze(Class<? extends BlockEntity> beClass, Class<?> blockClass) {
         SleepAnalysis a = new SleepAnalysis(beClass.getClassLoader());
@@ -131,25 +322,51 @@ final class SleepAnalysis {
     // ---------------------------------------------------------------- pass 1: clocks and hidden state
 
     private void follow(String owner, MethodNode m, int depth, Set<String> seen, Set<String> beChain, Class<?> beClass) throws AnalyzerException {
-        if (reject != null || !seen.add(owner + "." + m.name + m.desc)) return;
+        follow(owner, m, depth, seen, beChain, beClass, (m.access & Opcodes.ACC_STATIC) == 0 ? 1 : 0);
+    }
+
+    private void follow(String owner, MethodNode m, int depth, Set<String> seen, Set<String> beChain, Class<?> beClass, int self) throws AnalyzerException {
+        if (!ok() || !seen.add(owner + "." + m.name + m.desc + (entityMode ? "#" + self : ""))) return;
+        int savedSelf = selfMask;
+        selfMask = self;
+        try {
+            follow0(owner, m, depth, seen, beChain, beClass);
+        } finally {
+            selfMask = savedSelf;
+        }
+    }
+
+    private void follow0(String owner, MethodNode m, int depth, Set<String> seen, Set<String> beChain, Class<?> beClass) throws AnalyzerException {
         if (MixinTouch.touched(owner, m.name)) {   // the resource bytes are not the code that runs
             reject = "mixin-changed " + simple(owner) + "." + m.name;
             return;
         }
-        Frame<SourceValue>[] fr = new Analyzer<>(new SourceInterpreter()).analyze(owner, m);
+        Flow flow = flow(owner, m);
+        Frame<SourceValue>[] fr = flow.fr();
+        String here = simple(owner) + "." + m.name;
         AbstractInsnNode[] in = m.instructions.toArray();
-        for (int i = 0; i < in.length && reject == null; i++) {
-            if (fr[i] == null) continue;
+        for (int i = 0; i < in.length && ok(here); i++) {
+            if (fr[i] == null || !flow.live()[i]) continue;
             int op = in[i].getOpcode();
+            if (in[i] instanceof InvokeDynamicInsnNode indy) {
+                lambda(indy, fr, i, m, depth, seen, beChain, beClass, true);
+                continue;
+            }
             if ((op == Opcodes.PUTFIELD || op == Opcodes.GETFIELD) && in[i] instanceof FieldInsnNode wf && beChain.contains(wf.owner)
                     && !BASE_FIELDS.contains(wf.name) && (op == Opcodes.PUTFIELD || containerType(wf.desc))) {
                 Field fld = field(beClass, wf.name);
                 if (fld == null) { reject = "field not accessible: " + wf.name; break; }
                 watch.putIfAbsent(wf.name, fld);
             }
-            if (op == Opcodes.PUTFIELD && in[i] instanceof FieldInsnNode f && beChain.contains(f.owner)) {
+            if (entityMode && op == Opcodes.PUTFIELD && in[i] instanceof FieldInsnNode pf && !onThis(fr[i], 2, fr, m) && !entityClass(pf.owner)
+                    && !fresh(fr[i], 2, fr, m, 0) && !localScratch(pf.owner, owner, m)) {
+                reject = "writes " + simple(pf.owner) + "." + pf.name + " of a foreign object";
+                break;
+            }
+            if (op == Opcodes.PUTFIELD && in[i] instanceof FieldInsnNode f && beChain.contains(f.owner) && (!entityMode || onThis(fr[i], 2, fr, m))) {
                 String kind = clockKind(f, fr, m, i);
-                if (kind != null) clocks.putIfAbsent(f.owner + "." + f.name, field(beClass, f.name));
+                if (kind != null) clocks.putIfAbsent(fkey(f.owner, f.name), field(beClass, f.name));
+                if ("timestamp".equals(kind)) stamps.add(f.name);
             } else if (op >= Opcodes.IASTORE && op <= Opcodes.SASTORE) {
                 Operand arr = operand(fr[i], 3, fr, m, 0);
                 if (arr.kind == Kind.FIELD && beChain.contains(arr.owner) && !BASE_FIELDS.contains(arr.name)) {
@@ -165,10 +382,14 @@ final class SleepAnalysis {
                 for (int k = 1; k <= argc && reject == null; k++)
                     if (containsGameTime(operand(fr[i], k, fr, m, 0))) reject = "game time passed to " + simple(mi.owner) + "." + mi.name;
                 if (reject != null) break;
+                if (beChain.contains(mi.owner) && depth >= MAX_DEPTH) {
+                    reject = "own call graph deeper than " + MAX_DEPTH + " (" + mi.name + ")";
+                    break;
+                }
                 if (depth < MAX_DEPTH && beChain.contains(mi.owner)) {
                     String decl = mi.getOpcode() == Opcodes.INVOKESTATIC || mi.getOpcode() == Opcodes.INVOKESPECIAL ? ownerOf(mi.owner, mi.name, mi.desc) : ownerOf(internal(beClass), mi.name, mi.desc);
                     MethodNode target = decl == null ? null : method(decl, mi.name, mi.desc);
-                    if (target != null && (target.access & Opcodes.ACC_ABSTRACT) == 0) follow(decl, target, depth + 1, seen, beChain, beClass);
+                    if (target != null && (target.access & Opcodes.ACC_ABSTRACT) == 0) follow(decl, target, depth + 1, seen, beChain, beClass, calleeMask(fr[i], mi, fr, m));
                     else if (reject == null) reject = "unresolved own method " + mi.name;
                     continue;
                 }
@@ -177,9 +398,20 @@ final class SleepAnalysis {
                 // static calls: any owned argument could be mutated by the helper
                 // receiver and every argument; registry objects (the RecipeType of a furnace) are shared constants, not state
                 int nargs = Type.getArgumentTypes(mi.desc).length + (op == Opcodes.INVOKESTATIC ? 0 : 1);
+                if (entityMode && ENTITY_SINKS.contains(mi.owner + "." + mi.name)) continue;
                 for (int k = 0; k < nargs; k++) {
                     Operand o = operand(fr[i], nargs - k, fr, m, 0);
-                    if (isOwnField(o, beChain) && !safeOwned(o.type) && !registryType(o.type) && !pureReader(mi)) {
+                    if (nullField(o)) continue;   // null here: nothing to call or to change
+                    if (isOwnField(o, beChain) && !safeOwned(o.type) && !registryType(o.type) && !pureReader(mi)
+                            && !(entityMode && o.type != null && ENTITY_SAFE.contains(o.type))) {
+                        if (entityMode && o.kind == Kind.FIELD && o.type != null && o.type.startsWith("[") && mi.owner.equals("java/util/Arrays")) {
+                            Field af = field(beClass, o.name);   // an own array changed in place: snapshotted by content
+                            if (af != null) { watch.putIfAbsent(o.name, af); continue; }
+                        }
+                        if (entityMode && o.kind == Kind.FIELD && o.type != null && o.type.length() > 1) {
+                            nullCandidates.add(o.name);   // assume it null (checked at run time) and look again
+                            continue;
+                        }
                         reject = "calls " + simple(mi.owner) + "." + mi.name + (k == 0 && op != Opcodes.INVOKESTATIC ? " on" : " with") + " owned state " + o.name;
                         break;
                     }
@@ -198,11 +430,12 @@ final class SleepAnalysis {
 
     /** Counter: field = field +- const; timestamp: field = level.getGameTime(). */
     private String clockKind(FieldInsnNode f, Frame<SourceValue>[] fr, MethodNode m, int i) {
+        if (entityMode && !onThis(fr[i], 2, fr, m)) return null;
         Operand v = operand(fr[i], 1, fr, m, 0);
         if (v.kind == Kind.GAMETIME) return "timestamp";
         if (v.kind == Kind.ARITH && v.a != null && v.b != null && (v.op == Opcodes.IADD || v.op == Opcodes.ISUB || v.op == Opcodes.LADD || v.op == Opcodes.LSUB)) {
-            boolean self = (v.a.kind == Kind.FIELD && v.a.name.equals(f.name) && v.b.kind == Kind.CONST)
-                    || (v.b.kind == Kind.FIELD && v.b.name.equals(f.name) && v.a.kind == Kind.CONST);
+            boolean self = (v.a.kind == Kind.FIELD && v.a.name.equals(f.name) && (!entityMode || v.a.self) && v.b.kind == Kind.CONST)
+                    || (v.b.kind == Kind.FIELD && v.b.name.equals(f.name) && (!entityMode || v.b.self) && v.a.kind == Kind.CONST);
             if (self) return "counter";
         }
         return null;
@@ -211,12 +444,31 @@ final class SleepAnalysis {
     // ---------------------------------------------------------------- pass 2: conditions on clocks
 
     private void branches(String owner, MethodNode m, int depth, Set<String> seen, Set<String> beChain, Class<?> beClass) throws AnalyzerException {
-        if (reject != null || m == null || !seen.add(owner + "." + m.name + m.desc)) return;
-        Frame<SourceValue>[] fr = new Analyzer<>(new SourceInterpreter()).analyze(owner, m);
+        if (m == null) return;
+        branches(owner, m, depth, seen, beChain, beClass, (m.access & Opcodes.ACC_STATIC) == 0 ? 1 : 0);
+    }
+
+    private void branches(String owner, MethodNode m, int depth, Set<String> seen, Set<String> beChain, Class<?> beClass, int self) throws AnalyzerException {
+        if (!ok() || m == null || !seen.add(owner + "." + m.name + m.desc + (entityMode ? "#" + self : ""))) return;
+        int savedSelf = selfMask;
+        selfMask = self;
+        try {
+            branches0(owner, m, depth, seen, beChain, beClass);
+        } finally {
+            selfMask = savedSelf;
+        }
+    }
+
+    private void branches0(String owner, MethodNode m, int depth, Set<String> seen, Set<String> beChain, Class<?> beClass) throws AnalyzerException {
+        Flow flow = flow(owner, m);
+        Frame<SourceValue>[] fr = flow.fr();
+        String here = simple(owner) + "." + m.name;
         AbstractInsnNode[] in = m.instructions.toArray();
-        for (int i = 0; i < in.length && reject == null; i++) {
-            if (fr[i] == null) continue;
-            if (in[i] instanceof JumpInsnNode j && j.getOpcode() != Opcodes.GOTO && j.getOpcode() != Opcodes.JSR) {
+        for (int i = 0; i < in.length && ok(here); i++) {
+            if (fr[i] == null || !flow.live()[i]) continue;
+            if (in[i] instanceof InvokeDynamicInsnNode indy) {
+                lambda(indy, fr, i, m, depth, seen, beChain, beClass, false);
+            } else if (in[i] instanceof JumpInsnNode j && j.getOpcode() != Opcodes.GOTO && j.getOpcode() != Opcodes.JSR) {
                 int op = j.getOpcode();
                 boolean two = op >= Opcodes.IF_ICMPEQ && op <= Opcodes.IF_ACMPNE;
                 Operand x, y;
@@ -225,7 +477,9 @@ final class SleepAnalysis {
                     y = operand(fr[i], 1, fr, m, 0);
                 } else {
                     Operand v = operand(fr[i], 1, fr, m, 0);
-                    if (v.kind == Kind.CMP) {
+                    if (v.kind == Kind.CMP && (op == Opcodes.IFEQ || op == Opcodes.IFNE) && staleStamp(v.a, v.b)) {
+                        continue;   // a game-time stamp tested for "this tick": false once a quiet tick has passed
+                    } else if (v.kind == Kind.CMP) {
                         x = v.a;
                         y = v.b;
                     } else {
@@ -237,15 +491,72 @@ final class SleepAnalysis {
             } else if (in[i] instanceof MethodInsnNode mb && mb.getOpcode() == Opcodes.INVOKESTATIC && PURE_BOUNDS.contains(mb.owner + "." + mb.name)
                     && clockArgument(fr, i, mb, m)) {
                 boundConditions(fr, i, mb, m, beClass);
-            } else if (in[i] instanceof MethodInsnNode mi0 && clockArgument(fr, i, mi0, m)) {
+            } else if (in[i] instanceof MethodInsnNode mi0 && !(entityMode && CLOCK_SINKS.contains(mi0.owner + "." + mi0.name)) && clockArgument(fr, i, mi0, m)) {
                 reject = "clock passed to " + simple(mi0.owner) + "." + mi0.name;
             } else if (in[i] instanceof MethodInsnNode mi && depth < MAX_DEPTH && beChain.contains(mi.owner)) {
                 String decl = mi.getOpcode() == Opcodes.INVOKESTATIC || mi.getOpcode() == Opcodes.INVOKESPECIAL ? ownerOf(mi.owner, mi.name, mi.desc) : ownerOf(internal(beClass), mi.name, mi.desc);
                 MethodNode target = decl == null ? null : method(decl, mi.name, mi.desc);
-                if (target != null && (target.access & Opcodes.ACC_ABSTRACT) == 0) branches(decl, target, depth + 1, seen, beChain, beClass);
+                if (target != null && (target.access & Opcodes.ACC_ABSTRACT) == 0) branches(decl, target, depth + 1, seen, beChain, beClass, calleeMask(fr[i], mi, fr, m));
             }
         }
     }
+
+    /**
+     * invokedynamic lambdas and method references: an implementation in the own class chain is followed like an own
+     * call (whoever receives the function object may call it); owned state captured into it is checked like an argument.
+     */
+    private void lambda(InvokeDynamicInsnNode indy, Frame<SourceValue>[] fr, int i, MethodNode m, int depth, Set<String> seen, Set<String> beChain,
+            Class<?> beClass, boolean pass1) throws AnalyzerException {
+        if (!indy.bsm.getOwner().equals("java/lang/invoke/LambdaMetafactory")) {
+            String b = indy.bsm.getOwner();
+            if (pass1 && !b.equals("java/lang/invoke/StringConcatFactory") && !b.equals("java/lang/runtime/SwitchBootstraps") && !b.equals("java/lang/runtime/ObjectMethods"))
+                reject = "invokedynamic " + b;
+            return;
+        }
+        if (indy.bsmArgs.length < 2 || !(indy.bsmArgs[1] instanceof Handle h)) { reject = "lambda without implementation handle"; return; }
+        if (pass1) {
+            int argc = Type.getArgumentTypes(indy.desc).length;
+            for (int k = 1; k <= argc; k++) {
+                Operand o = operand(fr[i], k, fr, m, 0);
+                if (nullField(o)) continue;
+                if (isOwnField(o, beChain) && !safeOwned(o.type) && !registryType(o.type) && !(entityMode && o.type != null && ENTITY_SAFE.contains(o.type))) {
+                    reject = "captures owned state " + o.name + " in a lambda";
+                    return;
+                }
+            }
+        }
+        if (!beChain.contains(h.getOwner())) return;   // a foreign implementation: like calling it with the captured values
+        String decl = h.getTag() == Opcodes.H_INVOKEVIRTUAL || h.getTag() == Opcodes.H_INVOKEINTERFACE ? ownerOf(internal(beClass), h.getName(), h.getDesc())
+                : ownerOf(h.getOwner(), h.getName(), h.getDesc());
+        MethodNode target = decl == null ? null : method(decl, h.getName(), h.getDesc());
+        if (target == null || (target.access & Opcodes.ACC_ABSTRACT) != 0) {
+            if (reject == null) reject = "unresolved lambda " + h.getName();
+            return;
+        }
+        if (depth >= MAX_DEPTH) { reject = "own call graph deeper than " + MAX_DEPTH + " (" + h.getName() + ")"; return; }
+        int mask = 0, slot = 0;
+        Type[] cap = Type.getArgumentTypes(indy.desc);
+        for (int k = 0; k < cap.length; k++) {
+            if (onThis(fr[i], cap.length - k, fr, m) && slot < 31) mask |= 1 << slot;
+            slot += cap[k].getSize();
+        }
+        if (pass1) follow(decl, target, depth + 1, seen, beChain, beClass, mask);
+        else branches(decl, target, depth + 1, seen, beChain, beClass, mask);
+    }
+
+    /** a == b with one side a timestamp clock (stores getGameTime) and the other the game time */
+    private boolean staleStamp(Operand a, Operand b) {
+        if (!entityMode || a == null || b == null) return false;
+        return isClock(a) && b.kind == Kind.GAMETIME && stamps.contains(a.name) || isClock(b) && a.kind == Kind.GAMETIME && stamps.contains(b.name);
+    }
+
+    private final Set<String> stamps = new HashSet<>();
+
+    /** calls that only store or print a value (no comparison, no owned state changed) */
+    private static final Set<String> CLOCK_SINKS = Set.of("net/minecraft/nbt/CompoundTag.putInt", "net/minecraft/nbt/CompoundTag.putShort",
+            "net/minecraft/nbt/CompoundTag.putLong", "net/minecraft/nbt/CompoundTag.putByte");
+    private static final Set<String> ENTITY_SINKS = Set.of("java/util/Objects.requireNonNullElse", "com/google/common/base/MoreObjects.firstNonNull",
+            "net/minecraft/network/chat/Component.getString");
 
     /** Pure bound functions: they only compare their arguments. */
     private static final Set<String> PURE_BOUNDS = Set.of("net/minecraft/util/Mth.clamp", "java/lang/Math.max", "java/lang/Math.min");
@@ -275,12 +586,17 @@ final class SleepAnalysis {
                 reject = "clock expression passed to " + simple(mi.owner) + "." + mi.name;
                 return;
             }
-            Field clock = clocks.get(clockOp.owner + "." + clockOp.name);
+            Field clock = clocks.get(fkey(clockOp.owner, clockOp.name));
             if (clock == null) { reject = "clock not accessible: " + clockOp.name; return; }
             for (int b = 0; b < argc; b++) {
                 if (b == k) continue;
                 Operand o = a[b];
                 if (containsClock(o)) { reject = "two clocks in " + simple(mi.owner) + "." + mi.name; return; }
+                if (peerClock(o) && o.name.equals(clockOp.name) && c == 0) {
+                    conds.add(Cond.peer(clock, clockOp.name + " ? other." + o.name + " (" + mi.name + ")"));
+                    continue;
+                }
+                if (entityMode && o.kind == Kind.FIELD && !o.self) { reject = "clock bounded by another object's " + o.name + " in " + mi.name; return; }
                 if (o.kind == Kind.CONST) {
                     conds.add(new Cond(clock, null, o.value - c, 0, clockOp.name + " ? " + (o.value - c) + " (" + mi.name + ")"));
                 } else if (o.kind == Kind.FIELD && chain.contains(o.owner) && !BASE_FIELDS.contains(o.name)) {
@@ -317,14 +633,32 @@ final class SleepAnalysis {
             return;
         }
         Operand c = xc ? x : y, t = xc ? y : x;
-        Field clock = clocks.get(c.owner + "." + c.name);
+        Field clock = clocks.get(fkey(c.owner, c.name));
         if (t == null) { reject = "clock compared with unknown"; return; }
         switch (t.kind) {
             case CONST -> {
                 if (clock == null) { reject = "clock not accessible: " + c.name; return; }
                 conds.add(new Cond(clock, null, t.value, 0, c.name + " ? " + t.value));
             }
+            case ARITH -> {   // clock ? field +- const
+                Operand fa = t.a, cb = t.b;
+                boolean add = t.op == Opcodes.IADD || t.op == Opcodes.LADD, sub = t.op == Opcodes.ISUB || t.op == Opcodes.LSUB;
+                if ((add || sub) && fa != null && cb != null && fa.kind == Kind.FIELD && (!entityMode || fa.self) && beChain.contains(fa.owner)
+                        && !BASE_FIELDS.contains(fa.name) && !isClock(fa) && cb.kind == Kind.CONST) {
+                    Field tf = field(beClass, fa.name);
+                    if (tf == null || clock == null) { reject = "field not accessible: " + fa.name; return; }
+                    conds.add(new Cond(clock, tf, add ? cb.value : -cb.value, 0, c.name + " ? " + fa.name + (add ? " + " : " - ") + cb.value));
+                } else {
+                    reject = "clock " + c.name + " compared with ARITH";
+                }
+            }
             case FIELD -> {
+                if (peerClock(t) && t.name.equals(c.name)) {
+                    if (clock == null) { reject = "clock not accessible: " + c.name; return; }
+                    conds.add(Cond.peer(clock, c.name + " ? other." + t.name));
+                    return;
+                }
+                if (entityMode && !t.self) { reject = "clock compared with another object's " + t.name; return; }
                 if (!beChain.contains(t.owner)) { reject = "clock compared with foreign field " + t.name; return; }
                 Field tf = field(beClass, t.name);
                 if (tf == null || clock == null) { reject = "field not accessible: " + t.name; return; }
@@ -417,12 +751,42 @@ final class SleepAnalysis {
                 clockOp = isClock(base.a) ? base.a : base.b;
             else { reject = "clock in an expression the analysis does not model"; return; }
         }
-        Field clock = clocks.get(clockOp.owner + "." + clockOp.name);
+        Field clock = clocks.get(fkey(clockOp.owner, clockOp.name));
         if (clock == null) { reject = "clock not accessible: " + clockOp.name; return; }
         for (long n : ns) {
             if (n <= 0) { reject = "clock modulo " + n; return; }
             moduli.add(n);
             conds.add(new Cond(clock, null, 0, n, "(" + clockOp.name + " + ..) % " + n, true));
+        }
+    }
+
+    /** A local class declared in this very method (its instances are the method's scratch objects), not held by any own field. */
+    private boolean localScratch(String cls, String owner, MethodNode m) {
+        ClassNode cn = node(cls);
+        if (cn == null || !owner.equals(cn.outerClass) || cn.outerMethod == null) return false;
+        boolean here = m.name.equals(cn.outerMethod) && m.desc.equals(cn.outerMethodDesc) || m.name.startsWith("lambda$" + cn.outerMethod + "$");
+        if (!here) return false;
+        for (String c : chain) {
+            ClassNode k = node(c);
+            if (k != null) for (FieldNode f : k.fields) if (f.desc.contains("L" + cls + ";")) return false;
+        }
+        return true;
+    }
+
+    /** Field key by declaring class: javac names the receiver's static type as owner (ItemEntity.tickCount = Entity.tickCount). */
+    private String fkey(String owner, String name) {
+        if (owner != null && chain != null && chain.contains(owner) && beCls != null) {
+            Field f = field(beCls, name);
+            if (f != null) return internal(f.getDeclaringClass()) + "." + name;
+        }
+        return owner + "." + name;
+    }
+
+    private boolean entityClass(String internal) {
+        try {
+            return net.minecraft.world.entity.Entity.class.isAssignableFrom(Class.forName(internal.replace('/', '.'), false, loader));
+        } catch (ClassNotFoundException | LinkageError e) {
+            return false;
         }
     }
 
@@ -433,11 +797,17 @@ final class SleepAnalysis {
     }
 
     private boolean isClock(Operand o) {
-        return o != null && o.kind == Kind.FIELD && clocks.containsKey(o.owner + "." + o.name);
+        return o != null && o.kind == Kind.FIELD && (!entityMode || o.self) && clocks.containsKey(fkey(o.owner, o.name));
+    }
+
+    /** entity mode: the same field as a clock, read on another instance */
+    private boolean peerClock(Operand o) {
+        return entityMode && o != null && o.kind == Kind.FIELD && !o.self && clocks.containsKey(fkey(o.owner, o.name));
     }
 
     private boolean isOwnField(Operand o, Set<String> beChain) {
-        return o != null && (o.kind == Kind.OWNCALL || o.kind == Kind.FIELD && beChain.contains(o.owner) && !BASE_FIELDS.contains(o.name));
+        if (entityMode && o != null && o.type != null && o.type.length() > 1 && !o.type.startsWith("[") && entityClass(o.type)) return false;
+        return o != null && (o.kind == Kind.OWNCALL || o.kind == Kind.FIELD && (!entityMode || o.self) && beChain.contains(o.owner) && !BASE_FIELDS.contains(o.name));
     }
 
     private static boolean containsGameTime(Operand o) {
@@ -474,6 +844,7 @@ final class SleepAnalysis {
         String owner, name, type;
         long value;
         long[] values;   // CONSTSET: every constant the value can come from
+        boolean self;    // FIELD / OWNCALL: read on this object (not on another instance of the class)
         int op;
         Operand a, b;
 
@@ -483,6 +854,64 @@ final class SleepAnalysis {
             o.value = v;
             return o;
         }
+    }
+
+    /** Is the stack value {@code fromTop} at frame f an object allocated in this method (NEW, possibly through locals)? */
+    private static boolean fresh(Frame<SourceValue> f, int fromTop, Frame<SourceValue>[] frames, MethodNode m, int depth) {
+        if (f == null || f.getStackSize() < fromTop || depth > 6) return false;
+        return freshValue(f.getStack(f.getStackSize() - fromTop), frames, m, depth);
+    }
+
+    private static boolean freshValue(SourceValue v, Frame<SourceValue>[] frames, MethodNode m, int depth) {
+        if (v.insns.isEmpty() || depth > 6) return false;
+        for (AbstractInsnNode src : v.insns) {
+            int op = src.getOpcode();
+            Frame<SourceValue> sf = frames[m.instructions.indexOf(src)];
+            if (op == Opcodes.NEW) continue;
+            if (op == Opcodes.DUP && fresh(sf, 1, frames, m, depth + 1)) continue;
+            if (src instanceof VarInsnNode vi && op == Opcodes.ALOAD && sf != null) {
+                SourceValue lv = sf.getLocal(vi.var);
+                boolean ok = !lv.insns.isEmpty();
+                for (AbstractInsnNode st : lv.insns) {
+                    Frame<SourceValue> stf = frames[m.instructions.indexOf(st)];
+                    if (!(st instanceof VarInsnNode) || st.getOpcode() != Opcodes.ASTORE || !fresh(stf, 1, frames, m, depth + 1)) { ok = false; break; }
+                }
+                if (ok) continue;
+            }
+            return false;
+        }
+        return true;
+    }
+
+    /** Is the stack value {@code fromTop} at frame f the object itself (ALOAD 0 in an instance method that never reassigns it)? */
+    /** local slots holding the object itself in the method being analysed (slot 0 of instance methods, or params given this) */
+    private int selfMask = 1;
+
+    private int calleeMask(Frame<SourceValue> f, MethodInsnNode mi, Frame<SourceValue>[] frames, MethodNode m) {
+        Type[] args = Type.getArgumentTypes(mi.desc);
+        boolean inst = mi.getOpcode() != Opcodes.INVOKESTATIC;
+        int n = args.length + (inst ? 1 : 0), mask = 0, slot = 0;
+        for (int k = 0; k < n; k++) {
+            if (onThis(f, n - k, frames, m) && slot < 31) mask |= 1 << slot;
+            slot += inst && k == 0 ? 1 : args[k - (inst ? 1 : 0)].getSize();
+        }
+        return mask;
+    }
+
+    private boolean onThis(Frame<SourceValue> f, int fromTop, Frame<SourceValue>[] frames, MethodNode m) {
+        if (f == null || f.getStackSize() < fromTop) return false;
+        SourceValue v = f.getStack(f.getStackSize() - fromTop);
+        for (int hops = 0; hops < 4 && v.insns.size() == 1 && v.insns.iterator().next().getOpcode() == Opcodes.DUP; hops++) {
+            // DUP's copy: the value it duplicated (top of the stack at the DUP)
+            AbstractInsnNode d = v.insns.iterator().next();
+            Frame<SourceValue> df = frames[m.instructions.indexOf(d)];
+            if (df == null || df.getStackSize() < 1) return false;
+            v = df.getStack(df.getStackSize() - 1);
+        }
+        if (v.insns.size() != 1 || !(v.insns.iterator().next() instanceof VarInsnNode vi) || vi.getOpcode() != Opcodes.ALOAD || vi.var >= 31
+                || (selfMask & (1 << vi.var)) == 0) return false;
+        for (AbstractInsnNode x : m.instructions) if (x instanceof VarInsnNode st && st.getOpcode() == Opcodes.ASTORE && st.var == vi.var) return false;
+        return true;
     }
 
     /** The value {@code fromTop} positions from the top of the stack at a frame (1 = top). */
@@ -513,6 +942,7 @@ final class SleepAnalysis {
             o.kind = Kind.FIELD;
             o.owner = fi.owner;
             o.name = fi.name;
+            o.self = onThis(f, 1, frames, m);
             o.type = Type.getType(fi.desc).getSort() == Type.OBJECT ? Type.getType(fi.desc).getInternalName() : fi.desc;
         } else if (op >= Opcodes.ICONST_M1 && op <= Opcodes.ICONST_5) {
             o = Operand.constant(op - Opcodes.ICONST_0);
@@ -524,7 +954,8 @@ final class SleepAnalysis {
             o = Operand.constant(((Number) l.cst).longValue());
         } else if (src instanceof MethodInsnNode mi) {
             if (mi.name.equals("getGameTime") && mi.desc.equals("()J")) o.kind = Kind.GAMETIME;
-            else if (chain != null && chain.contains(mi.owner) && op != Opcodes.INVOKESTATIC && Type.getReturnType(mi.desc).getSort() >= Type.ARRAY) {
+            else if (chain != null && chain.contains(mi.owner) && op != Opcodes.INVOKESTATIC && Type.getReturnType(mi.desc).getSort() >= Type.ARRAY
+                    && (!entityMode || onThis(f, Type.getArgumentTypes(mi.desc).length + 1, frames, m))) {
                 // an object handed out by the block entity itself: a plain getter is that field, anything else is owned
                 String decl = ownerOf(internal(beCls), mi.name, mi.desc);
                 MethodNode t = decl == null ? null : method(decl, mi.name, mi.desc);
@@ -534,6 +965,10 @@ final class SleepAnalysis {
                     o.kind = Kind.FIELD;
                     o.owner = got.owner;
                     o.name = got.name;
+                    o.self = true;
+                } else if (entityMode && t != null && handsOutNothingOwned(decl, t)) {
+                    o.kind = Kind.CALL;
+                    o.name = mi.owner + "." + mi.name;
                 } else {
                     o.kind = Kind.OWNCALL;
                     o.name = "result of " + mi.name;
@@ -573,7 +1008,7 @@ final class SleepAnalysis {
                 g.value = o.b.value;
                 return g;
             }
-        } else if (op == Opcodes.I2L || op == Opcodes.L2I) {
+        } else if (op == Opcodes.I2L || op == Opcodes.L2I || op == Opcodes.I2S || op == Opcodes.I2B || op == Opcodes.I2C) {
             return operand(f, 1, frames, m, depth + 1);
         }
         return o;
@@ -592,6 +1027,61 @@ final class SleepAnalysis {
                 return null;
             }
         });
+    }
+
+    private final Map<String, Boolean> nothingOwned = new HashMap<>();
+
+    /**
+     * Every value the method returns is a new object, null, a static field, a constant or the result of a call outside
+     * the class chain (whose result the analysis already treats as foreign): the caller gets nothing the object owns.
+     */
+    private boolean handsOutNothingOwned(String owner, MethodNode t) {
+        String key = owner + "." + t.name + t.desc;
+        Boolean b = nothingOwned.get(key);
+        if (b != null) return b;
+        nothingOwned.put(key, false);   // recursion: conservative
+        boolean ok;
+        try {
+            Frame<SourceValue>[] fr = new Analyzer<>(new SourceInterpreter()).analyze(owner, t);
+            ok = true;
+            AbstractInsnNode[] in = t.instructions.toArray();
+            for (int i = 0; i < in.length && ok; i++) {
+                if (in[i].getOpcode() != Opcodes.ARETURN || fr[i] == null) continue;
+                SourceValue v = fr[i].getStack(fr[i].getStackSize() - 1);
+                ok = foreignValue(v, fr, t, 0);
+            }
+        } catch (AnalyzerException | RuntimeException e) {
+            ok = false;
+        }
+        nothingOwned.put(key, ok);
+        return ok;
+    }
+
+    private boolean foreignValue(SourceValue v, Frame<SourceValue>[] fr, MethodNode t, int depth) {
+        if (v.insns.isEmpty() || depth > 6) return false;
+        for (AbstractInsnNode src : v.insns) {
+            int op = src.getOpcode();
+            if (op == Opcodes.NEW || op == Opcodes.ACONST_NULL || op == Opcodes.GETSTATIC || op == Opcodes.LDC) continue;
+            if (src instanceof MethodInsnNode mi && !chain.contains(mi.owner)) continue;
+            if (op == Opcodes.CHECKCAST || op == Opcodes.DUP) {
+                Frame<SourceValue> f = fr[t.instructions.indexOf(src)];
+                if (f != null && foreignValue(f.getStack(f.getStackSize() - 1), fr, t, depth + 1)) continue;
+            }
+            if (src instanceof VarInsnNode vi && op == Opcodes.ALOAD) {
+                Frame<SourceValue> f = fr[t.instructions.indexOf(src)];
+                if (f != null && !(vi.var == 0 && (t.access & Opcodes.ACC_STATIC) == 0)) {
+                    SourceValue lv = f.getLocal(vi.var);
+                    boolean ok = !lv.insns.isEmpty();
+                    for (AbstractInsnNode st : lv.insns) {
+                        Frame<SourceValue> sf = fr[t.instructions.indexOf(st)];
+                        if (!(st instanceof VarInsnNode) || sf == null || !foreignValue(sf.getStack(sf.getStackSize() - 1), fr, t, depth + 1)) { ok = false; break; }
+                    }
+                    if (ok) continue;
+                }
+            }
+            return false;
+        }
+        return true;
     }
 
     /** ALOAD 0; GETFIELD f; xRETURN (ignoring labels and line numbers) -> f */
