@@ -30,3 +30,16 @@ kill @e[type=!minecraft:player,x=1100,y=-61,z=100,dx=64,dy=8,dz=64]
 fill 1100 -60 100 1164 -55 164 minecraft:air
 kill @e[type=!minecraft:player,x=1200,y=-61,z=100,dx=64,dy=12,dz=64]
 fill 1200 -61 100 1264 -50 164 minecraft:air
+schedule clear probe:create_clutch_on
+schedule clear probe:create_clutch_off
+kill @e[type=!minecraft:player,x=1400,y=-61,z=100,dx=124,dy=10,dz=130]
+fill 1400 -60 100 1423 -52 230 minecraft:air
+fill 1424 -60 100 1447 -52 230 minecraft:air
+fill 1448 -60 100 1471 -52 230 minecraft:air
+fill 1472 -60 100 1495 -52 230 minecraft:air
+fill 1496 -60 100 1519 -52 230 minecraft:air
+fill 1520 -60 100 1524 -52 230 minecraft:air
+kill @e[type=!minecraft:player,x=1600,y=-63,z=100,dx=60,dy=12,dz=104]
+fill 1600 -60 100 1623 -52 204 minecraft:air
+fill 1624 -60 100 1647 -52 204 minecraft:air
+fill 1648 -60 100 1660 -52 204 minecraft:air

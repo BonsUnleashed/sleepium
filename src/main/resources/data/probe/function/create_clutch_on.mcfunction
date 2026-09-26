@@ -1,0 +1,17 @@
+setblock 1412 -59 197 minecraft:redstone_block
+setblock 1412 -59 199 minecraft:redstone_block
+setblock 1412 -59 201 minecraft:redstone_block
+setblock 1412 -59 203 minecraft:redstone_block
+setblock 1412 -59 205 minecraft:redstone_block
+setblock 1412 -59 207 minecraft:redstone_block
+setblock 1412 -59 209 minecraft:redstone_block
+setblock 1412 -59 211 minecraft:redstone_block
+setblock 1412 -59 213 minecraft:redstone_block
+setblock 1412 -59 215 minecraft:redstone_block
+setblock 1412 -59 217 minecraft:redstone_block
+setblock 1412 -59 219 minecraft:redstone_block
+setblock 1412 -59 221 minecraft:redstone_block
+setblock 1412 -59 223 minecraft:redstone_block
+setblock 1412 -59 225 minecraft:redstone_block
+setblock 1412 -59 227 minecraft:redstone_block
+schedule function probe:create_clutch_off 10t replace

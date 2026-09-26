@@ -4,6 +4,8 @@ import java.util.concurrent.atomic.AtomicLong;
 
 /** Counters of opt mixins (mixin classes cannot be referenced from normal code, so they live here). */
 public final class OptCounters {
+    /** CubeAt collides (kept here: reading it must not initialise CubeAt, which needs the CubeShapeMixin accessor) */
+    public static long cubeCollides;
     /** EntitySectionScanMixin shadow check: queries compared with the vanilla walk, and differences found. */
     public static final AtomicLong SECTION_CHECKED = new AtomicLong(), SECTION_MISMATCHES = new AtomicLong();
     /** EntitySectionScanMixin: queries served by the direct walk / by the vanilla fallback (huge boxes). */
@@ -51,6 +53,6 @@ public final class OptCounters {
                 BlockCollisionMemo.hits, BlockCollisionMemo.misses, BlockCollisionMemo.unmemoizable, BlockCollisionMemo.collideHits, BlockCollisionMemo.collideMisses,
                 BlockCollisionMemo.supportHits, BlockCollisionMemo.supportMisses, MEMO_CHECKED.get(), MEMO_MISMATCHES.get(),
                 EventSites.report(), SIGNAL_CHECKED.get(), SIGNAL_MISMATCHES.get(), SignalProof.report(),
-                CubeAt.collides, CUBE_CHECKED.get(), CUBE_MISMATCHES.get(), TICKSCHED_CHECKED.get(), TICKSCHED_MISMATCHES.get());
+                cubeCollides, CUBE_CHECKED.get(), CUBE_MISMATCHES.get(), TICKSCHED_CHECKED.get(), TICKSCHED_MISMATCHES.get());
     }
 }

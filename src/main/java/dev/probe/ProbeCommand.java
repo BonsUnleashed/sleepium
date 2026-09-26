@@ -98,6 +98,21 @@ final class ProbeCommand {
                     say(ctx, r);
                     return 1;
                 }))
+                .then(Commands.literal("createbelt")   // scenes with the Create mod: its own belt placement between two shafts
+                        .then(Commands.argument("from", net.minecraft.commands.arguments.coordinates.BlockPosArgument.blockPos())
+                                .then(Commands.argument("to", net.minecraft.commands.arguments.coordinates.BlockPosArgument.blockPos()).executes(ctx -> {
+                                    var from = net.minecraft.commands.arguments.coordinates.BlockPosArgument.getLoadedBlockPos(ctx, "from");
+                                    var to = net.minecraft.commands.arguments.coordinates.BlockPosArgument.getLoadedBlockPos(ctx, "to");
+                                    try {
+                                        Class.forName("com.simibubi.create.content.kinetics.belt.item.BeltConnectorItem")
+                                                .getMethod("createBelts", Level.class, net.minecraft.core.BlockPos.class, net.minecraft.core.BlockPos.class)
+                                                .invoke(null, ctx.getSource().getLevel(), from, to);
+                                        return 1;
+                                    } catch (ReflectiveOperationException e) {
+                                        ProbeMod.LOGGER.error("createbelt failed (is Create installed?)", e);
+                                        return 0;
+                                    }
+                                }))))
                 .then(Commands.literal("sleepents").executes(ctx -> {
                     String r = dev.probe.optsupport.sleep.SleepEngine.entityReport(ctx.getSource().getLevel());
                     ProbeMod.LOGGER.info("{}{}", System.lineSeparator(), r);

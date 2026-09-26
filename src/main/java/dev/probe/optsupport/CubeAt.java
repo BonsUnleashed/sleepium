@@ -23,7 +23,6 @@ import net.minecraft.world.phys.shapes.VoxelShape;
 public final class CubeAt extends VoxelShape {
     private static final DiscreteVoxelShape FULL = ((ShapeAccess) Shapes.block()).probe$shape();
     private static final boolean CHECK = Boolean.getBoolean("lab.opt.cubeCheck");
-    public static long collides;
 
     private final double ox, oy, oz;
     private DoubleList xs, ys, zs;
@@ -85,7 +84,7 @@ public final class CubeAt extends VoxelShape {
             if (Double.doubleToRawLongBits(v) != Double.doubleToRawLongBits(r) && OptCounters.CUBE_MISMATCHES.incrementAndGet() <= 5)
                 System.out.println("[probe/opt] cube collide MISMATCH at " + ox + "," + oy + "," + oz + ": " + r + " vs vanilla " + v);
         }
-        collides++;
+        OptCounters.cubeCollides++;
         return r;
     }
 
