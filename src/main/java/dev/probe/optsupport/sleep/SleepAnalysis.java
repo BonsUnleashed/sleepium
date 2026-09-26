@@ -42,7 +42,15 @@ final class SleepAnalysis {
     static final Set<String> BASE_FIELDS = Set.of("level", "worldPosition", "blockState", "remove", "components", "hasSavedData");
 
     /** A condition "clock ? threshold": the engine wakes before its outcome can change. */
-    record Cond(Field clock, Field thresholdField, long thresholdConst, long mod, String text) {}
+    /**
+     * clock ? const/field; or gameTime % mod ? const (clock null); or (clock + x) % mod ? y (clock set, mod > 0,
+     * {@code clockMod}): a periodic condition on a clock, whose outcome can change every tick.
+     */
+    record Cond(Field clock, Field thresholdField, long thresholdConst, long mod, String text, boolean clockMod) {
+        Cond(Field clock, Field thresholdField, long thresholdConst, long mod, String text) {
+            this(clock, thresholdField, thresholdConst, mod, text, false);
+        }
+    }
 
     /** What the engine may do with a class. */
     /** What the engine may do with a class; {@code watch} = the only fields a tick can change (clocks included). */
@@ -226,6 +234,11 @@ final class SleepAnalysis {
                     }
                 }
                 condition(x, y, beChain, beClass);
+            } else if (in[i] instanceof MethodInsnNode mb && mb.getOpcode() == Opcodes.INVOKESTATIC && PURE_BOUNDS.contains(mb.owner + "." + mb.name)
+                    && clockArgument(fr, i, mb, m)) {
+                boundConditions(fr, i, mb, m, beClass);
+            } else if (in[i] instanceof MethodInsnNode mi0 && clockArgument(fr, i, mi0, m)) {
+                reject = "clock passed to " + simple(mi0.owner) + "." + mi0.name;
             } else if (in[i] instanceof MethodInsnNode mi && depth < MAX_DEPTH && beChain.contains(mi.owner)) {
                 String decl = mi.getOpcode() == Opcodes.INVOKESTATIC || mi.getOpcode() == Opcodes.INVOKESPECIAL ? ownerOf(mi.owner, mi.name, mi.desc) : ownerOf(internal(beClass), mi.name, mi.desc);
                 MethodNode target = decl == null ? null : method(decl, mi.name, mi.desc);
@@ -234,12 +247,67 @@ final class SleepAnalysis {
         }
     }
 
+    /** Pure bound functions: they only compare their arguments. */
+    private static final Set<String> PURE_BOUNDS = Set.of("net/minecraft/util/Mth.clamp", "java/lang/Math.max", "java/lang/Math.min");
+
+    /**
+     * clamp/max/min(clock + c, bounds...): the function compares clock + c with each bound b, i.e. clock with b - c.
+     * Bounds must be constants or the block entity's own fields; anything else is refused.
+     */
+    private void boundConditions(Frame<SourceValue>[] fr, int i, MethodInsnNode mi, MethodNode m, Class<?> beClass) {
+        int argc = Type.getArgumentTypes(mi.desc).length;
+        Operand[] a = new Operand[argc];
+        for (int k = 0; k < argc; k++) a[k] = operand(fr[i], argc - k, fr, m, 0);
+        for (int k = 0; k < argc && reject == null; k++) {
+            if (!containsClock(a[k])) continue;
+            Operand e = a[k], clockOp;
+            long c;
+            if (isClock(e)) {
+                clockOp = e;
+                c = 0;
+            } else if (e.kind == Kind.ARITH && (e.op == Opcodes.IADD || e.op == Opcodes.LADD) && isClock(e.a) && e.b != null && e.b.kind == Kind.CONST) {
+                clockOp = e.a;
+                c = e.b.value;
+            } else if (e.kind == Kind.ARITH && (e.op == Opcodes.ISUB || e.op == Opcodes.LSUB) && isClock(e.a) && e.b != null && e.b.kind == Kind.CONST) {
+                clockOp = e.a;
+                c = -e.b.value;
+            } else {
+                reject = "clock expression passed to " + simple(mi.owner) + "." + mi.name;
+                return;
+            }
+            Field clock = clocks.get(clockOp.owner + "." + clockOp.name);
+            if (clock == null) { reject = "clock not accessible: " + clockOp.name; return; }
+            for (int b = 0; b < argc; b++) {
+                if (b == k) continue;
+                Operand o = a[b];
+                if (containsClock(o)) { reject = "two clocks in " + simple(mi.owner) + "." + mi.name; return; }
+                if (o.kind == Kind.CONST) {
+                    conds.add(new Cond(clock, null, o.value - c, 0, clockOp.name + " ? " + (o.value - c) + " (" + mi.name + ")"));
+                } else if (o.kind == Kind.FIELD && chain.contains(o.owner) && !BASE_FIELDS.contains(o.name)) {
+                    Field tf = field(beClass, o.name);
+                    if (tf == null) { reject = "field not accessible: " + o.name; return; }
+                    conds.add(new Cond(clock, tf, -c, 0, clockOp.name + " ? " + o.name + (c == 0 ? "" : " - " + c) + " (" + mi.name + ")"));
+                } else {
+                    reject = "clock bounded by an unknown value in " + simple(mi.owner) + "." + mi.name;
+                    return;
+                }
+            }
+        }
+    }
+
+    private boolean clockArgument(Frame<SourceValue>[] fr, int i, MethodInsnNode mi, MethodNode m) {
+        int argc = Type.getArgumentTypes(mi.desc).length;
+        for (int k = 1; k <= argc; k++) if (containsClock(operand(fr[i], k, fr, m, 0))) return true;
+        return false;
+    }
+
     private void condition(Operand x, Operand y, Set<String> beChain, Class<?> beClass) {
         boolean xc = isClock(x), yc = isClock(y);
         boolean xg = x != null && x.kind == Kind.GAMEMOD, yg = y != null && y.kind == Kind.GAMEMOD;
         if (!xc && !yc && !xg && !yg) {
             if ((x != null && x.kind == Kind.GAMETIME) || (y != null && y.kind == Kind.GAMETIME)) reject = "game time compared without modulo";
             else if (containsGameTime(x) || containsGameTime(y)) reject = "game time in an expression the analysis does not model";
+            else if (containsClock(x) || containsClock(y)) clockModulo(containsClock(x) ? x : y, containsClock(x) ? y : x);
             return;   // not a time condition: its inputs are covered by the read set / own state
         }
         if (xg || yg) {
@@ -329,6 +397,41 @@ final class SleepAnalysis {
         return true;
     }
 
+    /** Moduli of periodic clock conditions ((clock + x) % N ? y), for the entity engine's period. */
+    final java.util.TreeSet<Long> moduli = new java.util.TreeSet<>();
+
+    /** (clock +- x) % N ? y with N constant(s) and x, y free of clocks: a periodic condition; anything else is refused. */
+    private void clockModulo(Operand e, Operand other) {
+        if (containsClock(other) || e == null || e.kind != Kind.ARITH || (e.op != Opcodes.IREM && e.op != Opcodes.LREM)) {
+            reject = "clock in an expression the analysis does not model";
+            return;
+        }
+        Operand base = e.a, mod = e.b;
+        if (containsClock(mod)) { reject = "clock as a modulus"; return; }
+        long[] ns = mod.kind == Kind.CONST ? new long[] {mod.value} : mod.kind == Kind.CONSTSET ? mod.values : null;
+        if (ns == null) { reject = "clock modulo a non-constant"; return; }
+        Operand clockOp = base;
+        if (!isClock(base)) {   // clock + x / x + clock / clock - x
+            if (base.kind == Kind.ARITH && (base.op == Opcodes.IADD || base.op == Opcodes.LADD || base.op == Opcodes.ISUB || base.op == Opcodes.LSUB)
+                    && (isClock(base.a) && !containsClock(base.b) || isClock(base.b) && !containsClock(base.a) && base.op != Opcodes.ISUB && base.op != Opcodes.LSUB))
+                clockOp = isClock(base.a) ? base.a : base.b;
+            else { reject = "clock in an expression the analysis does not model"; return; }
+        }
+        Field clock = clocks.get(clockOp.owner + "." + clockOp.name);
+        if (clock == null) { reject = "clock not accessible: " + clockOp.name; return; }
+        for (long n : ns) {
+            if (n <= 0) { reject = "clock modulo " + n; return; }
+            moduli.add(n);
+            conds.add(new Cond(clock, null, 0, n, "(" + clockOp.name + " + ..) % " + n, true));
+        }
+    }
+
+    private boolean containsClock(Operand o) {
+        if (o == null) return false;
+        if (isClock(o)) return true;
+        return containsClock(o.a) || containsClock(o.b);
+    }
+
     private boolean isClock(Operand o) {
         return o != null && o.kind == Kind.FIELD && clocks.containsKey(o.owner + "." + o.name);
     }
@@ -364,12 +467,13 @@ final class SleepAnalysis {
     // ---------------------------------------------------------------- operand model
 
     /** OWNCALL: an object returned by a method of the block entity itself (other than a plain field getter). */
-    enum Kind { FIELD, CONST, GAMETIME, GAMEMOD, ARITH, CMP, CALL, OWNCALL, LOCAL, OTHER }
+    enum Kind { FIELD, CONST, CONSTSET, GAMETIME, GAMEMOD, ARITH, CMP, CALL, OWNCALL, LOCAL, OTHER }
 
     static final class Operand {
         Kind kind = Kind.OTHER;
         String owner, name, type;
         long value;
+        long[] values;   // CONSTSET: every constant the value can come from
         int op;
         Operand a, b;
 
@@ -389,6 +493,18 @@ final class SleepAnalysis {
 
     private Operand describe(SourceValue v, Frame<SourceValue>[] frames, MethodNode m, int depth) {
         Operand o = new Operand();
+        if (v.insns.size() > 1 && depth <= 4) {
+            long[] vals = new long[v.insns.size()];
+            int n = 0;
+            for (AbstractInsnNode src : v.insns) {
+                Operand c = describe(new SourceValue(v.size, src), frames, m, depth + 1);
+                if (c.kind != Kind.CONST) return o;
+                vals[n++] = c.value;
+            }
+            o.kind = Kind.CONSTSET;
+            o.values = vals;
+            return o;
+        }
         if (v.insns.size() != 1 || depth > 4) return o;
         AbstractInsnNode src = v.insns.iterator().next();
         int op = src.getOpcode();
@@ -436,7 +552,8 @@ final class SleepAnalysis {
                     if (!(st instanceof VarInsnNode) || st.getOpcode() < Opcodes.ISTORE || st.getOpcode() > Opcodes.ASTORE) continue;
                     Frame<SourceValue> sf = frames[m.instructions.indexOf(st)];
                     Operand stored = sf == null ? null : operand(sf, 1, frames, m, depth + 1);
-                    if (stored != null && (stored.kind == Kind.OWNCALL || stored.kind == Kind.FIELD || containsGameTime(stored))) return stored;
+                    if (stored != null && (stored.kind == Kind.OWNCALL || stored.kind == Kind.FIELD || containsGameTime(stored)
+                            || stored.kind == Kind.CONST || stored.kind == Kind.CONSTSET || containsClock(stored))) return stored;
                 }
             }
         } else if (op == Opcodes.DUP || op == Opcodes.DUP2 || op == Opcodes.DUP_X1 || op == Opcodes.DUP_X2) {

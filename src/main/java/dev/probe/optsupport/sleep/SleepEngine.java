@@ -387,9 +387,10 @@ public final class SleepEngine {
 
     /** Ticks until the relation between clock and threshold (or the game time residue) can change. */
     private static long ticksUntilChange(Sleeper s, SleepAnalysis.Cond c, long now) throws IllegalAccessException {
+        if (c.clockMod()) return rateOf(s, c.clock()) == 0 ? Long.MAX_VALUE : 1;   // periodic on a moving clock: may change every tick
         if (c.mod() > 0) return Math.floorMod(c.thresholdConst() - (now + 1), c.mod()) + 1;
         long v = value(c.clock(), s.be), rv = rateOf(s, c.clock());
-        long h = c.thresholdField() != null ? value(c.thresholdField(), s.be) : c.thresholdConst();
+        long h = (c.thresholdField() != null ? value(c.thresholdField(), s.be) : 0) + c.thresholdConst();   // field + offset, or constant
         long rh = c.thresholdField() != null ? rateOf(s, c.thresholdField()) : 0;
         long d = v - h, rd = rv - rh;
         if (rd == 0) return Long.MAX_VALUE;
