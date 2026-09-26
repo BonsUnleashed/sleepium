@@ -25,3 +25,8 @@ kill @e[type=!minecraft:player,x=1000,y=-61,z=100,dx=52,dy=8,dz=32]
 fill 1000 -60 100 1052 -54 132 minecraft:air
 kill @e[type=!minecraft:player,x=1000,y=-61,z=140,dx=30,dy=8,dz=32]
 fill 1000 -60 140 1030 -54 172 minecraft:air
+schedule clear probe:fluid_cycle
+kill @e[type=!minecraft:player,x=1100,y=-61,z=100,dx=64,dy=8,dz=64]
+fill 1100 -60 100 1164 -55 164 minecraft:air
+kill @e[type=!minecraft:player,x=1200,y=-61,z=100,dx=64,dy=12,dz=64]
+fill 1200 -61 100 1264 -50 164 minecraft:air

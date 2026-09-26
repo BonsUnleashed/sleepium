@@ -45,7 +45,8 @@
     "SignalProofStateMixin",
     "EntityCollideMemoMixin",
     "CubeShapeMixin",
-    "VoxelShapeAccessor"
+    "VoxelShapeAccessor",
+    "FluidSpreadMixin"
   ],
   "injectors": {
     "defaultRequire": 1

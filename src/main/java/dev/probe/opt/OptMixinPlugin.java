@@ -55,7 +55,7 @@ public final class OptMixinPlugin implements IMixinConfigPlugin {
      * not the experimental worldgen/pool ones). Expanded into the individual flags before any of them is read.
      */
     static final String[] UNIVERSAL = {"TickMemoMixin", "ChunkCacheMixin", "EntitySectionScanMixin", "EntitySectionIndexMixin",
-            "NeighborNotifySkipMixin", "NeoForgeBusMixin", "NeighborReactMixin", "TagCacheMixin", "BrainFlatMixin", "PoiColumnMixin", "EntityCollisionSkipMixin", "BlockCollisionMemoMixin", "EventSiteMixin", "NeighborQueueMixin", "SignalPathMixin", "CubeShapeMixin"};
+            "NeighborNotifySkipMixin", "NeoForgeBusMixin", "NeighborReactMixin", "TagCacheMixin", "BrainFlatMixin", "PoiColumnMixin", "EntityCollisionSkipMixin", "BlockCollisionMemoMixin", "EventSiteMixin", "NeighborQueueMixin", "SignalPathMixin", "CubeShapeMixin", "FluidSpreadMixin"};
 
     @Override
     public void onLoad(String mixinPackage) {
