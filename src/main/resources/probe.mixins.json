@@ -39,7 +39,8 @@
     "DrawStatsObjectsMixin",
     "DrawStatsEntitiesMixin",
     "DrawStatsFrameMixin",
-    "DrawStatsLevelMixin"
+    "DrawStatsLevelMixin",
+    "ClientAutoMouseMixin"
   ],
   "injectors": {
     "defaultRequire": 1

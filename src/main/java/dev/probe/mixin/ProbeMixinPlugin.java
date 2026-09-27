@@ -16,6 +16,7 @@ public final class ProbeMixinPlugin implements IMixinConfigPlugin {
         if (simple.startsWith("SleepProbe")) return sleep;
         if (simple.startsWith("FrameHash")) return Boolean.getBoolean("probe.clientAuto.framehash");
         if (simple.startsWith("DrawStats")) return Boolean.getBoolean("probe.drawStats");
+        if (simple.equals("ClientAutoMouseMixin")) return System.getProperty("probe.clientAuto") != null;
         if (simple.startsWith("EntSleep")) return Boolean.getBoolean("lab.opt.EntitySleep") || System.getProperty("lab.entsleep.diag") != null;
         return !simple.startsWith("ReadProbe") || Boolean.getBoolean("probe.beReads") || sleep;
     }

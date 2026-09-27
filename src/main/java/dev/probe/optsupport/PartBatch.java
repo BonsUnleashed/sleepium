@@ -270,7 +270,7 @@ public final class PartBatch {
      * types (items in frames) drawn from VRAM too, ordered per object (its origin's distance, farthest first) instead of
      * per quad across all objects; inside an object the recorded order.
      */
-    public static final boolean TRANSLUCENT_RESIDENT = Boolean.getBoolean("lab.rcache.translucentResident");
+    public static final boolean TRANSLUCENT_RESIDENT = !"false".equals(System.getProperty("lab.rcache.translucentResident"));
 
     /** Uploads n vertices (NEW_ENTITY) once; returns the first vertex in the resident arena. */
     static int residentUpload(long src, int n) {
