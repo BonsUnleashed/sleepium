@@ -84,6 +84,7 @@ public final class ChunkMultiDraw {
      * positive or negative ones plus "other", often one contiguous run). bq[k] = first quad of bucket k, bq[7] = quads.
      */
     static final class Entry {
+        Arena arena;
         int start, vertices, indexCount;
         long origin;
         final int[] bq = new int[8];
@@ -164,7 +165,6 @@ public final class ChunkMultiDraw {
         int vbo, vao, capacity, stride;   // capacity in vertices
         boolean vaoStale = true;
         final TreeMap<Integer, Integer> free = new TreeMap<>();   // start -> length (vertices)
-        final IdentityHashMap<SectionRenderDispatcher.RenderSection, Entry> entries = new IdentityHashMap<>();
         // per-frame draw list
         int n, maxIndices;
         final long counts = MemoryUtil.nmemAlloc(4L * MAX_DRAWS), bases = MemoryUtil.nmemAlloc(4L * MAX_DRAWS), indices = MemoryUtil.nmemCalloc(MAX_DRAWS, 8);
@@ -317,7 +317,8 @@ public final class ChunkMultiDraw {
         e.start = start;
         e.vertices = verts;
         e.indexCount = verts / 4 * 6;
-        a.entries.put(section, e);
+        e.arena = a;
+        ((ChunkEntries) section).probe$md()[slot(a)] = e;
     }
 
     // ------------------------------------------------------------------ packed vertices (16 bytes, bit-exact)
@@ -407,18 +408,24 @@ public final class ChunkMultiDraw {
     private static void release(SectionRenderDispatcher.RenderSection section, RenderType layer) {
         int li = LAYERS.indexOf(layer);
         if (li < 0) return;
-        releaseIn(ARENAS[li], section);
-        releaseIn(PACKED_ARENAS[li], section);
-    }
-
-    private static void releaseIn(Long2ObjectOpenHashMap<Arena> arenas, SectionRenderDispatcher.RenderSection section) {
-        for (Arena a : arenas.values()) {
-            Entry e = a.entries.remove(section);
+        Object[] md = ((ChunkEntries) section).probe$md();
+        for (int k = 2 * li; k < 2 * li + 2; k++) {
+            Entry e = (Entry) md[k];
             if (e != null) {
-                a.release(e.start, e.vertices);
-                return;
+                e.arena.release(e.start, e.vertices);
+                md[k] = null;
             }
         }
+    }
+
+    /** A section's entry slot: layer index * 2, + 1 for the packed format. */
+    private static int slot(Arena a) {
+        return 2 * LAYERS.indexOf(a.layer) + (a.packed ? 1 : 0);
+    }
+
+    /** RenderSection (ChunkSectionMixin): its arena entries by slot, so drawing needs no lookup. */
+    public interface ChunkEntries {
+        Object[] probe$md();
     }
 
     // ------------------------------------------------------------------ drawing
@@ -437,19 +444,25 @@ public final class ChunkMultiDraw {
         int[] ps = programState(shader.getId());
         if (ps == null) return false;
         var uniform = shader.CHUNK_OFFSET;
-        Long2ObjectOpenHashMap<Arena> arenas = ARENAS[li], packedArenas = PACKED_ARENAS[li];
         LISTED.clear();
+        boolean replaces = replacesVanilla(layer);
+        int fs = 2 * li;
         for (SectionRenderDispatcher.RenderSection s : visible) {
-            if (s.getCompiled().isEmpty(layer)) continue;
+            // the section's own entry slots: no emptiness test (an empty layer has no entry), no map lookups
+            Object[] md = ((ChunkEntries) s).probe$md();
+            Entry e = (Entry) md[fs], pe = (Entry) md[fs + 1];
+            if (e == null && pe == null && (replaces || s.getCompiled().isEmpty(layer))) {
+                if (replaces) sectionsSkipped++;
+                continue;
+            }
             var o = s.getOrigin();
-            long rk = regionKey(o.getX() >> 4, o.getY() >> 4, o.getZ() >> 4), origin = o.asLong();
-            Arena a = arenas.get(fullKey(o.getX() >> 4, o.getY() >> 4, o.getZ() >> 4)), pa = packedArenas.get(rk);
-            Entry e = a == null ? null : a.entries.get(s), pe = pa == null ? null : pa.entries.get(s);
+            long origin = o.asLong();
             if (e != null && e.origin != origin) e = null;
             if (pe != null && pe.origin != origin) pe = null;
+            Arena a = e == null ? null : e.arena, pa = pe == null ? null : pe.arena;
             float ox = (float) ((double) o.getX() - x), oy = (float) ((double) o.getY() - y), oz = (float) ((double) o.getZ() - z);
             if (e == null && pe == null) {
-                if (replacesVanilla(layer)) {   // its vanilla buffer holds nothing current: nothing to draw
+                if (replaces) {   // its vanilla buffer holds nothing current: nothing to draw
                     sectionsSkipped++;
                     continue;
                 }

@@ -47,6 +47,7 @@ public final class RenderCache {
     public static final boolean VERIFY = Boolean.getBoolean("lab.rcache.verify");
     /** ticks an animated / unsupported object is drawn the vanilla way before it is probed again */
     private static final int VOLATILE_TICKS = 40;
+    public static long translations;
     public static long hits, records, animated, unsupported, verified, mismatches, replayedVertices, vanilla;
     private static final Map<Class<?>, long[]> BY_CLASS = new HashMap<>();   // hits, records, animated, unsupported, mismatches
 
@@ -59,6 +60,7 @@ public final class RenderCache {
         long tick, key, state, stateNow, hashTick = Long.MIN_VALUE, refreshAt, probedAt = Long.MIN_VALUE / 2;
         boolean recorded;
         long[] fields;
+        long keyNow, keyTick = Long.MIN_VALUE;
         int light, overlay;
         float yaw;
         long skipUntil = Long.MIN_VALUE;   // animated / unsupported: vanilla until then
@@ -329,6 +331,27 @@ public final class RenderCache {
     /** -Dlab.rcache.probeEvery=N: an unchanged object is probed again after N ticks (default 200) */
     private static final int PROBE_EVERY = Integer.getInteger("lab.rcache.probeEvery", 200);
 
+    /**
+     * The caller's key as computed in this tick, or NO_KEY: the key (synched data, equipment) changes by ticks and
+     * packets, so like the state hash it is taken once per tick.
+     */
+    public static final long NO_KEY = Long.MIN_VALUE + 17;
+
+    public static long keyThisTick(Object obj) {
+        Rec rec = RECS.get(obj);
+        var level = Minecraft.getInstance().level;
+        return rec != null && level != null && rec.keyTick == level.getGameTime() ? rec.keyNow : NO_KEY;
+    }
+
+    public static void keyComputed(Object obj, long key) {
+        var level = Minecraft.getInstance().level;
+        if (level == null) return;
+        Rec rec = RECS.get(obj);
+        if (rec == null) RECS.put(obj, rec = new Rec());
+        rec.keyNow = key;
+        rec.keyTick = level.getGameTime();
+    }
+
     /** ParallelRender: an object the cache currently draws the vanilla way (animated / unsupported). */
     static boolean animated(Object obj) {
         Rec rec = RECS.get(obj);
@@ -379,6 +402,19 @@ public final class RenderCache {
 
     private static void transform(long base, int n, VertexFormat f, boolean normalIdentity) {
         int vs = f.getVertexSize(), po = f.getOffset(VertexFormatElement.POSITION), no = f.contains(VertexFormatElement.NORMAL) ? f.getOffset(VertexFormatElement.NORMAL) : -1;
+        if (normalIdentity && M.m00() == 1 && M.m11() == 1 && M.m22() == 1 && M.m01() == 0 && M.m02() == 0 && M.m10() == 0 && M.m12() == 0 && M.m20() == 0
+                && M.m21() == 0 && M.m03() == 0 && M.m13() == 0 && M.m23() == 0 && M.m33() == 1) {
+            // the usual pose here: the camera-relative translation only (the same sums the general form gives)
+            float tx = M.m30(), ty = M.m31(), tz = M.m32();
+            for (int i = 0; i < n; i++) {
+                long v = base + (long) i * vs + po;
+                MemoryUtil.memPutFloat(v, MemoryUtil.memGetFloat(v) + tx);
+                MemoryUtil.memPutFloat(v + 4, MemoryUtil.memGetFloat(v + 4) + ty);
+                MemoryUtil.memPutFloat(v + 8, MemoryUtil.memGetFloat(v + 8) + tz);
+            }
+            translations++;
+            return;
+        }
         for (int i = 0; i < n; i++) {
             long v = base + (long) i * vs;
             float x = MemoryUtil.memGetFloat(v + po), y = MemoryUtil.memGetFloat(v + po + 4), z = MemoryUtil.memGetFloat(v + po + 8);

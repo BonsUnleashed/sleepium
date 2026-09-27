@@ -79,7 +79,9 @@
     "PartDrawMixin",
     "PartTypeMixin",
     "PartFrameMixin",
-    "ShaderStateShardAccessor"
+    "ShaderStateShardAccessor",
+    "VertexSortDirectMixin",
+    "MeshDataAccessor"
   ],
   "injectors": {
     "defaultRequire": 1

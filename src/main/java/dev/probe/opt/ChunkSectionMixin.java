@@ -15,8 +15,14 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /** ChunkMultiDraw: tags the section's layer buffers; a reset (origin change, release) frees its arena entries. */
 @Mixin(SectionRenderDispatcher.RenderSection.class)
-public abstract class ChunkSectionMixin {
+public abstract class ChunkSectionMixin implements ChunkMultiDraw.ChunkEntries {
     @Shadow @Final private Map<RenderType, VertexBuffer> buffers;
+    @org.spongepowered.asm.mixin.Unique private final Object[] probe$md = new Object[16];
+
+    @Override
+    public Object[] probe$md() {
+        return probe$md;
+    }
 
     @Inject(method = "<init>", at = @At("RETURN"))
     private void probe$tag(CallbackInfo ci) {

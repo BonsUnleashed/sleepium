@@ -43,9 +43,12 @@ public final class QuadSort {
         return out;
     }
 
-    /** Indices of d sorted by Float.compare descending, stable. */
     static int[] sort(float[] d) {
-        int n = d.length;
+        return sort(d, d.length);
+    }
+
+    /** Indices of d[0..n) sorted by Float.compare descending, stable. */
+    static int[] sort(float[] d, int n) {
         int[] out = new int[n];
         if (n < 32) {   // stable insertion sort: any stable sort gives the same permutation
             for (int i = 0; i < n; i++) {
@@ -121,8 +124,78 @@ public final class QuadSort {
         }
     }
 
+    // ------------------------------------------------------------------ the sort of BufferSource, without centroid objects
+
+    private static final org.joml.Vector3f ORIGIN = new org.joml.Vector3f();
+    private static float[] keys = new float[1024];
+    public static long fastSorts, fastQuads;
+
+    /**
+     * BufferSource.endBatch: MeshData.sortQuads when the sorting is DISTANCE_TO_ORIGIN (world rendering). The keys come
+     * straight from the vertex buffer: the centroid of vertices 0 and 2 as unpackQuadCentroids forms it, the distance
+     * by the same JOML call the vanilla lambda makes (origin.distanceSquared); then the same stable descending order
+     * and the same index buffer as buildSortedIndexBuffer. No Vector3f per quad, no SortState (BufferSource drops it).
+     */
+    public static com.mojang.blaze3d.vertex.MeshData.SortState sortQuads(com.mojang.blaze3d.vertex.MeshData m, com.mojang.blaze3d.vertex.ByteBufferBuilder bb,
+            VertexSorting sorting) {
+        var ds = m.drawState();
+        var f = ds.format();
+        if (sorting != VertexSorting.DISTANCE_TO_ORIGIN || ds.mode() != com.mojang.blaze3d.vertex.VertexFormat.Mode.QUADS
+                || !f.contains(com.mojang.blaze3d.vertex.VertexFormatElement.POSITION)) return m.sortQuads(bb, sorting);
+        int quads = ds.vertexCount() / 4;
+        if (keys.length < quads) keys = new float[Math.max(quads, keys.length * 2)];
+        float[] d = keys;
+        long base = org.lwjgl.system.MemoryUtil.memAddress(m.vertexBuffer());
+        int stride = f.getVertexSize(), po = f.getOffset(com.mojang.blaze3d.vertex.VertexFormatElement.POSITION);
+        for (int q = 0; q < quads; q++) {
+            long v0 = base + (long) q * 4 * stride + po, v2 = v0 + 2L * stride;
+            float cx = (org.lwjgl.system.MemoryUtil.memGetFloat(v0) + org.lwjgl.system.MemoryUtil.memGetFloat(v2)) / 2.0F;
+            float cy = (org.lwjgl.system.MemoryUtil.memGetFloat(v0 + 4) + org.lwjgl.system.MemoryUtil.memGetFloat(v2 + 4)) / 2.0F;
+            float cz = (org.lwjgl.system.MemoryUtil.memGetFloat(v0 + 8) + org.lwjgl.system.MemoryUtil.memGetFloat(v2 + 8)) / 2.0F;
+            d[q] = ORIGIN.distanceSquared(cx, cy, cz);
+        }
+        int[] order = sort(d, quads);
+        if (CHECK) {
+            int[] ref = new int[quads];
+            for (int i = 0; i < quads; i++) ref[i] = i;
+            float[] dd = java.util.Arrays.copyOf(d, quads);
+            IntArrays.mergeSort(ref, (a, b) -> com.google.common.primitives.Floats.compare(dd[b], dd[a]));
+            checked++;
+            if (!java.util.Arrays.equals(ref, order)) mismatches++;
+        }
+        var type = ds.indexType();
+        long p = bb.reserve(quads * 6 * type.bytes);
+        if (type == com.mojang.blaze3d.vertex.VertexFormat.IndexType.SHORT) {
+            for (int j : order) {
+                int b = j * 4;
+                org.lwjgl.system.MemoryUtil.memPutShort(p, (short) b);
+                org.lwjgl.system.MemoryUtil.memPutShort(p + 2, (short) (b + 1));
+                org.lwjgl.system.MemoryUtil.memPutShort(p + 4, (short) (b + 2));
+                org.lwjgl.system.MemoryUtil.memPutShort(p + 6, (short) (b + 2));
+                org.lwjgl.system.MemoryUtil.memPutShort(p + 8, (short) (b + 3));
+                org.lwjgl.system.MemoryUtil.memPutShort(p + 10, (short) b);
+                p += 12;
+            }
+        } else {
+            for (int j : order) {
+                int b = j * 4;
+                org.lwjgl.system.MemoryUtil.memPutInt(p, b);
+                org.lwjgl.system.MemoryUtil.memPutInt(p + 4, b + 1);
+                org.lwjgl.system.MemoryUtil.memPutInt(p + 8, b + 2);
+                org.lwjgl.system.MemoryUtil.memPutInt(p + 12, b + 2);
+                org.lwjgl.system.MemoryUtil.memPutInt(p + 16, b + 3);
+                org.lwjgl.system.MemoryUtil.memPutInt(p + 20, b);
+                p += 24;
+            }
+        }
+        ((dev.probe.opt.MeshDataAccessor) (Object) m).probe$setIndexBuffer(bb.build());
+        fastSorts++;
+        fastQuads += quads;
+        return null;
+    }
+
     public static String report() {
-        return String.format(java.util.Locale.ROOT, "quad sorts %d (%d quads)%s", sorts, quads,
+        return String.format(java.util.Locale.ROOT, "quad sorts %d (%d quads), direct buffer sorts %d (%d quads)%s", sorts, quads, fastSorts, fastQuads,
                 CHECK ? ", checked " + checked + ", mismatches " + mismatches : "");
     }
 }
