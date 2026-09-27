@@ -34,7 +34,10 @@
     "EntSleepDataMixin"
   ],
   "client": [
-    "FrameHashFreezeMixin"
+    "FrameHashFreezeMixin",
+    "DrawStatsMixin",
+    "DrawStatsObjectsMixin",
+    "DrawStatsEntitiesMixin"
   ],
   "injectors": {
     "defaultRequire": 1

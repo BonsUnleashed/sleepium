@@ -265,6 +265,7 @@ public final class ChunkMultiDraw {
         }
         Entry e = new Entry();
         ByteBuffer vb = mesh.vertexBuffer();
+        if (PACK_STATS && stride == 32) packStats(vb, verts);
         if (ds.format().getOffset(com.mojang.blaze3d.vertex.VertexFormatElement.POSITION) == 0 && verts % 4 == 0) {
             vb = bucketed(vb, verts / 4, stride, e.bq, e.plane);
         } else {
@@ -456,6 +457,46 @@ public final class ChunkMultiDraw {
         a.vaoStale = false;
     }
 
+    // ------------------------------------------------------------------ packing statistics (-Dlab.chunkmd.packStats)
+
+    private static final boolean PACK_STATS = Boolean.getBoolean("lab.chunkmd.packStats");
+    private static final int[] SHIFTS = {4, 8, 10, 11, 12, 16, 20, 23};
+    private static final long[] posExact = new long[SHIFTS.length], uvExact = new long[SHIFTS.length];
+    private static long statVerts, lightByte, alphaFull;
+    private static float posMin = Float.MAX_VALUE, posMax = -Float.MAX_VALUE, uvMin = Float.MAX_VALUE, uvMax = -Float.MAX_VALUE;
+
+    /** Which fields of the BLOCK format would survive a narrower encoding bit-exactly (counts per vertex). */
+    private static void packStats(ByteBuffer vb, int verts) {
+        long base = MemoryUtil.memAddress(vb);
+        for (int i = 0; i < verts; i++) {
+            long v = base + 32L * i;
+            float x = MemoryUtil.memGetFloat(v), y = MemoryUtil.memGetFloat(v + 4), z = MemoryUtil.memGetFloat(v + 8);
+            float u = MemoryUtil.memGetFloat(v + 16), w = MemoryUtil.memGetFloat(v + 20);
+            posMin = Math.min(posMin, Math.min(x, Math.min(y, z)));
+            posMax = Math.max(posMax, Math.max(x, Math.max(y, z)));
+            uvMin = Math.min(uvMin, Math.min(u, w));
+            uvMax = Math.max(uvMax, Math.max(u, w));
+            for (int k = 0; k < SHIFTS.length; k++) {
+                float sc = (float) (1 << SHIFTS[k]);
+                if (x * sc == (float) Math.rint(x * sc) && y * sc == (float) Math.rint(y * sc) && z * sc == (float) Math.rint(z * sc)) posExact[k]++;
+                if (u * sc == (float) Math.rint(u * sc) && w * sc == (float) Math.rint(w * sc)) uvExact[k]++;
+            }
+            int l = MemoryUtil.memGetInt(v + 24);
+            if ((l & 0xFFFF) <= 255 && (l >>> 16) <= 255) lightByte++;
+            if ((MemoryUtil.memGetInt(v + 12) >>> 24) == 255) alphaFull++;
+            statVerts++;
+        }
+    }
+
+    private static String packReport() {
+        if (!PACK_STATS || statVerts == 0) return "";
+        StringBuilder sb = new StringBuilder(String.format(java.util.Locale.ROOT, "; pack stats: %d vertices, pos [%s, %s], uv [%s, %s], light fits bytes %.4f %%, alpha 255 %.4f %%, exact at 2^k (pos / uv):",
+                statVerts, posMin, posMax, uvMin, uvMax, 100.0 * lightByte / statVerts, 100.0 * alphaFull / statVerts));
+        for (int k = 0; k < SHIFTS.length; k++)
+            sb.append(String.format(java.util.Locale.ROOT, " %d: %.4f / %.4f %%", SHIFTS[k], 100.0 * posExact[k] / statVerts, 100.0 * uvExact[k] / statVerts));
+        return sb.toString();
+    }
+
     public static String report() {
         int arenas = 0;
         long verts = 0;
@@ -466,6 +507,6 @@ public final class ChunkMultiDraw {
         return String.format(java.util.Locale.ROOT, "chunk multidraw: patched %s, multi-draw calls %d, sections by multi-draw %d, by vanilla draws %d, skipped %d, quads drawn %.1f %% (face culling %s), uploads %d, arenas %d (%.1f MB), grows %d, vanilla buffers %s",
                 PATCHED, multiDraws, sectionsMulti, sectionsVanilla, sectionsSkipped, 100.0 * quadsDrawn / Math.max(1, quadsTotal), FACE_CULL ? "on" : "off",
                 uploads, arenas, verts * 32 / 1048576.0, grows,
-                KEEP_VANILLA || PATCHED.size() != SUPPORTED.size() ? "filled" : "not filled");
+                KEEP_VANILLA || PATCHED.size() != SUPPORTED.size() ? "filled" : "not filled") + packReport();
     }
 }

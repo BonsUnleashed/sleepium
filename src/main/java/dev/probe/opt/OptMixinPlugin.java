@@ -51,7 +51,7 @@ public final class OptMixinPlugin implements IMixinConfigPlugin {
         if (on && simple.equals("PersistentPoolsMixin")
                 && (Boolean.getBoolean("lab.opt.all") || Boolean.getBoolean("lab.opt.LabPoolsMixin"))) on = false;
         // A/B of the client-side ones with the server-side ones on: -Dlab.opt.noClient=true
-        if (on && Boolean.getBoolean("lab.opt.noClient") && (simple.startsWith("Section") && simple.contains("Layer") || simple.startsWith("Ambient") || simple.startsWith("Shader") || simple.startsWith("ClientEventSite") || simple.startsWith("Pose") || simple.startsWith("BulkData") || simple.startsWith("Chunk") && !simple.startsWith("ChunkCache"))) on = false;
+        if (on && Boolean.getBoolean("lab.opt.noClient") && (simple.startsWith("Section") && simple.contains("Layer") || simple.startsWith("Ambient") || simple.startsWith("Shader") || simple.startsWith("ClientEventSite") || simple.startsWith("Pose") || simple.startsWith("BulkData") || simple.startsWith("VertexSort") || simple.startsWith("Chunk") && !simple.startsWith("ChunkCache"))) on = false;
         if (on) {
             System.out.println("[probe/opt] applying " + simple + " -> " + targetClassName);
         }
@@ -68,7 +68,9 @@ public final class OptMixinPlugin implements IMixinConfigPlugin {
             // client-thread collision memo (OwnerThread)
             "ClientEventSiteMixin",
             // sampler locations from updateLocations + sampler names made once: entity scene 64 -> 127 fps
-            "ShaderSamplerCacheMixin"};
+            "ShaderSamplerCacheMixin",
+            // translucent quad sort: same floats, stable radix sort (0 mismatches over 63 M quads): entity scene +6 %
+            "VertexSortRadixMixin"};
     // client side, exact but no measurable fps effect (3 steady A/B pairs): opt-in only
     //   -Dlab.opt.SectionLayerMaskMixin / AmbientParticleSkipMixin
 
@@ -86,5 +88,7 @@ public final class OptMixinPlugin implements IMixinConfigPlugin {
     @Override public void postApply(String targetClassName, ClassNode targetClass, String mixinClassName, IMixinInfo mixinInfo) {
         if (mixinClassName.endsWith(".EventSiteMixin") || mixinClassName.endsWith(".ClientEventSiteMixin"))
             dev.probe.optsupport.EventSiteTransformer.transform(targetClass);
+        if (mixinClassName.endsWith(".VertexSortRadixMixin"))
+            dev.probe.optsupport.QuadSort.transform(targetClass);
     }
 }

@@ -50,7 +50,23 @@ final class ClientAuto {
     private static final boolean FRAMEHASH = Boolean.getBoolean("probe.clientAuto.framehash");
     private static int hashAt = -1, idleTicks, sceneAt;
 
+    /** -Dprobe.clientAuto.jfr=file.jfr[;settings.jfc]: a JFR recording of exactly the measured window */
+    private static final String JFR = System.getProperty("probe.clientAuto.jfr");
+    private static jdk.jfr.Recording recording;
+
     private static void startMeasuring() {
+        if (DrawStats.ON) DrawStats.start();
+        if (JFR != null) {
+            try {
+                String[] j = JFR.split(";");
+                var cfg = j.length > 1 ? jdk.jfr.Configuration.create(Path.of(j[1])) : jdk.jfr.Configuration.getConfiguration("profile");
+                recording = new jdk.jfr.Recording(cfg);
+                recording.setDestination(Path.of(j[0]));
+                recording.start();
+            } catch (Exception e) {
+                log("jfr failed: " + e);
+            }
+        }
         if (FRAMEHASH) {
             // no /tick freeze: frozen, the server stops sending the light that new sections need to be built
             dev.probe.optsupport.ClientCounters.freezeTextures = true;
@@ -245,7 +261,13 @@ final class ClientAuto {
             }
             case FINISH -> {
                 if (!ClientProbe.running()) {
+                    if (recording != null) {
+                        recording.stop();   // written to its destination
+                        recording.close();
+                        recording = null;
+                    }
                     log(dev.probe.optsupport.ClientCounters.report());
+                    if (DrawStats.ON) log(DrawStats.report());
                     log("thread census:\n" + census());
                     enter(Phase.DONE);
                     if (savedFps != null) {

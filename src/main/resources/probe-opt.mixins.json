@@ -61,7 +61,8 @@
     "ChunkShaderPatchMixin",
     "ChunkSectionMixin",
     "ChunkUploadMixin",
-    "ChunkMultiDrawMixin"
+    "ChunkMultiDrawMixin",
+    "VertexSortRadixMixin"
   ],
   "injectors": {
     "defaultRequire": 1
