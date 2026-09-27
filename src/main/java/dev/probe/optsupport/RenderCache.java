@@ -423,7 +423,7 @@ public final class RenderCache {
             VertexConsumer vc = buffers.getBuffer(t);
             long src = rec.mem + rec.offs[i];
             int n = rec.counts[i];
-            if (!asIs && normalIdentity && rec != PROBE && n % 4 == 0 && PartBatch.residentOk(t, vc)) {
+            if (!asIs && normalIdentity && rec != PROBE && n % 4 == 0 && PartBatch.residentOk(t, vc, buffers)) {
                 PartBatch.queueResident(t, (BufferBuilder) vc, rec.resident(i), n, M);
                 replayedVertices += n;
                 residentSegments++;

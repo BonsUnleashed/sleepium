@@ -19,7 +19,8 @@ public abstract class ChunkShaderPatchMixin {
         if (type == Program.Type.VERTEX) {
             if (ChunkMultiDraw.SUPPORTED.contains(name)) {
                 if (Boolean.getBoolean("lab.opt.ChunkMultiDrawMixin") && ChunkMultiDraw.capable()) src = ChunkMultiDraw.patch(name, src);
-            } else if (Boolean.getBoolean("lab.opt.PartBatchMixin") && (name.startsWith("rendertype_entity") || name.startsWith("rendertype_armor"))
+            } else if (Boolean.getBoolean("lab.opt.PartBatchMixin") && (name.startsWith("rendertype_entity") || name.startsWith("rendertype_armor")
+                    || name.startsWith("rendertype_item_entity"))
                     && dev.probe.optsupport.PartBatch.capable()) {
                 src = dev.probe.optsupport.PartBatch.patch(name, src);
             }

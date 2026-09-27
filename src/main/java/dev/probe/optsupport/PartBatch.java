@@ -224,6 +224,7 @@ public final class PartBatch {
         int cap = 256, n;
         long counts = MemoryUtil.nmemAlloc(4L * 256), bases = MemoryUtil.nmemAlloc(4L * 256), indices = MemoryUtil.nmemCalloc(256, 8);
         int maxIndices;
+        float[] keys = new float[64];
 
         void ensure() {
             if (n < cap) return;
@@ -256,10 +257,20 @@ public final class PartBatch {
     }
 
     /** A recorded segment of this type can be drawn from VRAM with its pose: batched, NEW_ENTITY quads, patched shader. */
-    public static boolean residentOk(RenderType t, VertexConsumer vc) {
-        return RESIDENT_ON && vc instanceof BufferBuilder bb && EntityBatch.typeOf(bb) == t && t.format() == DefaultVertexFormat.NEW_ENTITY
-                && t.mode() == VertexFormat.Mode.QUADS && typeOk(t) && capable();
+    public static boolean residentOk(RenderType t, VertexConsumer vc, net.minecraft.client.renderer.MultiBufferSource buffers) {
+        if (!RESIDENT_ON || !(vc instanceof BufferBuilder bb) || t.format() != DefaultVertexFormat.NEW_ENTITY || t.mode() != VertexFormat.Mode.QUADS) return false;
+        if (EntityBatch.typeOf(bb) == t) return typeOk(t) && capable();
+        // experiment (-Dlab.rcache.translucentResident): a sorted (translucent) type, drawn per object back to front
+        return TRANSLUCENT_RESIDENT && t.sortOnUpload() && buffers instanceof net.minecraft.client.renderer.MultiBufferSource.BufferSource bs
+                && ((dev.probe.opt.BufferSourceAccessor) bs).probe$started().get(t) == bb && typeOk(t) && capable();
     }
+
+    /**
+     * -Dlab.rcache.translucentResident=true (experiment, differs from vanilla): cached segments of sorted translucent
+     * types (items in frames) drawn from VRAM too, ordered per object (its origin's distance, farthest first) instead of
+     * per quad across all objects; inside an object the recorded order.
+     */
+    public static final boolean TRANSLUCENT_RESIDENT = Boolean.getBoolean("lab.rcache.translucentResident");
 
     /** Uploads n vertices (NEW_ENTITY) once; returns the first vertex in the resident arena. */
     static int residentUpload(long src, int n) {
@@ -292,6 +303,8 @@ public final class PartBatch {
         Queue q = RESIDENT.computeIfAbsent(t, x -> new Queue());
         q.ensure();
         m.getToAddress(q.mem + 144L * q.n);
+        if (q.keys.length <= q.n) q.keys = java.util.Arrays.copyOf(q.keys, Math.max(64, q.keys.length * 2));
+        q.keys[q.n] = m.m30() * m.m30() + m.m31() * m.m31() + m.m32() * m.m32();   // the object's origin, camera-relative
         int idx = n / 4 * 6;
         MemoryUtil.memPutInt(q.counts + 4L * q.n, idx);
         MemoryUtil.memPutInt(q.bases + 4L * q.n, start);
@@ -384,9 +397,32 @@ public final class PartBatch {
         boolean parts = q != null && q.n > 0, res = r != null && r.n > 0;
         if (!parts && !res) return;
         if (parts) drawQueue(shader, q, 1);
-        if (res) drawQueue(shader, r, 2);
+        if (res) {
+            if (t.sortOnUpload()) sortBackToFront(r);
+            drawQueue(shader, r, 2);
+        }
         com.mojang.blaze3d.vertex.BufferUploader.invalidate();   // vanilla's bound buffer is no longer bound
         GL30C.glBindVertexArray(0);
+    }
+
+    /** The queue's entries reordered by key, farthest first (stable). */
+    private static void sortBackToFront(Queue q) {
+        int n = q.n;
+        if (n < 2) return;
+        int[] order = QuadSort.sort(q.keys, n);
+        long rec = MemoryUtil.nmemAlloc(144L * n), cnt = MemoryUtil.nmemAlloc(4L * n), bas = MemoryUtil.nmemAlloc(4L * n);
+        for (int i = 0; i < n; i++) {
+            int j = order[i];
+            MemoryUtil.memCopy(q.mem + 144L * j, rec + 144L * i, 144);
+            MemoryUtil.memPutInt(cnt + 4L * i, MemoryUtil.memGetInt(q.counts + 4L * j));
+            MemoryUtil.memPutInt(bas + 4L * i, MemoryUtil.memGetInt(q.bases + 4L * j));
+        }
+        MemoryUtil.memCopy(rec, q.mem, 144L * n);
+        MemoryUtil.memCopy(cnt, q.counts, 4L * n);
+        MemoryUtil.memCopy(bas, q.bases, 4L * n);
+        MemoryUtil.nmemFree(rec);
+        MemoryUtil.nmemFree(cnt);
+        MemoryUtil.nmemFree(bas);
     }
 
     private static void drawQueue(ShaderInstance shader, Queue q, int mode) {
