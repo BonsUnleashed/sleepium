@@ -130,6 +130,7 @@ public final class ParallelRender {
         @Override
         public void run() {
             if (!claimed.compareAndSet(false, true)) return;   // the render thread took it while waiting
+            if (PIN_WORKERS != null && !PINNED.get()) pinWorker();
             Set s = SETS.poll();
             try {
                 ok = s != null && render(s, this);
@@ -165,9 +166,47 @@ public final class ParallelRender {
     private static int size;
     private static boolean listened;
 
+    /**
+     * -Dlab.prender.pin=render;w1,w2,...: the render thread pinned to one logical CPU and each worker, at its first
+     * job, to the next of the list (experiment: separate physical cores; the default spreads over even numbers).
+     */
+    private static final String PIN = System.getProperty("lab.prender.pin");
+    private static final long RENDER_PIN;
+    private static final long[] PIN_WORKERS;
+    private static final ThreadLocal<Boolean> PINNED = ThreadLocal.withInitial(() -> false);
+    private static final java.util.concurrent.atomic.AtomicInteger NEXT_PIN = new java.util.concurrent.atomic.AtomicInteger();
+    private static boolean renderPinned;
+
+    static {
+        long rp = 0;
+        long[] wp = null;
+        if (PIN != null) {
+            String spec = PIN.equals("true") ? "2;4,6,8,10" : PIN;
+            String[] parts = spec.split(";");
+            rp = 1L << Integer.parseInt(parts[0].trim());
+            String[] ws = parts.length > 1 ? parts[1].split(",") : new String[0];
+            wp = new long[ws.length];
+            for (int i = 0; i < ws.length; i++) wp[i] = 1L << Integer.parseInt(ws[i].trim());
+        }
+        RENDER_PIN = rp;
+        PIN_WORKERS = wp;
+    }
+
+    private static void pinWorker() {
+        PINNED.set(true);
+        if (PIN_WORKERS.length == 0) return;
+        int i = NEXT_PIN.getAndIncrement() % PIN_WORKERS.length;
+        boolean ok = dev.lab.runtime.OsThreads.pinCurrent(PIN_WORKERS[i]);
+        System.out.println("[probe/opt] parallel render: " + Thread.currentThread().getName() + " pinned to mask " + Long.toHexString(PIN_WORKERS[i]) + " " + ok);
+    }
+
     /** LevelRenderer's entity loop, per entity (in place of renderEntity). */
     public static void enqueue(LevelRenderer lr, Entity e, double camX, double camY, double camZ, float pt, PoseStack pose, MultiBufferSource buffers) {
         if (size == 0) {
+            if (RENDER_PIN != 0 && !renderPinned) {
+                renderPinned = true;
+                System.out.println("[probe/opt] parallel render: render thread pinned to mask " + Long.toHexString(RENDER_PIN) + " " + dev.lab.runtime.OsThreads.pinCurrent(RENDER_PIN));
+            }
             ensureSets();
             listened = EventSites.renderListened();   // once per frame
         }
