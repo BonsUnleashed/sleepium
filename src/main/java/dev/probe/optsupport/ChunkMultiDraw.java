@@ -71,8 +71,11 @@ public final class ChunkMultiDraw {
         String uv = "texCoord0 = UV0;";
         if (!SUPPORTED.contains(name) || !src.startsWith("#version 150") || !src.contains(decl) || !src.contains(use) || !src.contains(uv)) return src;
         // packed (mode 2): integers as floats, minus a whole number, times a power of two: the stored floats exactly
-        String out = src.replaceFirst("#version 150", "#version 150\n#extension GL_ARB_shader_draw_parameters : require")
-                .replace(decl, decl + "\nuniform int ProbeMultiDraw;\nlayout(std140) uniform ProbeChunkOffsets { vec4 ProbeOffsets[" + MAX_DRAWS + "]; };")
+        String out = src.replaceFirst("#version 150", "#version 150\n#extension GL_ARB_shader_draw_parameters : require"
+                        + (ssbo() ? "\n#extension GL_ARB_shader_storage_buffer_object : require" : ""))
+                .replace(decl, decl + "\nuniform int ProbeMultiDraw;\n" + (ssbo()
+                        ? "layout(std430) readonly buffer ProbeChunkOffsets { vec4 ProbeOffsets[]; };"
+                        : "layout(std140) uniform ProbeChunkOffsets { vec4 ProbeOffsets[" + MAX_DRAWS + "]; };"))
                 .replace(use, "vec3 pos = (ProbeMultiDraw == 2 ? (Position - 2048.0) * 0.00390625 : Position) + (ProbeMultiDraw != 0 ? ProbeOffsets[gl_DrawIDARB].xyz : ChunkOffset);")
                 .replace(uv, "texCoord0 = ProbeMultiDraw == 2 ? UV0 * 0.0000152587890625 : UV0;");
         PATCHED.add(name);
@@ -168,9 +171,24 @@ public final class ChunkMultiDraw {
         boolean vaoStale = true;
         final TreeMap<Integer, Integer> free = new TreeMap<>();   // start -> length (vertices)
         // per-frame draw list
-        int n, maxIndices;
-        final long counts = MemoryUtil.nmemAlloc(4L * MAX_DRAWS), bases = MemoryUtil.nmemAlloc(4L * MAX_DRAWS), indices = MemoryUtil.nmemCalloc(MAX_DRAWS, 8);
-        final ByteBuffer offsets = MemoryUtil.memAlloc(16 * MAX_DRAWS);
+        int n, maxIndices, drawCap = MAX_DRAWS;
+        long counts = MemoryUtil.nmemAlloc(4L * MAX_DRAWS), bases = MemoryUtil.nmemAlloc(4L * MAX_DRAWS), indices = MemoryUtil.nmemCalloc(MAX_DRAWS, 8);
+        ByteBuffer offsets = MemoryUtil.memAlloc(16 * MAX_DRAWS);
+
+        /** Storage-buffer offsets have no size limit: the draw list grows instead of being split. */
+        void ensureDraws(int needed) {
+            if (needed <= drawCap) return;
+            int c = Math.max(needed, drawCap * 2);
+            counts = MemoryUtil.nmemRealloc(counts, 4L * c);
+            bases = MemoryUtil.nmemRealloc(bases, 4L * c);
+            MemoryUtil.nmemFree(indices);
+            indices = MemoryUtil.nmemCalloc(c, 8);
+            ByteBuffer o = MemoryUtil.memAlloc(16 * c);
+            MemoryUtil.memCopy(MemoryUtil.memAddress(offsets), MemoryUtil.memAddress(o), 16L * n);
+            MemoryUtil.memFree(offsets);
+            offsets = o;
+            drawCap = c;
+        }
         boolean listed;
         final boolean packed;
         int uboOffset;
@@ -261,12 +279,17 @@ public final class ChunkMultiDraw {
      * over 1024 draws is split as before. Off: 8x4x8.
      */
     private static long packedKey(long sx, long sy, long sz) {
+        if (SINGLE && ssbo()) return 0;
         return BIG_REGIONS ? regionKey(sx >> 2, sy >> 1, sz >> 2) : regionKey(sx, sy, sz);
     }
 
     private static final boolean BIG_REGIONS = !"false".equals(System.getProperty("lab.chunkmd.bigRegions"));
 
+    /** -Dlab.chunkmd.single (default on, with storage buffers): one arena per layer and format, one call each. */
+    private static final boolean SINGLE = !"false".equals(System.getProperty("lab.chunkmd.single"));
+
     private static long fullKey(long sx, long sy, long sz) {
+        if (SINGLE && ssbo()) return 0;
         return PACK ? regionKey(sx >> 2, BIG_REGIONS ? sy >> 1 : sy, sz >> 2) : regionKey(sx, sy, sz);
     }
 
@@ -533,7 +556,9 @@ public final class ChunkMultiDraw {
      * packed arenas first and full-format ones after, so the mode uniform is set at most twice per layer.
      */
     private static void flushAll(RenderType layer, int[] ps) {
-        if (uboAlign == 0) uboAlign = Math.max(16, GL11C.glGetInteger(GL31C.GL_UNIFORM_BUFFER_OFFSET_ALIGNMENT));
+        boolean sb = ssbo();
+        int target = sb ? GL43C.GL_SHADER_STORAGE_BUFFER : GL31C.GL_UNIFORM_BUFFER;
+        if (uboAlign == 0) uboAlign = Math.max(16, GL11C.glGetInteger(sb ? GL43C.GL_SHADER_STORAGE_BUFFER_OFFSET_ALIGNMENT : GL31C.GL_UNIFORM_BUFFER_OFFSET_ALIGNMENT));
         int total = 0;
         for (Arena a : LISTED) {
             a.listed = false;
@@ -548,11 +573,12 @@ public final class ChunkMultiDraw {
         }
         long st = MemoryUtil.memAddress(staging);
         for (Arena a : LISTED) if (a.n > 0) MemoryUtil.memCopy(MemoryUtil.memAddress(a.offsets), st + a.uboOffset, 16L * a.n);
-        GL15C.glBindBuffer(GL31C.GL_UNIFORM_BUFFER, ubo());
-        // new storage each time (no wait on the previous frame's draws); a full block's size past the last range
-        GL15C.glBufferData(GL31C.GL_UNIFORM_BUFFER, total + 16L * MAX_DRAWS, GL15C.GL_STREAM_DRAW);
+        int buf = sb ? ssboBuffer() : ubo();
+        GL15C.glBindBuffer(target, buf);
+        // new storage each time (no wait on the previous frame's draws); a uniform block's full size past the last range
+        GL15C.glBufferData(target, total + (sb ? 16L : 16L * MAX_DRAWS), GL15C.GL_STREAM_DRAW);
         staging.limit(total).position(0);
-        GL15C.glBufferSubData(GL31C.GL_UNIFORM_BUFFER, 0, staging);
+        GL15C.glBufferSubData(target, 0, staging);
         staging.clear();
         boolean indirect = indirect();
         if (indirect) {
@@ -594,7 +620,7 @@ public final class ChunkMultiDraw {
                 if (a.vaoStale || a.vao == 0) setupVao(a, layer);
                 GL30C.glBindVertexArray(a.vao);
                 seq.bind(a.maxIndices);
-                GL30C.glBindBufferRange(GL31C.GL_UNIFORM_BUFFER, UBO_BINDING, ubo(), a.uboOffset, 16L * MAX_DRAWS);
+                GL30C.glBindBufferRange(target, UBO_BINDING, buf, a.uboOffset, sb ? 16L * a.n : 16L * MAX_DRAWS);
                 if (dev.probe.DrawStats.ON) dev.probe.DrawStats.phaseBegin(3);
                 if (indirect) GL43C.glMultiDrawElementsIndirect(GL15C.GL_TRIANGLES, seq.type().asGLType, a.cmdOffset, a.n, 20);
                 else GL32C.nglMultiDrawElementsBaseVertex(GL15C.GL_TRIANGLES, a.counts, seq.type().asGLType, a.indices, a.n, a.bases);
@@ -631,7 +657,10 @@ public final class ChunkMultiDraw {
                 a.maxIndices = 0;
                 LISTED.add(a);
             }
-            if (a.n + 4 > MAX_DRAWS) flush(a, layer, ps);
+            if (a.n + 4 > a.drawCap) {
+                if (ssbo()) a.ensureDraws(a.n + 4);
+                else flush(a, layer, ps);
+            }
             // visible face buckets: a face whose normal points away from the camera (or edge-on) would be culled by the
             // GPU anyway; every +X face of the section lies at x >= minX, so with the camera at x <= minX none is visible
             // (a margin of 1/64 block keeps it conservative against float rounding: more faces drawn, never fewer)
@@ -692,7 +721,24 @@ public final class ChunkMultiDraw {
         a.maxIndices = 0;
     }
 
-    private static int ubo;
+    private static int ubo, ssboBuf;
+    private static Boolean ssbo;
+
+    private static int ssboBuffer() {
+        if (ssboBuf == 0) ssboBuf = GL15C.glGenBuffers();
+        return ssboBuf;
+    }
+
+    /** Offsets in a shader storage buffer (GL 4.3 / ARB_shader_storage_buffer_object; -Dlab.chunkmd.noSsbo for the uniform block). */
+    static boolean ssbo() {
+        Boolean s = ssbo;
+        if (s == null) {
+            var caps = GL.getCapabilities();
+            ssbo = s = (caps.OpenGL43 || caps.GL_ARB_shader_storage_buffer_object) && !Boolean.getBoolean("lab.chunkmd.noSsbo");
+            System.out.println("[probe/opt] chunk multidraw: offsets in a storage buffer " + s);
+        }
+        return s;
+    }
 
     private static int ubo() {
         if (ubo == 0) {
@@ -708,11 +754,14 @@ public final class ChunkMultiDraw {
         int[] s = PROGRAM_STATE.get(program);
         if (s == null) {
             int flag = GL20C.glGetUniformLocation(program, "ProbeMultiDraw");
-            int block = GL31C.glGetUniformBlockIndex(program, "ProbeChunkOffsets");
+            boolean sb = ssbo();
+            int block = sb ? GL43C.glGetProgramResourceIndex(program, GL43C.GL_SHADER_STORAGE_BLOCK, "ProbeChunkOffsets")
+                    : GL31C.glGetUniformBlockIndex(program, "ProbeChunkOffsets");
             if (flag < 0 || block == GL31C.GL_INVALID_INDEX) {
                 s = new int[0];
             } else {
-                GL31C.glUniformBlockBinding(program, block, UBO_BINDING);
+                if (sb) GL43C.glShaderStorageBlockBinding(program, block, UBO_BINDING);
+                else GL31C.glUniformBlockBinding(program, block, UBO_BINDING);
                 s = new int[] {flag};
             }
             PROGRAM_STATE.put(program, s);
