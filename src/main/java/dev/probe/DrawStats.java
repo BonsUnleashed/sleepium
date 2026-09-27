@@ -18,6 +18,16 @@ public final class DrawStats {
     private static final Map<String, long[]> TYPES = new HashMap<>();     // draws, vertices, bytes
     private static final Map<Class<?>, long[]> OBJECTS = new HashMap<>(); // calls, nanos
     private static long depth, start;
+    private static final long[] PHASE = new long[3], PHASE_START = new long[3];
+    private static final String[] PHASE_NAMES = {"buffer swap (flipFrame)", "world (renderLevel)", "frame render (world + GUI)"};
+
+    public static void phaseBegin(int i) {
+        if (active) PHASE_START[i] = System.nanoTime();
+    }
+
+    public static void phaseEnd(int i) {
+        if (active && PHASE_START[i] != 0) PHASE[i] += System.nanoTime() - PHASE_START[i];
+    }
     private static Class<?> current;
 
     private DrawStats() {}
@@ -25,6 +35,8 @@ public final class DrawStats {
     static void start() {
         TYPES.clear();
         OBJECTS.clear();
+        java.util.Arrays.fill(PHASE, 0);
+        java.util.Arrays.fill(PHASE_START, 0);
         frames = 0;
         active = true;
     }
@@ -69,6 +81,7 @@ public final class DrawStats {
             v += t[1];
             b += t[2];
         }
+        for (int i = 0; i < PHASE.length; i++) sb.append(String.format(Locale.ROOT, "\n  %s: %.3f ms per frame", PHASE_NAMES[i], PHASE[i] / 1e6 / frames));
         sb.append(String.format(Locale.ROOT, "\n  immediate draws %.1f, vertices %.0f, uploaded %.0f KiB", d / (double) frames, v / (double) frames, b / 1024.0 / frames));
         List<Map.Entry<String, long[]>> ts = new ArrayList<>(TYPES.entrySet());
         ts.sort((x, y) -> Long.compare(y.getValue()[1], x.getValue()[1]));

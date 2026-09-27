@@ -91,7 +91,9 @@ public final class PartBatch {
         pre.append("    vec3 probe_Position = Position;\n    vec4 probe_Color = Color;\n    vec3 probe_Normal = Normal;\n");
         if (uv1 != null) pre.append("    ").append(uv1).append(" probe_UV1 = UV1;\n");
         if (uv2 != null) pre.append("    ivec2 probe_UV2 = UV2;\n");
-        pre.append("    if (ProbePartMode != 0) {\n");
+        pre.append("    if (ProbePartMode == 2) {\n");
+        pre.append("        probe_Position = (probeParts[gl_DrawIDARB].pose * vec4(Position, 1.0)).xyz;\n");
+        pre.append("    } else if (ProbePartMode != 0) {\n");
         pre.append("        ProbePart probe_d = probeParts[gl_DrawIDARB];\n");
         pre.append("        probe_Position = (probe_d.pose * vec4(Position, 1.0)).xyz;\n");
         pre.append("        vec3 probe_n = normalize(mat3(probe_d.n0.xyz, probe_d.n1.xyz, probe_d.n2.xyz) * Normal);\n");
@@ -235,7 +237,68 @@ public final class PartBatch {
         }
     }
 
-    private static final Map<RenderType, Queue> QUEUES = new IdentityHashMap<>();
+    private static final Map<RenderType, Queue> QUEUES = new IdentityHashMap<>(), RESIDENT = new IdentityHashMap<>();
+
+    // ------------------------------------------------------------------ resident recordings (render cache in VRAM)
+
+    /** -Dlab.rcache.resident=false: the render cache replays on the CPU even where it could draw from VRAM. */
+    public static final boolean RESIDENT_ON = !"false".equals(System.getProperty("lab.rcache.resident"));
+    static final ChunkMultiDraw.Arena RES_ARENA = newResArena();
+    private static int resVao;
+    public static long residentDraws, residentUploads;
+    /** vertex ranges of collected recordings, freed on the render thread */
+    static final java.util.concurrent.ConcurrentLinkedQueue<int[]> RES_FREE = new java.util.concurrent.ConcurrentLinkedQueue<>();
+
+    private static ChunkMultiDraw.Arena newResArena() {
+        ChunkMultiDraw.Arena a = new ChunkMultiDraw.Arena(0, null, false);
+        a.stride = DefaultVertexFormat.NEW_ENTITY.getVertexSize();
+        return a;
+    }
+
+    /** A recorded segment of this type can be drawn from VRAM with its pose: batched, NEW_ENTITY quads, patched shader. */
+    public static boolean residentOk(RenderType t, VertexConsumer vc) {
+        return RESIDENT_ON && vc instanceof BufferBuilder bb && EntityBatch.typeOf(bb) == t && t.format() == DefaultVertexFormat.NEW_ENTITY
+                && t.mode() == VertexFormat.Mode.QUADS && typeOk(t) && capable();
+    }
+
+    /** Uploads n vertices (NEW_ENTITY) once; returns the first vertex in the resident arena. */
+    static int residentUpload(long src, int n) {
+        drainFree();
+        ChunkMultiDraw.Arena a = RES_ARENA;
+        int start = a.alloc(n);
+        if (start < 0) {
+            a.grow(n);
+            start = a.alloc(n);
+        }
+        GL15C.glBindBuffer(GL15C.GL_ARRAY_BUFFER, a.vbo);
+        GL15C.nglBufferSubData(GL15C.GL_ARRAY_BUFFER, (long) start * a.stride, (long) n * a.stride, src);
+        residentUploads++;
+        return start;
+    }
+
+    static void residentRelease(int start, int n) {
+        RES_ARENA.release(start, n);
+    }
+
+    private static void drainFree() {
+        int[] r;
+        while ((r = RES_FREE.poll()) != null) RES_ARENA.release(r[0], r[1]);
+    }
+
+    /** One resident segment drawn with the pose M this frame (the batch gets an empty quad so it is drawn). */
+    public static void queueResident(RenderType t, BufferBuilder bb, int start, int n, Matrix4f m) {
+        dev.probe.opt.BufferBuilderAccessor a = (dev.probe.opt.BufferBuilderAccessor) bb;
+        if (a.probe$vertices() == 0) for (int i = 0; i < 4; i++) bb.addVertex(0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0);
+        Queue q = RESIDENT.computeIfAbsent(t, x -> new Queue());
+        q.ensure();
+        m.getToAddress(q.mem + 144L * q.n);
+        int idx = n / 4 * 6;
+        MemoryUtil.memPutInt(q.counts + 4L * q.n, idx);
+        MemoryUtil.memPutInt(q.bases + 4L * q.n, start);
+        if (idx > q.maxIndices) q.maxIndices = idx;
+        q.n++;
+        residentDraws++;
+    }
     private static final Map<RenderType, Boolean> TYPE_OK = new IdentityHashMap<>();
 
     /**
@@ -314,8 +377,16 @@ public final class PartBatch {
     public static void afterDraw(ShaderInstance shader) {
         RenderType t = current;
         if (t == null) return;
-        Queue q = QUEUES.get(t);
-        if (q == null || q.n == 0) return;
+        Queue q = QUEUES.get(t), r = RESIDENT.get(t);
+        boolean parts = q != null && q.n > 0, res = r != null && r.n > 0;
+        if (!parts && !res) return;
+        if (parts) drawQueue(shader, q, 1);
+        if (res) drawQueue(shader, r, 2);
+        com.mojang.blaze3d.vertex.BufferUploader.invalidate();   // vanilla's bound buffer is no longer bound
+        GL30C.glBindVertexArray(0);
+    }
+
+    private static void drawQueue(ShaderInstance shader, Queue q, int mode) {
         int flag = GL20C.glGetUniformLocation(shader.getId(), "ProbePartMode");
         int block = GL43C.glGetProgramResourceIndex(shader.getId(), GL43C.GL_SHADER_STORAGE_BLOCK, "ProbeParts");
         if (flag < 0 || block == GL31C.GL_INVALID_INDEX) {
@@ -329,18 +400,27 @@ public final class PartBatch {
         long bytes = 144L * q.n;
         GL15C.nglBufferData(GL43C.GL_SHADER_STORAGE_BUFFER, bytes, q.mem, GL15C.GL_STREAM_DRAW);
         GL30C.glBindBufferBase(GL43C.GL_SHADER_STORAGE_BUFFER, SSBO_BINDING, ssbo);
-        if (vaoStale || vao == 0) setupVao();
-        GL30C.glBindVertexArray(vao);
+        if (mode == 1) {
+            if (vaoStale || vao == 0) setupVao();
+            GL30C.glBindVertexArray(vao);
+        } else {
+            if (RES_ARENA.vaoStale || resVao == 0) {
+                if (resVao == 0) resVao = GL30C.glGenVertexArrays();
+                GL30C.glBindVertexArray(resVao);
+                GL15C.glBindBuffer(GL15C.GL_ARRAY_BUFFER, RES_ARENA.vbo);
+                DefaultVertexFormat.NEW_ENTITY.setupBufferState();
+                RES_ARENA.vaoStale = false;
+            }
+            GL30C.glBindVertexArray(resVao);
+        }
         RenderSystem.AutoStorageIndexBuffer seq = RenderSystem.getSequentialBuffer(VertexFormat.Mode.QUADS);
         seq.bind(q.maxIndices);
-        GL20C.glUniform1i(flag, 1);
+        GL20C.glUniform1i(flag, mode);
         GL32C.nglMultiDrawElementsBaseVertex(GL11C.GL_TRIANGLES, q.counts, seq.type().asGLType, q.indices, q.n, q.bases);
         GL20C.glUniform1i(flag, 0);
         draws++;
         q.n = 0;
         q.maxIndices = 0;
-        com.mojang.blaze3d.vertex.BufferUploader.invalidate();   // vanilla's bound buffer is no longer bound
-        GL30C.glBindVertexArray(0);
     }
 
     /** Attribute indices as the entity shaders bind them (NEW_ENTITY order): Position 0, UV0 2, Normal 5. */
@@ -359,6 +439,11 @@ public final class PartBatch {
 
     /** End of a frame's level render: nothing queued may outlive it (a type never drawn this frame). */
     public static void endFrame() {
+        for (Queue q : RESIDENT.values()) {
+            if (q.n > 0) fallbacks += q.n;
+            q.n = 0;
+            q.maxIndices = 0;
+        }
         for (Queue q : QUEUES.values()) {
             if (q.n > 0) fallbacks += q.n;
             q.n = 0;
@@ -367,7 +452,8 @@ public final class PartBatch {
     }
 
     public static String report() {
-        return String.format(java.util.Locale.ROOT, "part batch: shaders patched %s, parts %d, multi-draws %d, geometries %d (%.1f MB), lost %d", PATCHED, parts, draws,
-                geometries, (double) used * STRIDE / 1048576.0, fallbacks);
+        return String.format(java.util.Locale.ROOT, "part batch: shaders patched %s, parts %d, multi-draws %d, geometries %d (%.1f MB), lost %d; resident draws %d, uploads %d (arena %.1f MB)",
+                PATCHED, parts, draws, geometries, (double) used * STRIDE / 1048576.0, fallbacks, residentDraws, residentUploads,
+                (double) RES_ARENA.capacity * RES_ARENA.stride / 1048576.0);
     }
 }

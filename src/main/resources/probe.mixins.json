@@ -37,7 +37,9 @@
     "FrameHashFreezeMixin",
     "DrawStatsMixin",
     "DrawStatsObjectsMixin",
-    "DrawStatsEntitiesMixin"
+    "DrawStatsEntitiesMixin",
+    "DrawStatsFrameMixin",
+    "DrawStatsLevelMixin"
   ],
   "injectors": {
     "defaultRequire": 1

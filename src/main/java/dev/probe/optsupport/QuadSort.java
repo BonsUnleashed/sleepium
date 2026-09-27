@@ -128,7 +128,47 @@ public final class QuadSort {
 
     private static final org.joml.Vector3f ORIGIN = new org.joml.Vector3f();
     private static float[] keys = new float[1024];
-    public static long fastSorts, fastQuads;
+    public static long fastSorts, fastQuads, memoHits;
+
+    /** The last sorts by quad count: keys (bit patterns) and their order. */
+    private static final class Memo {
+        int[] keyBits = new int[0], order;
+        int n;
+    }
+
+    private static final it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap<Memo> MEMOS = new it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap<>();
+
+    /**
+     * The sort of d[0..n), reused when the same keys (bit for bit) were sorted last time for this quad count: same input,
+     * same stable order. A still camera over still objects gives the same keys every frame.
+     */
+    private static int[] memo(float[] d, int n) {
+        if (n < 256) return sort(d, n);
+        Memo m = MEMOS.get(n);
+        if (m != null) {
+            int[] kb = m.keyBits;
+            boolean same = true;
+            for (int i = 0; i < n; i++) {
+                if (Float.floatToRawIntBits(d[i]) != kb[i]) {
+                    same = false;
+                    break;
+                }
+            }
+            if (same) {
+                memoHits++;
+                return m.order;
+            }
+        } else {
+            if (MEMOS.size() > 64) MEMOS.clear();
+            MEMOS.put(n, m = new Memo());
+        }
+        int[] order = sort(d, n);
+        if (m.keyBits.length < n) m.keyBits = new int[n];
+        for (int i = 0; i < n; i++) m.keyBits[i] = Float.floatToRawIntBits(d[i]);
+        m.order = order;
+        m.n = n;
+        return order;
+    }
 
     /**
      * BufferSource.endBatch: MeshData.sortQuads when the sorting is DISTANCE_TO_ORIGIN (world rendering). The keys come
@@ -154,7 +194,7 @@ public final class QuadSort {
             float cz = (org.lwjgl.system.MemoryUtil.memGetFloat(v0 + 8) + org.lwjgl.system.MemoryUtil.memGetFloat(v2 + 8)) / 2.0F;
             d[q] = ORIGIN.distanceSquared(cx, cy, cz);
         }
-        int[] order = sort(d, quads);
+        int[] order = memo(d, quads);
         if (CHECK) {
             int[] ref = new int[quads];
             for (int i = 0; i < quads; i++) ref[i] = i;
@@ -195,7 +235,7 @@ public final class QuadSort {
     }
 
     public static String report() {
-        return String.format(java.util.Locale.ROOT, "quad sorts %d (%d quads), direct buffer sorts %d (%d quads)%s", sorts, quads, fastSorts, fastQuads,
+        return String.format(java.util.Locale.ROOT, "quad sorts %d (%d quads), direct buffer sorts %d (%d quads, same keys as last time %d)%s", sorts, quads, fastSorts, fastQuads, memoHits,
                 CHECK ? ", checked " + checked + ", mismatches " + mismatches : "");
     }
 }

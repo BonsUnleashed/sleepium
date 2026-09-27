@@ -47,7 +47,7 @@ public final class RenderCache {
     public static final boolean VERIFY = Boolean.getBoolean("lab.rcache.verify");
     /** ticks an animated / unsupported object is drawn the vanilla way before it is probed again */
     private static final int VOLATILE_TICKS = 40;
-    public static long translations;
+    public static long translations, residentSegments;
     public static long hits, records, animated, unsupported, verified, mismatches, replayedVertices, vanilla;
     private static final Map<Class<?>, long[]> BY_CLASS = new HashMap<>();   // hits, records, animated, unsupported, mismatches
 
@@ -70,15 +70,44 @@ public final class RenderCache {
         int size, cap;
         /** the native block, freed when the record is collected (its object left the world) */
         final long[] box = new long[1];
+        /** per segment: first vertex in PartBatch's resident arena (-1: not uploaded); shared with the cleaner */
+        final int[][] res = {new int[4], new int[4]};   // starts, counts
 
         Rec() {
             long[] b = box;
+            int[][] r = res;
+            java.util.Arrays.fill(r[0], -1);
             CLEANER.register(this, () -> {
                 if (b[0] != 0) MemoryUtil.nmemFree(b[0]);
+                for (int i = 0; i < r[0].length; i++) if (r[0][i] >= 0) PartBatch.RES_FREE.add(new int[] {r[0][i], r[1][i]});
             });
         }
 
+        /** VRAM copies of the old contents released (render thread) before a new recording replaces them. */
+        void releaseResident() {
+            for (int i = 0; i < res[0].length; i++) {
+                if (res[0][i] >= 0) PartBatch.residentRelease(res[0][i], res[1][i]);
+                res[0][i] = -1;
+            }
+        }
+
+        int resident(int i) {
+            if (res[0].length <= i) {
+                int c = Math.max(i + 1, res[0].length * 2);
+                int[] s = java.util.Arrays.copyOf(res[0], c), n = java.util.Arrays.copyOf(res[1], c);
+                java.util.Arrays.fill(s, res[0].length, c, -1);
+                res[0] = s;
+                res[1] = n;
+            }
+            if (res[0][i] < 0) {
+                res[0][i] = PartBatch.residentUpload(mem + offs[i], counts[i]);
+                res[1][i] = counts[i];
+            }
+            return res[0][i];
+        }
+
         void clear() {
+            releaseResident();
             types.clear();
             size = 0;
         }
@@ -383,6 +412,12 @@ public final class RenderCache {
             VertexConsumer vc = buffers.getBuffer(t);
             long src = rec.mem + rec.offs[i];
             int n = rec.counts[i];
+            if (!asIs && normalIdentity && rec != PROBE && n % 4 == 0 && PartBatch.residentOk(t, vc)) {
+                PartBatch.queueResident(t, (BufferBuilder) vc, rec.resident(i), n, M);
+                replayedVertices += n;
+                residentSegments++;
+                continue;
+            }
             VertexFormat f = t.format();
             if (vc instanceof BufferBuilder bb && ((BufferBuilderAccessor) bb).probe$format() == f && ((BufferBuilderAccessor) bb).probe$mode() == t.mode()
                     && ((BufferBuilderAccessor) (Object) bb).probe$elementsToFill() == 0) {
