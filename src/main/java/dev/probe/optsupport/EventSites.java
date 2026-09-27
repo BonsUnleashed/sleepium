@@ -96,6 +96,20 @@ public final class EventSites {
         }
     }
 
+    /** The events posted from inside a (non-player: players stay on the render thread) entity's rendering. */
+    private static final Class<?>[] ENTITY_RENDER_EVENTS = {net.neoforged.neoforge.client.event.RenderLivingEvent.Pre.class,
+            net.neoforged.neoforge.client.event.RenderLivingEvent.Post.class, net.neoforged.neoforge.client.event.RenderNameTagEvent.class,
+            net.neoforged.neoforge.client.event.RenderItemInFrameEvent.class};
+    /**
+     * One of them has a listener now, asked of the bus (a mod's listener must not run on a worker). A type never posted
+     * yet counts as listened (the bus cannot know), so callers ask again each frame instead of keeping the answer.
+     */
+    public static boolean renderListened() {
+        if (!(NeoForge.EVENT_BUS instanceof CompositeEventBus cb)) return true;
+        for (Class<?> c : ENTITY_RENDER_EVENTS) if (cb.hasListeners(c)) return true;
+        return false;
+    }
+
     public static String report() {
         int fast = 0;
         java.util.Set<String> slow = new java.util.TreeSet<>();

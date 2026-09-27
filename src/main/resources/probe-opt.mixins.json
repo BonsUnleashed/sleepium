@@ -69,7 +69,12 @@
     "RenderCacheMixin",
     "RenderCacheBlockEntityMixin",
     "BufferBuilderAccessor",
-    "BufferSourceAccessor"
+    "BufferSourceAccessor",
+    "ParallelEntitiesMixin",
+    "ParallelReloadMixin",
+    "EntityRenderDispatcherInvoker",
+    "EntityRendererAccessor",
+    "LevelRendererInvoker"
   ],
   "injectors": {
     "defaultRequire": 1

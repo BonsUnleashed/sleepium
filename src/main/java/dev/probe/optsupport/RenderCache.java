@@ -101,10 +101,19 @@ public final class RenderCache {
             size += n;
         }
 
+        /** Same types, counts and element bytes (a format's padding bytes are never written: left out). */
         boolean sameAs(Rec o) {
             if (o.size != size || !o.types.equals(types)) return false;
-            for (int i = 0; i < types.size(); i++) if (o.counts[i] != counts[i]) return false;
-            for (int i = 0; i < size; i++) if (MemoryUtil.memGetByte(mem + i) != MemoryUtil.memGetByte(o.mem + i)) return false;
+            for (int i = 0; i < types.size(); i++) if (o.counts[i] != counts[i] || o.offs[i] != offs[i]) return false;
+            for (int i = 0; i < types.size(); i++) {
+                VertexFormat f = types.get(i).format();
+                boolean[] used = usedBytes(f);
+                int vs = f.getVertexSize();
+                long a = mem + offs[i], b = o.mem + offs[i];
+                for (int v = 0; v < counts[i]; v++)
+                    for (int k = 0; k < vs; k++)
+                        if (used[k] && MemoryUtil.memGetByte(a + (long) v * vs + k) != MemoryUtil.memGetByte(b + (long) v * vs + k)) return false;
+            }
             return true;
         }
     }
@@ -156,6 +165,17 @@ public final class RenderCache {
     private static final Recorder RECORDER = new Recorder();
     private static final Rec PROBE = new Rec();
     private static final Map<Object, Rec> RECS = new WeakHashMap<>();
+
+    private static final Map<VertexFormat, boolean[]> USED = new java.util.concurrent.ConcurrentHashMap<>();
+
+    static boolean[] usedBytes(VertexFormat f) {
+        return USED.computeIfAbsent(f, x -> {
+            boolean[] u = new boolean[x.getVertexSize()];
+            for (VertexFormatElement e : x.getElements())
+                for (int k = 0; k < e.byteSize(); k++) u[x.getOffset(e) + k] = true;
+            return u;
+        });
+    }
 
     private static boolean formatSupported(VertexFormat f) {
         for (VertexFormatElement e : f.getElements())
@@ -309,15 +329,32 @@ public final class RenderCache {
     /** -Dlab.rcache.probeEvery=N: an unchanged object is probed again after N ticks (default 200) */
     private static final int PROBE_EVERY = Integer.getInteger("lab.rcache.probeEvery", 200);
 
+    /** ParallelRender: an object the cache currently draws the vanilla way (animated / unsupported). */
+    static boolean animated(Object obj) {
+        Rec rec = RECS.get(obj);
+        var level = Minecraft.getInstance().level;
+        return rec != null && level != null && rec.skipUntil > level.getGameTime();
+    }
+
+    /** ParallelRender: recorded camera-relative output appended as it is (no transform). */
+    static void append(Rec rec, MultiBufferSource buffers) {
+        M.identity();
+        N.identity();
+        replay(rec, buffers, null);
+    }
+
     // ------------------------------------------------------------------ replay
 
     private static final Matrix4f M = new Matrix4f();
     private static final Matrix3f N = new Matrix3f(), IDENTITY3 = new Matrix3f();
 
     private static void replay(Rec rec, MultiBufferSource buffers, PoseStack pose) {
-        M.set(pose.last().pose());
-        N.set(pose.last().normal());
-        boolean normalIdentity = N.equals(IDENTITY3);
+        boolean asIs = pose == null;
+        if (!asIs) {
+            M.set(pose.last().pose());
+            N.set(pose.last().normal());
+        }
+        boolean normalIdentity = asIs || N.equals(IDENTITY3);
         for (int i = 0; i < rec.types.size(); i++) {
             RenderType t = rec.types.get(i);
             VertexConsumer vc = buffers.getBuffer(t);
@@ -330,7 +367,7 @@ public final class RenderCache {
                 int vs = f.getVertexSize();
                 long dst = a.probe$buffer().reserve(n * vs);
                 MemoryUtil.memCopy(src, dst, (long) n * vs);
-                transform(dst, n, f, normalIdentity);
+                if (!asIs) transform(dst, n, f, normalIdentity);
                 a.probe$setVertices(a.probe$vertices() + n);
                 a.probe$setVertexPointer(dst + (long) (n - 1) * vs);
             } else {
