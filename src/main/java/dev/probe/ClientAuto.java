@@ -40,6 +40,8 @@ final class ClientAuto {
     private static final String LABEL = System.getProperty("probe.clientAuto", "auto");
     private static final String WORLD = "probe-auto";
     private static final long SEED = 20260925L;
+    /** -Dprobe.clientAuto.fps=N: frame cap for resource measurements at equal frame rate (default 260 = unlimited) */
+    private static final int FPS_CAP = Integer.getInteger("probe.clientAuto.fps", 260);
     /** -Dprobe.clientAuto.steady=true: after the initial terrain, 30 s of frames standing still, no teleports */
     private static final boolean STEADY = Boolean.getBoolean("probe.clientAuto.steady");
     private static final int SETTLE_S = Integer.getInteger("probe.clientAuto.settle", 0);
@@ -188,9 +190,9 @@ final class ClientAuto {
                     }
                     // measure the renderer, not the monitor: no vsync, no frame cap (260 = unlimited)
                     mc.options.enableVsync().set(false);
-                    mc.options.framerateLimit().set(260);
+                    mc.options.framerateLimit().set(FPS_CAP);
                     mc.getWindow().updateVsync(false);
-                    mc.getWindow().setFramerateLimit(260);
+                    mc.getWindow().setFramerateLimit(FPS_CAP);
                     Path dir = mc.getLevelSource().getBaseDir().resolve(WORLD);
                     deleteTree(dir);
                     LevelSettings settings = new LevelSettings(WORLD, GameType.CREATIVE, false, Difficulty.PEACEFUL, true,
