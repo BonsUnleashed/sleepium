@@ -58,6 +58,8 @@ public final class OptMixinPlugin implements IMixinConfigPlugin {
             on = Boolean.getBoolean("lab.opt.all") || Boolean.getBoolean("lab.opt.VertexSortRadixMixin");
         if (simple.equals("SectionListsMixin") || simple.equals("LevelRendererVisibleAccessor"))   // needs the multi-draw entry slots
             on = (Boolean.getBoolean("lab.opt.all") || Boolean.getBoolean("lab.opt.SectionListsMixin")) && Boolean.getBoolean("lab.opt.ChunkMultiDrawMixin");
+        if (simple.equals("ClientChunkCacheBiomeMixin"))
+            on = Boolean.getBoolean("lab.opt.all") || Boolean.getBoolean("lab.opt.ClientBiomeMemoMixin");
         if (simple.equals("PoseAccessor"))
             on = Boolean.getBoolean("lab.opt.all") || Boolean.getBoolean("lab.opt.PoseStackPoolMixin");
         if (simple.equals("AmbientChunksMixin"))
@@ -68,7 +70,7 @@ public final class OptMixinPlugin implements IMixinConfigPlugin {
         if (on && simple.equals("PersistentPoolsMixin")
                 && (Boolean.getBoolean("lab.opt.all") || Boolean.getBoolean("lab.opt.LabPoolsMixin"))) on = false;
         // A/B of the client-side ones with the server-side ones on: -Dlab.opt.noClient=true
-        if (on && Boolean.getBoolean("lab.opt.noClient") && (simple.startsWith("Section") && simple.contains("Layer") || simple.startsWith("Ambient") || simple.startsWith("Shader") || simple.startsWith("ClientEventSite") || simple.startsWith("Pose") || simple.startsWith("BulkData") || simple.startsWith("VertexSort") || simple.startsWith("EntityBatch") || simple.startsWith("RenderCache") || simple.startsWith("Parallel") || simple.startsWith("Part") || simple.startsWith("ShaderStateShard") || simple.startsWith("MeshData") || simple.startsWith("SectionLists") || simple.startsWith("LevelRendererVisible") || simple.startsWith("EntityRender") || simple.startsWith("LevelRendererInvoker") || simple.startsWith("BufferBuilder") || simple.startsWith("BufferSource") || simple.startsWith("Composite") || simple.startsWith("Chunk") && !simple.startsWith("ChunkCache"))) on = false;
+        if (on && Boolean.getBoolean("lab.opt.noClient") && (simple.startsWith("Section") && simple.contains("Layer") || simple.startsWith("Ambient") || simple.startsWith("Shader") || simple.startsWith("ClientEventSite") || simple.startsWith("Pose") || simple.startsWith("BulkData") || simple.startsWith("VertexSort") || simple.startsWith("EntityBatch") || simple.startsWith("RenderCache") || simple.startsWith("Parallel") || simple.startsWith("Part") || simple.startsWith("ShaderStateShard") || simple.startsWith("MeshData") || simple.startsWith("SectionLists") || simple.startsWith("ClientBiome") || simple.startsWith("ClientChunkCacheBiome") || simple.startsWith("LevelRendererVisible") || simple.startsWith("EntityRender") || simple.startsWith("LevelRendererInvoker") || simple.startsWith("BufferBuilder") || simple.startsWith("BufferSource") || simple.startsWith("Composite") || simple.startsWith("Chunk") && !simple.startsWith("ChunkCache"))) on = false;
         if (on) {
             System.out.println("[probe/opt] applying " + simple + " -> " + targetClassName);
         }

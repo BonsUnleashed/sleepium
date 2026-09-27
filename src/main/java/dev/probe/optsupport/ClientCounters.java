@@ -26,6 +26,7 @@ public final class ClientCounters {
                 + (Boolean.getBoolean("lab.opt.RenderCacheMixin") ? "; " + RenderCache.report() : "")
                 + (Boolean.getBoolean("lab.opt.ParallelEntitiesMixin") ? "; " + ParallelRender.report() : "")
                 + (Boolean.getBoolean("lab.opt.PartBatchMixin") ? "; " + PartBatch.report() : "")
-                + (Boolean.getBoolean("lab.opt.SectionListsMixin") ? "; " + SectionLists.report() : "");
+                + (Boolean.getBoolean("lab.opt.SectionListsMixin") ? "; " + SectionLists.report() : "")
+                + (Boolean.getBoolean("lab.opt.ClientBiomeMemoMixin") && net.minecraft.client.Minecraft.getInstance().level instanceof BiomeMemo bm ? "; " + bm.probe$biomeReport() : "");
     }
 }

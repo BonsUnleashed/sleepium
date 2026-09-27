@@ -83,7 +83,9 @@
     "VertexSortDirectMixin",
     "MeshDataAccessor",
     "SectionListsMixin",
-    "LevelRendererVisibleAccessor"
+    "LevelRendererVisibleAccessor",
+    "ClientBiomeMemoMixin",
+    "ClientChunkCacheBiomeMixin"
   ],
   "injectors": {
     "defaultRequire": 1
