@@ -71,6 +71,8 @@ public final class ParallelRender {
     static final class Set {
         final int epoch;
         final PoseStack pose = new PoseStack();
+        /** the set's recorder: a set serves one job at a time, and finish copies into the job's record */
+        final RenderCache.Recorder recorder = new RenderCache.Recorder();
         final Map<EntityType<?>, EntityRenderer<?>> renderers;
         final Map<PlayerSkin.Model, EntityRenderer<? extends net.minecraft.world.entity.player.Player>> players;
 
@@ -96,7 +98,8 @@ public final class ParallelRender {
         }
     }
 
-    private static final ConcurrentLinkedQueue<Set> SETS = new ConcurrentLinkedQueue<>();
+    /** a bounded array queue: no node object per poll / offer (one per job with a linked queue) */
+    private static final java.util.concurrent.ArrayBlockingQueue<Set> SETS = new java.util.concurrent.ArrayBlockingQueue<>(THREADS + 2);
 
     /** THREADS sets, built on the render thread (a mod renderer's constructor may touch GL). */
     private static void ensureSets() {
@@ -119,7 +122,6 @@ public final class ParallelRender {
         MultiBufferSource buffers;
         boolean parallel;
         volatile boolean done, ok;
-        final RenderCache.Recorder recorder = new RenderCache.Recorder();
         final RenderCache.Rec out = new RenderCache.Rec();
 
         /** worker or render thread: whoever claims the job first renders it */
@@ -269,7 +271,7 @@ public final class ParallelRender {
         double z = Mth.lerp((double) pt, e.zOld, e.getZ()) - j.camZ;
         float yaw = Mth.lerp(pt, e.yRotO, e.getYRot());
         int light = r.getPackedLightCoords(e, pt);
-        RenderCache.Recorder rec = j.recorder;
+        RenderCache.Recorder rec = s.recorder;
         rec.reset();
         PoseStack pose = s.pose;   // one per renderer set (a set serves one job at a time): its pose pool persists
         pose.setIdentity();

@@ -66,7 +66,8 @@ public final class OptMixinPlugin implements IMixinConfigPlugin {
             on = Boolean.getBoolean("lab.opt.all") || Boolean.getBoolean("lab.opt.ModelPartQuatMixin");
         // exp/frame-garbage: one flag for the per-frame garbage fixes
         if (simple.equals("Vec3FromRgbMixin") || simple.equals("OverworldFogMixin") || simple.equals("EntityCullNoAllocMixin") || simple.equals("FrustumInvoker")
-                || simple.equals("ItemFrameOffsetMixin") || simple.equals("EntityLightNoAllocMixin") || simple.equals("BlockEntityCullNoAllocMixin"))
+                || simple.equals("ItemFrameOffsetMixin") || simple.equals("EntityLightNoAllocMixin") || simple.equals("BlockEntityCullNoAllocMixin")
+                || simple.equals("UtilMemoizeMixin"))
             on = Boolean.getBoolean("lab.opt.all") || Boolean.getBoolean("lab.opt.FrameGarbageMixin");
         if (simple.equals("PoseAccessor"))
             on = Boolean.getBoolean("lab.opt.all") || Boolean.getBoolean("lab.opt.PoseStackPoolMixin");

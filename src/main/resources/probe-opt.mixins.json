@@ -97,7 +97,8 @@
     "FrustumInvoker",
     "ItemFrameOffsetMixin",
     "EntityLightNoAllocMixin",
-    "BlockEntityCullNoAllocMixin"
+    "BlockEntityCullNoAllocMixin",
+    "UtilMemoizeMixin"
   ],
   "injectors": {
     "defaultRequire": 1

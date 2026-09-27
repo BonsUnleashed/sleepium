@@ -113,14 +113,17 @@ public final class RenderCache {
         }
 
         void add(RenderType t, ByteBuffer data, int vertices) {
-            int n = data.remaining();
+            add(t, MemoryUtil.memAddress(data), data.remaining(), vertices);
+        }
+
+        void add(RenderType t, long src, int n, int vertices) {
             if (size + n > cap) {
                 int c = Math.max(size + n, Math.max(256, cap * 2));
                 mem = mem == 0 ? MemoryUtil.nmemAlloc(c) : MemoryUtil.nmemRealloc(mem, c);
                 box[0] = mem;
                 cap = c;
             }
-            MemoryUtil.memCopy(MemoryUtil.memAddress(data), mem + size, n);
+            MemoryUtil.memCopy(src, mem + size, n);
             int i = types.size();
             if (i == offs.length) {
                 offs = java.util.Arrays.copyOf(offs, i * 2);
@@ -150,21 +153,25 @@ public final class RenderCache {
     }
 
     /** A MultiBufferSource that keeps what a renderer draws, per render type, in local space. */
+    /**
+     * A MultiBufferSource that keeps what a renderer draws, per render type, in local space: one RecordingBuilder per
+     * type kept across recordings (same bytes as a BufferBuilder, no objects per recording).
+     */
     static final class Recorder implements MultiBufferSource {
-        final Map<RenderType, BufferBuilder> builders = new IdentityHashMap<>();
-        final List<RenderType> order = new ArrayList<>();
-        final Map<RenderType, ByteBufferBuilder> pool = new IdentityHashMap<>();
+        final Map<RenderType, RecordingBuilder> builders = new IdentityHashMap<>();
+        final List<RenderType> order = new ArrayList<>();   // the types asked for in this recording, in order
+        final java.util.Set<RenderType> used = java.util.Collections.newSetFromMap(new IdentityHashMap<>());
         boolean unsupported;
 
         @Override
         public VertexConsumer getBuffer(RenderType type) {
-            BufferBuilder b = builders.get(type);
-            if (b != null) return b;
-            if ((type.mode() != VertexFormat.Mode.QUADS && type.mode() != VertexFormat.Mode.TRIANGLES) || !formatSupported(type.format())) unsupported = true;
-            ByteBufferBuilder bb = pool.computeIfAbsent(type, t -> new ByteBufferBuilder(Math.max(256, t.bufferSize() / 16)));
-            b = new BufferBuilder(bb, type.mode(), type.format());
-            builders.put(type, b);
-            order.add(type);
+            RecordingBuilder b = builders.get(type);
+            if (b == null) builders.put(type, b = new RecordingBuilder(type.format()));
+            if (used.add(type)) {
+                b.reset();
+                order.add(type);
+                if ((type.mode() != VertexFormat.Mode.QUADS && type.mode() != VertexFormat.Mode.TRIANGLES) || !formatSupported(type.format())) unsupported = true;
+            }
             return b;
         }
 
@@ -172,22 +179,16 @@ public final class RenderCache {
         void finish(Rec rec) {
             rec.clear();
             for (RenderType t : order) {
-                MeshData m = builders.get(t).build();
-                if (m == null) continue;
-                rec.add(t, m.vertexBuffer(), m.drawState().vertexCount());
-                m.close();
+                RecordingBuilder b = builders.get(t);
+                if (b.n > 0) rec.add(t, b.mem, b.n * b.vertexSize, b.n);
             }
-            builders.clear();
             order.clear();
+            used.clear();
         }
 
         void reset() {
-            for (RenderType t : order) {
-                MeshData m = builders.get(t).build();
-                if (m != null) m.close();
-            }
-            builders.clear();
             order.clear();
+            used.clear();
             unsupported = false;
         }
     }
