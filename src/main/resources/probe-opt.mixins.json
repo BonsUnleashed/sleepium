@@ -65,7 +65,11 @@
     "VertexSortRadixMixin",
     "EntityBatchMixin",
     "CompositeRenderTypeAccessor",
-    "CompositeStateAccessor"
+    "CompositeStateAccessor",
+    "RenderCacheMixin",
+    "RenderCacheBlockEntityMixin",
+    "BufferBuilderAccessor",
+    "BufferSourceAccessor"
   ],
   "injectors": {
     "defaultRequire": 1

@@ -1,0 +1,401 @@
+package dev.probe.optsupport;
+
+import com.mojang.blaze3d.vertex.BufferBuilder;
+import com.mojang.blaze3d.vertex.ByteBufferBuilder;
+import com.mojang.blaze3d.vertex.MeshData;
+import com.mojang.blaze3d.vertex.PoseStack;
+import com.mojang.blaze3d.vertex.VertexConsumer;
+import com.mojang.blaze3d.vertex.VertexFormat;
+import com.mojang.blaze3d.vertex.VertexFormatElement;
+import dev.probe.opt.BufferBuilderAccessor;
+import java.nio.ByteBuffer;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.IdentityHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.WeakHashMap;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.renderer.MultiBufferSource;
+import net.minecraft.client.renderer.RenderType;
+import org.joml.Matrix3f;
+import org.joml.Matrix4f;
+import org.joml.Quaternionf;
+import org.lwjgl.system.MemoryUtil;
+
+/**
+ * exp/render-cache (client, "render sleep"): an entity's or block entity's renderer output recorded once in the
+ * object's own space and replayed with the frame's pose, for any renderer that draws through MultiBufferSource.
+ *
+ * <p>Record: the renderer runs with an identity pose into a recording source (per render type a BufferBuilder, in the
+ * order the types are asked for); the vertices are then in local space. Replay: per recorded type the real source's
+ * consumer, the vertices appended with the pose the dispatcher built for this frame (camera-relative translation):
+ * one copy plus an affine transform per vertex for a BufferBuilder, the VertexConsumer calls otherwise. The result can
+ * differ from vanilla's in float rounding only (vanilla multiplies the translation into the matrix first) — accepted
+ * for this engine, unlike every other render change (frame hash).
+ *
+ * <p>Validity: the object's whole state (StateHash: every field of its class chain, hashed once per tick, tick counters
+ * left out), the caller's key (synched data and equipment / block state), packed light, overlay, yaw argument; and a
+ * renewal after REFRESH..2*REFRESH ticks spread over objects, the bound for anything no key covers. What a renderer
+ * might read between frames is tested by observation whenever the state changed (and every PROBE_EVERY ticks): the
+ * object is rendered again with another partial tick, a turned camera and another tickCount; different bytes mark it
+ * animated (drawn the vanilla way for a while). A renderer that draws into the real buffer source past its recorder is
+ * noticed (vertex counts) and left to vanilla. {@code -Dlab.rcache.verify=true}: every hit is also rendered fresh and
+ * compared byte for byte (mismatches by class); {@code -Dlab.rcache.why=true}: which fields change the state.
+ */
+public final class RenderCache {
+    public static final boolean VERIFY = Boolean.getBoolean("lab.rcache.verify");
+    /** ticks an animated / unsupported object is drawn the vanilla way before it is probed again */
+    private static final int VOLATILE_TICKS = 40;
+    public static long hits, records, animated, unsupported, verified, mismatches, replayedVertices, vanilla;
+    private static final Map<Class<?>, long[]> BY_CLASS = new HashMap<>();   // hits, records, animated, unsupported, mismatches
+
+    private RenderCache() {}
+
+    // ------------------------------------------------------------------ recording
+
+    /** One object's recorded output: segments (render type, byte offset, vertex count) in request order. */
+    static final class Rec {
+        long tick, key, state, stateNow, hashTick = Long.MIN_VALUE, refreshAt, probedAt = Long.MIN_VALUE / 2;
+        boolean recorded;
+        long[] fields;
+        int light, overlay;
+        float yaw;
+        long skipUntil = Long.MIN_VALUE;   // animated / unsupported: vanilla until then
+        final List<RenderType> types = new ArrayList<>();
+        int[] offs = new int[4], counts = new int[4];
+        long mem;
+        int size, cap;
+
+        void clear() {
+            types.clear();
+            size = 0;
+        }
+
+        void add(RenderType t, ByteBuffer data, int vertices) {
+            int n = data.remaining();
+            if (size + n > cap) {
+                int c = Math.max(size + n, Math.max(256, cap * 2));
+                mem = mem == 0 ? MemoryUtil.nmemAlloc(c) : MemoryUtil.nmemRealloc(mem, c);
+                cap = c;
+            }
+            MemoryUtil.memCopy(MemoryUtil.memAddress(data), mem + size, n);
+            int i = types.size();
+            if (i == offs.length) {
+                offs = java.util.Arrays.copyOf(offs, i * 2);
+                counts = java.util.Arrays.copyOf(counts, i * 2);
+            }
+            types.add(t);
+            offs[i] = size;
+            counts[i] = vertices;
+            size += n;
+        }
+
+        boolean sameAs(Rec o) {
+            if (o.size != size || !o.types.equals(types)) return false;
+            for (int i = 0; i < types.size(); i++) if (o.counts[i] != counts[i]) return false;
+            for (int i = 0; i < size; i++) if (MemoryUtil.memGetByte(mem + i) != MemoryUtil.memGetByte(o.mem + i)) return false;
+            return true;
+        }
+    }
+
+    /** A MultiBufferSource that keeps what a renderer draws, per render type, in local space. */
+    static final class Recorder implements MultiBufferSource {
+        final Map<RenderType, BufferBuilder> builders = new IdentityHashMap<>();
+        final List<RenderType> order = new ArrayList<>();
+        final Map<RenderType, ByteBufferBuilder> pool = new IdentityHashMap<>();
+        boolean unsupported;
+
+        @Override
+        public VertexConsumer getBuffer(RenderType type) {
+            BufferBuilder b = builders.get(type);
+            if (b != null) return b;
+            if ((type.mode() != VertexFormat.Mode.QUADS && type.mode() != VertexFormat.Mode.TRIANGLES) || !formatSupported(type.format())) unsupported = true;
+            ByteBufferBuilder bb = pool.computeIfAbsent(type, t -> new ByteBufferBuilder(Math.max(256, t.bufferSize() / 16)));
+            b = new BufferBuilder(bb, type.mode(), type.format());
+            builders.put(type, b);
+            order.add(type);
+            return b;
+        }
+
+        /** Moves everything recorded into rec (cleared first). */
+        void finish(Rec rec) {
+            rec.clear();
+            for (RenderType t : order) {
+                MeshData m = builders.get(t).build();
+                if (m == null) continue;
+                rec.add(t, m.vertexBuffer(), m.drawState().vertexCount());
+                m.close();
+            }
+            builders.clear();
+            order.clear();
+        }
+
+        void reset() {
+            for (RenderType t : order) {
+                MeshData m = builders.get(t).build();
+                if (m != null) m.close();
+            }
+            builders.clear();
+            order.clear();
+            unsupported = false;
+        }
+    }
+
+    private static final Recorder RECORDER = new Recorder();
+    private static final Rec PROBE = new Rec();
+    private static final Map<Object, Rec> RECS = new WeakHashMap<>();
+
+    private static boolean formatSupported(VertexFormat f) {
+        for (VertexFormatElement e : f.getElements())
+            if (e != VertexFormatElement.POSITION && e != VertexFormatElement.COLOR && e != VertexFormatElement.UV0 && e != VertexFormatElement.UV1
+                    && e != VertexFormatElement.UV2 && e != VertexFormatElement.NORMAL) return false;
+        return true;
+    }
+
+    /** The renderer call, with the object-local pose and a buffer source to draw into. */
+    public interface Draw {
+        void draw(PoseStack pose, MultiBufferSource buffers, float partialTick);
+    }
+
+    private static final int OK = 0, UNSUPPORTED = 1, BYPASS = 2;
+    private static MultiBufferSource.BufferSource real;
+
+    /** Vertices started in the real source: a renderer that draws there past its recorder shows up as a change. */
+    private static long realVertices() {
+        long n = 0;
+        for (BufferBuilder b : ((dev.probe.opt.BufferSourceAccessor) real).probe$started().values()) n += ((BufferBuilderAccessor) b).probe$vertices();
+        return n;
+    }
+
+    /** Records one render into rec (only if OK; on BYPASS the recorded part is kept too). */
+    private static int record(Draw d, float pt, Rec rec) {
+        RECORDER.reset();
+        long before = realVertices();
+        d.draw(new PoseStack(), RECORDER, pt);
+        if (realVertices() != before) {
+            RECORDER.finish(rec);
+            return BYPASS;
+        }
+        if (RECORDER.unsupported) {
+            RECORDER.reset();
+            return UNSUPPORTED;
+        }
+        RECORDER.finish(rec);
+        return OK;
+    }
+
+    // ------------------------------------------------------------------ entry point
+
+    /**
+     * From the dispatchers, in place of renderer.render(...). key: whatever else the output depends on that the caller
+     * knows (block state, synched data, yaw). camera: the entity dispatcher when its orientation can be probed.
+     */
+    public static void render(Object obj, Class<?> rendererClass, Draw d, float pt, PoseStack pose, MultiBufferSource buffers, int light, int overlay,
+            float yaw, long key, net.minecraft.client.renderer.entity.EntityRenderDispatcher camera) {
+        var level = Minecraft.getInstance().level;
+        if (level == null || !(buffers instanceof MultiBufferSource.BufferSource)) {
+            vanilla++;
+            d.draw(pose, buffers, pt);
+            return;
+        }
+        real = (MultiBufferSource.BufferSource) buffers;
+        long tick = level.getGameTime();
+        long[] cs = BY_CLASS.computeIfAbsent(rendererClass, c -> new long[5]);
+        Rec rec = RECS.get(obj);
+        if (rec == null) RECS.put(obj, rec = new Rec());
+        if (rec.skipUntil > tick) {
+            vanilla++;
+            d.draw(pose, buffers, pt);
+            return;
+        }
+        if (rec.hashTick != tick) {   // the whole state, once per tick (packets and ticks change it)
+            rec.stateNow = StateHash.of(obj);
+            rec.hashTick = tick;
+            if (WHY) why(obj, rec);
+        }
+        if (rec.recorded && rec.state == rec.stateNow && rec.key == key && rec.light == light && rec.overlay == overlay && rec.yaw == yaw && tick < rec.refreshAt) {
+            if (VERIFY && record(d, pt, PROBE) == OK) {
+                verified++;
+                if (!PROBE.sameAs(rec)) {
+                    mismatches++;
+                    cs[4]++;
+                }
+            }
+            replay(rec, buffers, pose);
+            hits++;
+            cs[0]++;
+            return;
+        }
+        boolean changed = !rec.recorded || rec.state != rec.stateNow || rec.key != key;
+        rec.recorded = false;
+        int r = record(d, pt, rec);
+        if (r != OK) {
+            rec.skipUntil = tick + VOLATILE_TICKS;
+            unsupported++;
+            cs[3]++;
+            if (r == BYPASS) replay(rec, buffers, pose);   // its other part is already in the real source
+            else d.draw(pose, buffers, pt);
+            return;
+        }
+        records++;
+        cs[1]++;
+        // observation, when the state changed (and now and then): another partial tick, a turned camera, another tick
+        // count; any difference = drawn per frame (vanilla) for a while
+        if (changed || tick - rec.probedAt >= PROBE_EVERY) {
+            rec.probedAt = tick;
+            boolean animated = record(d, pt < 0.5f ? pt + 0.5f : pt - 0.5f, PROBE) != OK || !PROBE.sameAs(rec);
+            if (!animated && camera != null) {
+                Quaternionf q = camera.cameraOrientation();
+                camera.overrideCameraOrientation(new Quaternionf(q).rotateY(1.3f).rotateX(0.4f));
+                try {
+                    animated = record(d, pt, PROBE) != OK || !PROBE.sameAs(rec);
+                } finally {
+                    camera.overrideCameraOrientation(q);
+                }
+            }
+            if (!animated && obj instanceof net.minecraft.world.entity.Entity e) {
+                e.tickCount += 7;
+                try {
+                    animated = record(d, pt, PROBE) != OK || !PROBE.sameAs(rec);
+                } finally {
+                    e.tickCount -= 7;
+                }
+            }
+            if (animated) {
+                rec.skipUntil = tick + VOLATILE_TICKS;
+                RenderCache.animated++;
+                cs[2]++;
+                d.draw(pose, buffers, pt);
+                return;
+            }
+        }
+        rec.recorded = true;
+        rec.state = rec.stateNow;
+        rec.light = light;
+        rec.overlay = overlay;
+        rec.yaw = yaw;
+        rec.key = key;
+        // safety net for what no key covers: recorded again after REFRESH ticks, spread over objects
+        rec.refreshAt = tick + REFRESH + Math.floorMod(System.identityHashCode(obj), REFRESH);
+        replay(rec, buffers, pose);
+    }
+
+    private static final boolean WHY = Boolean.getBoolean("lab.rcache.why");
+    private static final Map<String, long[]> WHY_COUNTS = new HashMap<>();
+
+    /** Which fields changed since the last tick's hash, counted by class and field name. */
+    private static void why(Object obj, Rec rec) {
+        long[] now = StateHash.fields(obj);
+        if (rec.fields != null && rec.fields.length == now.length)
+            for (int i = 0; i < now.length; i++)
+                if (now[i] != rec.fields[i]) WHY_COUNTS.computeIfAbsent(obj.getClass().getSimpleName() + " " + StateHash.name(obj, i), k -> new long[1])[0]++;
+        rec.fields = now;
+    }
+
+    /** -Dlab.rcache.refresh=N: every recording is renewed after N..2N ticks at most (default 20) */
+    private static final int REFRESH = Math.max(1, Integer.getInteger("lab.rcache.refresh", 20));
+    /** -Dlab.rcache.probeEvery=N: an unchanged object is probed again after N ticks (default 200) */
+    private static final int PROBE_EVERY = Integer.getInteger("lab.rcache.probeEvery", 200);
+
+    // ------------------------------------------------------------------ replay
+
+    private static final Matrix4f M = new Matrix4f();
+    private static final Matrix3f N = new Matrix3f(), IDENTITY3 = new Matrix3f();
+
+    private static void replay(Rec rec, MultiBufferSource buffers, PoseStack pose) {
+        M.set(pose.last().pose());
+        N.set(pose.last().normal());
+        boolean normalIdentity = N.equals(IDENTITY3);
+        for (int i = 0; i < rec.types.size(); i++) {
+            RenderType t = rec.types.get(i);
+            VertexConsumer vc = buffers.getBuffer(t);
+            long src = rec.mem + rec.offs[i];
+            int n = rec.counts[i];
+            VertexFormat f = t.format();
+            if (vc instanceof BufferBuilder bb && ((BufferBuilderAccessor) bb).probe$format() == f && ((BufferBuilderAccessor) bb).probe$mode() == t.mode()
+                    && ((BufferBuilderAccessor) (Object) bb).probe$elementsToFill() == 0) {
+                BufferBuilderAccessor a = (BufferBuilderAccessor) bb;
+                int vs = f.getVertexSize();
+                long dst = a.probe$buffer().reserve(n * vs);
+                MemoryUtil.memCopy(src, dst, (long) n * vs);
+                transform(dst, n, f, normalIdentity);
+                a.probe$setVertices(a.probe$vertices() + n);
+                a.probe$setVertexPointer(dst + (long) (n - 1) * vs);
+            } else {
+                generic(vc, src, n, f);
+            }
+            replayedVertices += n;
+        }
+    }
+
+    private static void transform(long base, int n, VertexFormat f, boolean normalIdentity) {
+        int vs = f.getVertexSize(), po = f.getOffset(VertexFormatElement.POSITION), no = f.contains(VertexFormatElement.NORMAL) ? f.getOffset(VertexFormatElement.NORMAL) : -1;
+        for (int i = 0; i < n; i++) {
+            long v = base + (long) i * vs;
+            float x = MemoryUtil.memGetFloat(v + po), y = MemoryUtil.memGetFloat(v + po + 4), z = MemoryUtil.memGetFloat(v + po + 8);
+            MemoryUtil.memPutFloat(v + po, M.m00() * x + M.m10() * y + M.m20() * z + M.m30());
+            MemoryUtil.memPutFloat(v + po + 4, M.m01() * x + M.m11() * y + M.m21() * z + M.m31());
+            MemoryUtil.memPutFloat(v + po + 8, M.m02() * x + M.m12() * y + M.m22() * z + M.m32());
+            if (no >= 0 && !normalIdentity) {
+                float nx = MemoryUtil.memGetByte(v + no) / 127f, ny = MemoryUtil.memGetByte(v + no + 1) / 127f, nz = MemoryUtil.memGetByte(v + no + 2) / 127f;
+                float tx = N.m00() * nx + N.m10() * ny + N.m20() * nz, ty = N.m01() * nx + N.m11() * ny + N.m21() * nz, tz = N.m02() * nx + N.m12() * ny + N.m22() * nz;
+                float len = (float) Math.sqrt(tx * tx + ty * ty + tz * tz);
+                if (len > 0) {
+                    tx /= len;
+                    ty /= len;
+                    tz /= len;
+                }
+                MemoryUtil.memPutByte(v + no, (byte) ((int) (net.minecraft.util.Mth.clamp(tx, -1f, 1f) * 127f) & 0xFF));
+                MemoryUtil.memPutByte(v + no + 1, (byte) ((int) (net.minecraft.util.Mth.clamp(ty, -1f, 1f) * 127f) & 0xFF));
+                MemoryUtil.memPutByte(v + no + 2, (byte) ((int) (net.minecraft.util.Mth.clamp(tz, -1f, 1f) * 127f) & 0xFF));
+            }
+        }
+    }
+
+    /** Any other consumer (outline, glint wrappers of a mod): the vertices through the VertexConsumer calls. */
+    private static void generic(VertexConsumer vc, long src, int n, VertexFormat f) {
+        int vs = f.getVertexSize();
+        for (int i = 0; i < n; i++) {
+            long v = src + (long) i * vs;
+            int po = f.getOffset(VertexFormatElement.POSITION);
+            float x = MemoryUtil.memGetFloat(v + po), y = MemoryUtil.memGetFloat(v + po + 4), z = MemoryUtil.memGetFloat(v + po + 8);
+            vc.addVertex(M.m00() * x + M.m10() * y + M.m20() * z + M.m30(), M.m01() * x + M.m11() * y + M.m21() * z + M.m31(),
+                    M.m02() * x + M.m12() * y + M.m22() * z + M.m32());
+            if (f.contains(VertexFormatElement.COLOR)) {
+                long c = v + f.getOffset(VertexFormatElement.COLOR);
+                vc.setColor(MemoryUtil.memGetByte(c) & 0xFF, MemoryUtil.memGetByte(c + 1) & 0xFF, MemoryUtil.memGetByte(c + 2) & 0xFF, MemoryUtil.memGetByte(c + 3) & 0xFF);
+            }
+            if (f.contains(VertexFormatElement.UV0)) {
+                long u = v + f.getOffset(VertexFormatElement.UV0);
+                vc.setUv(MemoryUtil.memGetFloat(u), MemoryUtil.memGetFloat(u + 4));
+            }
+            if (f.contains(VertexFormatElement.UV1)) {
+                long u = v + f.getOffset(VertexFormatElement.UV1);
+                vc.setUv1(MemoryUtil.memGetShort(u), MemoryUtil.memGetShort(u + 2));
+            }
+            if (f.contains(VertexFormatElement.UV2)) {
+                long u = v + f.getOffset(VertexFormatElement.UV2);
+                vc.setUv2(MemoryUtil.memGetShort(u), MemoryUtil.memGetShort(u + 2));
+            }
+            if (f.contains(VertexFormatElement.NORMAL)) {
+                long u = v + f.getOffset(VertexFormatElement.NORMAL);
+                float nx = MemoryUtil.memGetByte(u) / 127f, ny = MemoryUtil.memGetByte(u + 1) / 127f, nz = MemoryUtil.memGetByte(u + 2) / 127f;
+                vc.setNormal(N.m00() * nx + N.m10() * ny + N.m20() * nz, N.m01() * nx + N.m11() * ny + N.m21() * nz, N.m02() * nx + N.m12() * ny + N.m22() * nz);
+            }
+        }
+    }
+
+    public static String report() {
+        StringBuilder w = new StringBuilder();
+        if (WHY) WHY_COUNTS.entrySet().stream().sorted((a, b) -> Long.compare(b.getValue()[0], a.getValue()[0])).limit(25)
+                .forEach(e -> w.append("\n    changed ").append(e.getValue()[0]).append("x ").append(e.getKey()));
+        StringBuilder sb = new StringBuilder(w.length() > 0 ? "render cache field changes:" + w + "\n" : "");
+        sb.append(String.format(java.util.Locale.ROOT,
+                "render cache: hits %d, records %d, animated %d, unsupported %d, vanilla %d, replayed vertices %d%s", hits, records, animated, unsupported, vanilla,
+                replayedVertices, VERIFY ? ", verified " + verified + ", mismatches " + mismatches : ""));
+        BY_CLASS.forEach((c, v) -> sb.append(String.format(java.util.Locale.ROOT, "\n    %s: hits %d, records %d, animated %d, unsupported %d%s", c.getSimpleName(),
+                v[0], v[1], v[2], v[3], VERIFY ? ", mismatches " + v[4] : "")));
+        return sb.toString();
+    }
+}

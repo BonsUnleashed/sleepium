@@ -1,0 +1,23 @@
+package dev.probe.opt;
+
+import com.mojang.blaze3d.vertex.PoseStack;
+import dev.probe.optsupport.RenderCache;
+import net.minecraft.client.renderer.MultiBufferSource;
+import net.minecraft.client.renderer.blockentity.BlockEntityRenderDispatcher;
+import net.minecraft.client.renderer.blockentity.BlockEntityRenderer;
+import net.minecraft.world.level.block.entity.BlockEntity;
+import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.injection.At;
+import org.spongepowered.asm.mixin.injection.Redirect;
+
+/** exp/render-cache (client): the block entity renderer call of setupAndRender goes through RenderCache. Key: block state. */
+@Mixin(BlockEntityRenderDispatcher.class)
+public abstract class RenderCacheBlockEntityMixin {
+    @Redirect(method = "setupAndRender", at = @At(value = "INVOKE",
+            target = "Lnet/minecraft/client/renderer/blockentity/BlockEntityRenderer;render(Lnet/minecraft/world/level/block/entity/BlockEntity;FLcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/MultiBufferSource;II)V"))
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private static void probe$cached(BlockEntityRenderer r, BlockEntity be, float pt, PoseStack pose, MultiBufferSource buffers, int light, int overlay) {
+        RenderCache.render(be, r.getClass(), (p, b, t) -> r.render(be, t, p, b, light, overlay), pt, pose, buffers, light, overlay, 0f,
+                System.identityHashCode(be.getBlockState()), null);
+    }
+}

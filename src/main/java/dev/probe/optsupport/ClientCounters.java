@@ -22,6 +22,7 @@ public final class ClientCounters {
                 biomeSkips, samplerHits, BlockCollisionMemo.hits, BlockCollisionMemo.misses, EventSites.report())
                 + (Boolean.getBoolean("lab.opt.ChunkMultiDrawMixin") ? "; " + ChunkMultiDraw.report() : "")
                 + (Boolean.getBoolean("lab.opt.VertexSortRadixMixin") ? "; " + QuadSort.report() : "")
-                + (Boolean.getBoolean("lab.opt.EntityBatchMixin") ? "; " + EntityBatch.report() : "");
+                + (Boolean.getBoolean("lab.opt.EntityBatchMixin") ? "; " + EntityBatch.report() : "")
+                + (Boolean.getBoolean("lab.opt.RenderCacheMixin") ? "; " + RenderCache.report() : "");
     }
 }
