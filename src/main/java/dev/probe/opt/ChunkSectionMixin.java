@@ -18,10 +18,37 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 public abstract class ChunkSectionMixin implements ChunkMultiDraw.ChunkEntries {
     @Shadow @Final private Map<RenderType, VertexBuffer> buffers;
     @org.spongepowered.asm.mixin.Unique private final Object[] probe$md = new Object[16];
+    @org.spongepowered.asm.mixin.Unique private int probe$visIdx = -1, probe$visBuild = -1, probe$dirtyBuild = -1;
 
     @Override
     public Object[] probe$md() {
         return probe$md;
+    }
+
+    @Override
+    public int probe$visIdx(int b) {
+        return probe$visBuild == b ? probe$visIdx : -1;
+    }
+
+    @Override
+    public void probe$setVis(int idx, int b) {
+        probe$visIdx = idx;
+        probe$visBuild = b;
+    }
+
+    @Override
+    public int probe$dirtyBuild() {
+        return probe$dirtyBuild;
+    }
+
+    @Override
+    public void probe$setDirtyBuild(int b) {
+        probe$dirtyBuild = b;
+    }
+
+    @Inject(method = "setDirty", at = @At("HEAD"))
+    private void probe$dirty(boolean playerChanged, CallbackInfo ci) {
+        dev.probe.optsupport.SectionLists.dirtied((SectionRenderDispatcher.RenderSection) (Object) this);
     }
 
     @Inject(method = "<init>", at = @At("RETURN"))
@@ -32,6 +59,7 @@ public abstract class ChunkSectionMixin implements ChunkMultiDraw.ChunkEntries {
     @Inject(method = "reset", at = @At("HEAD"))
     private void probe$reset(CallbackInfo ci) {
         dev.probe.optsupport.SectionLists.changed();
+        dev.probe.optsupport.SectionLists.dirtied((SectionRenderDispatcher.RenderSection) (Object) this);   // reset sets dirty
         ChunkMultiDraw.release((SectionRenderDispatcher.RenderSection) (Object) this);
     }
 }

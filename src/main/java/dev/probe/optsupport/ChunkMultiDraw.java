@@ -428,6 +428,16 @@ public final class ChunkMultiDraw {
     /** RenderSection (ChunkSectionMixin): its arena entries by slot, so drawing needs no lookup. */
     public interface ChunkEntries {
         Object[] probe$md();
+
+        /** SectionLists: the section's index in the visible list of build b (-1: not visible in it). */
+        int probe$visIdx(int b);
+
+        void probe$setVis(int idx, int b);
+
+        /** SectionLists: the build whose dirty list holds the section (no duplicates). */
+        int probe$dirtyBuild();
+
+        void probe$setDirtyBuild(int b);
     }
 
     // ------------------------------------------------------------------ drawing

@@ -29,6 +29,11 @@ public abstract class SectionListsMixin {
         return SectionLists.forLayer(((LevelRendererVisibleAccessor) self).probe$visible());
     }
 
+    @Redirect(method = "compileSections", at = @At(value = "FIELD", target = FIELD, opcode = Opcodes.GETFIELD))
+    private ObjectArrayList<SectionRenderDispatcher.RenderSection> probe$dirty(LevelRenderer self) {
+        return SectionLists.dirtyVisible(((LevelRendererVisibleAccessor) self).probe$visible());
+    }
+
     @Inject(method = "addRecentlyCompiledSection", at = @At("HEAD"))
     private void probe$compiled(SectionRenderDispatcher.RenderSection section, CallbackInfo ci) {
         SectionLists.changed();

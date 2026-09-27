@@ -23,7 +23,9 @@ public final class SectionLists {
     @SuppressWarnings("unchecked")
     private static final ObjectArrayList<SectionRenderDispatcher.RenderSection>[] LAYERS = new ObjectArrayList[8];
     private static final ObjectArrayList<SectionRenderDispatcher.RenderSection> TRANSLUCENT = new ObjectArrayList<>(), TRIPWIRE = new ObjectArrayList<>(),
-            BLOCK_ENTITIES = new ObjectArrayList<>();
+            BLOCK_ENTITIES = new ObjectArrayList<>(), DIRTY = new ObjectArrayList<>(), DIRTY_OUT = new ObjectArrayList<>();
+    /** id of the current build (the visible indices and the dirty list belong to it) */
+    private static int build;
     public static long builds, reuses;
     /** the layer renderSectionLayer is drawing (set at its head) */
     public static RenderType currentLayer;
@@ -49,10 +51,18 @@ public final class SectionLists {
         TRANSLUCENT.clear();
         TRIPWIRE.clear();
         BLOCK_ENTITIES.clear();
+        DIRTY.clear();
+        build++;
         RenderType translucent = RenderType.translucent(), tripwire = RenderType.tripwire();
         for (int i = 0; i < n; i++) {
             var s = (SectionRenderDispatcher.RenderSection) refs[i];
-            Object[] md = ((ChunkMultiDraw.ChunkEntries) s).probe$md();
+            ChunkMultiDraw.ChunkEntries ce = (ChunkMultiDraw.ChunkEntries) s;
+            ce.probe$setVis(i, build);
+            if (s.isDirty()) {
+                DIRTY.add(s);
+                ce.probe$setDirtyBuild(build);
+            }
+            Object[] md = ce.probe$md();
             for (int k = 0; k < LAYERS.length; k++) if (md[2 * k] != null || md[2 * k + 1] != null) LAYERS[k].add(s);
             var c = s.getCompiled();
             if (!c.isEmpty(translucent)) TRANSLUCENT.add(s);
@@ -91,6 +101,40 @@ public final class SectionLists {
     public static ObjectArrayList<SectionRenderDispatcher.RenderSection> blockEntities(ObjectArrayList<SectionRenderDispatcher.RenderSection> visible) {
         refresh(visible);
         return BLOCK_ENTITIES;
+    }
+
+    /** RenderSection.setDirty / reset: a visible section of the current build joins its dirty list (once). */
+    public static void dirtied(SectionRenderDispatcher.RenderSection s) {
+        ChunkMultiDraw.ChunkEntries ce = (ChunkMultiDraw.ChunkEntries) s;
+        if (ce.probe$visIdx(build) >= 0 && ce.probe$dirtyBuild() != build) {
+            DIRTY.add(s);
+            ce.probe$setDirtyBuild(build);
+        }
+    }
+
+    /**
+     * compileSections' loop: the visible sections that are dirty, in visible-list order (the loop tests isDirty itself;
+     * the ones no longer dirty are dropped here). Sections that are dirty but not visible are never walked.
+     */
+    public static ObjectArrayList<SectionRenderDispatcher.RenderSection> dirtyVisible(ObjectArrayList<SectionRenderDispatcher.RenderSection> visible) {
+        refresh(visible);
+        DIRTY_OUT.clear();
+        int w = 0;
+        for (int i = 0; i < DIRTY.size(); i++) {
+            var s = DIRTY.get(i);
+            if (!s.isDirty()) {
+                ((ChunkMultiDraw.ChunkEntries) s).probe$setDirtyBuild(-1);
+                continue;
+            }
+            DIRTY.set(w++, s);
+            DIRTY_OUT.add(s);
+        }
+        DIRTY.size(w);
+        if (DIRTY_OUT.size() > 1) {
+            int b = build;
+            DIRTY_OUT.sort((a, c) -> Integer.compare(((ChunkMultiDraw.ChunkEntries) a).probe$visIdx(b), ((ChunkMultiDraw.ChunkEntries) c).probe$visIdx(b)));
+        }
+        return DIRTY_OUT;
     }
 
     public static String report() {
