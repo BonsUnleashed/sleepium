@@ -363,6 +363,7 @@ public final class PartBatch {
     // ------------------------------------------------------------------ draw
 
     private static RenderType current;
+    private static final java.util.HashMap<Integer, int[]> PROGRAMS = new java.util.HashMap<>();
     private static int ssbo, ssboSize;
 
     public static void beginType(RenderType t) {
@@ -387,14 +388,19 @@ public final class PartBatch {
     }
 
     private static void drawQueue(ShaderInstance shader, Queue q, int mode) {
-        int flag = GL20C.glGetUniformLocation(shader.getId(), "ProbePartMode");
-        int block = GL43C.glGetProgramResourceIndex(shader.getId(), GL43C.GL_SHADER_STORAGE_BLOCK, "ProbeParts");
-        if (flag < 0 || block == GL31C.GL_INVALID_INDEX) {
+        // looked up once per program: a query each draw makes the render thread wait for the driver's thread
+        int[] st = PROGRAMS.computeIfAbsent(shader.getId(), id -> {
+            int f = GL20C.glGetUniformLocation(id, "ProbePartMode");
+            int b = GL43C.glGetProgramResourceIndex(id, GL43C.GL_SHADER_STORAGE_BLOCK, "ProbeParts");
+            if (f >= 0 && b != GL31C.GL_INVALID_INDEX) GL43C.glShaderStorageBlockBinding(id, b, SSBO_BINDING);
+            return new int[] {f, b};
+        });
+        int flag = st[0];
+        if (flag < 0 || st[1] == GL31C.GL_INVALID_INDEX) {
             fallbacks += q.n;   // should not happen (typeOk): the parts are lost for this frame
             q.n = 0;
             return;
         }
-        GL43C.glShaderStorageBlockBinding(shader.getId(), block, SSBO_BINDING);
         if (ssbo == 0) ssbo = GL15C.glGenBuffers();
         GL15C.glBindBuffer(GL43C.GL_SHADER_STORAGE_BUFFER, ssbo);
         long bytes = 144L * q.n;

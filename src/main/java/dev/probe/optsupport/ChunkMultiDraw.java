@@ -509,6 +509,17 @@ public final class ChunkMultiDraw {
         // with the vanilla buffers empty, only the sections with an entry matter: SectionLists keeps them, in order
         if (replaces && SECTION_LISTS && visible instanceof it.unimi.dsi.fastutil.objects.ObjectArrayList<SectionRenderDispatcher.RenderSection> vis)
             visible = SectionLists.layer(vis, li);
+        // the same camera position over the same lists and contents gives the same draws: last frame's are drawn again
+        // (offsets and face buckets depend on the position only, so turning the head keeps them)
+        boolean reusable = REUSE && replaces && SECTION_LISTS && SINGLE && ssbo();
+        LayerCache lc = LCACHE[li];
+        long ver = SectionLists.version();
+        if (reusable && lc.ver == ver && lc.x == x && lc.y == y && lc.z == z) {
+            LISTED.addAll(lc.arenas);
+            flushAll(layer, ps, true);
+            drawReuses++;
+            return true;
+        }
         for (SectionRenderDispatcher.RenderSection s : visible) {
             // the section's own entry slots: no emptiness test (an empty layer has no entry), no map lookups
             Object[] md = ((ChunkEntries) s).probe$md();
@@ -544,8 +555,37 @@ public final class ChunkMultiDraw {
             if (e != null) queue(a, e, o, x, y, z, ox, oy, oz, layer, ps);
             sectionsMulti++;
         }
-        flushAll(layer, ps);
+        if (reusable) {
+            lc.arenas.clear();
+            lc.arenas.addAll(LISTED);
+            lc.ver = ver;
+            lc.x = x;
+            lc.y = y;
+            lc.z = z;
+        } else {
+            lc.ver = -1;
+        }
+        flushAll(layer, ps, reusable);
         return true;
+    }
+
+    /** -Dlab.chunkmd.reuse=false: build the draws every frame. */
+    private static final boolean REUSE = !"false".equals(System.getProperty("lab.chunkmd.reuse"));
+    public static long drawReuses;
+
+    /** A layer's last draws (single arenas keep their lists when kept) and what they were built from. */
+    static final class LayerCache {
+        long ver = -1;
+        double x = Double.NaN, y, z;
+        final List<Arena> arenas = new ArrayList<>();
+    }
+
+    private static final LayerCache[] LCACHE = newCaches();
+
+    private static LayerCache[] newCaches() {
+        LayerCache[] c = new LayerCache[8];
+        for (int i = 0; i < c.length; i++) c[i] = new LayerCache();
+        return c;
     }
 
     private static ByteBuffer staging = MemoryUtil.memAlloc(1 << 16);
@@ -555,7 +595,7 @@ public final class ChunkMultiDraw {
      * The layer's queued draws: every arena's offsets in one orphaning upload (each arena then reads its own range),
      * packed arenas first and full-format ones after, so the mode uniform is set at most twice per layer.
      */
-    private static void flushAll(RenderType layer, int[] ps) {
+    private static void flushAll(RenderType layer, int[] ps, boolean keep) {
         boolean sb = ssbo();
         int target = sb ? GL43C.GL_SHADER_STORAGE_BUFFER : GL31C.GL_UNIFORM_BUFFER;
         if (uboAlign == 0) uboAlign = Math.max(16, GL11C.glGetInteger(sb ? GL43C.GL_SHADER_STORAGE_BUFFER_OFFSET_ALIGNMENT : GL31C.GL_UNIFORM_BUFFER_OFFSET_ALIGNMENT));
@@ -626,8 +666,10 @@ public final class ChunkMultiDraw {
                 else GL32C.nglMultiDrawElementsBaseVertex(GL15C.GL_TRIANGLES, a.counts, seq.type().asGLType, a.indices, a.n, a.bases);
                 if (dev.probe.DrawStats.ON) dev.probe.DrawStats.phaseEnd(3);
                 multiDraws++;
-                a.n = 0;
-                a.maxIndices = 0;
+                if (!keep) {
+                    a.n = 0;
+                    a.maxIndices = 0;
+                }
             }
         }
         GL20C.glUniform1i(ps[0], 0);
@@ -840,8 +882,8 @@ public final class ChunkMultiDraw {
                     bytes += (long) a.capacity * a.stride;
                 }
             }
-        return String.format(java.util.Locale.ROOT, "chunk multidraw: packed quads %.2f %%, patched %s, multi-draw calls %d, sections by multi-draw %d, by vanilla draws %d, skipped %d, quads drawn %.1f %% (face culling %s), uploads %d, arenas %d (%.1f MB), grows %d, vanilla buffers %s",
-                100.0 * quadsPacked / Math.max(1, quadsPacked + quadsFull), PATCHED, multiDraws, sectionsMulti, sectionsVanilla, sectionsSkipped, 100.0 * quadsDrawn / Math.max(1, quadsTotal), FACE_CULL ? "on" : "off",
+        return String.format(java.util.Locale.ROOT, "chunk multidraw: reused draws %d, packed quads %.2f %%, patched %s, multi-draw calls %d, sections by multi-draw %d, by vanilla draws %d, skipped %d, quads drawn %.1f %% (face culling %s), uploads %d, arenas %d (%.1f MB), grows %d, vanilla buffers %s",
+                drawReuses, 100.0 * quadsPacked / Math.max(1, quadsPacked + quadsFull), PATCHED, multiDraws, sectionsMulti, sectionsVanilla, sectionsSkipped, 100.0 * quadsDrawn / Math.max(1, quadsTotal), FACE_CULL ? "on" : "off",
                 uploads, arenas, bytes / 1048576.0, grows,
                 KEEP_VANILLA || PATCHED.size() != SUPPORTED.size() ? "filled" : "not filled") + packReport();
     }

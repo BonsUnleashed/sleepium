@@ -40,6 +40,11 @@ public final class SectionLists {
         gen++;
     }
 
+    /** The build and content generation the current lists come from (after a refresh): equal = the same lists. */
+    public static long version() {
+        return ((long) build << 32) | (builtGen & 0xFFFFFFFFL);
+    }
+
     private static void refresh(ObjectArrayList<SectionRenderDispatcher.RenderSection> visible) {
         int n = visible.size();
         Object[] refs = visible.elements();
