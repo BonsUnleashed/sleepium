@@ -14,6 +14,8 @@ import java.util.TreeMap;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.client.renderer.chunk.SectionRenderDispatcher;
 import org.lwjgl.opengl.GL;
+import com.mojang.blaze3d.vertex.DefaultVertexFormat;
+import org.lwjgl.opengl.GL11C;
 import org.lwjgl.opengl.GL15C;
 import org.lwjgl.opengl.GL20C;
 import org.lwjgl.opengl.GL30C;
@@ -64,10 +66,13 @@ public final class ChunkMultiDraw {
     public static String patch(String name, String src) {
         String decl = "uniform vec3 ChunkOffset;";
         String use = "vec3 pos = Position + ChunkOffset;";
-        if (!SUPPORTED.contains(name) || !src.startsWith("#version 150") || !src.contains(decl) || !src.contains(use)) return src;
+        String uv = "texCoord0 = UV0;";
+        if (!SUPPORTED.contains(name) || !src.startsWith("#version 150") || !src.contains(decl) || !src.contains(use) || !src.contains(uv)) return src;
+        // packed (mode 2): integers as floats, minus a whole number, times a power of two: the stored floats exactly
         String out = src.replaceFirst("#version 150", "#version 150\n#extension GL_ARB_shader_draw_parameters : require")
                 .replace(decl, decl + "\nuniform int ProbeMultiDraw;\nlayout(std140) uniform ProbeChunkOffsets { vec4 ProbeOffsets[" + MAX_DRAWS + "]; };")
-                .replace(use, "vec3 pos = Position + (ProbeMultiDraw != 0 ? ProbeOffsets[gl_DrawIDARB].xyz : ChunkOffset);");
+                .replace(use, "vec3 pos = (ProbeMultiDraw == 2 ? (Position - 2048.0) * 0.00390625 : Position) + (ProbeMultiDraw != 0 ? ProbeOffsets[gl_DrawIDARB].xyz : ChunkOffset);")
+                .replace(uv, "texCoord0 = ProbeMultiDraw == 2 ? UV0 * 0.0000152587890625 : UV0;");
         PATCHED.add(name);
         return out;
     }
@@ -165,10 +170,14 @@ public final class ChunkMultiDraw {
         final long counts = MemoryUtil.nmemAlloc(4L * MAX_DRAWS), bases = MemoryUtil.nmemAlloc(4L * MAX_DRAWS), indices = MemoryUtil.nmemCalloc(MAX_DRAWS, 8);
         final ByteBuffer offsets = MemoryUtil.memAlloc(16 * MAX_DRAWS);
         boolean listed;
+        final boolean packed;
+        int uboOffset;
 
-        Arena(long key, RenderType layer) {
+        Arena(long key, RenderType layer, boolean packed) {
             this.key = key;
             this.layer = layer;
+            this.packed = packed;
+            if (packed) stride = PACKED_STRIDE;
         }
 
         int alloc(int vertices) {
@@ -216,7 +225,7 @@ public final class ChunkMultiDraw {
         }
     }
 
-    private static final Long2ObjectOpenHashMap<Arena>[] ARENAS = newMaps();
+    private static final Long2ObjectOpenHashMap<Arena>[] ARENAS = newMaps(), PACKED_ARENAS = newMaps();
     private static final List<RenderType> LAYERS = new ArrayList<>();
 
     @SuppressWarnings("unchecked")
@@ -239,6 +248,14 @@ public final class ChunkMultiDraw {
         return t == RenderType.solid() || t == RenderType.cutoutMipped() || t == RenderType.cutout();
     }
 
+    /**
+     * The full-format arena of a section: with packing on, only the ~3 % of quads that do not pack exactly go there, so
+     * their regions are 4x wider in x and z (32x4x32 sections) and there are few extra multi-draws.
+     */
+    private static long fullKey(long sx, long sy, long sz) {
+        return PACK ? regionKey(sx >> 2, sy, sz >> 2) : regionKey(sx, sy, sz);
+    }
+
     private static long regionKey(long sx, long sy, long sz) {
         return ((sx >> 3) & 0x1FFFFF) | (((sy >> 2) & 0x3FFFFF) << 21) | (((sz >> 3) & 0x1FFFFF) << 43);
     }
@@ -251,18 +268,13 @@ public final class ChunkMultiDraw {
         int li = layerIndex(layer);
         if (li < 0) return false;
         var o = section.getOrigin();
-        long key = regionKey(o.getX() >> 4, o.getY() >> 4, o.getZ() >> 4);
-        Arena a = ARENAS[li].get(key);
-        if (a == null) ARENAS[li].put(key, a = new Arena(key, layer));
+        long key = regionKey(o.getX() >> 4, o.getY() >> 4, o.getZ() >> 4), fk = fullKey(o.getX() >> 4, o.getY() >> 4, o.getZ() >> 4);
+        Arena a = ARENAS[li].get(fk);
+        if (a == null) ARENAS[li].put(fk, a = new Arena(fk, layer, false));
         int stride = ds.format().getVertexSize();
         if (a.stride == 0) a.stride = stride;
         if (a.stride != stride) return false;   // another format: vanilla path
         int verts = ds.vertexCount();
-        int start = a.alloc(verts);
-        if (start < 0) {
-            a.grow(verts);
-            start = a.alloc(verts);
-        }
         Entry e = new Entry();
         ByteBuffer vb = mesh.vertexBuffer();
         if (PACK_STATS && stride == 32) packStats(vb, verts);
@@ -272,15 +284,112 @@ public final class ChunkMultiDraw {
             java.util.Arrays.fill(e.bq, 0, 4, 0);   // everything in "other"
             for (int k = 4; k < 8; k++) e.bq[k] = verts / 4;
         }
+        e.origin = o.asLong();
+        uploads++;
+        if (PACK && ds.format() == DefaultVertexFormat.BLOCK && verts % 4 == 0) {
+            Entry pe = new Entry();
+            pe.origin = e.origin;
+            System.arraycopy(e.plane, 0, pe.plane, 0, 7);
+            ByteBuffer full = split(vb, verts / 4, e.bq, pe.bq);   // packed quads into PACKED_SCRATCH, the rest returned
+            int packedQuads = pe.bq[7], fullQuads = e.bq[7];
+            if (packedQuads > 0) {
+                Arena pa = PACKED_ARENAS[li].get(key);
+                if (pa == null) PACKED_ARENAS[li].put(key, pa = new Arena(key, layer, true));
+                put(pa, pe, packedScratch, packedQuads * 4, section);
+            }
+            if (fullQuads > 0) put(a, e, full, fullQuads * 4, section);
+            quadsPacked += packedQuads;
+            quadsFull += fullQuads;
+            return true;
+        }
+        put(a, e, vb, verts, section);
+        return true;
+    }
+
+    private static void put(Arena a, Entry e, ByteBuffer data, int verts, SectionRenderDispatcher.RenderSection section) {
+        int start = a.alloc(verts);
+        if (start < 0) {
+            a.grow(verts);
+            start = a.alloc(verts);
+        }
         GL15C.glBindBuffer(GL15C.GL_ARRAY_BUFFER, a.vbo);
-        GL15C.glBufferSubData(GL15C.GL_ARRAY_BUFFER, (long) start * stride, vb);
+        GL15C.glBufferSubData(GL15C.GL_ARRAY_BUFFER, (long) start * a.stride, data);
         e.start = start;
         e.vertices = verts;
-        e.indexCount = ds.indexCount();
-        e.origin = o.asLong();
+        e.indexCount = verts / 4 * 6;
         a.entries.put(section, e);
-        uploads++;
-        return true;
+    }
+
+    // ------------------------------------------------------------------ packed vertices (16 bytes, bit-exact)
+
+    /** -Dlab.chunkmd.noPack=true: every quad in the 32-byte vanilla format */
+    private static final boolean PACK = !Boolean.getBoolean("lab.chunkmd.noPack");
+    static final int PACKED_STRIDE = 16;
+    public static long quadsPacked, quadsFull;
+    private static ByteBuffer packedScratch = MemoryUtil.memAlloc(1 << 19), fullScratch = MemoryUtil.memAlloc(1 << 20);
+
+    /**
+     * Splits bucketed BLOCK quads (32 bytes per vertex) into packed ones (written to packedScratch, 16 bytes per vertex)
+     * and the rest (returned, still 32 bytes), each keeping bucket order; fb / pb receive the bucket starts of each part.
+     * A quad is packed only if every vertex survives exactly: position (x + 8) * 256 an integer in 0..65535, UV * 65536
+     * an integer in 0..65535 (no -0.0), both light shorts <= 255. Layout: position u16x3 @0, light u8x2 @6,
+     * colour rgba8 @8 (as stored), UV u16x2 @12. The Normal attribute is not read by the chunk shaders.
+     */
+    private static ByteBuffer split(ByteBuffer vb, int quads, int[] fb, int[] pb) {
+        if (packedScratch.capacity() < quads * 64) {
+            MemoryUtil.memFree(packedScratch);
+            packedScratch = MemoryUtil.memAlloc(Math.max(quads * 64, packedScratch.capacity() * 2));
+        }
+        if (fullScratch.capacity() < quads * 128) {
+            MemoryUtil.memFree(fullScratch);
+            fullScratch = MemoryUtil.memAlloc(Math.max(quads * 128, fullScratch.capacity() * 2));
+        }
+        long src = MemoryUtil.memAddress(vb), pdst = MemoryUtil.memAddress(packedScratch), fdst = MemoryUtil.memAddress(fullScratch);
+        int[] bucketStart = fb.clone();
+        int np = 0, nf = 0;
+        for (int k = 0; k < 7; k++) {
+            pb[k] = np;
+            fb[k] = nf;
+            for (int q = bucketStart[k]; q < bucketStart[k + 1]; q++) {
+                long v = src + 128L * q;
+                if (packable(v) && packable(v + 32) && packable(v + 64) && packable(v + 96)) {
+                    long d = pdst + 64L * np;
+                    for (int i = 0; i < 4; i++) pack(v + 32L * i, d + 16L * i);
+                    np++;
+                } else {
+                    MemoryUtil.memCopy(v, fdst + 128L * nf, 128);
+                    nf++;
+                }
+            }
+        }
+        pb[7] = np;
+        fb[7] = nf;
+        packedScratch.limit(np * 64).position(0);
+        fullScratch.limit(nf * 128).position(0);
+        return fullScratch;
+    }
+
+    private static boolean exact(float f, double bias, double scale) {
+        if (Float.floatToRawIntBits(f) == 0x80000000) return false;
+        double d = ((double) f + bias) * scale;
+        return d >= 0 && d <= 65535 && d == Math.rint(d);
+    }
+
+    private static boolean packable(long v) {
+        int l = MemoryUtil.memGetInt(v + 24);
+        return exact(MemoryUtil.memGetFloat(v), 8, 256) && exact(MemoryUtil.memGetFloat(v + 4), 8, 256) && exact(MemoryUtil.memGetFloat(v + 8), 8, 256)
+                && exact(MemoryUtil.memGetFloat(v + 16), 0, 65536) && exact(MemoryUtil.memGetFloat(v + 20), 0, 65536)
+                && (l & 0xFFFF) <= 255 && (l >>> 16) <= 255;
+    }
+
+    private static void pack(long v, long d) {
+        for (int i = 0; i < 3; i++) MemoryUtil.memPutShort(d + 2L * i, (short) (int) (((double) MemoryUtil.memGetFloat(v + 4L * i) + 8) * 256));
+        int l = MemoryUtil.memGetInt(v + 24);
+        MemoryUtil.memPutByte(d + 6, (byte) (l & 0xFF));
+        MemoryUtil.memPutByte(d + 7, (byte) ((l >>> 16) & 0xFF));
+        MemoryUtil.memPutInt(d + 8, MemoryUtil.memGetInt(v + 12));
+        MemoryUtil.memPutShort(d + 12, (short) (int) ((double) MemoryUtil.memGetFloat(v + 16) * 65536));
+        MemoryUtil.memPutShort(d + 14, (short) (int) ((double) MemoryUtil.memGetFloat(v + 20) * 65536));
     }
 
     /** The vanilla buffer is not filled for arena layers (no duplicate VRAM) while the layer's shader is patched. */
@@ -298,7 +407,12 @@ public final class ChunkMultiDraw {
     private static void release(SectionRenderDispatcher.RenderSection section, RenderType layer) {
         int li = LAYERS.indexOf(layer);
         if (li < 0) return;
-        for (Arena a : ARENAS[li].values()) {
+        releaseIn(ARENAS[li], section);
+        releaseIn(PACKED_ARENAS[li], section);
+    }
+
+    private static void releaseIn(Long2ObjectOpenHashMap<Arena> arenas, SectionRenderDispatcher.RenderSection section) {
+        for (Arena a : arenas.values()) {
             Entry e = a.entries.remove(section);
             if (e != null) {
                 a.release(e.start, e.vertices);
@@ -323,15 +437,18 @@ public final class ChunkMultiDraw {
         int[] ps = programState(shader.getId());
         if (ps == null) return false;
         var uniform = shader.CHUNK_OFFSET;
-        Long2ObjectOpenHashMap<Arena> arenas = ARENAS[li];
+        Long2ObjectOpenHashMap<Arena> arenas = ARENAS[li], packedArenas = PACKED_ARENAS[li];
         LISTED.clear();
         for (SectionRenderDispatcher.RenderSection s : visible) {
             if (s.getCompiled().isEmpty(layer)) continue;
             var o = s.getOrigin();
-            Arena a = arenas.get(regionKey(o.getX() >> 4, o.getY() >> 4, o.getZ() >> 4));
-            Entry e = a == null ? null : a.entries.get(s);
+            long rk = regionKey(o.getX() >> 4, o.getY() >> 4, o.getZ() >> 4), origin = o.asLong();
+            Arena a = arenas.get(fullKey(o.getX() >> 4, o.getY() >> 4, o.getZ() >> 4)), pa = packedArenas.get(rk);
+            Entry e = a == null ? null : a.entries.get(s), pe = pa == null ? null : pa.entries.get(s);
+            if (e != null && e.origin != origin) e = null;
+            if (pe != null && pe.origin != origin) pe = null;
             float ox = (float) ((double) o.getX() - x), oy = (float) ((double) o.getY() - y), oz = (float) ((double) o.getZ() - z);
-            if (e == null || e.origin != o.asLong()) {
+            if (e == null && pe == null) {
                 if (replacesVanilla(layer)) {   // its vanilla buffer holds nothing current: nothing to draw
                     sectionsSkipped++;
                     continue;
@@ -348,6 +465,65 @@ public final class ChunkMultiDraw {
                 sectionsVanilla++;
                 continue;
             }
+            if (pe != null) queue(pa, pe, o, x, y, z, ox, oy, oz, layer, ps);
+            if (e != null) queue(a, e, o, x, y, z, ox, oy, oz, layer, ps);
+            sectionsMulti++;
+        }
+        flushAll(layer, ps);
+        return true;
+    }
+
+    private static ByteBuffer staging = MemoryUtil.memAlloc(1 << 16);
+    private static int uboAlign;
+
+    /**
+     * The layer's queued draws: every arena's offsets in one orphaning upload (each arena then reads its own range),
+     * packed arenas first and full-format ones after, so the mode uniform is set at most twice per layer.
+     */
+    private static void flushAll(RenderType layer, int[] ps) {
+        if (uboAlign == 0) uboAlign = Math.max(16, GL11C.glGetInteger(GL31C.GL_UNIFORM_BUFFER_OFFSET_ALIGNMENT));
+        int total = 0;
+        for (Arena a : LISTED) {
+            a.listed = false;
+            if (a.n == 0) continue;
+            a.uboOffset = total;
+            total += (16 * a.n + uboAlign - 1) / uboAlign * uboAlign;
+        }
+        if (total == 0) return;
+        if (staging.capacity() < total) {
+            MemoryUtil.memFree(staging);
+            staging = MemoryUtil.memAlloc(Math.max(total, staging.capacity() * 2));
+        }
+        long st = MemoryUtil.memAddress(staging);
+        for (Arena a : LISTED) if (a.n > 0) MemoryUtil.memCopy(MemoryUtil.memAddress(a.offsets), st + a.uboOffset, 16L * a.n);
+        GL15C.glBindBuffer(GL31C.GL_UNIFORM_BUFFER, ubo());
+        // new storage each time (no wait on the previous frame's draws); a full block's size past the last range
+        GL15C.glBufferData(GL31C.GL_UNIFORM_BUFFER, total + 16L * MAX_DRAWS, GL15C.GL_STREAM_DRAW);
+        staging.limit(total).position(0);
+        GL15C.glBufferSubData(GL31C.GL_UNIFORM_BUFFER, 0, staging);
+        staging.clear();
+        RenderSystem.AutoStorageIndexBuffer seq = RenderSystem.getSequentialBuffer(VertexFormat.Mode.QUADS);
+        int mode = -1;
+        for (int pass = 0; pass < 2; pass++) {
+            for (Arena a : LISTED) {
+                if (a.n == 0 || a.packed != (pass == 0)) continue;
+                int m = a.packed ? 2 : 1;
+                if (m != mode) GL20C.glUniform1i(ps[0], mode = m);
+                if (a.vaoStale || a.vao == 0) setupVao(a, layer);
+                GL30C.glBindVertexArray(a.vao);
+                seq.bind(a.maxIndices);
+                GL30C.glBindBufferRange(GL31C.GL_UNIFORM_BUFFER, UBO_BINDING, ubo(), a.uboOffset, 16L * MAX_DRAWS);
+                GL32C.nglMultiDrawElementsBaseVertex(GL15C.GL_TRIANGLES, a.counts, seq.type().asGLType, a.indices, a.n, a.bases);
+                multiDraws++;
+                a.n = 0;
+                a.maxIndices = 0;
+            }
+        }
+        GL20C.glUniform1i(ps[0], 0);
+    }
+
+    private static void queue(Arena a, Entry e, net.minecraft.core.BlockPos o, double x, double y, double z, float ox, float oy, float oz,
+            RenderType layer, int[] ps) {
             if (!a.listed) {
                 a.listed = true;
                 a.n = 0;
@@ -382,13 +558,6 @@ public final class ChunkMultiDraw {
                 }
             }
             quadsTotal += bq[7];
-            sectionsMulti++;
-        }
-        for (Arena a : LISTED) {
-            a.listed = false;
-            flush(a, layer, ps);
-        }
-        return true;
     }
 
     private static final double EPS = 1.0 / 64;
@@ -404,7 +573,7 @@ public final class ChunkMultiDraw {
     /** Issues the arena's queued draws as one multi-draw. */
     private static void flush(Arena a, RenderType layer, int[] ps) {
         if (a.n == 0) return;
-        GL20C.glUniform1i(ps[0], 1);
+        GL20C.glUniform1i(ps[0], a.packed ? 2 : 1);
         RenderSystem.AutoStorageIndexBuffer seq = RenderSystem.getSequentialBuffer(VertexFormat.Mode.QUADS);
         if (a.vaoStale || a.vao == 0) setupVao(a, layer);
         GL30C.glBindVertexArray(a.vao);
@@ -453,7 +622,18 @@ public final class ChunkMultiDraw {
         if (a.vao == 0) a.vao = GL30C.glGenVertexArrays();
         GL30C.glBindVertexArray(a.vao);
         GL15C.glBindBuffer(GL15C.GL_ARRAY_BUFFER, a.vbo);
-        layer.format().setupBufferState();
+        if (a.packed) {
+            GL20C.glEnableVertexAttribArray(0);
+            GL20C.glVertexAttribPointer(0, 3, GL11C.GL_UNSIGNED_SHORT, false, PACKED_STRIDE, 0);
+            GL20C.glEnableVertexAttribArray(1);
+            GL20C.glVertexAttribPointer(1, 4, GL11C.GL_UNSIGNED_BYTE, true, PACKED_STRIDE, 8);
+            GL20C.glEnableVertexAttribArray(2);
+            GL20C.glVertexAttribPointer(2, 2, GL11C.GL_UNSIGNED_SHORT, false, PACKED_STRIDE, 12);
+            GL20C.glEnableVertexAttribArray(3);
+            GL30C.glVertexAttribIPointer(3, 2, GL11C.GL_UNSIGNED_BYTE, PACKED_STRIDE, 6);
+        } else {
+            layer.format().setupBufferState();
+        }
         a.vaoStale = false;
     }
 
@@ -500,13 +680,18 @@ public final class ChunkMultiDraw {
     public static String report() {
         int arenas = 0;
         long verts = 0;
-        for (var m : ARENAS) {
-            arenas += m.size();
-            for (Arena a : m.values()) verts += a.capacity;
-        }
-        return String.format(java.util.Locale.ROOT, "chunk multidraw: patched %s, multi-draw calls %d, sections by multi-draw %d, by vanilla draws %d, skipped %d, quads drawn %.1f %% (face culling %s), uploads %d, arenas %d (%.1f MB), grows %d, vanilla buffers %s",
-                PATCHED, multiDraws, sectionsMulti, sectionsVanilla, sectionsSkipped, 100.0 * quadsDrawn / Math.max(1, quadsTotal), FACE_CULL ? "on" : "off",
-                uploads, arenas, verts * 32 / 1048576.0, grows,
+        long bytes = 0;
+        for (var maps : List.of(ARENAS, PACKED_ARENAS))
+            for (var m : maps) {
+                arenas += m.size();
+                for (Arena a : m.values()) {
+                    verts += a.capacity;
+                    bytes += (long) a.capacity * a.stride;
+                }
+            }
+        return String.format(java.util.Locale.ROOT, "chunk multidraw: packed quads %.2f %%, patched %s, multi-draw calls %d, sections by multi-draw %d, by vanilla draws %d, skipped %d, quads drawn %.1f %% (face culling %s), uploads %d, arenas %d (%.1f MB), grows %d, vanilla buffers %s",
+                100.0 * quadsPacked / Math.max(1, quadsPacked + quadsFull), PATCHED, multiDraws, sectionsMulti, sectionsVanilla, sectionsSkipped, 100.0 * quadsDrawn / Math.max(1, quadsTotal), FACE_CULL ? "on" : "off",
+                uploads, arenas, bytes / 1048576.0, grows,
                 KEEP_VANILLA || PATCHED.size() != SUPPORTED.size() ? "filled" : "not filled") + packReport();
     }
 }
