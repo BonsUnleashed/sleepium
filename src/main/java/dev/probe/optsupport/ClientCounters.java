@@ -25,6 +25,7 @@ public final class ClientCounters {
                 + (Boolean.getBoolean("lab.opt.EntityBatchMixin") ? "; " + EntityBatch.report() : "")
                 + (Boolean.getBoolean("lab.opt.RenderCacheMixin") ? "; " + RenderCache.report() : "")
                 + (Boolean.getBoolean("lab.opt.ParallelEntitiesMixin") ? "; " + ParallelRender.report() : "")
-                + (Boolean.getBoolean("lab.opt.PartBatchMixin") ? "; " + PartBatch.report() : "");
+                + (Boolean.getBoolean("lab.opt.PartBatchMixin") ? "; " + PartBatch.report() : "")
+                + (Boolean.getBoolean("lab.opt.SectionListsMixin") ? "; " + SectionLists.report() : "");
     }
 }

@@ -31,6 +31,7 @@ public abstract class ChunkSectionMixin implements ChunkMultiDraw.ChunkEntries {
 
     @Inject(method = "reset", at = @At("HEAD"))
     private void probe$reset(CallbackInfo ci) {
+        dev.probe.optsupport.SectionLists.changed();
         ChunkMultiDraw.release((SectionRenderDispatcher.RenderSection) (Object) this);
     }
 }

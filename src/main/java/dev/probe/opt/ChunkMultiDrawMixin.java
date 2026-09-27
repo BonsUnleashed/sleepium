@@ -36,6 +36,7 @@ public abstract class ChunkMultiDrawMixin {
 
     @Inject(method = "renderSectionLayer", at = @At("HEAD"), cancellable = true)
     private void probe$multi(RenderType renderType, double x, double y, double z, Matrix4f frustumMatrix, Matrix4f projectionMatrix, CallbackInfo ci) {
+        dev.probe.optsupport.SectionLists.currentLayer = renderType;
         if (!ACTIVE || !ChunkMultiDraw.layerSupported(renderType) || ChunkMultiDraw.PATCHED.isEmpty()) return;
         RenderSystem.assertOnRenderThread();
         renderType.setupRenderState();

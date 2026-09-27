@@ -81,7 +81,9 @@
     "PartFrameMixin",
     "ShaderStateShardAccessor",
     "VertexSortDirectMixin",
-    "MeshDataAccessor"
+    "MeshDataAccessor",
+    "SectionListsMixin",
+    "LevelRendererVisibleAccessor"
   ],
   "injectors": {
     "defaultRequire": 1

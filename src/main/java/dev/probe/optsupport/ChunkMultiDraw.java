@@ -319,6 +319,7 @@ public final class ChunkMultiDraw {
         e.indexCount = verts / 4 * 6;
         e.arena = a;
         ((ChunkEntries) section).probe$md()[slot(a)] = e;
+        SectionLists.changed();
     }
 
     // ------------------------------------------------------------------ packed vertices (16 bytes, bit-exact)
@@ -414,6 +415,7 @@ public final class ChunkMultiDraw {
             if (e != null) {
                 e.arena.release(e.start, e.vertices);
                 md[k] = null;
+                SectionLists.changed();
             }
         }
     }
@@ -447,6 +449,9 @@ public final class ChunkMultiDraw {
         LISTED.clear();
         boolean replaces = replacesVanilla(layer);
         int fs = 2 * li;
+        // with the vanilla buffers empty, only the sections with an entry matter: SectionLists keeps them, in order
+        if (replaces && SECTION_LISTS && visible instanceof it.unimi.dsi.fastutil.objects.ObjectArrayList<SectionRenderDispatcher.RenderSection> vis)
+            visible = SectionLists.layer(vis, li);
         for (SectionRenderDispatcher.RenderSection s : visible) {
             // the section's own entry slots: no emptiness test (an empty layer has no entry), no map lookups
             Object[] md = ((ChunkEntries) s).probe$md();
@@ -574,6 +579,7 @@ public final class ChunkMultiDraw {
     }
 
     private static final double EPS = 1.0 / 64;
+    private static final boolean SECTION_LISTS = Boolean.getBoolean("lab.opt.SectionListsMixin");
 
     private static void addDraw(Arena a, int baseVertex, int indices, float ox, float oy, float oz) {
         int i = a.n++;
