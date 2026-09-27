@@ -87,7 +87,10 @@
     "ClientBiomeMemoMixin",
     "ClientChunkCacheBiomeMixin",
     "UniformDedupeMixin",
-    "SamplerUnitDedupeMixin"
+    "SamplerUnitDedupeMixin",
+    "ModelPartQuatMixin",
+    "ModelPartIterMixin",
+    "CubicSamplerMixin"
   ],
   "injectors": {
     "defaultRequire": 1

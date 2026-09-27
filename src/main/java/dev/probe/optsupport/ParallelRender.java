@@ -70,6 +70,7 @@ public final class ParallelRender {
 
     static final class Set {
         final int epoch;
+        final PoseStack pose = new PoseStack();
         final Map<EntityType<?>, EntityRenderer<?>> renderers;
         final Map<PlayerSkin.Model, EntityRenderer<? extends net.minecraft.world.entity.player.Player>> players;
 
@@ -270,7 +271,8 @@ public final class ParallelRender {
         int light = r.getPackedLightCoords(e, pt);
         RenderCache.Recorder rec = j.recorder;
         rec.reset();
-        PoseStack pose = new PoseStack();
+        PoseStack pose = s.pose;   // one per renderer set (a set serves one job at a time): its pose pool persists
+        pose.setIdentity();
         Vec3 off = r.getRenderOffset(e, pt);
         pose.pushPose();
         pose.translate(x + off.x(), y + off.y(), z + off.z());

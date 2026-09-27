@@ -194,6 +194,8 @@ public final class RenderCache {
 
     private static final java.lang.ref.Cleaner CLEANER = java.lang.ref.Cleaner.create();
     private static final Recorder RECORDER = new Recorder();
+    private static final PoseStack LOCAL = new PoseStack();
+    private static int recordDepth;
     private static final Rec PROBE = new Rec();
     private static final Map<Object, Rec> RECS = new WeakHashMap<>();
 
@@ -234,7 +236,16 @@ public final class RenderCache {
     private static int record(Draw d, float pt, Rec rec) {
         RECORDER.reset();
         long before = realVertices();
-        d.draw(new PoseStack(), RECORDER, pt);
+        // one stack for the recordings (render thread) so its pose pool persists; a recording inside a recording (a
+        // renderer rendering another object) gets its own
+        PoseStack ps = recordDepth == 0 ? LOCAL : new PoseStack();
+        ps.setIdentity();
+        recordDepth++;
+        try {
+            d.draw(ps, RECORDER, pt);
+        } finally {
+            recordDepth--;
+        }
         if (realVertices() != before) {
             RECORDER.finish(rec);
             return BYPASS;
