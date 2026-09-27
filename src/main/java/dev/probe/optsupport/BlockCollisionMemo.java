@@ -78,6 +78,21 @@ public final class BlockCollisionMemo {
         return true;
     }
 
+    /** -Dlab.memo.eager=true: record on every miss (before: moving entities paid the scan every tick for no hit) */
+    public static final boolean EAGER = Boolean.getBoolean("lab.memo.eager");
+    public static long deferred;
+
+    /**
+     * Record only for a box already seen on the previous miss: an entity moving every tick (falling blocks, bouncing
+     * mobs) gets a new box every time and never pays the recording scan; a resting one is memoized one query later.
+     */
+    public static boolean worthRecording(BlockCollisionMemo m, AABB bb) {
+        if (EAGER || m.sameBox(bb)) return true;
+        m.setBox(bb);
+        deferred++;
+        return false;
+    }
+
     /** The same sections (identity) with the same modification counters, chunks still loaded. */
     public static boolean unchanged(CollisionGetter level, BlockCollisionMemo m, AABB bb) {
         int x0 = Mth.floor(bb.minX - 1.0E-7) - 1, x1 = Mth.floor(bb.maxX + 1.0E-7) + 1;

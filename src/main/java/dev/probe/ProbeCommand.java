@@ -355,18 +355,23 @@ final class ProbeCommand {
     private static int autoStopAtTick = -1;
     private static String autoLabel = "";
 
+    /** while the server sprints (/tick sprint) a run lasts its seconds of wall time, not seconds * 20 ticks */
+    private static long autoStopAtNanos;
+
     private static int run(CommandContext<CommandSourceStack> ctx, int seconds, String label) {
         start(ctx);
         autoStopAtTick = seconds * 20;
+        autoStopAtNanos = System.nanoTime() + seconds * 1_000_000_000L;
         autoLabel = label;
-        say(ctx, "probe: run '" + label + "' for " + seconds + " s (" + autoStopAtTick + " ticks)");
+        boolean sprint = ctx.getSource().getServer().tickRateManager().isSprinting();
+        say(ctx, "probe: run '" + label + "' for " + seconds + " s (" + (sprint ? "wall time, sprinting" : autoStopAtTick + " ticks") + ")");
         return 1;
     }
 
     /** From ServerTickEvent.Post (LOWEST). */
     static void onTickEnd(MinecraftServer server) {
         GenBench.onTickEnd(server);
-        if (autoStopAtTick >= 0 && TickTimer.INSTANCE.ticks() >= autoStopAtTick) {
+        if (autoStopAtTick >= 0 && (server.tickRateManager().isSprinting() ? System.nanoTime() >= autoStopAtNanos : TickTimer.INSTANCE.ticks() >= autoStopAtTick)) {
             autoStopAtTick = -1;
             Path file = finish(server, autoLabel);
             server.getPlayerList().broadcastSystemMessage(Component.literal("probe: run '" + autoLabel + "' done -> " + file), false);

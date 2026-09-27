@@ -112,7 +112,9 @@ public final class OptMixinPlugin implements IMixinConfigPlugin {
     @Override
     public void onLoad(String mixinPackage) {
         if (Boolean.getBoolean("lab.opt.universal")) {
-            for (String f : UNIVERSAL) System.setProperty("lab.opt." + f, "true");
+            // -Dlab.opt.except=A,B: universal without those (A/B of one part)
+            java.util.Set<String> except = new java.util.HashSet<>(java.util.Arrays.asList(System.getProperty("lab.opt.except", "").split(",")));
+            for (String f : UNIVERSAL) if (!except.contains(f)) System.setProperty("lab.opt." + f, "true");
             System.out.println("[probe/opt] lab.opt.universal: " + String.join(", ", UNIVERSAL));
         }
     }

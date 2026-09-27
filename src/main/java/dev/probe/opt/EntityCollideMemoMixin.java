@@ -61,7 +61,7 @@ public abstract class EntityCollideMemoMixin {
         BlockCollisionMemo.collideMisses++;
         Vec3 r = collideWithShapes(vec, collisionBox, collectColliders(entity, level, potentialHits, bb));
         if (m == null) holder.probe$setCollideMemo(m = new BlockCollisionMemo());
-        m.valid = BlockCollisionMemo.record(level, m, bb);
+        m.valid = BlockCollisionMemo.worthRecording(m, collisionBox) && BlockCollisionMemo.record(level, m, bb);
         if (m.valid) {
             m.setBox(collisionBox);
             m.setKey(vec.x, vec.y, vec.z);

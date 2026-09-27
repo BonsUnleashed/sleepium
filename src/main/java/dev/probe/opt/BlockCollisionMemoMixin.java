@@ -75,7 +75,7 @@ public abstract class BlockCollisionMemoMixin {
         java.util.Optional<net.minecraft.core.BlockPos> r = probe$vanillaSupport(entity, box);
         if (memo) {
             if (m == null) ((BlockCollisionMemo.Holder) entity).probe$setSupportMemo(m = new BlockCollisionMemo());
-            m.valid = BlockCollisionMemo.record(self, m, box);
+            m.valid = BlockCollisionMemo.worthRecording(m, box) && BlockCollisionMemo.record(self, m, box);
             if (m.valid) {
                 m.setBox(box);
                 m.setKey(entity.getX(), entity.getY(), entity.getZ());
@@ -129,7 +129,7 @@ public abstract class BlockCollisionMemoMixin {
         BlockCollisionMemo.misses++;
         boolean free = probe$vanillaBlocksFree(entity, box);
         if (m == null) holder.probe$setCollisionMemo(m = new BlockCollisionMemo());
-        m.valid = BlockCollisionMemo.record(self, m, box);
+        m.valid = BlockCollisionMemo.worthRecording(m, box) && BlockCollisionMemo.record(self, m, box);
         if (m.valid) {
             m.setBox(box);
             m.free = free;
