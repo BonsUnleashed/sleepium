@@ -45,7 +45,8 @@ import net.minecraft.world.phys.Vec3;
  */
 public final class ParallelRender {
     public static final boolean VERIFY = Boolean.getBoolean("lab.prender.verify");
-    private static final int THREADS = Integer.getInteger("lab.prender.threads", Math.max(1, Math.min(4, Runtime.getRuntime().availableProcessors() - 2)));
+    /** renderer sets in use at once = the reactor's workers (+1 for the render thread helping) */
+    private static final int THREADS = FrameReactor.threads();
     public static long jobs, parallel, sequential, failed, verified, mismatches, helped;
     private static volatile int epoch;
 
@@ -54,11 +55,7 @@ public final class ParallelRender {
     private static LabRuntime pool;
 
     private static LabRuntime pool() {
-        if (pool == null) {
-            pool = new LabRuntime(LabRuntime.Config.of("Render-Worker", THREADS).withPriority(OsThreads.NORMAL).withDaemon(true));
-            System.out.println("[probe/opt] parallel render: " + THREADS + " workers");
-        }
-        return pool;
+        return FrameReactor.pool();   // the frame's shared pool
     }
 
     /** From EntityRenderDispatcher.onResourceManagerReload: the worker renderer sets are built again. */

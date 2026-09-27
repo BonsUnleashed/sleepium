@@ -10,19 +10,19 @@ import net.minecraft.world.level.lighting.LevelLightEngine;
 /**
  * exp/client-light-async (client): the client's light propagation (LevelRenderer.renderLevel → runLightUpdates, up to a
  * third of the render thread on a relighting scene, and whole batches in single frames) runs on a worker while the
- * rest of the frame renders; it is joined at the end of renderLevel, before the next tick and packets touch the world.
+ * rest of the frame renders (on FrameReactor's pool, possibly across frames); it is joined at the reactor's points
+ * before the next tick, queued packets or a level change touch the world.
  *
  * <p>Safe to overlap: readers (entity light, section compiles — vanilla's compile workers already read concurrently)
  * use the storage's published copy, which the engine replaces as a whole at the end (copy-on-write data layers);
  * nothing else in the rest of renderLevel writes the engine or the chunks. The engine's section-dirty callbacks
  * (ClientChunkCache.onLightUpdate → LevelRenderer.setSectionDirty) are recorded on the worker and replayed on the
- * render thread at the join, in order. Difference from vanilla: those sections are marked dirty at the end of the
+ * render thread in order: handed back through the reactor's completion ring when the job ends, or at a join. Difference from vanilla: those sections are marked dirty at the end of the
  * frame instead of mid-frame, so their rebuild starts one frame later.
  */
 public final class ClientLightAsync {
     private ClientLightAsync() {}
 
-    private static LabRuntime pool;
     private static volatile boolean running;
     private static final Object LOCK = new Object();
     private static Thread worker;
@@ -35,22 +35,18 @@ public final class ClientLightAsync {
         return running;
     }
 
-    /** End of renderLevel: a finished job's section marks now, without waiting for a running one. */
-    public static void replayIfDone() {
-        if (!running) replay();
-    }
-
-    private static LabRuntime pool() {
-        if (pool == null) pool = new LabRuntime(LabRuntime.Config.of("Light-Worker", 1).withPriority(OsThreads.NORMAL).withDaemon(true));
-        return pool;
-    }
+    /** FrameReactor participant: ticks, queued packets and level changes need the engine to themselves. */
+    private static final FrameReactor.Participant PARTICIPANT = p -> {
+        if (p == FrameReactor.Point.BEFORE_TICK || p == FrameReactor.Point.BEFORE_TASKS || p == FrameReactor.Point.LEVEL_CHANGE) join();
+    };
 
     /** In place of the render thread's runLightUpdates. */
     public static void start(LevelLightEngine engine) {
         join();   // never two at once
+        FrameReactor.register(PARTICIPANT);
         running = true;
         jobs++;
-        pool().execute(() -> {
+        FrameReactor.pool().execute(() -> {
             worker = Thread.currentThread();
             try {
                 engine.runLightUpdates();
@@ -59,6 +55,7 @@ public final class ClientLightAsync {
                     running = false;
                     LOCK.notifyAll();
                 }
+                FrameReactor.complete(ClientLightAsync::replay);   // the marks, on the render thread at its next point
             }
         });
     }

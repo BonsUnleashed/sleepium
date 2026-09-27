@@ -10,7 +10,7 @@ import java.lang.invoke.VarHandle;
  * seq[p] = p+1; a consumer takes p when seq[p] == p+1 and frees it with seq[p] = p+capacity. One CAS per operation,
  * no allocation, no locks. offer() returns false when full (the caller decides on the overflow path).
  */
-final class MpmcRing {
+public final class MpmcRing {
     private static final VarHandle SEQ = MethodHandles.arrayElementVarHandle(long[].class);
     private static final VarHandle HEAD, TAIL;
 
@@ -35,7 +35,7 @@ final class MpmcRing {
     private volatile long tail;
     @SuppressWarnings("unused") private long p20, p21, p22, p23, p24, p25, p26, p27;
 
-    MpmcRing(int capacityPow2) {
+    public MpmcRing(int capacityPow2) {
         if (Integer.bitCount(capacityPow2) != 1) throw new IllegalArgumentException("capacity must be a power of two");
         this.mask = capacityPow2 - 1;
         this.items = new Object[capacityPow2];
@@ -43,7 +43,7 @@ final class MpmcRing {
         for (int i = 0; i < capacityPow2; i++) seq[i] = i;
     }
 
-    boolean offer(Object x) {
+    public boolean offer(Object x) {
         return offerPos(x) >= 0;
     }
 
@@ -85,7 +85,7 @@ final class MpmcRing {
     }
 
     /** Fast path kept small so C2 inlines it into the worker loop; the retry loop lives in pollSlow(). */
-    Object poll() {
+    public Object poll() {
         long pos = (long) HEAD.getVolatile(this);
         int i = (int) pos & mask;
         long s = (long) SEQ.getAcquire(seq, i);
