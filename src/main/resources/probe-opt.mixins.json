@@ -95,7 +95,9 @@
     "OverworldFogMixin",
     "EntityCullNoAllocMixin",
     "FrustumInvoker",
-    "ItemFrameOffsetMixin"
+    "ItemFrameOffsetMixin",
+    "EntityLightNoAllocMixin",
+    "BlockEntityCullNoAllocMixin"
   ],
   "injectors": {
     "defaultRequire": 1
