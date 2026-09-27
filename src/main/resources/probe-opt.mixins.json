@@ -57,7 +57,11 @@
     "ClientEventSiteMixin",
     "PoseAccessor",
     "PoseStackPoolMixin",
-    "BulkDataArraysMixin"
+    "BulkDataArraysMixin",
+    "ChunkShaderPatchMixin",
+    "ChunkSectionMixin",
+    "ChunkUploadMixin",
+    "ChunkMultiDrawMixin"
   ],
   "injectors": {
     "defaultRequire": 1
