@@ -46,7 +46,7 @@ import net.minecraft.world.phys.Vec3;
 public final class ParallelRender {
     public static final boolean VERIFY = Boolean.getBoolean("lab.prender.verify");
     private static final int THREADS = Integer.getInteger("lab.prender.threads", Math.max(1, Math.min(4, Runtime.getRuntime().availableProcessors() - 2)));
-    public static long jobs, parallel, sequential, failed, verified, mismatches;
+    public static long jobs, parallel, sequential, failed, verified, mismatches, helped;
     private static volatile int epoch;
 
     private ParallelRender() {}
@@ -101,10 +101,10 @@ public final class ParallelRender {
     private static void ensureSets() {
         int e = epoch;
         Set any = SETS.peek();
-        if (any != null && any.epoch == e && SETS.size() == THREADS) return;
+        if (any != null && any.epoch == e && SETS.size() == THREADS + 1) return;
         SETS.clear();
         long t0 = System.nanoTime();
-        for (int i = 0; i < THREADS; i++) SETS.add(new Set(e));
+        for (int i = 0; i < THREADS + 1; i++) SETS.add(new Set(e));   // one more: the render thread helps
         System.out.printf("[probe/opt] parallel render: %d renderer sets built in %.1f ms%n", THREADS, (System.nanoTime() - t0) / 1e6);
     }
 
@@ -121,8 +121,12 @@ public final class ParallelRender {
         final RenderCache.Recorder recorder = new RenderCache.Recorder();
         final RenderCache.Rec out = new RenderCache.Rec();
 
+        /** worker or render thread: whoever claims the job first renders it */
+        final java.util.concurrent.atomic.AtomicBoolean claimed = new java.util.concurrent.atomic.AtomicBoolean();
+
         @Override
         public void run() {
+            if (!claimed.compareAndSet(false, true)) return;   // the render thread took it while waiting
             Set s = SETS.poll();
             try {
                 ok = s != null && render(s, this);
@@ -179,6 +183,7 @@ public final class ParallelRender {
         j.buffers = buffers;
         j.done = false;
         j.ok = false;
+        j.claimed.set(false);
         j.parallel = eligible(e, buffers);
         jobs++;
         if (j.parallel) pool().execute(j);
@@ -198,6 +203,14 @@ public final class ParallelRender {
         for (int i = 0; i < size; i++) {
             Job j = QUEUE.get(i);
             if (j.parallel) {
+                // helping instead of waiting: the queued jobs from here on that no worker has taken yet
+                for (int k = i; !j.done && k < size; k++) {
+                    Job h = QUEUE.get(k);
+                    if (h.parallel && !h.done) {
+                        h.run();
+                        if (h.done) helped++;
+                    }
+                }
                 j.await();
                 if (j.ok) {
                     if (VERIFY) verify(inv, j);
@@ -279,7 +292,7 @@ public final class ParallelRender {
     }
 
     public static String report() {
-        return String.format(java.util.Locale.ROOT, "parallel render: %d workers, jobs %d, on workers %d, on the render thread %d, failed %d%s", THREADS, jobs, parallel,
-                sequential, failed, VERIFY ? ", verified " + verified + ", mismatches " + mismatches : "");
+        return String.format(java.util.Locale.ROOT, "parallel render: %d workers, jobs %d, on workers %d (render thread helped %d), on the render thread %d, failed %d%s", THREADS, jobs, parallel,
+                helped, sequential, failed, VERIFY ? ", verified " + verified + ", mismatches " + mismatches : "");
     }
 }
