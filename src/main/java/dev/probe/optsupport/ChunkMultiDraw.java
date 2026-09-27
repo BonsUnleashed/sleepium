@@ -40,7 +40,7 @@ public final class ChunkMultiDraw {
     /** vertex shader names patched by ChunkShaderPatchMixin */
     public static final Set<String> PATCHED = java.util.concurrent.ConcurrentHashMap.newKeySet();
     public static final Set<String> SUPPORTED = Set.of("rendertype_solid", "rendertype_cutout_mipped", "rendertype_cutout");
-    public static long multiDraws, sectionsMulti, sectionsVanilla, uploads, grows;
+    public static long multiDraws, sectionsMulti, sectionsVanilla, sectionsSkipped, uploads, grows;
 
     private static Boolean capable;
 
@@ -167,19 +167,19 @@ public final class ChunkMultiDraw {
     }
 
     /** From VertexBuffer.upload of a section's layer buffer, before vanilla consumes the mesh (render thread). */
-    public static void store(SectionRenderDispatcher.RenderSection section, RenderType layer, MeshData mesh) {
+    public static boolean store(SectionRenderDispatcher.RenderSection section, RenderType layer, MeshData mesh) {
         MeshData.DrawState ds = mesh.drawState();
-        if (!layerSupported(layer) || mesh.indexBuffer() != null || ds.mode() != VertexFormat.Mode.QUADS || !capable()) return;
+        if (!layerSupported(layer) || mesh.indexBuffer() != null || ds.mode() != VertexFormat.Mode.QUADS || !capable()) return false;
         release(section, layer);
         int li = layerIndex(layer);
-        if (li < 0) return;
+        if (li < 0) return false;
         var o = section.getOrigin();
         long key = regionKey(o.getX() >> 4, o.getY() >> 4, o.getZ() >> 4);
         Arena a = ARENAS[li].get(key);
         if (a == null) ARENAS[li].put(key, a = new Arena(key, layer));
         int stride = ds.format().getVertexSize();
         if (a.stride == 0) a.stride = stride;
-        if (a.stride != stride) return;   // another format: vanilla path
+        if (a.stride != stride) return false;   // another format: vanilla path
         int verts = ds.vertexCount();
         int start = a.alloc(verts);
         if (start < 0) {
@@ -196,7 +196,15 @@ public final class ChunkMultiDraw {
         e.origin = o.asLong();
         a.entries.put(section, e);
         uploads++;
+        return true;
     }
+
+    /** The vanilla buffer is not filled for arena layers (no duplicate VRAM) while the layer's shader is patched. */
+    public static boolean replacesVanilla(RenderType layer) {
+        return !KEEP_VANILLA && PATCHED.size() == SUPPORTED.size();
+    }
+
+    private static final boolean KEEP_VANILLA = Boolean.getBoolean("lab.chunkmd.keepVanilla");
 
     /** From RenderSection.reset (origin change, release): every layer's entry. */
     public static void release(SectionRenderDispatcher.RenderSection section) {
@@ -240,6 +248,10 @@ public final class ChunkMultiDraw {
             Entry e = a == null ? null : a.entries.get(s);
             float ox = (float) ((double) o.getX() - x), oy = (float) ((double) o.getY() - y), oz = (float) ((double) o.getZ() - z);
             if (e == null || e.origin != o.asLong() || a.n >= MAX_DRAWS) {
+                if (replacesVanilla(layer)) {   // its vanilla buffer holds nothing current: nothing to draw
+                    sectionsSkipped++;
+                    continue;
+                }
                 // vanilla, now
                 GL20C.glUniform1i(ps[0], 0);
                 if (uniform != null) {
@@ -329,7 +341,8 @@ public final class ChunkMultiDraw {
             arenas += m.size();
             for (Arena a : m.values()) verts += a.capacity;
         }
-        return String.format(java.util.Locale.ROOT, "chunk multidraw: patched %s, multi-draw calls %d, sections by multi-draw %d, by vanilla draws %d, uploads %d, arenas %d (%.1f MB), grows %d",
-                PATCHED, multiDraws, sectionsMulti, sectionsVanilla, uploads, arenas, verts * 32 / 1048576.0, grows);
+        return String.format(java.util.Locale.ROOT, "chunk multidraw: patched %s, multi-draw calls %d, sections by multi-draw %d, by vanilla draws %d, skipped %d, uploads %d, arenas %d (%.1f MB), grows %d, vanilla buffers %s",
+                PATCHED, multiDraws, sectionsMulti, sectionsVanilla, sectionsSkipped, uploads, arenas, verts * 32 / 1048576.0, grows,
+                KEEP_VANILLA || PATCHED.size() != SUPPORTED.size() ? "filled" : "not filled");
     }
 }

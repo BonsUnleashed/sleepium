@@ -24,8 +24,11 @@ public abstract class ChunkUploadMixin implements ChunkBufferTag {
         probe$layer = layer;
     }
 
-    @Inject(method = "upload(Lcom/mojang/blaze3d/vertex/MeshData;)V", at = @At("HEAD"))
+    @Inject(method = "upload(Lcom/mojang/blaze3d/vertex/MeshData;)V", at = @At("HEAD"), cancellable = true)
     private void probe$store(MeshData mesh, CallbackInfo ci) {
-        if (probe$section != null) ChunkMultiDraw.store(probe$section, probe$layer, mesh);
+        if (probe$section != null && ChunkMultiDraw.store(probe$section, probe$layer, mesh) && ChunkMultiDraw.replacesVanilla(probe$layer)) {
+            mesh.close();   // what vanilla's upload does at the end
+            ci.cancel();
+        }
     }
 }
