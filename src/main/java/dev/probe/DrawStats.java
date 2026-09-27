@@ -18,8 +18,9 @@ public final class DrawStats {
     private static final Map<String, long[]> TYPES = new HashMap<>();     // draws, vertices, bytes
     private static final Map<Class<?>, long[]> OBJECTS = new HashMap<>(); // calls, nanos
     private static long depth, start;
-    private static final long[] PHASE = new long[3], PHASE_START = new long[3];
-    private static final String[] PHASE_NAMES = {"buffer swap (flipFrame)", "world (renderLevel)", "frame render (world + GUI)"};
+    private static final long[] PHASE = new long[5], PHASE_START = new long[5];
+    private static final String[] PHASE_NAMES = {"buffer swap (flipFrame)", "world (renderLevel)", "frame render (world + GUI)",
+            "chunk multi-draw GL calls", "chunk layers (ChunkMultiDraw.draw)"};
 
     public static void phaseBegin(int i) {
         if (active) PHASE_START[i] = System.nanoTime();

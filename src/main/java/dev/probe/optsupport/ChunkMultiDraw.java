@@ -21,6 +21,8 @@ import org.lwjgl.opengl.GL20C;
 import org.lwjgl.opengl.GL30C;
 import org.lwjgl.opengl.GL31C;
 import org.lwjgl.opengl.GL32C;
+import org.lwjgl.opengl.GL40C;
+import org.lwjgl.opengl.GL43C;
 import org.lwjgl.opengl.GLCapabilities;
 import org.lwjgl.system.MemoryUtil;
 
@@ -172,6 +174,7 @@ public final class ChunkMultiDraw {
         boolean listed;
         final boolean packed;
         int uboOffset;
+        long cmdOffset;
 
         Arena(long key, RenderType layer, boolean packed) {
             this.key = key;
@@ -451,6 +454,16 @@ public final class ChunkMultiDraw {
      */
     public static boolean draw(RenderType layer, Iterable<SectionRenderDispatcher.RenderSection> visible, double x, double y, double z,
             net.minecraft.client.renderer.ShaderInstance shader) {
+        if (dev.probe.DrawStats.ON) dev.probe.DrawStats.phaseBegin(4);
+        try {
+            return draw0(layer, visible, x, y, z, shader);
+        } finally {
+            if (dev.probe.DrawStats.ON) dev.probe.DrawStats.phaseEnd(4);
+        }
+    }
+
+    private static boolean draw0(RenderType layer, Iterable<SectionRenderDispatcher.RenderSection> visible, double x, double y, double z,
+            net.minecraft.client.renderer.ShaderInstance shader) {
         int li = LAYERS.indexOf(layer);
         if (li < 0) return false;
         int[] ps = programState(shader.getId());
@@ -530,6 +543,36 @@ public final class ChunkMultiDraw {
         staging.limit(total).position(0);
         GL15C.glBufferSubData(GL31C.GL_UNIFORM_BUFFER, 0, staging);
         staging.clear();
+        boolean indirect = indirect();
+        if (indirect) {
+            // every arena's commands {count, 1 instance, first index 0, base vertex, base instance 0} in one upload
+            int cmds = 0;
+            for (Arena a : LISTED) {
+                if (a.n == 0) continue;
+                a.cmdOffset = cmds * 20L;
+                cmds += a.n;
+            }
+            long bytes = cmds * 20L;
+            if (cmdStaging.capacity() < bytes) {
+                MemoryUtil.memFree(cmdStaging);
+                cmdStaging = MemoryUtil.memAlloc((int) Math.max(bytes, cmdStaging.capacity() * 2L));
+            }
+            long c = MemoryUtil.memAddress(cmdStaging);
+            for (Arena a : LISTED) {
+                if (a.n == 0) continue;
+                long p = c + a.cmdOffset;
+                for (int i = 0; i < a.n; i++, p += 20) {
+                    MemoryUtil.memPutInt(p, MemoryUtil.memGetInt(a.counts + 4L * i));
+                    MemoryUtil.memPutInt(p + 4, 1);
+                    MemoryUtil.memPutInt(p + 8, 0);
+                    MemoryUtil.memPutInt(p + 12, MemoryUtil.memGetInt(a.bases + 4L * i));
+                    MemoryUtil.memPutInt(p + 16, 0);
+                }
+            }
+            if (indirectBuffer == 0) indirectBuffer = GL15C.glGenBuffers();
+            GL15C.glBindBuffer(GL40C.GL_DRAW_INDIRECT_BUFFER, indirectBuffer);
+            GL15C.nglBufferData(GL40C.GL_DRAW_INDIRECT_BUFFER, bytes, c, GL15C.GL_STREAM_DRAW);
+        }
         RenderSystem.AutoStorageIndexBuffer seq = RenderSystem.getSequentialBuffer(VertexFormat.Mode.QUADS);
         int mode = -1;
         for (int pass = 0; pass < 2; pass++) {
@@ -541,13 +584,32 @@ public final class ChunkMultiDraw {
                 GL30C.glBindVertexArray(a.vao);
                 seq.bind(a.maxIndices);
                 GL30C.glBindBufferRange(GL31C.GL_UNIFORM_BUFFER, UBO_BINDING, ubo(), a.uboOffset, 16L * MAX_DRAWS);
-                GL32C.nglMultiDrawElementsBaseVertex(GL15C.GL_TRIANGLES, a.counts, seq.type().asGLType, a.indices, a.n, a.bases);
+                if (dev.probe.DrawStats.ON) dev.probe.DrawStats.phaseBegin(3);
+                if (indirect) GL43C.glMultiDrawElementsIndirect(GL15C.GL_TRIANGLES, seq.type().asGLType, a.cmdOffset, a.n, 20);
+                else GL32C.nglMultiDrawElementsBaseVertex(GL15C.GL_TRIANGLES, a.counts, seq.type().asGLType, a.indices, a.n, a.bases);
+                if (dev.probe.DrawStats.ON) dev.probe.DrawStats.phaseEnd(3);
                 multiDraws++;
                 a.n = 0;
                 a.maxIndices = 0;
             }
         }
         GL20C.glUniform1i(ps[0], 0);
+        if (indirect) GL15C.glBindBuffer(GL40C.GL_DRAW_INDIRECT_BUFFER, 0);
+    }
+
+    private static ByteBuffer cmdStaging = MemoryUtil.memAlloc(1 << 16);
+    private static int indirectBuffer;
+    private static Boolean indirect;
+
+    /** GL 4.3 multi-draw indirect: the commands read by the GPU instead of walked by the driver (-Dlab.chunkmd.noIndirect). */
+    private static boolean indirect() {
+        Boolean i = indirect;
+        if (i == null) {
+            var caps = GL.getCapabilities();
+            indirect = i = (caps.OpenGL43 || caps.GL_ARB_multi_draw_indirect) && !Boolean.getBoolean("lab.chunkmd.noIndirect");
+            System.out.println("[probe/opt] chunk multidraw: indirect " + i);
+        }
+        return i;
     }
 
     private static void queue(Arena a, Entry e, net.minecraft.core.BlockPos o, double x, double y, double z, float ox, float oy, float oz,
