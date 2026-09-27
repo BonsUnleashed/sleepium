@@ -41,6 +41,8 @@ public final class OptMixinPlugin implements IMixinConfigPlugin {
             on = Boolean.getBoolean("lab.opt.all") || Boolean.getBoolean("lab.opt.SignalPathMixin");
         if (simple.equals("ChunkShaderPatchMixin") || simple.equals("ChunkSectionMixin") || simple.equals("ChunkUploadMixin"))
             on = Boolean.getBoolean("lab.opt.all") || Boolean.getBoolean("lab.opt.ChunkMultiDrawMixin");
+        if (simple.equals("CompositeRenderTypeAccessor") || simple.equals("CompositeStateAccessor"))
+            on = Boolean.getBoolean("lab.opt.all") || Boolean.getBoolean("lab.opt.EntityBatchMixin");
         if (simple.equals("PoseAccessor"))
             on = Boolean.getBoolean("lab.opt.all") || Boolean.getBoolean("lab.opt.PoseStackPoolMixin");
         if (simple.equals("AmbientChunksMixin"))
@@ -51,7 +53,7 @@ public final class OptMixinPlugin implements IMixinConfigPlugin {
         if (on && simple.equals("PersistentPoolsMixin")
                 && (Boolean.getBoolean("lab.opt.all") || Boolean.getBoolean("lab.opt.LabPoolsMixin"))) on = false;
         // A/B of the client-side ones with the server-side ones on: -Dlab.opt.noClient=true
-        if (on && Boolean.getBoolean("lab.opt.noClient") && (simple.startsWith("Section") && simple.contains("Layer") || simple.startsWith("Ambient") || simple.startsWith("Shader") || simple.startsWith("ClientEventSite") || simple.startsWith("Pose") || simple.startsWith("BulkData") || simple.startsWith("VertexSort") || simple.startsWith("Chunk") && !simple.startsWith("ChunkCache"))) on = false;
+        if (on && Boolean.getBoolean("lab.opt.noClient") && (simple.startsWith("Section") && simple.contains("Layer") || simple.startsWith("Ambient") || simple.startsWith("Shader") || simple.startsWith("ClientEventSite") || simple.startsWith("Pose") || simple.startsWith("BulkData") || simple.startsWith("VertexSort") || simple.startsWith("EntityBatch") || simple.startsWith("Composite") || simple.startsWith("Chunk") && !simple.startsWith("ChunkCache"))) on = false;
         if (on) {
             System.out.println("[probe/opt] applying " + simple + " -> " + targetClassName);
         }
@@ -70,7 +72,10 @@ public final class OptMixinPlugin implements IMixinConfigPlugin {
             // sampler locations from updateLocations + sampler names made once: entity scene 64 -> 127 fps
             "ShaderSamplerCacheMixin",
             // translucent quad sort: same floats, stable radix sort (0 mismatches over 63 M quads): entity scene +6 %
-            "VertexSortRadixMixin"};
+            "VertexSortRadixMixin",
+            // immediate draws batched per commuting render type (497 -> 12 draws per frame on the entity scene, frame
+            // hash identical): +4 % in two pairs; the render types are judged by their state, so mod types too
+            "EntityBatchMixin"};
     // client side, exact but no measurable fps effect (3 steady A/B pairs): opt-in only
     //   -Dlab.opt.SectionLayerMaskMixin / AmbientParticleSkipMixin
 

@@ -62,7 +62,10 @@
     "ChunkSectionMixin",
     "ChunkUploadMixin",
     "ChunkMultiDrawMixin",
-    "VertexSortRadixMixin"
+    "VertexSortRadixMixin",
+    "EntityBatchMixin",
+    "CompositeRenderTypeAccessor",
+    "CompositeStateAccessor"
   ],
   "injectors": {
     "defaultRequire": 1
