@@ -74,7 +74,12 @@
     "ParallelReloadMixin",
     "EntityRenderDispatcherInvoker",
     "EntityRendererAccessor",
-    "LevelRendererInvoker"
+    "LevelRendererInvoker",
+    "PartBatchMixin",
+    "PartDrawMixin",
+    "PartTypeMixin",
+    "PartFrameMixin",
+    "ShaderStateShardAccessor"
   ],
   "injectors": {
     "defaultRequire": 1

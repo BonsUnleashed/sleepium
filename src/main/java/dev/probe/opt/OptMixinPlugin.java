@@ -39,8 +39,12 @@ public final class OptMixinPlugin implements IMixinConfigPlugin {
             on = Boolean.getBoolean("lab.opt.all") || Boolean.getBoolean("lab.opt.CubeShapeMixin");
         if (simple.equals("SignalProofStateMixin"))
             on = Boolean.getBoolean("lab.opt.all") || Boolean.getBoolean("lab.opt.SignalPathMixin");
-        if (simple.equals("ChunkShaderPatchMixin") || simple.equals("ChunkSectionMixin") || simple.equals("ChunkUploadMixin"))
+        if (simple.equals("ChunkSectionMixin") || simple.equals("ChunkUploadMixin"))
             on = Boolean.getBoolean("lab.opt.all") || Boolean.getBoolean("lab.opt.ChunkMultiDrawMixin");
+        if (simple.equals("ChunkShaderPatchMixin"))   // the shader patch hook of both chunk multi-draw and part batching
+            on = Boolean.getBoolean("lab.opt.all") || Boolean.getBoolean("lab.opt.ChunkMultiDrawMixin") || Boolean.getBoolean("lab.opt.PartBatchMixin");
+        if (simple.equals("PartDrawMixin") || simple.equals("PartTypeMixin") || simple.equals("PartFrameMixin") || simple.equals("ShaderStateShardAccessor"))
+            on = Boolean.getBoolean("lab.opt.all") || Boolean.getBoolean("lab.opt.PartBatchMixin");
         if (simple.equals("CompositeRenderTypeAccessor") || simple.equals("CompositeStateAccessor"))
             on = Boolean.getBoolean("lab.opt.all") || Boolean.getBoolean("lab.opt.EntityBatchMixin");
         if (simple.equals("RenderCacheBlockEntityMixin") || simple.equals("BufferBuilderAccessor") || simple.equals("BufferSourceAccessor"))
@@ -48,7 +52,8 @@ public final class OptMixinPlugin implements IMixinConfigPlugin {
         if (simple.equals("ParallelReloadMixin") || simple.equals("EntityRenderDispatcherInvoker") || simple.equals("EntityRendererAccessor") || simple.equals("LevelRendererInvoker"))
             on = Boolean.getBoolean("lab.opt.all") || Boolean.getBoolean("lab.opt.ParallelEntitiesMixin");
         if (simple.equals("BufferBuilderAccessor") || simple.equals("BufferSourceAccessor"))
-            on = Boolean.getBoolean("lab.opt.all") || Boolean.getBoolean("lab.opt.RenderCacheMixin") || Boolean.getBoolean("lab.opt.ParallelEntitiesMixin");
+            on = Boolean.getBoolean("lab.opt.all") || Boolean.getBoolean("lab.opt.RenderCacheMixin") || Boolean.getBoolean("lab.opt.ParallelEntitiesMixin")
+                    || Boolean.getBoolean("lab.opt.PartBatchMixin");
         if (simple.equals("PoseAccessor"))
             on = Boolean.getBoolean("lab.opt.all") || Boolean.getBoolean("lab.opt.PoseStackPoolMixin");
         if (simple.equals("AmbientChunksMixin"))
@@ -59,7 +64,7 @@ public final class OptMixinPlugin implements IMixinConfigPlugin {
         if (on && simple.equals("PersistentPoolsMixin")
                 && (Boolean.getBoolean("lab.opt.all") || Boolean.getBoolean("lab.opt.LabPoolsMixin"))) on = false;
         // A/B of the client-side ones with the server-side ones on: -Dlab.opt.noClient=true
-        if (on && Boolean.getBoolean("lab.opt.noClient") && (simple.startsWith("Section") && simple.contains("Layer") || simple.startsWith("Ambient") || simple.startsWith("Shader") || simple.startsWith("ClientEventSite") || simple.startsWith("Pose") || simple.startsWith("BulkData") || simple.startsWith("VertexSort") || simple.startsWith("EntityBatch") || simple.startsWith("RenderCache") || simple.startsWith("Parallel") || simple.startsWith("EntityRender") || simple.startsWith("LevelRendererInvoker") || simple.startsWith("BufferBuilder") || simple.startsWith("BufferSource") || simple.startsWith("Composite") || simple.startsWith("Chunk") && !simple.startsWith("ChunkCache"))) on = false;
+        if (on && Boolean.getBoolean("lab.opt.noClient") && (simple.startsWith("Section") && simple.contains("Layer") || simple.startsWith("Ambient") || simple.startsWith("Shader") || simple.startsWith("ClientEventSite") || simple.startsWith("Pose") || simple.startsWith("BulkData") || simple.startsWith("VertexSort") || simple.startsWith("EntityBatch") || simple.startsWith("RenderCache") || simple.startsWith("Parallel") || simple.startsWith("Part") || simple.startsWith("ShaderStateShard") || simple.startsWith("EntityRender") || simple.startsWith("LevelRendererInvoker") || simple.startsWith("BufferBuilder") || simple.startsWith("BufferSource") || simple.startsWith("Composite") || simple.startsWith("Chunk") && !simple.startsWith("ChunkCache"))) on = false;
         if (on) {
             System.out.println("[probe/opt] applying " + simple + " -> " + targetClassName);
         }

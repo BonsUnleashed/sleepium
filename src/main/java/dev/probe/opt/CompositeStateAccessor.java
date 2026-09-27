@@ -20,6 +20,9 @@ public interface CompositeStateAccessor {
     @Accessor("outputState")
     RenderStateShard.OutputStateShard probe$output();
 
+    @Accessor("shaderState")
+    RenderStateShard.ShaderStateShard probe$shader();
+
     @Accessor("colorLogicState")
     RenderStateShard.ColorLogicStateShard probe$colorLogic();
 }

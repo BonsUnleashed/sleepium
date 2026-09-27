@@ -39,6 +39,31 @@ public final class EntityBatch {
         return c;
     }
 
+    private static final Map<com.mojang.blaze3d.vertex.BufferBuilder, RenderType> TYPE_OF = new IdentityHashMap<>();
+
+    /** EntityBatchMixin: a batched builder of this type was started / drawn. */
+    public static void started(com.mojang.blaze3d.vertex.BufferBuilder b, RenderType t) {
+        TYPE_OF.put(b, t);
+    }
+
+    public static void ended(com.mojang.blaze3d.vertex.BufferBuilder b) {
+        if (b != null) TYPE_OF.remove(b);
+    }
+
+    /** PartBatch: the render type of a builder this batching owns (null for any other consumer). */
+    public static RenderType typeOf(com.mojang.blaze3d.vertex.BufferBuilder b) {
+        return TYPE_OF.get(b);
+    }
+
+    /** The shader a composite render type sets up (its shader shard's supplier), or null. */
+    public static net.minecraft.client.renderer.ShaderInstance shaderOf(RenderType t) {
+        if (!(t instanceof CompositeRenderTypeAccessor a)) return null;
+        var shard = ((CompositeStateAccessor) (Object) a.probe$state()).probe$shader();
+        if (shard == null) return null;
+        var sup = ((dev.probe.opt.ShaderStateShardAccessor) shard).probe$shader();
+        return sup.isPresent() ? sup.get().get() : null;
+    }
+
     public static String report() {
         long n = COMMUTES.values().stream().filter(b -> b).count();
         return "entity batch: types batched " + n + " of " + COMMUTES.size() + ", batches opened " + batches + ", batch draws " + draws;

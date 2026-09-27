@@ -65,6 +65,7 @@ public abstract class EntityBatchMixin {
         if (lastSharedType != null) endBatch(lastSharedType);
         b = new BufferBuilder(bb, type.mode(), type.format());
         startedBuilders.put(type, b);
+        EntityBatch.started(b, type);
         probe$deferred.add(type);
         EntityBatch.batches++;
         cir.setReturnValue(b);
@@ -75,6 +76,7 @@ public abstract class EntityBatchMixin {
     private void probe$beforeDraw(RenderType type, BufferBuilder builder, CallbackInfo ci) {
         if (probe$flushing) return;
         if (probe$deferred.remove(type)) {
+            EntityBatch.ended(builder);
             EntityBatch.draws++;
             return;
         }
@@ -94,6 +96,7 @@ public abstract class EntityBatchMixin {
             for (RenderType t : probe$deferred) {
                 BufferBuilder b = startedBuilders.remove(t);
                 if (b != null) {
+                    EntityBatch.ended(b);
                     endBatch(t, b);
                     EntityBatch.draws++;
                 }
