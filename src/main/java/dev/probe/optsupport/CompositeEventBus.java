@@ -148,6 +148,24 @@ public final class CompositeEventBus implements IEventBus {
         return list == null || list.getListeners().length > 0;
     }
 
+    /**
+     * Like hasListeners, but a type never posted is answered too: the bus creates a type's listener list when a listener
+     * registers for it or when it is first posted, so no list means nobody registered for it; what a first post would
+     * find then are its parent types' listeners.
+     */
+    public boolean mayHaveListeners(Class<?> type) {
+        if (fallbackAlways || (boolean) shutdown.getVolatile(delegate)) return true;
+        Built b = holders.get(type).built;
+        if (b != null) return b.list().getListeners().length > 0;
+        ListenerList list = lookupList(type);
+        if (list != null) return list.getListeners().length > 0;
+        for (Class<?> c = type.getSuperclass(); c != null && Event.class.isAssignableFrom(c); c = c.getSuperclass()) {
+            ListenerList pl = lookupList(c);
+            if (pl != null && pl.getListeners().length > 0) return true;
+        }
+        return false;
+    }
+
     /** Full post: first posts, listener changes, dispatch, fallbacks and statistics. */
     private <T extends Event> T postFull(T event) {
         if (fallbackAlways || (boolean) shutdown.getVolatile(delegate)) {

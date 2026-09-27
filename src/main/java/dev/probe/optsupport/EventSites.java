@@ -101,12 +101,12 @@ public final class EventSites {
             net.neoforged.neoforge.client.event.RenderLivingEvent.Post.class, net.neoforged.neoforge.client.event.RenderNameTagEvent.class,
             net.neoforged.neoforge.client.event.RenderItemInFrameEvent.class};
     /**
-     * One of them has a listener now, asked of the bus (a mod's listener must not run on a worker). A type never posted
-     * yet counts as listened (the bus cannot know), so callers ask again each frame instead of keeping the answer.
+     * One of them has a listener now, asked of the bus (a mod's listener must not run on a worker); cheap, callers ask
+     * once per frame (listeners can be added at any time).
      */
     public static boolean renderListened() {
         if (!(NeoForge.EVENT_BUS instanceof CompositeEventBus cb)) return true;
-        for (Class<?> c : ENTITY_RENDER_EVENTS) if (cb.hasListeners(c)) return true;
+        for (Class<?> c : ENTITY_RENDER_EVENTS) if (cb.mayHaveListeners(c)) return true;
         return false;
     }
 
