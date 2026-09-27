@@ -54,7 +54,10 @@
     "AmbientChunksMixin",
     "AmbientParticleSkipMixin",
     "ShaderSamplerCacheMixin",
-    "ClientEventSiteMixin"
+    "ClientEventSiteMixin",
+    "PoseAccessor",
+    "PoseStackPoolMixin",
+    "BulkDataArraysMixin"
   ],
   "injectors": {
     "defaultRequire": 1
