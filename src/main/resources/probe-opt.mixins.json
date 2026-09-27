@@ -102,7 +102,9 @@
     "ClientLightAsyncMixin",
     "ClientLightCallbackMixin",
     "ClientLevelLightQueueAccessor",
-    "ClientLightJoinMixin"
+    "ClientLightJoinMixin",
+    "BlockMeshMemoMixin",
+    "BlockMeshDirtyMixin"
   ],
   "injectors": {
     "defaultRequire": 1

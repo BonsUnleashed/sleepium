@@ -47,6 +47,21 @@ public final class RecordingBuilder implements VertexConsumer {
         fill = 0;
     }
 
+    /** count whole vertices appended by the caller (BlockMeshMemo's replay): their first byte */
+    long appendRaw(int count) {
+        long need = (long) (n + count) * vertexSize;
+        if (need > cap) {
+            long c = Math.max(need, Math.max(4096, cap * 2));
+            mem = mem == 0 ? MemoryUtil.nmemAlloc(c) : MemoryUtil.nmemRealloc(mem, c);
+            cap = c;
+        }
+        long dst = mem + (long) n * vertexSize;
+        n += count;
+        v = mem + (long) (n - 1) * vertexSize;
+        fill = 0;
+        return dst;
+    }
+
     @Override
     public VertexConsumer addVertex(float x, float y, float z) {
         long need = (long) (n + 1) * vertexSize;

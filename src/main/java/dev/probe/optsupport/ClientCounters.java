@@ -29,6 +29,7 @@ public final class ClientCounters {
                 + (Boolean.getBoolean("lab.opt.ParallelEntitiesMixin") ? "; " + ParallelRender.report() : "")
                 + (Boolean.getBoolean("lab.opt.PartBatchMixin") ? "; " + PartBatch.report() : "")
                 + (Boolean.getBoolean("lab.opt.SectionListsMixin") ? "; " + SectionLists.report() : "")
+                + (Boolean.getBoolean("lab.opt.BlockMeshMemoMixin") ? "; " + BlockMeshMemo.report() : "")
                 + (Boolean.getBoolean("lab.opt.ClientLightAsyncMixin") ? "; " + ClientLightAsync.report() + "; " + FrameReactor.report() : "")
                 + (Boolean.getBoolean("lab.opt.UniformDedupeMixin") ? "; uniform uploads sent " + uniformsSent + ", skipped (same value) " + uniformsSkipped : "")
                 + (Boolean.getBoolean("lab.opt.ClientBiomeMemoMixin") && net.minecraft.client.Minecraft.getInstance().level instanceof BiomeMemo bm ? "; " + bm.probe$biomeReport() : "");

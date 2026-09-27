@@ -53,7 +53,7 @@ public final class OptMixinPlugin implements IMixinConfigPlugin {
             on = Boolean.getBoolean("lab.opt.all") || Boolean.getBoolean("lab.opt.ParallelEntitiesMixin");
         if (simple.equals("BufferBuilderAccessor") || simple.equals("BufferSourceAccessor"))
             on = Boolean.getBoolean("lab.opt.all") || Boolean.getBoolean("lab.opt.RenderCacheMixin") || Boolean.getBoolean("lab.opt.ParallelEntitiesMixin")
-                    || Boolean.getBoolean("lab.opt.PartBatchMixin");
+                    || Boolean.getBoolean("lab.opt.PartBatchMixin") || Boolean.getBoolean("lab.opt.BlockMeshMemoMixin");
         if (simple.equals("VertexSortDirectMixin") || simple.equals("MeshDataAccessor"))   // part of the radix sort flag
             on = Boolean.getBoolean("lab.opt.all") || Boolean.getBoolean("lab.opt.VertexSortRadixMixin");
         if (simple.equals("SectionListsMixin") || simple.equals("LevelRendererVisibleAccessor"))   // needs the multi-draw entry slots
@@ -71,6 +71,8 @@ public final class OptMixinPlugin implements IMixinConfigPlugin {
             on = Boolean.getBoolean("lab.opt.all") || Boolean.getBoolean("lab.opt.FrameGarbageMixin");
         if (simple.equals("ClientLightCallbackMixin") || simple.equals("ClientLevelLightQueueAccessor") || simple.equals("ClientLightJoinMixin"))
             on = Boolean.getBoolean("lab.opt.all") || Boolean.getBoolean("lab.opt.ClientLightAsyncMixin");
+        if (simple.equals("BlockMeshDirtyMixin"))
+            on = Boolean.getBoolean("lab.opt.all") || Boolean.getBoolean("lab.opt.BlockMeshMemoMixin");
         if (simple.equals("PoseAccessor"))
             on = Boolean.getBoolean("lab.opt.all") || Boolean.getBoolean("lab.opt.PoseStackPoolMixin");
         if (simple.equals("AmbientChunksMixin"))
@@ -81,7 +83,7 @@ public final class OptMixinPlugin implements IMixinConfigPlugin {
         if (on && simple.equals("PersistentPoolsMixin")
                 && (Boolean.getBoolean("lab.opt.all") || Boolean.getBoolean("lab.opt.LabPoolsMixin"))) on = false;
         // A/B of the client-side ones with the server-side ones on: -Dlab.opt.noClient=true
-        if (on && Boolean.getBoolean("lab.opt.noClient") && (simple.startsWith("Section") && simple.contains("Layer") || simple.startsWith("Ambient") || simple.startsWith("Shader") || simple.startsWith("ClientEventSite") || simple.startsWith("Pose") || simple.startsWith("BulkData") || simple.startsWith("VertexSort") || simple.startsWith("EntityBatch") || simple.startsWith("RenderCache") || simple.startsWith("Parallel") || simple.startsWith("Part") || simple.startsWith("ShaderStateShard") || simple.startsWith("MeshData") || simple.startsWith("SectionLists") || simple.startsWith("ClientBiome") || simple.startsWith("UniformDedupe") || simple.startsWith("SamplerUnit") || simple.startsWith("ModelPartQuat") || simple.startsWith("ModelPartIter") || simple.startsWith("CubicSampler") || simple.startsWith("OverworldFog") || simple.startsWith("EntityCullNoAlloc") || simple.startsWith("FrustumInvoker") || simple.startsWith("ItemFrameOffset") || simple.startsWith("ClientLight") || simple.startsWith("ClientLevelLightQueue") || simple.startsWith("EntityLightNoAlloc") || simple.startsWith("BlockEntityCullNoAlloc") || simple.startsWith("ClientChunkCacheBiome") || simple.startsWith("LevelRendererVisible") || simple.startsWith("EntityRender") || simple.startsWith("LevelRendererInvoker") || simple.startsWith("BufferBuilder") || simple.startsWith("BufferSource") || simple.startsWith("Composite") || simple.startsWith("Chunk") && !simple.startsWith("ChunkCache"))) on = false;
+        if (on && Boolean.getBoolean("lab.opt.noClient") && (simple.startsWith("Section") && simple.contains("Layer") || simple.startsWith("Ambient") || simple.startsWith("Shader") || simple.startsWith("ClientEventSite") || simple.startsWith("Pose") || simple.startsWith("BulkData") || simple.startsWith("VertexSort") || simple.startsWith("EntityBatch") || simple.startsWith("RenderCache") || simple.startsWith("Parallel") || simple.startsWith("Part") || simple.startsWith("ShaderStateShard") || simple.startsWith("MeshData") || simple.startsWith("SectionLists") || simple.startsWith("ClientBiome") || simple.startsWith("UniformDedupe") || simple.startsWith("SamplerUnit") || simple.startsWith("ModelPartQuat") || simple.startsWith("ModelPartIter") || simple.startsWith("CubicSampler") || simple.startsWith("OverworldFog") || simple.startsWith("EntityCullNoAlloc") || simple.startsWith("FrustumInvoker") || simple.startsWith("ItemFrameOffset") || simple.startsWith("ClientLight") || simple.startsWith("BlockMesh") || simple.startsWith("ClientLevelLightQueue") || simple.startsWith("EntityLightNoAlloc") || simple.startsWith("BlockEntityCullNoAlloc") || simple.startsWith("ClientChunkCacheBiome") || simple.startsWith("LevelRendererVisible") || simple.startsWith("EntityRender") || simple.startsWith("LevelRendererInvoker") || simple.startsWith("BufferBuilder") || simple.startsWith("BufferSource") || simple.startsWith("Composite") || simple.startsWith("Chunk") && !simple.startsWith("ChunkCache"))) on = false;
         if (on) {
             System.out.println("[probe/opt] applying " + simple + " -> " + targetClassName);
         }

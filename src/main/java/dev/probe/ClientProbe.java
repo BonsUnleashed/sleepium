@@ -73,7 +73,16 @@ final class ClientProbe {
         label = l;
         TaskStats.reset();
         startNanos = System.nanoTime();
+        cpuAtStart = processCpu();
         stopAtNanos = startNanos + seconds * 1_000_000_000L;
+    }
+
+    private static long cpuAtStart;
+
+    /** CPU time of the whole process (render thread, driver threads, workers, the integrated server), ns; -1 if unknown */
+    private static long processCpu() {
+        return java.lang.management.ManagementFactory.getOperatingSystemMXBean() instanceof com.sun.management.OperatingSystemMXBean os
+                ? os.getProcessCpuTime() : -1;
     }
 
     private static void onPre() {
@@ -105,6 +114,8 @@ final class ClientProbe {
     private static void finish() {
         Minecraft mc = Minecraft.getInstance();
         double secs = (System.nanoTime() - startNanos) / 1e9;
+        long cpuNow = processCpu();
+        double cpuSecs = cpuAtStart >= 0 && cpuNow >= 0 ? (cpuNow - cpuAtStart) / 1e9 : Double.NaN;
         TickTimer.Stats f = TickTimer.Stats.of(frames, n);
         TickTimer.Stats r = TickTimer.Stats.of(renders, n);
         TickTimer.Stats a = TickTimer.Stats.of(allocs, n);
@@ -121,6 +132,7 @@ final class ClientProbe {
         StringBuilder sb = new StringBuilder();
         sb.append("# probe client report '").append(label).append("' ").append(LocalDateTime.now()).append('\n')
                 .append(String.format(Locale.ROOT, "window %.1f s, %d frames, %.1f fps avg%n", secs, n, n / secs))
+                .append(String.format(Locale.ROOT, "process CPU %.1f s (%.2f cores), %.3f ms per frame%n", cpuSecs, cpuSecs / secs, cpuSecs * 1e3 / Math.max(1, n)))
                 .append(mc.getLaunchedVersion()).append(", ").append(com.mojang.blaze3d.platform.GlUtil.getRenderer()).append("\n\n")
                 .append("frame   ").append(f.asMillis()).append('\n')
                 .append("render  ").append(r.asMillis()).append("   (GameRenderer.render, CPU side)\n")
@@ -150,8 +162,8 @@ final class ClientProbe {
         ProbeMod.LOGGER.info("\n{}", sb);
         if (mc.player != null) {
             mc.player.displayClientMessage(Component.literal(String.format(Locale.ROOT,
-                    "probeclient '%s': %.0f fps, frame p50 %.2f / p99 %.2f ms, %.0f KiB/frame, client tick mean %.3f / p99 %.3f ms -> %s",
-                    label, n / secs, f.p50() / 1e6, f.p99() / 1e6, a.mean() / 1024, t.mean() / 1e6, t.p99() / 1e6, file.getFileName())), false);
+                    "probeclient '%s': %.0f fps, frame p50 %.2f / p99 %.2f ms, %.0f KiB/frame, CPU %.2f cores / %.3f ms per frame, client tick mean %.3f / p99 %.3f ms -> %s",
+                    label, n / secs, f.p50() / 1e6, f.p99() / 1e6, a.mean() / 1024, cpuSecs / secs, cpuSecs * 1e3 / Math.max(1, n), t.mean() / 1e6, t.p99() / 1e6, file.getFileName())), false);
         }
     }
 }
