@@ -66,6 +66,15 @@ public final class RenderCache {
         int[] offs = new int[4], counts = new int[4];
         long mem;
         int size, cap;
+        /** the native block, freed when the record is collected (its object left the world) */
+        final long[] box = new long[1];
+
+        Rec() {
+            long[] b = box;
+            CLEANER.register(this, () -> {
+                if (b[0] != 0) MemoryUtil.nmemFree(b[0]);
+            });
+        }
 
         void clear() {
             types.clear();
@@ -77,6 +86,7 @@ public final class RenderCache {
             if (size + n > cap) {
                 int c = Math.max(size + n, Math.max(256, cap * 2));
                 mem = mem == 0 ? MemoryUtil.nmemAlloc(c) : MemoryUtil.nmemRealloc(mem, c);
+                box[0] = mem;
                 cap = c;
             }
             MemoryUtil.memCopy(MemoryUtil.memAddress(data), mem + size, n);
@@ -142,6 +152,7 @@ public final class RenderCache {
         }
     }
 
+    private static final java.lang.ref.Cleaner CLEANER = java.lang.ref.Cleaner.create();
     private static final Recorder RECORDER = new Recorder();
     private static final Rec PROBE = new Rec();
     private static final Map<Object, Rec> RECS = new WeakHashMap<>();
