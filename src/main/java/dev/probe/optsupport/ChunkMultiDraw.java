@@ -34,13 +34,16 @@ import org.lwjgl.system.MemoryUtil;
  * shader is not patched: that layer keeps vanilla's path). Sections without an arena entry are drawn the vanilla way.
  */
 public final class ChunkMultiDraw {
-    public static final int MAX_DRAWS = 256;   // sections per region = offsets per uniform block
+    /** draws per multi-draw call = offsets per uniform block (16 KB, the guaranteed minimum block size) */
+    public static final int MAX_DRAWS = 1024;
+    /** -Dlab.chunkmd.noFaceCull=true: every face bucket drawn (A/B of the direction culling) */
+    private static final boolean FACE_CULL = !Boolean.getBoolean("lab.chunkmd.noFaceCull");
     private static final int REGION_W = 8, REGION_H = 4;
     private static final int UBO_BINDING = 7;
     /** vertex shader names patched by ChunkShaderPatchMixin */
     public static final Set<String> PATCHED = java.util.concurrent.ConcurrentHashMap.newKeySet();
     public static final Set<String> SUPPORTED = Set.of("rendertype_solid", "rendertype_cutout_mipped", "rendertype_cutout");
-    public static long multiDraws, sectionsMulti, sectionsVanilla, sectionsSkipped, uploads, grows;
+    public static long multiDraws, sectionsMulti, sectionsVanilla, sectionsSkipped, uploads, grows, quadsTotal, quadsDrawn;
 
     private static Boolean capable;
 
@@ -71,9 +74,83 @@ public final class ChunkMultiDraw {
 
     // ------------------------------------------------------------------ arenas
 
+    /**
+     * Face buckets, in the order they are stored: -X, -Y, -Z, other, +X, +Y, +Z (a camera in one octant sees the three
+     * positive or negative ones plus "other", often one contiguous run). bq[k] = first quad of bucket k, bq[7] = quads.
+     */
     static final class Entry {
         int start, vertices, indexCount;
         long origin;
+        final int[] bq = new int[8];
+        /** per bucket: the face plane nearest the camera side that could see it (+ buckets min, - buckets max coordinate, section-relative) */
+        final float[] plane = new float[7];
+    }
+
+    private static ByteBuffer scratch = MemoryUtil.memAlloc(1 << 20);
+    private static int[] quadBucket = new int[1 << 14];
+
+    /**
+     * The bucket of each quad from its geometric normal (both triangles of the quad, in the draw's winding): exactly
+     * axis-aligned -> that direction, anything else -> "other". Then the quads copied bucket by bucket, stable (the
+     * order inside a bucket is vanilla's: coplanar overlays keep their order).
+     */
+    private static ByteBuffer bucketed(ByteBuffer vb, int quads, int stride, int[] bq, float[] plane) {
+        int bytes = quads * 4 * stride;
+        if (scratch.capacity() < bytes) {
+            MemoryUtil.memFree(scratch);
+            scratch = MemoryUtil.memAlloc(Math.max(bytes, scratch.capacity() * 2));
+        }
+        if (quadBucket.length < quads) quadBucket = new int[Math.max(quads, quadBucket.length * 2)];
+        long base = MemoryUtil.memAddress(vb);
+        int[] count = new int[7];
+        for (int k = 0; k < 3; k++) {
+            plane[k] = Float.NEGATIVE_INFINITY;
+            plane[k + 4] = Float.POSITIVE_INFINITY;
+        }
+        for (int q = 0; q < quads; q++) {
+            long v = base + (long) q * 4 * stride;
+            int b = 3;
+            if (FACE_CULL) {
+                int n1 = axisNormal(v, v + stride, v + 2L * stride), n2 = axisNormal(v + 2L * stride, v + 3L * stride, v);
+                if (n1 >= 0 && n1 == n2) {
+                    b = n1;
+                    // model elements may reach outside the block and the section: the bucket's own extreme plane
+                    float c = MemoryUtil.memGetFloat(v + 4L * (b & 3));
+                    if (b < 3) plane[b] = Math.max(plane[b], c);
+                    else plane[b] = Math.min(plane[b], c);
+                }
+            }
+            quadBucket[q] = b;
+            count[b]++;
+        }
+        int[] next = new int[7];
+        for (int k = 0, acc = 0; k < 7; k++) {
+            bq[k] = acc;
+            next[k] = acc;
+            acc += count[k];
+        }
+        bq[7] = quads;
+        long dst = MemoryUtil.memAddress(scratch);
+        int quadBytes = 4 * stride;
+        for (int q = 0; q < quads; q++) {
+            int b = quadBucket[q];
+            MemoryUtil.memCopy(base + (long) q * quadBytes, dst + (long) next[b]++ * quadBytes, quadBytes);
+        }
+        scratch.limit(bytes).position(0);
+        return scratch;
+    }
+
+    /** Bucket of the triangle a, b, c by its normal (b - a) x (c - b): 0 -X, 1 -Y, 2 -Z, 4 +X, 5 +Y, 6 +Z, -1 not axis-aligned. */
+    private static int axisNormal(long a, long b, long c) {
+        float ax = MemoryUtil.memGetFloat(a), ay = MemoryUtil.memGetFloat(a + 4), az = MemoryUtil.memGetFloat(a + 8);
+        float bx = MemoryUtil.memGetFloat(b), by = MemoryUtil.memGetFloat(b + 4), bz = MemoryUtil.memGetFloat(b + 8);
+        float cx = MemoryUtil.memGetFloat(c), cy = MemoryUtil.memGetFloat(c + 4), cz = MemoryUtil.memGetFloat(c + 8);
+        float ux = bx - ax, uy = by - ay, uz = bz - az, wx = cx - bx, wy = cy - by, wz = cz - bz;
+        float nx = uy * wz - uz * wy, ny = uz * wx - ux * wz, nz = ux * wy - uy * wx;
+        if (ny == 0 && nz == 0 && nx != 0) return nx > 0 ? 4 : 0;
+        if (nx == 0 && nz == 0 && ny != 0) return ny > 0 ? 5 : 1;
+        if (nx == 0 && ny == 0 && nz != 0) return nz > 0 ? 6 : 2;
+        return -1;
     }
 
     static final class Arena {
@@ -186,10 +263,16 @@ public final class ChunkMultiDraw {
             a.grow(verts);
             start = a.alloc(verts);
         }
+        Entry e = new Entry();
         ByteBuffer vb = mesh.vertexBuffer();
+        if (ds.format().getOffset(com.mojang.blaze3d.vertex.VertexFormatElement.POSITION) == 0 && verts % 4 == 0) {
+            vb = bucketed(vb, verts / 4, stride, e.bq, e.plane);
+        } else {
+            java.util.Arrays.fill(e.bq, 0, 4, 0);   // everything in "other"
+            for (int k = 4; k < 8; k++) e.bq[k] = verts / 4;
+        }
         GL15C.glBindBuffer(GL15C.GL_ARRAY_BUFFER, a.vbo);
         GL15C.glBufferSubData(GL15C.GL_ARRAY_BUFFER, (long) start * stride, vb);
-        Entry e = new Entry();
         e.start = start;
         e.vertices = verts;
         e.indexCount = ds.indexCount();
@@ -247,7 +330,7 @@ public final class ChunkMultiDraw {
             Arena a = arenas.get(regionKey(o.getX() >> 4, o.getY() >> 4, o.getZ() >> 4));
             Entry e = a == null ? null : a.entries.get(s);
             float ox = (float) ((double) o.getX() - x), oy = (float) ((double) o.getY() - y), oz = (float) ((double) o.getZ() - z);
-            if (e == null || e.origin != o.asLong() || a.n >= MAX_DRAWS) {
+            if (e == null || e.origin != o.asLong()) {
                 if (replacesVanilla(layer)) {   // its vanilla buffer holds nothing current: nothing to draw
                     sectionsSkipped++;
                     continue;
@@ -270,32 +353,71 @@ public final class ChunkMultiDraw {
                 a.maxIndices = 0;
                 LISTED.add(a);
             }
-            int i = a.n++;
-            MemoryUtil.memPutInt(a.counts + 4L * i, e.indexCount);
-            MemoryUtil.memPutInt(a.bases + 4L * i, e.start);
-            a.offsets.putFloat(16 * i, ox).putFloat(16 * i + 4, oy).putFloat(16 * i + 8, oz);
-            if (e.indexCount > a.maxIndices) a.maxIndices = e.indexCount;
-        }
-        if (!LISTED.isEmpty()) {
-            GL20C.glUniform1i(ps[0], 1);
-            RenderSystem.AutoStorageIndexBuffer seq = RenderSystem.getSequentialBuffer(VertexFormat.Mode.QUADS);
-            for (Arena a : LISTED) {
-                a.listed = false;
-                if (a.vaoStale || a.vao == 0) setupVao(a, layer);
-                GL30C.glBindVertexArray(a.vao);
-                seq.bind(a.maxIndices);   // element buffer of this VAO, large enough
-                GL15C.glBindBuffer(GL31C.GL_UNIFORM_BUFFER, ubo());
-                a.offsets.limit(16 * a.n).position(0);
-                GL15C.glBufferSubData(GL31C.GL_UNIFORM_BUFFER, 0, a.offsets);
-                a.offsets.clear();
-                GL31C.glBindBufferBase(GL31C.GL_UNIFORM_BUFFER, UBO_BINDING, ubo());
-                GL32C.nglMultiDrawElementsBaseVertex(GL15C.GL_TRIANGLES, a.counts, seq.type().asGLType, a.indices, a.n, a.bases);
-                multiDraws++;
-                sectionsMulti += a.n;
+            if (a.n + 4 > MAX_DRAWS) flush(a, layer, ps);
+            // visible face buckets: a face whose normal points away from the camera (or edge-on) would be culled by the
+            // GPU anyway; every +X face of the section lies at x >= minX, so with the camera at x <= minX none is visible
+            // (a margin of 1/64 block keeps it conservative against float rounding: more faces drawn, never fewer)
+            float[] pl = e.plane;
+            double rx = x - o.getX(), ry = y - o.getY(), rz = z - o.getZ();
+            int vis = 1 << 3;   // other
+            if (rx < pl[0] + EPS) vis |= 1;
+            if (ry < pl[1] + EPS) vis |= 1 << 1;
+            if (rz < pl[2] + EPS) vis |= 1 << 2;
+            if (rx > pl[4] - EPS) vis |= 1 << 4;
+            if (ry > pl[5] - EPS) vis |= 1 << 5;
+            if (rz > pl[6] - EPS) vis |= 1 << 6;
+            int[] bq = e.bq;
+            int runStart = -1, runEnd = -1;
+            for (int k = 0; k <= 7; k++) {
+                boolean take = k < 7 && (vis & (1 << k)) != 0;
+                boolean empty = k < 7 && bq[k + 1] == bq[k];
+                if (take && !empty) {
+                    if (runStart < 0) runStart = bq[k];
+                    runEnd = bq[k + 1];
+                } else if (!empty && runStart >= 0) {   // an invisible, non-empty bucket (or the end) closes the run
+                    addDraw(a, e.start + runStart * 4, (runEnd - runStart) * 6, ox, oy, oz);
+                    quadsDrawn += runEnd - runStart;
+                    runStart = -1;
+                }
             }
-            GL20C.glUniform1i(ps[0], 0);
+            quadsTotal += bq[7];
+            sectionsMulti++;
+        }
+        for (Arena a : LISTED) {
+            a.listed = false;
+            flush(a, layer, ps);
         }
         return true;
+    }
+
+    private static final double EPS = 1.0 / 64;
+
+    private static void addDraw(Arena a, int baseVertex, int indices, float ox, float oy, float oz) {
+        int i = a.n++;
+        MemoryUtil.memPutInt(a.counts + 4L * i, indices);
+        MemoryUtil.memPutInt(a.bases + 4L * i, baseVertex);
+        a.offsets.putFloat(16 * i, ox).putFloat(16 * i + 4, oy).putFloat(16 * i + 8, oz);
+        if (indices > a.maxIndices) a.maxIndices = indices;
+    }
+
+    /** Issues the arena's queued draws as one multi-draw. */
+    private static void flush(Arena a, RenderType layer, int[] ps) {
+        if (a.n == 0) return;
+        GL20C.glUniform1i(ps[0], 1);
+        RenderSystem.AutoStorageIndexBuffer seq = RenderSystem.getSequentialBuffer(VertexFormat.Mode.QUADS);
+        if (a.vaoStale || a.vao == 0) setupVao(a, layer);
+        GL30C.glBindVertexArray(a.vao);
+        seq.bind(a.maxIndices);   // element buffer of this VAO, large enough
+        GL15C.glBindBuffer(GL31C.GL_UNIFORM_BUFFER, ubo());
+        a.offsets.limit(16 * a.n).position(0);
+        GL15C.glBufferSubData(GL31C.GL_UNIFORM_BUFFER, 0, a.offsets);
+        a.offsets.clear();
+        GL31C.glBindBufferBase(GL31C.GL_UNIFORM_BUFFER, UBO_BINDING, ubo());
+        GL32C.nglMultiDrawElementsBaseVertex(GL15C.GL_TRIANGLES, a.counts, seq.type().asGLType, a.indices, a.n, a.bases);
+        GL20C.glUniform1i(ps[0], 0);
+        multiDraws++;
+        a.n = 0;
+        a.maxIndices = 0;
     }
 
     private static int ubo;
@@ -341,8 +463,9 @@ public final class ChunkMultiDraw {
             arenas += m.size();
             for (Arena a : m.values()) verts += a.capacity;
         }
-        return String.format(java.util.Locale.ROOT, "chunk multidraw: patched %s, multi-draw calls %d, sections by multi-draw %d, by vanilla draws %d, skipped %d, uploads %d, arenas %d (%.1f MB), grows %d, vanilla buffers %s",
-                PATCHED, multiDraws, sectionsMulti, sectionsVanilla, sectionsSkipped, uploads, arenas, verts * 32 / 1048576.0, grows,
+        return String.format(java.util.Locale.ROOT, "chunk multidraw: patched %s, multi-draw calls %d, sections by multi-draw %d, by vanilla draws %d, skipped %d, quads drawn %.1f %% (face culling %s), uploads %d, arenas %d (%.1f MB), grows %d, vanilla buffers %s",
+                PATCHED, multiDraws, sectionsMulti, sectionsVanilla, sectionsSkipped, 100.0 * quadsDrawn / Math.max(1, quadsTotal), FACE_CULL ? "on" : "off",
+                uploads, arenas, verts * 32 / 1048576.0, grows,
                 KEEP_VANILLA || PATCHED.size() != SUPPORTED.size() ? "filled" : "not filled");
     }
 }
