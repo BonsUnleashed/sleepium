@@ -98,7 +98,11 @@
     "ItemFrameOffsetMixin",
     "EntityLightNoAllocMixin",
     "BlockEntityCullNoAllocMixin",
-    "UtilMemoizeMixin"
+    "UtilMemoizeMixin",
+    "ClientLightAsyncMixin",
+    "ClientLightCallbackMixin",
+    "ClientLevelLightQueueAccessor",
+    "ClientLightJoinMixin"
   ],
   "injectors": {
     "defaultRequire": 1
