@@ -363,6 +363,8 @@ public final class PartBatch {
     // ------------------------------------------------------------------ draw
 
     private static RenderType current;
+    private static long cmdMem, cmdCap;
+    private static int cmdBuf;
     private static final java.util.HashMap<Integer, int[]> PROGRAMS = new java.util.HashMap<>();
     private static int ssbo, ssboSize;
 
@@ -422,7 +424,26 @@ public final class PartBatch {
         RenderSystem.AutoStorageIndexBuffer seq = RenderSystem.getSequentialBuffer(VertexFormat.Mode.QUADS);
         seq.bind(q.maxIndices);
         GL20C.glUniform1i(flag, mode);
-        GL32C.nglMultiDrawElementsBaseVertex(GL11C.GL_TRIANGLES, q.counts, seq.type().asGLType, q.indices, q.n, q.bases);
+        // the commands in a buffer the GPU reads (the driver no longer walks every draw on the CPU)
+        long bytes20 = 20L * q.n;
+        if (cmdCap < bytes20) {
+            if (cmdMem != 0) MemoryUtil.nmemFree(cmdMem);
+            cmdCap = Math.max(bytes20, cmdCap * 2);
+            cmdMem = MemoryUtil.nmemAlloc(cmdCap);
+        }
+        for (int i = 0; i < q.n; i++) {
+            long c = cmdMem + 20L * i;
+            MemoryUtil.memPutInt(c, MemoryUtil.memGetInt(q.counts + 4L * i));
+            MemoryUtil.memPutInt(c + 4, 1);
+            MemoryUtil.memPutInt(c + 8, 0);
+            MemoryUtil.memPutInt(c + 12, MemoryUtil.memGetInt(q.bases + 4L * i));
+            MemoryUtil.memPutInt(c + 16, 0);
+        }
+        if (cmdBuf == 0) cmdBuf = GL15C.glGenBuffers();
+        GL15C.glBindBuffer(org.lwjgl.opengl.GL40C.GL_DRAW_INDIRECT_BUFFER, cmdBuf);
+        GL15C.nglBufferData(org.lwjgl.opengl.GL40C.GL_DRAW_INDIRECT_BUFFER, bytes20, cmdMem, GL15C.GL_STREAM_DRAW);
+        GL43C.glMultiDrawElementsIndirect(GL11C.GL_TRIANGLES, seq.type().asGLType, 0L, q.n, 20);
+        GL15C.glBindBuffer(org.lwjgl.opengl.GL40C.GL_DRAW_INDIRECT_BUFFER, 0);
         GL20C.glUniform1i(flag, 0);
         draws++;
         q.n = 0;
