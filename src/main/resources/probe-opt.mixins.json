@@ -90,7 +90,11 @@
     "SamplerUnitDedupeMixin",
     "ModelPartQuatMixin",
     "ModelPartIterMixin",
-    "CubicSamplerMixin"
+    "CubicSamplerMixin",
+    "Vec3FromRgbMixin",
+    "OverworldFogMixin",
+    "EntityCullNoAllocMixin",
+    "FrustumInvoker"
   ],
   "injectors": {
     "defaultRequire": 1

@@ -17,7 +17,17 @@ public abstract class RenderCacheBlockEntityMixin {
             target = "Lnet/minecraft/client/renderer/blockentity/BlockEntityRenderer;render(Lnet/minecraft/world/level/block/entity/BlockEntity;FLcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/MultiBufferSource;II)V"))
     @SuppressWarnings({"unchecked", "rawtypes"})
     private static void probe$cached(BlockEntityRenderer r, BlockEntity be, float pt, PoseStack pose, MultiBufferSource buffers, int light, int overlay) {
-        RenderCache.render(be, r.getClass(), (p, b, t) -> r.render(be, t, p, b, light, overlay), pt, pose, buffers, light, overlay, 0f,
-                System.identityHashCode(be.getBlockState()), null);
+        if (!com.mojang.blaze3d.systems.RenderSystem.isOnRenderThread()) {
+            RenderCache.render(be, r.getClass(), (p, b, t) -> r.render(be, t, p, b, light, overlay), pt, pose, buffers, light, overlay, 0f,
+                    System.identityHashCode(be.getBlockState()), null);
+            return;
+        }
+        var d = dev.probe.optsupport.RenderCacheDraws.enterBe(r, be, light, overlay);   // no lambda per call
+        try {
+            RenderCache.render(be, r.getClass(), d, pt, pose, buffers, light, overlay, 0f, System.identityHashCode(be.getBlockState()), null);
+        } finally {
+            dev.probe.optsupport.RenderCacheDraws.exitBe(d);
+        }
     }
 }
+

@@ -33,7 +33,17 @@ public abstract class RenderCacheMixin {
             }
             RenderCache.keyComputed(e, key);
         }
-        RenderCache.render(e, r.getClass(), (p, b, t) -> r.render(e, yaw, t, p, b, light), pt, pose, buffers, light, OverlayTexture.NO_OVERLAY, yaw, key,
-                (EntityRenderDispatcher) (Object) this);
+        if (!com.mojang.blaze3d.systems.RenderSystem.isOnRenderThread()) {
+            RenderCache.render(e, r.getClass(), (p, b, t) -> r.render(e, yaw, t, p, b, light), pt, pose, buffers, light, OverlayTexture.NO_OVERLAY, yaw, key,
+                    (EntityRenderDispatcher) (Object) this);
+            return;
+        }
+        var d = dev.probe.optsupport.RenderCacheDraws.enterEntity(r, e, yaw, light);   // no lambda per call
+        try {
+            RenderCache.render(e, r.getClass(), d, pt, pose, buffers, light, OverlayTexture.NO_OVERLAY, yaw, key, (EntityRenderDispatcher) (Object) this);
+        } finally {
+            dev.probe.optsupport.RenderCacheDraws.exitEntity(d);
+        }
     }
 }
+
