@@ -255,8 +255,19 @@ public final class ChunkMultiDraw {
      * The full-format arena of a section: with packing on, only the ~3 % of quads that do not pack exactly go there, so
      * their regions are 4x wider in x and z (32x4x32 sections) and there are few extra multi-draws.
      */
+    /**
+     * The packed arena of a section: -Dlab.chunkmd.bigRegions (default on) makes them 32x8x32 sections, so a layer has a
+     * handful of arenas (each a VAO bind, index bind, offsets range and one indirect call) instead of dozens; a call
+     * over 1024 draws is split as before. Off: 8x4x8.
+     */
+    private static long packedKey(long sx, long sy, long sz) {
+        return BIG_REGIONS ? regionKey(sx >> 2, sy >> 1, sz >> 2) : regionKey(sx, sy, sz);
+    }
+
+    private static final boolean BIG_REGIONS = !"false".equals(System.getProperty("lab.chunkmd.bigRegions"));
+
     private static long fullKey(long sx, long sy, long sz) {
-        return PACK ? regionKey(sx >> 2, sy, sz >> 2) : regionKey(sx, sy, sz);
+        return PACK ? regionKey(sx >> 2, BIG_REGIONS ? sy >> 1 : sy, sz >> 2) : regionKey(sx, sy, sz);
     }
 
     private static long regionKey(long sx, long sy, long sz) {
@@ -271,7 +282,7 @@ public final class ChunkMultiDraw {
         int li = layerIndex(layer);
         if (li < 0) return false;
         var o = section.getOrigin();
-        long key = regionKey(o.getX() >> 4, o.getY() >> 4, o.getZ() >> 4), fk = fullKey(o.getX() >> 4, o.getY() >> 4, o.getZ() >> 4);
+        long key = packedKey(o.getX() >> 4, o.getY() >> 4, o.getZ() >> 4), fk = fullKey(o.getX() >> 4, o.getY() >> 4, o.getZ() >> 4);
         Arena a = ARENAS[li].get(fk);
         if (a == null) ARENAS[li].put(fk, a = new Arena(fk, layer, false));
         int stride = ds.format().getVertexSize();
