@@ -1,603 +1,547 @@
 # probe:client_entities - a client rendering scene in the sky (ClientAuto -Dprobe.clientAuto.scene=client_entities):
-# 120 armour stands, 235 item frames, 69 chests, 69 signs, 46 banners, 60 still cows, seen from above.
-fill 0 179 16 48 179 64 minecraft:smooth_stone
-fill 0 180 64 48 190 64 minecraft:stone
-summon minecraft:armor_stand 2.5 180 18.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
-summon minecraft:armor_stand 2.5 180 21.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
-summon minecraft:armor_stand 2.5 180 24.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
-summon minecraft:armor_stand 2.5 180 27.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
-summon minecraft:armor_stand 2.5 180 30.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
-summon minecraft:armor_stand 2.5 180 33.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
-summon minecraft:armor_stand 2.5 180 36.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
-summon minecraft:armor_stand 2.5 180 39.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
-summon minecraft:armor_stand 5.5 180 18.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
-summon minecraft:armor_stand 5.5 180 21.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
-summon minecraft:armor_stand 5.5 180 24.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
-summon minecraft:armor_stand 5.5 180 27.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
-summon minecraft:armor_stand 5.5 180 30.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
-summon minecraft:armor_stand 5.5 180 33.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
-summon minecraft:armor_stand 5.5 180 36.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
-summon minecraft:armor_stand 5.5 180 39.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
-summon minecraft:armor_stand 8.5 180 18.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
-summon minecraft:armor_stand 8.5 180 21.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
-summon minecraft:armor_stand 8.5 180 24.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
-summon minecraft:armor_stand 8.5 180 27.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
-summon minecraft:armor_stand 8.5 180 30.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
-summon minecraft:armor_stand 8.5 180 33.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
-summon minecraft:armor_stand 8.5 180 36.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
-summon minecraft:armor_stand 8.5 180 39.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
-summon minecraft:armor_stand 11.5 180 18.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
-summon minecraft:armor_stand 11.5 180 21.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
-summon minecraft:armor_stand 11.5 180 24.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
-summon minecraft:armor_stand 11.5 180 27.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
-summon minecraft:armor_stand 11.5 180 30.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
-summon minecraft:armor_stand 11.5 180 33.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
-summon minecraft:armor_stand 11.5 180 36.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
-summon minecraft:armor_stand 11.5 180 39.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
-summon minecraft:armor_stand 14.5 180 18.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
-summon minecraft:armor_stand 14.5 180 21.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
-summon minecraft:armor_stand 14.5 180 24.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
-summon minecraft:armor_stand 14.5 180 27.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
-summon minecraft:armor_stand 14.5 180 30.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
-summon minecraft:armor_stand 14.5 180 33.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
-summon minecraft:armor_stand 14.5 180 36.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
-summon minecraft:armor_stand 14.5 180 39.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
-summon minecraft:armor_stand 17.5 180 18.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
-summon minecraft:armor_stand 17.5 180 21.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
-summon minecraft:armor_stand 17.5 180 24.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
-summon minecraft:armor_stand 17.5 180 27.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
-summon minecraft:armor_stand 17.5 180 30.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
-summon minecraft:armor_stand 17.5 180 33.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
-summon minecraft:armor_stand 17.5 180 36.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
-summon minecraft:armor_stand 17.5 180 39.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
-summon minecraft:armor_stand 20.5 180 18.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
-summon minecraft:armor_stand 20.5 180 21.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
-summon minecraft:armor_stand 20.5 180 24.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
-summon minecraft:armor_stand 20.5 180 27.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
-summon minecraft:armor_stand 20.5 180 30.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
-summon minecraft:armor_stand 20.5 180 33.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
-summon minecraft:armor_stand 20.5 180 36.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
-summon minecraft:armor_stand 20.5 180 39.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
-summon minecraft:armor_stand 23.5 180 18.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
-summon minecraft:armor_stand 23.5 180 21.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
-summon minecraft:armor_stand 23.5 180 24.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
-summon minecraft:armor_stand 23.5 180 27.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
-summon minecraft:armor_stand 23.5 180 30.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
-summon minecraft:armor_stand 23.5 180 33.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
-summon minecraft:armor_stand 23.5 180 36.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
-summon minecraft:armor_stand 23.5 180 39.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
-summon minecraft:armor_stand 26.5 180 18.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
-summon minecraft:armor_stand 26.5 180 21.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
-summon minecraft:armor_stand 26.5 180 24.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
-summon minecraft:armor_stand 26.5 180 27.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
-summon minecraft:armor_stand 26.5 180 30.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
-summon minecraft:armor_stand 26.5 180 33.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
-summon minecraft:armor_stand 26.5 180 36.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
-summon minecraft:armor_stand 26.5 180 39.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
-summon minecraft:armor_stand 29.5 180 18.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
-summon minecraft:armor_stand 29.5 180 21.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
-summon minecraft:armor_stand 29.5 180 24.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
-summon minecraft:armor_stand 29.5 180 27.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
-summon minecraft:armor_stand 29.5 180 30.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
-summon minecraft:armor_stand 29.5 180 33.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
-summon minecraft:armor_stand 29.5 180 36.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
-summon minecraft:armor_stand 29.5 180 39.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
-summon minecraft:armor_stand 32.5 180 18.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
-summon minecraft:armor_stand 32.5 180 21.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
-summon minecraft:armor_stand 32.5 180 24.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
-summon minecraft:armor_stand 32.5 180 27.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
-summon minecraft:armor_stand 32.5 180 30.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
-summon minecraft:armor_stand 32.5 180 33.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
-summon minecraft:armor_stand 32.5 180 36.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
-summon minecraft:armor_stand 32.5 180 39.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
-summon minecraft:armor_stand 35.5 180 18.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
-summon minecraft:armor_stand 35.5 180 21.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
-summon minecraft:armor_stand 35.5 180 24.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
-summon minecraft:armor_stand 35.5 180 27.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
-summon minecraft:armor_stand 35.5 180 30.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
-summon minecraft:armor_stand 35.5 180 33.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
-summon minecraft:armor_stand 35.5 180 36.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
-summon minecraft:armor_stand 35.5 180 39.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
-summon minecraft:armor_stand 38.5 180 18.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
-summon minecraft:armor_stand 38.5 180 21.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
-summon minecraft:armor_stand 38.5 180 24.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
-summon minecraft:armor_stand 38.5 180 27.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
-summon minecraft:armor_stand 38.5 180 30.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
-summon minecraft:armor_stand 38.5 180 33.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
-summon minecraft:armor_stand 38.5 180 36.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
-summon minecraft:armor_stand 38.5 180 39.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
-summon minecraft:armor_stand 41.5 180 18.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
-summon minecraft:armor_stand 41.5 180 21.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
-summon minecraft:armor_stand 41.5 180 24.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
-summon minecraft:armor_stand 41.5 180 27.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
-summon minecraft:armor_stand 41.5 180 30.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
-summon minecraft:armor_stand 41.5 180 33.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
-summon minecraft:armor_stand 41.5 180 36.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
-summon minecraft:armor_stand 41.5 180 39.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
-summon minecraft:armor_stand 44.5 180 18.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
-summon minecraft:armor_stand 44.5 180 21.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
-summon minecraft:armor_stand 44.5 180 24.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
-summon minecraft:armor_stand 44.5 180 27.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
-summon minecraft:armor_stand 44.5 180 30.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
-summon minecraft:armor_stand 44.5 180 33.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
-summon minecraft:armor_stand 44.5 180 36.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
-summon minecraft:armor_stand 44.5 180 39.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
-summon minecraft:item_frame 1 181 63 {Facing:2b,Item:{id:"minecraft:diamond_sword",count:1}}
-summon minecraft:item_frame 1 183 63 {Facing:2b,Item:{id:"minecraft:bow",count:1}}
-summon minecraft:item_frame 1 185 63 {Facing:2b,Item:{id:"minecraft:apple",count:1}}
-summon minecraft:item_frame 1 187 63 {Facing:2b,Item:{id:"minecraft:compass",count:1}}
-summon minecraft:item_frame 1 189 63 {Facing:2b,Item:{id:"minecraft:clock",count:1}}
-summon minecraft:item_frame 2 181 63 {Facing:2b,Item:{id:"minecraft:golden_apple",count:1}}
-summon minecraft:item_frame 2 183 63 {Facing:2b,Item:{id:"minecraft:iron_pickaxe",count:1}}
-summon minecraft:item_frame 2 185 63 {Facing:2b,Item:{id:"minecraft:shield",count:1}}
-summon minecraft:item_frame 2 187 63 {Facing:2b,Item:{id:"minecraft:book",count:1}}
-summon minecraft:item_frame 2 189 63 {Facing:2b,Item:{id:"minecraft:map",count:1}}
-summon minecraft:item_frame 3 181 63 {Facing:2b,Item:{id:"minecraft:diamond_sword",count:1}}
-summon minecraft:item_frame 3 183 63 {Facing:2b,Item:{id:"minecraft:bow",count:1}}
-summon minecraft:item_frame 3 185 63 {Facing:2b,Item:{id:"minecraft:apple",count:1}}
-summon minecraft:item_frame 3 187 63 {Facing:2b,Item:{id:"minecraft:compass",count:1}}
-summon minecraft:item_frame 3 189 63 {Facing:2b,Item:{id:"minecraft:clock",count:1}}
-summon minecraft:item_frame 4 181 63 {Facing:2b,Item:{id:"minecraft:golden_apple",count:1}}
-summon minecraft:item_frame 4 183 63 {Facing:2b,Item:{id:"minecraft:iron_pickaxe",count:1}}
-summon minecraft:item_frame 4 185 63 {Facing:2b,Item:{id:"minecraft:shield",count:1}}
-summon minecraft:item_frame 4 187 63 {Facing:2b,Item:{id:"minecraft:book",count:1}}
-summon minecraft:item_frame 4 189 63 {Facing:2b,Item:{id:"minecraft:map",count:1}}
-summon minecraft:item_frame 5 181 63 {Facing:2b,Item:{id:"minecraft:diamond_sword",count:1}}
-summon minecraft:item_frame 5 183 63 {Facing:2b,Item:{id:"minecraft:bow",count:1}}
-summon minecraft:item_frame 5 185 63 {Facing:2b,Item:{id:"minecraft:apple",count:1}}
-summon minecraft:item_frame 5 187 63 {Facing:2b,Item:{id:"minecraft:compass",count:1}}
-summon minecraft:item_frame 5 189 63 {Facing:2b,Item:{id:"minecraft:clock",count:1}}
-summon minecraft:item_frame 6 181 63 {Facing:2b,Item:{id:"minecraft:golden_apple",count:1}}
-summon minecraft:item_frame 6 183 63 {Facing:2b,Item:{id:"minecraft:iron_pickaxe",count:1}}
-summon minecraft:item_frame 6 185 63 {Facing:2b,Item:{id:"minecraft:shield",count:1}}
-summon minecraft:item_frame 6 187 63 {Facing:2b,Item:{id:"minecraft:book",count:1}}
-summon minecraft:item_frame 6 189 63 {Facing:2b,Item:{id:"minecraft:map",count:1}}
-summon minecraft:item_frame 7 181 63 {Facing:2b,Item:{id:"minecraft:diamond_sword",count:1}}
-summon minecraft:item_frame 7 183 63 {Facing:2b,Item:{id:"minecraft:bow",count:1}}
-summon minecraft:item_frame 7 185 63 {Facing:2b,Item:{id:"minecraft:apple",count:1}}
-summon minecraft:item_frame 7 187 63 {Facing:2b,Item:{id:"minecraft:compass",count:1}}
-summon minecraft:item_frame 7 189 63 {Facing:2b,Item:{id:"minecraft:clock",count:1}}
-summon minecraft:item_frame 8 181 63 {Facing:2b,Item:{id:"minecraft:golden_apple",count:1}}
-summon minecraft:item_frame 8 183 63 {Facing:2b,Item:{id:"minecraft:iron_pickaxe",count:1}}
-summon minecraft:item_frame 8 185 63 {Facing:2b,Item:{id:"minecraft:shield",count:1}}
-summon minecraft:item_frame 8 187 63 {Facing:2b,Item:{id:"minecraft:book",count:1}}
-summon minecraft:item_frame 8 189 63 {Facing:2b,Item:{id:"minecraft:map",count:1}}
-summon minecraft:item_frame 9 181 63 {Facing:2b,Item:{id:"minecraft:diamond_sword",count:1}}
-summon minecraft:item_frame 9 183 63 {Facing:2b,Item:{id:"minecraft:bow",count:1}}
-summon minecraft:item_frame 9 185 63 {Facing:2b,Item:{id:"minecraft:apple",count:1}}
-summon minecraft:item_frame 9 187 63 {Facing:2b,Item:{id:"minecraft:compass",count:1}}
-summon minecraft:item_frame 9 189 63 {Facing:2b,Item:{id:"minecraft:clock",count:1}}
-summon minecraft:item_frame 10 181 63 {Facing:2b,Item:{id:"minecraft:golden_apple",count:1}}
-summon minecraft:item_frame 10 183 63 {Facing:2b,Item:{id:"minecraft:iron_pickaxe",count:1}}
-summon minecraft:item_frame 10 185 63 {Facing:2b,Item:{id:"minecraft:shield",count:1}}
-summon minecraft:item_frame 10 187 63 {Facing:2b,Item:{id:"minecraft:book",count:1}}
-summon minecraft:item_frame 10 189 63 {Facing:2b,Item:{id:"minecraft:map",count:1}}
-summon minecraft:item_frame 11 181 63 {Facing:2b,Item:{id:"minecraft:diamond_sword",count:1}}
-summon minecraft:item_frame 11 183 63 {Facing:2b,Item:{id:"minecraft:bow",count:1}}
-summon minecraft:item_frame 11 185 63 {Facing:2b,Item:{id:"minecraft:apple",count:1}}
-summon minecraft:item_frame 11 187 63 {Facing:2b,Item:{id:"minecraft:compass",count:1}}
-summon minecraft:item_frame 11 189 63 {Facing:2b,Item:{id:"minecraft:clock",count:1}}
-summon minecraft:item_frame 12 181 63 {Facing:2b,Item:{id:"minecraft:golden_apple",count:1}}
-summon minecraft:item_frame 12 183 63 {Facing:2b,Item:{id:"minecraft:iron_pickaxe",count:1}}
-summon minecraft:item_frame 12 185 63 {Facing:2b,Item:{id:"minecraft:shield",count:1}}
-summon minecraft:item_frame 12 187 63 {Facing:2b,Item:{id:"minecraft:book",count:1}}
-summon minecraft:item_frame 12 189 63 {Facing:2b,Item:{id:"minecraft:map",count:1}}
-summon minecraft:item_frame 13 181 63 {Facing:2b,Item:{id:"minecraft:diamond_sword",count:1}}
-summon minecraft:item_frame 13 183 63 {Facing:2b,Item:{id:"minecraft:bow",count:1}}
-summon minecraft:item_frame 13 185 63 {Facing:2b,Item:{id:"minecraft:apple",count:1}}
-summon minecraft:item_frame 13 187 63 {Facing:2b,Item:{id:"minecraft:compass",count:1}}
-summon minecraft:item_frame 13 189 63 {Facing:2b,Item:{id:"minecraft:clock",count:1}}
-summon minecraft:item_frame 14 181 63 {Facing:2b,Item:{id:"minecraft:golden_apple",count:1}}
-summon minecraft:item_frame 14 183 63 {Facing:2b,Item:{id:"minecraft:iron_pickaxe",count:1}}
-summon minecraft:item_frame 14 185 63 {Facing:2b,Item:{id:"minecraft:shield",count:1}}
-summon minecraft:item_frame 14 187 63 {Facing:2b,Item:{id:"minecraft:book",count:1}}
-summon minecraft:item_frame 14 189 63 {Facing:2b,Item:{id:"minecraft:map",count:1}}
-summon minecraft:item_frame 15 181 63 {Facing:2b,Item:{id:"minecraft:diamond_sword",count:1}}
-summon minecraft:item_frame 15 183 63 {Facing:2b,Item:{id:"minecraft:bow",count:1}}
-summon minecraft:item_frame 15 185 63 {Facing:2b,Item:{id:"minecraft:apple",count:1}}
-summon minecraft:item_frame 15 187 63 {Facing:2b,Item:{id:"minecraft:compass",count:1}}
-summon minecraft:item_frame 15 189 63 {Facing:2b,Item:{id:"minecraft:clock",count:1}}
-summon minecraft:item_frame 16 181 63 {Facing:2b,Item:{id:"minecraft:golden_apple",count:1}}
-summon minecraft:item_frame 16 183 63 {Facing:2b,Item:{id:"minecraft:iron_pickaxe",count:1}}
-summon minecraft:item_frame 16 185 63 {Facing:2b,Item:{id:"minecraft:shield",count:1}}
-summon minecraft:item_frame 16 187 63 {Facing:2b,Item:{id:"minecraft:book",count:1}}
-summon minecraft:item_frame 16 189 63 {Facing:2b,Item:{id:"minecraft:map",count:1}}
-summon minecraft:item_frame 17 181 63 {Facing:2b,Item:{id:"minecraft:diamond_sword",count:1}}
-summon minecraft:item_frame 17 183 63 {Facing:2b,Item:{id:"minecraft:bow",count:1}}
-summon minecraft:item_frame 17 185 63 {Facing:2b,Item:{id:"minecraft:apple",count:1}}
-summon minecraft:item_frame 17 187 63 {Facing:2b,Item:{id:"minecraft:compass",count:1}}
-summon minecraft:item_frame 17 189 63 {Facing:2b,Item:{id:"minecraft:clock",count:1}}
-summon minecraft:item_frame 18 181 63 {Facing:2b,Item:{id:"minecraft:golden_apple",count:1}}
-summon minecraft:item_frame 18 183 63 {Facing:2b,Item:{id:"minecraft:iron_pickaxe",count:1}}
-summon minecraft:item_frame 18 185 63 {Facing:2b,Item:{id:"minecraft:shield",count:1}}
-summon minecraft:item_frame 18 187 63 {Facing:2b,Item:{id:"minecraft:book",count:1}}
-summon minecraft:item_frame 18 189 63 {Facing:2b,Item:{id:"minecraft:map",count:1}}
-summon minecraft:item_frame 19 181 63 {Facing:2b,Item:{id:"minecraft:diamond_sword",count:1}}
-summon minecraft:item_frame 19 183 63 {Facing:2b,Item:{id:"minecraft:bow",count:1}}
-summon minecraft:item_frame 19 185 63 {Facing:2b,Item:{id:"minecraft:apple",count:1}}
-summon minecraft:item_frame 19 187 63 {Facing:2b,Item:{id:"minecraft:compass",count:1}}
-summon minecraft:item_frame 19 189 63 {Facing:2b,Item:{id:"minecraft:clock",count:1}}
-summon minecraft:item_frame 20 181 63 {Facing:2b,Item:{id:"minecraft:golden_apple",count:1}}
-summon minecraft:item_frame 20 183 63 {Facing:2b,Item:{id:"minecraft:iron_pickaxe",count:1}}
-summon minecraft:item_frame 20 185 63 {Facing:2b,Item:{id:"minecraft:shield",count:1}}
-summon minecraft:item_frame 20 187 63 {Facing:2b,Item:{id:"minecraft:book",count:1}}
-summon minecraft:item_frame 20 189 63 {Facing:2b,Item:{id:"minecraft:map",count:1}}
-summon minecraft:item_frame 21 181 63 {Facing:2b,Item:{id:"minecraft:diamond_sword",count:1}}
-summon minecraft:item_frame 21 183 63 {Facing:2b,Item:{id:"minecraft:bow",count:1}}
-summon minecraft:item_frame 21 185 63 {Facing:2b,Item:{id:"minecraft:apple",count:1}}
-summon minecraft:item_frame 21 187 63 {Facing:2b,Item:{id:"minecraft:compass",count:1}}
-summon minecraft:item_frame 21 189 63 {Facing:2b,Item:{id:"minecraft:clock",count:1}}
-summon minecraft:item_frame 22 181 63 {Facing:2b,Item:{id:"minecraft:golden_apple",count:1}}
-summon minecraft:item_frame 22 183 63 {Facing:2b,Item:{id:"minecraft:iron_pickaxe",count:1}}
-summon minecraft:item_frame 22 185 63 {Facing:2b,Item:{id:"minecraft:shield",count:1}}
-summon minecraft:item_frame 22 187 63 {Facing:2b,Item:{id:"minecraft:book",count:1}}
-summon minecraft:item_frame 22 189 63 {Facing:2b,Item:{id:"minecraft:map",count:1}}
-summon minecraft:item_frame 23 181 63 {Facing:2b,Item:{id:"minecraft:diamond_sword",count:1}}
-summon minecraft:item_frame 23 183 63 {Facing:2b,Item:{id:"minecraft:bow",count:1}}
-summon minecraft:item_frame 23 185 63 {Facing:2b,Item:{id:"minecraft:apple",count:1}}
-summon minecraft:item_frame 23 187 63 {Facing:2b,Item:{id:"minecraft:compass",count:1}}
-summon minecraft:item_frame 23 189 63 {Facing:2b,Item:{id:"minecraft:clock",count:1}}
-summon minecraft:item_frame 24 181 63 {Facing:2b,Item:{id:"minecraft:golden_apple",count:1}}
-summon minecraft:item_frame 24 183 63 {Facing:2b,Item:{id:"minecraft:iron_pickaxe",count:1}}
-summon minecraft:item_frame 24 185 63 {Facing:2b,Item:{id:"minecraft:shield",count:1}}
-summon minecraft:item_frame 24 187 63 {Facing:2b,Item:{id:"minecraft:book",count:1}}
-summon minecraft:item_frame 24 189 63 {Facing:2b,Item:{id:"minecraft:map",count:1}}
-summon minecraft:item_frame 25 181 63 {Facing:2b,Item:{id:"minecraft:diamond_sword",count:1}}
-summon minecraft:item_frame 25 183 63 {Facing:2b,Item:{id:"minecraft:bow",count:1}}
-summon minecraft:item_frame 25 185 63 {Facing:2b,Item:{id:"minecraft:apple",count:1}}
-summon minecraft:item_frame 25 187 63 {Facing:2b,Item:{id:"minecraft:compass",count:1}}
-summon minecraft:item_frame 25 189 63 {Facing:2b,Item:{id:"minecraft:clock",count:1}}
-summon minecraft:item_frame 26 181 63 {Facing:2b,Item:{id:"minecraft:golden_apple",count:1}}
-summon minecraft:item_frame 26 183 63 {Facing:2b,Item:{id:"minecraft:iron_pickaxe",count:1}}
-summon minecraft:item_frame 26 185 63 {Facing:2b,Item:{id:"minecraft:shield",count:1}}
-summon minecraft:item_frame 26 187 63 {Facing:2b,Item:{id:"minecraft:book",count:1}}
-summon minecraft:item_frame 26 189 63 {Facing:2b,Item:{id:"minecraft:map",count:1}}
-summon minecraft:item_frame 27 181 63 {Facing:2b,Item:{id:"minecraft:diamond_sword",count:1}}
-summon minecraft:item_frame 27 183 63 {Facing:2b,Item:{id:"minecraft:bow",count:1}}
-summon minecraft:item_frame 27 185 63 {Facing:2b,Item:{id:"minecraft:apple",count:1}}
-summon minecraft:item_frame 27 187 63 {Facing:2b,Item:{id:"minecraft:compass",count:1}}
-summon minecraft:item_frame 27 189 63 {Facing:2b,Item:{id:"minecraft:clock",count:1}}
-summon minecraft:item_frame 28 181 63 {Facing:2b,Item:{id:"minecraft:golden_apple",count:1}}
-summon minecraft:item_frame 28 183 63 {Facing:2b,Item:{id:"minecraft:iron_pickaxe",count:1}}
-summon minecraft:item_frame 28 185 63 {Facing:2b,Item:{id:"minecraft:shield",count:1}}
-summon minecraft:item_frame 28 187 63 {Facing:2b,Item:{id:"minecraft:book",count:1}}
-summon minecraft:item_frame 28 189 63 {Facing:2b,Item:{id:"minecraft:map",count:1}}
-summon minecraft:item_frame 29 181 63 {Facing:2b,Item:{id:"minecraft:diamond_sword",count:1}}
-summon minecraft:item_frame 29 183 63 {Facing:2b,Item:{id:"minecraft:bow",count:1}}
-summon minecraft:item_frame 29 185 63 {Facing:2b,Item:{id:"minecraft:apple",count:1}}
-summon minecraft:item_frame 29 187 63 {Facing:2b,Item:{id:"minecraft:compass",count:1}}
-summon minecraft:item_frame 29 189 63 {Facing:2b,Item:{id:"minecraft:clock",count:1}}
-summon minecraft:item_frame 30 181 63 {Facing:2b,Item:{id:"minecraft:golden_apple",count:1}}
-summon minecraft:item_frame 30 183 63 {Facing:2b,Item:{id:"minecraft:iron_pickaxe",count:1}}
-summon minecraft:item_frame 30 185 63 {Facing:2b,Item:{id:"minecraft:shield",count:1}}
-summon minecraft:item_frame 30 187 63 {Facing:2b,Item:{id:"minecraft:book",count:1}}
-summon minecraft:item_frame 30 189 63 {Facing:2b,Item:{id:"minecraft:map",count:1}}
-summon minecraft:item_frame 31 181 63 {Facing:2b,Item:{id:"minecraft:diamond_sword",count:1}}
-summon minecraft:item_frame 31 183 63 {Facing:2b,Item:{id:"minecraft:bow",count:1}}
-summon minecraft:item_frame 31 185 63 {Facing:2b,Item:{id:"minecraft:apple",count:1}}
-summon minecraft:item_frame 31 187 63 {Facing:2b,Item:{id:"minecraft:compass",count:1}}
-summon minecraft:item_frame 31 189 63 {Facing:2b,Item:{id:"minecraft:clock",count:1}}
-summon minecraft:item_frame 32 181 63 {Facing:2b,Item:{id:"minecraft:golden_apple",count:1}}
-summon minecraft:item_frame 32 183 63 {Facing:2b,Item:{id:"minecraft:iron_pickaxe",count:1}}
-summon minecraft:item_frame 32 185 63 {Facing:2b,Item:{id:"minecraft:shield",count:1}}
-summon minecraft:item_frame 32 187 63 {Facing:2b,Item:{id:"minecraft:book",count:1}}
-summon minecraft:item_frame 32 189 63 {Facing:2b,Item:{id:"minecraft:map",count:1}}
-summon minecraft:item_frame 33 181 63 {Facing:2b,Item:{id:"minecraft:diamond_sword",count:1}}
-summon minecraft:item_frame 33 183 63 {Facing:2b,Item:{id:"minecraft:bow",count:1}}
-summon minecraft:item_frame 33 185 63 {Facing:2b,Item:{id:"minecraft:apple",count:1}}
-summon minecraft:item_frame 33 187 63 {Facing:2b,Item:{id:"minecraft:compass",count:1}}
-summon minecraft:item_frame 33 189 63 {Facing:2b,Item:{id:"minecraft:clock",count:1}}
-summon minecraft:item_frame 34 181 63 {Facing:2b,Item:{id:"minecraft:golden_apple",count:1}}
-summon minecraft:item_frame 34 183 63 {Facing:2b,Item:{id:"minecraft:iron_pickaxe",count:1}}
-summon minecraft:item_frame 34 185 63 {Facing:2b,Item:{id:"minecraft:shield",count:1}}
-summon minecraft:item_frame 34 187 63 {Facing:2b,Item:{id:"minecraft:book",count:1}}
-summon minecraft:item_frame 34 189 63 {Facing:2b,Item:{id:"minecraft:map",count:1}}
-summon minecraft:item_frame 35 181 63 {Facing:2b,Item:{id:"minecraft:diamond_sword",count:1}}
-summon minecraft:item_frame 35 183 63 {Facing:2b,Item:{id:"minecraft:bow",count:1}}
-summon minecraft:item_frame 35 185 63 {Facing:2b,Item:{id:"minecraft:apple",count:1}}
-summon minecraft:item_frame 35 187 63 {Facing:2b,Item:{id:"minecraft:compass",count:1}}
-summon minecraft:item_frame 35 189 63 {Facing:2b,Item:{id:"minecraft:clock",count:1}}
-summon minecraft:item_frame 36 181 63 {Facing:2b,Item:{id:"minecraft:golden_apple",count:1}}
-summon minecraft:item_frame 36 183 63 {Facing:2b,Item:{id:"minecraft:iron_pickaxe",count:1}}
-summon minecraft:item_frame 36 185 63 {Facing:2b,Item:{id:"minecraft:shield",count:1}}
-summon minecraft:item_frame 36 187 63 {Facing:2b,Item:{id:"minecraft:book",count:1}}
-summon minecraft:item_frame 36 189 63 {Facing:2b,Item:{id:"minecraft:map",count:1}}
-summon minecraft:item_frame 37 181 63 {Facing:2b,Item:{id:"minecraft:diamond_sword",count:1}}
-summon minecraft:item_frame 37 183 63 {Facing:2b,Item:{id:"minecraft:bow",count:1}}
-summon minecraft:item_frame 37 185 63 {Facing:2b,Item:{id:"minecraft:apple",count:1}}
-summon minecraft:item_frame 37 187 63 {Facing:2b,Item:{id:"minecraft:compass",count:1}}
-summon minecraft:item_frame 37 189 63 {Facing:2b,Item:{id:"minecraft:clock",count:1}}
-summon minecraft:item_frame 38 181 63 {Facing:2b,Item:{id:"minecraft:golden_apple",count:1}}
-summon minecraft:item_frame 38 183 63 {Facing:2b,Item:{id:"minecraft:iron_pickaxe",count:1}}
-summon minecraft:item_frame 38 185 63 {Facing:2b,Item:{id:"minecraft:shield",count:1}}
-summon minecraft:item_frame 38 187 63 {Facing:2b,Item:{id:"minecraft:book",count:1}}
-summon minecraft:item_frame 38 189 63 {Facing:2b,Item:{id:"minecraft:map",count:1}}
-summon minecraft:item_frame 39 181 63 {Facing:2b,Item:{id:"minecraft:diamond_sword",count:1}}
-summon minecraft:item_frame 39 183 63 {Facing:2b,Item:{id:"minecraft:bow",count:1}}
-summon minecraft:item_frame 39 185 63 {Facing:2b,Item:{id:"minecraft:apple",count:1}}
-summon minecraft:item_frame 39 187 63 {Facing:2b,Item:{id:"minecraft:compass",count:1}}
-summon minecraft:item_frame 39 189 63 {Facing:2b,Item:{id:"minecraft:clock",count:1}}
-summon minecraft:item_frame 40 181 63 {Facing:2b,Item:{id:"minecraft:golden_apple",count:1}}
-summon minecraft:item_frame 40 183 63 {Facing:2b,Item:{id:"minecraft:iron_pickaxe",count:1}}
-summon minecraft:item_frame 40 185 63 {Facing:2b,Item:{id:"minecraft:shield",count:1}}
-summon minecraft:item_frame 40 187 63 {Facing:2b,Item:{id:"minecraft:book",count:1}}
-summon minecraft:item_frame 40 189 63 {Facing:2b,Item:{id:"minecraft:map",count:1}}
-summon minecraft:item_frame 41 181 63 {Facing:2b,Item:{id:"minecraft:diamond_sword",count:1}}
-summon minecraft:item_frame 41 183 63 {Facing:2b,Item:{id:"minecraft:bow",count:1}}
-summon minecraft:item_frame 41 185 63 {Facing:2b,Item:{id:"minecraft:apple",count:1}}
-summon minecraft:item_frame 41 187 63 {Facing:2b,Item:{id:"minecraft:compass",count:1}}
-summon minecraft:item_frame 41 189 63 {Facing:2b,Item:{id:"minecraft:clock",count:1}}
-summon minecraft:item_frame 42 181 63 {Facing:2b,Item:{id:"minecraft:golden_apple",count:1}}
-summon minecraft:item_frame 42 183 63 {Facing:2b,Item:{id:"minecraft:iron_pickaxe",count:1}}
-summon minecraft:item_frame 42 185 63 {Facing:2b,Item:{id:"minecraft:shield",count:1}}
-summon minecraft:item_frame 42 187 63 {Facing:2b,Item:{id:"minecraft:book",count:1}}
-summon minecraft:item_frame 42 189 63 {Facing:2b,Item:{id:"minecraft:map",count:1}}
-summon minecraft:item_frame 43 181 63 {Facing:2b,Item:{id:"minecraft:diamond_sword",count:1}}
-summon minecraft:item_frame 43 183 63 {Facing:2b,Item:{id:"minecraft:bow",count:1}}
-summon minecraft:item_frame 43 185 63 {Facing:2b,Item:{id:"minecraft:apple",count:1}}
-summon minecraft:item_frame 43 187 63 {Facing:2b,Item:{id:"minecraft:compass",count:1}}
-summon minecraft:item_frame 43 189 63 {Facing:2b,Item:{id:"minecraft:clock",count:1}}
-summon minecraft:item_frame 44 181 63 {Facing:2b,Item:{id:"minecraft:golden_apple",count:1}}
-summon minecraft:item_frame 44 183 63 {Facing:2b,Item:{id:"minecraft:iron_pickaxe",count:1}}
-summon minecraft:item_frame 44 185 63 {Facing:2b,Item:{id:"minecraft:shield",count:1}}
-summon minecraft:item_frame 44 187 63 {Facing:2b,Item:{id:"minecraft:book",count:1}}
-summon minecraft:item_frame 44 189 63 {Facing:2b,Item:{id:"minecraft:map",count:1}}
-summon minecraft:item_frame 45 181 63 {Facing:2b,Item:{id:"minecraft:diamond_sword",count:1}}
-summon minecraft:item_frame 45 183 63 {Facing:2b,Item:{id:"minecraft:bow",count:1}}
-summon minecraft:item_frame 45 185 63 {Facing:2b,Item:{id:"minecraft:apple",count:1}}
-summon minecraft:item_frame 45 187 63 {Facing:2b,Item:{id:"minecraft:compass",count:1}}
-summon minecraft:item_frame 45 189 63 {Facing:2b,Item:{id:"minecraft:clock",count:1}}
-summon minecraft:item_frame 46 181 63 {Facing:2b,Item:{id:"minecraft:golden_apple",count:1}}
-summon minecraft:item_frame 46 183 63 {Facing:2b,Item:{id:"minecraft:iron_pickaxe",count:1}}
-summon minecraft:item_frame 46 185 63 {Facing:2b,Item:{id:"minecraft:shield",count:1}}
-summon minecraft:item_frame 46 187 63 {Facing:2b,Item:{id:"minecraft:book",count:1}}
-summon minecraft:item_frame 46 189 63 {Facing:2b,Item:{id:"minecraft:map",count:1}}
-summon minecraft:item_frame 47 181 63 {Facing:2b,Item:{id:"minecraft:diamond_sword",count:1}}
-summon minecraft:item_frame 47 183 63 {Facing:2b,Item:{id:"minecraft:bow",count:1}}
-summon minecraft:item_frame 47 185 63 {Facing:2b,Item:{id:"minecraft:apple",count:1}}
-summon minecraft:item_frame 47 187 63 {Facing:2b,Item:{id:"minecraft:compass",count:1}}
-summon minecraft:item_frame 47 189 63 {Facing:2b,Item:{id:"minecraft:clock",count:1}}
-setblock 2 180 44 minecraft:chest[facing=north]
-setblock 4 180 44 minecraft:chest[facing=north]
-setblock 6 180 44 minecraft:chest[facing=north]
-setblock 8 180 44 minecraft:chest[facing=north]
-setblock 10 180 44 minecraft:chest[facing=north]
-setblock 12 180 44 minecraft:chest[facing=north]
-setblock 14 180 44 minecraft:chest[facing=north]
-setblock 16 180 44 minecraft:chest[facing=north]
-setblock 18 180 44 minecraft:chest[facing=north]
-setblock 20 180 44 minecraft:chest[facing=north]
-setblock 22 180 44 minecraft:chest[facing=north]
-setblock 24 180 44 minecraft:chest[facing=north]
-setblock 26 180 44 minecraft:chest[facing=north]
-setblock 28 180 44 minecraft:chest[facing=north]
-setblock 30 180 44 minecraft:chest[facing=north]
-setblock 32 180 44 minecraft:chest[facing=north]
-setblock 34 180 44 minecraft:chest[facing=north]
-setblock 36 180 44 minecraft:chest[facing=north]
-setblock 38 180 44 minecraft:chest[facing=north]
-setblock 40 180 44 minecraft:chest[facing=north]
-setblock 42 180 44 minecraft:chest[facing=north]
-setblock 44 180 44 minecraft:chest[facing=north]
-setblock 46 180 44 minecraft:chest[facing=north]
-setblock 2 180 46 minecraft:chest[facing=north]
-setblock 4 180 46 minecraft:chest[facing=north]
-setblock 6 180 46 minecraft:chest[facing=north]
-setblock 8 180 46 minecraft:chest[facing=north]
-setblock 10 180 46 minecraft:chest[facing=north]
-setblock 12 180 46 minecraft:chest[facing=north]
-setblock 14 180 46 minecraft:chest[facing=north]
-setblock 16 180 46 minecraft:chest[facing=north]
-setblock 18 180 46 minecraft:chest[facing=north]
-setblock 20 180 46 minecraft:chest[facing=north]
-setblock 22 180 46 minecraft:chest[facing=north]
-setblock 24 180 46 minecraft:chest[facing=north]
-setblock 26 180 46 minecraft:chest[facing=north]
-setblock 28 180 46 minecraft:chest[facing=north]
-setblock 30 180 46 minecraft:chest[facing=north]
-setblock 32 180 46 minecraft:chest[facing=north]
-setblock 34 180 46 minecraft:chest[facing=north]
-setblock 36 180 46 minecraft:chest[facing=north]
-setblock 38 180 46 minecraft:chest[facing=north]
-setblock 40 180 46 minecraft:chest[facing=north]
-setblock 42 180 46 minecraft:chest[facing=north]
-setblock 44 180 46 minecraft:chest[facing=north]
-setblock 46 180 46 minecraft:chest[facing=north]
-setblock 2 180 48 minecraft:chest[facing=north]
-setblock 4 180 48 minecraft:chest[facing=north]
-setblock 6 180 48 minecraft:chest[facing=north]
-setblock 8 180 48 minecraft:chest[facing=north]
-setblock 10 180 48 minecraft:chest[facing=north]
-setblock 12 180 48 minecraft:chest[facing=north]
-setblock 14 180 48 minecraft:chest[facing=north]
-setblock 16 180 48 minecraft:chest[facing=north]
-setblock 18 180 48 minecraft:chest[facing=north]
-setblock 20 180 48 minecraft:chest[facing=north]
-setblock 22 180 48 minecraft:chest[facing=north]
-setblock 24 180 48 minecraft:chest[facing=north]
-setblock 26 180 48 minecraft:chest[facing=north]
-setblock 28 180 48 minecraft:chest[facing=north]
-setblock 30 180 48 minecraft:chest[facing=north]
-setblock 32 180 48 minecraft:chest[facing=north]
-setblock 34 180 48 minecraft:chest[facing=north]
-setblock 36 180 48 minecraft:chest[facing=north]
-setblock 38 180 48 minecraft:chest[facing=north]
-setblock 40 180 48 minecraft:chest[facing=north]
-setblock 42 180 48 minecraft:chest[facing=north]
-setblock 44 180 48 minecraft:chest[facing=north]
-setblock 46 180 48 minecraft:chest[facing=north]
-setblock 2 180 50 minecraft:oak_sign[rotation=8]{front_text:{messages:['{"text":"probe"}','{"text":"sign 2"}','{"text":""}','{"text":""}']}}
-setblock 4 180 50 minecraft:oak_sign[rotation=8]{front_text:{messages:['{"text":"probe"}','{"text":"sign 4"}','{"text":""}','{"text":""}']}}
-setblock 6 180 50 minecraft:oak_sign[rotation=8]{front_text:{messages:['{"text":"probe"}','{"text":"sign 6"}','{"text":""}','{"text":""}']}}
-setblock 8 180 50 minecraft:oak_sign[rotation=8]{front_text:{messages:['{"text":"probe"}','{"text":"sign 8"}','{"text":""}','{"text":""}']}}
-setblock 10 180 50 minecraft:oak_sign[rotation=8]{front_text:{messages:['{"text":"probe"}','{"text":"sign 10"}','{"text":""}','{"text":""}']}}
-setblock 12 180 50 minecraft:oak_sign[rotation=8]{front_text:{messages:['{"text":"probe"}','{"text":"sign 12"}','{"text":""}','{"text":""}']}}
-setblock 14 180 50 minecraft:oak_sign[rotation=8]{front_text:{messages:['{"text":"probe"}','{"text":"sign 14"}','{"text":""}','{"text":""}']}}
-setblock 16 180 50 minecraft:oak_sign[rotation=8]{front_text:{messages:['{"text":"probe"}','{"text":"sign 16"}','{"text":""}','{"text":""}']}}
-setblock 18 180 50 minecraft:oak_sign[rotation=8]{front_text:{messages:['{"text":"probe"}','{"text":"sign 18"}','{"text":""}','{"text":""}']}}
-setblock 20 180 50 minecraft:oak_sign[rotation=8]{front_text:{messages:['{"text":"probe"}','{"text":"sign 20"}','{"text":""}','{"text":""}']}}
-setblock 22 180 50 minecraft:oak_sign[rotation=8]{front_text:{messages:['{"text":"probe"}','{"text":"sign 22"}','{"text":""}','{"text":""}']}}
-setblock 24 180 50 minecraft:oak_sign[rotation=8]{front_text:{messages:['{"text":"probe"}','{"text":"sign 24"}','{"text":""}','{"text":""}']}}
-setblock 26 180 50 minecraft:oak_sign[rotation=8]{front_text:{messages:['{"text":"probe"}','{"text":"sign 26"}','{"text":""}','{"text":""}']}}
-setblock 28 180 50 minecraft:oak_sign[rotation=8]{front_text:{messages:['{"text":"probe"}','{"text":"sign 28"}','{"text":""}','{"text":""}']}}
-setblock 30 180 50 minecraft:oak_sign[rotation=8]{front_text:{messages:['{"text":"probe"}','{"text":"sign 30"}','{"text":""}','{"text":""}']}}
-setblock 32 180 50 minecraft:oak_sign[rotation=8]{front_text:{messages:['{"text":"probe"}','{"text":"sign 32"}','{"text":""}','{"text":""}']}}
-setblock 34 180 50 minecraft:oak_sign[rotation=8]{front_text:{messages:['{"text":"probe"}','{"text":"sign 34"}','{"text":""}','{"text":""}']}}
-setblock 36 180 50 minecraft:oak_sign[rotation=8]{front_text:{messages:['{"text":"probe"}','{"text":"sign 36"}','{"text":""}','{"text":""}']}}
-setblock 38 180 50 minecraft:oak_sign[rotation=8]{front_text:{messages:['{"text":"probe"}','{"text":"sign 38"}','{"text":""}','{"text":""}']}}
-setblock 40 180 50 minecraft:oak_sign[rotation=8]{front_text:{messages:['{"text":"probe"}','{"text":"sign 40"}','{"text":""}','{"text":""}']}}
-setblock 42 180 50 minecraft:oak_sign[rotation=8]{front_text:{messages:['{"text":"probe"}','{"text":"sign 42"}','{"text":""}','{"text":""}']}}
-setblock 44 180 50 minecraft:oak_sign[rotation=8]{front_text:{messages:['{"text":"probe"}','{"text":"sign 44"}','{"text":""}','{"text":""}']}}
-setblock 46 180 50 minecraft:oak_sign[rotation=8]{front_text:{messages:['{"text":"probe"}','{"text":"sign 46"}','{"text":""}','{"text":""}']}}
-setblock 2 180 52 minecraft:oak_sign[rotation=8]{front_text:{messages:['{"text":"probe"}','{"text":"sign 2"}','{"text":""}','{"text":""}']}}
-setblock 4 180 52 minecraft:oak_sign[rotation=8]{front_text:{messages:['{"text":"probe"}','{"text":"sign 4"}','{"text":""}','{"text":""}']}}
-setblock 6 180 52 minecraft:oak_sign[rotation=8]{front_text:{messages:['{"text":"probe"}','{"text":"sign 6"}','{"text":""}','{"text":""}']}}
-setblock 8 180 52 minecraft:oak_sign[rotation=8]{front_text:{messages:['{"text":"probe"}','{"text":"sign 8"}','{"text":""}','{"text":""}']}}
-setblock 10 180 52 minecraft:oak_sign[rotation=8]{front_text:{messages:['{"text":"probe"}','{"text":"sign 10"}','{"text":""}','{"text":""}']}}
-setblock 12 180 52 minecraft:oak_sign[rotation=8]{front_text:{messages:['{"text":"probe"}','{"text":"sign 12"}','{"text":""}','{"text":""}']}}
-setblock 14 180 52 minecraft:oak_sign[rotation=8]{front_text:{messages:['{"text":"probe"}','{"text":"sign 14"}','{"text":""}','{"text":""}']}}
-setblock 16 180 52 minecraft:oak_sign[rotation=8]{front_text:{messages:['{"text":"probe"}','{"text":"sign 16"}','{"text":""}','{"text":""}']}}
-setblock 18 180 52 minecraft:oak_sign[rotation=8]{front_text:{messages:['{"text":"probe"}','{"text":"sign 18"}','{"text":""}','{"text":""}']}}
-setblock 20 180 52 minecraft:oak_sign[rotation=8]{front_text:{messages:['{"text":"probe"}','{"text":"sign 20"}','{"text":""}','{"text":""}']}}
-setblock 22 180 52 minecraft:oak_sign[rotation=8]{front_text:{messages:['{"text":"probe"}','{"text":"sign 22"}','{"text":""}','{"text":""}']}}
-setblock 24 180 52 minecraft:oak_sign[rotation=8]{front_text:{messages:['{"text":"probe"}','{"text":"sign 24"}','{"text":""}','{"text":""}']}}
-setblock 26 180 52 minecraft:oak_sign[rotation=8]{front_text:{messages:['{"text":"probe"}','{"text":"sign 26"}','{"text":""}','{"text":""}']}}
-setblock 28 180 52 minecraft:oak_sign[rotation=8]{front_text:{messages:['{"text":"probe"}','{"text":"sign 28"}','{"text":""}','{"text":""}']}}
-setblock 30 180 52 minecraft:oak_sign[rotation=8]{front_text:{messages:['{"text":"probe"}','{"text":"sign 30"}','{"text":""}','{"text":""}']}}
-setblock 32 180 52 minecraft:oak_sign[rotation=8]{front_text:{messages:['{"text":"probe"}','{"text":"sign 32"}','{"text":""}','{"text":""}']}}
-setblock 34 180 52 minecraft:oak_sign[rotation=8]{front_text:{messages:['{"text":"probe"}','{"text":"sign 34"}','{"text":""}','{"text":""}']}}
-setblock 36 180 52 minecraft:oak_sign[rotation=8]{front_text:{messages:['{"text":"probe"}','{"text":"sign 36"}','{"text":""}','{"text":""}']}}
-setblock 38 180 52 minecraft:oak_sign[rotation=8]{front_text:{messages:['{"text":"probe"}','{"text":"sign 38"}','{"text":""}','{"text":""}']}}
-setblock 40 180 52 minecraft:oak_sign[rotation=8]{front_text:{messages:['{"text":"probe"}','{"text":"sign 40"}','{"text":""}','{"text":""}']}}
-setblock 42 180 52 minecraft:oak_sign[rotation=8]{front_text:{messages:['{"text":"probe"}','{"text":"sign 42"}','{"text":""}','{"text":""}']}}
-setblock 44 180 52 minecraft:oak_sign[rotation=8]{front_text:{messages:['{"text":"probe"}','{"text":"sign 44"}','{"text":""}','{"text":""}']}}
-setblock 46 180 52 minecraft:oak_sign[rotation=8]{front_text:{messages:['{"text":"probe"}','{"text":"sign 46"}','{"text":""}','{"text":""}']}}
-setblock 2 180 54 minecraft:oak_sign[rotation=8]{front_text:{messages:['{"text":"probe"}','{"text":"sign 2"}','{"text":""}','{"text":""}']}}
-setblock 4 180 54 minecraft:oak_sign[rotation=8]{front_text:{messages:['{"text":"probe"}','{"text":"sign 4"}','{"text":""}','{"text":""}']}}
-setblock 6 180 54 minecraft:oak_sign[rotation=8]{front_text:{messages:['{"text":"probe"}','{"text":"sign 6"}','{"text":""}','{"text":""}']}}
-setblock 8 180 54 minecraft:oak_sign[rotation=8]{front_text:{messages:['{"text":"probe"}','{"text":"sign 8"}','{"text":""}','{"text":""}']}}
-setblock 10 180 54 minecraft:oak_sign[rotation=8]{front_text:{messages:['{"text":"probe"}','{"text":"sign 10"}','{"text":""}','{"text":""}']}}
-setblock 12 180 54 minecraft:oak_sign[rotation=8]{front_text:{messages:['{"text":"probe"}','{"text":"sign 12"}','{"text":""}','{"text":""}']}}
-setblock 14 180 54 minecraft:oak_sign[rotation=8]{front_text:{messages:['{"text":"probe"}','{"text":"sign 14"}','{"text":""}','{"text":""}']}}
-setblock 16 180 54 minecraft:oak_sign[rotation=8]{front_text:{messages:['{"text":"probe"}','{"text":"sign 16"}','{"text":""}','{"text":""}']}}
-setblock 18 180 54 minecraft:oak_sign[rotation=8]{front_text:{messages:['{"text":"probe"}','{"text":"sign 18"}','{"text":""}','{"text":""}']}}
-setblock 20 180 54 minecraft:oak_sign[rotation=8]{front_text:{messages:['{"text":"probe"}','{"text":"sign 20"}','{"text":""}','{"text":""}']}}
-setblock 22 180 54 minecraft:oak_sign[rotation=8]{front_text:{messages:['{"text":"probe"}','{"text":"sign 22"}','{"text":""}','{"text":""}']}}
-setblock 24 180 54 minecraft:oak_sign[rotation=8]{front_text:{messages:['{"text":"probe"}','{"text":"sign 24"}','{"text":""}','{"text":""}']}}
-setblock 26 180 54 minecraft:oak_sign[rotation=8]{front_text:{messages:['{"text":"probe"}','{"text":"sign 26"}','{"text":""}','{"text":""}']}}
-setblock 28 180 54 minecraft:oak_sign[rotation=8]{front_text:{messages:['{"text":"probe"}','{"text":"sign 28"}','{"text":""}','{"text":""}']}}
-setblock 30 180 54 minecraft:oak_sign[rotation=8]{front_text:{messages:['{"text":"probe"}','{"text":"sign 30"}','{"text":""}','{"text":""}']}}
-setblock 32 180 54 minecraft:oak_sign[rotation=8]{front_text:{messages:['{"text":"probe"}','{"text":"sign 32"}','{"text":""}','{"text":""}']}}
-setblock 34 180 54 minecraft:oak_sign[rotation=8]{front_text:{messages:['{"text":"probe"}','{"text":"sign 34"}','{"text":""}','{"text":""}']}}
-setblock 36 180 54 minecraft:oak_sign[rotation=8]{front_text:{messages:['{"text":"probe"}','{"text":"sign 36"}','{"text":""}','{"text":""}']}}
-setblock 38 180 54 minecraft:oak_sign[rotation=8]{front_text:{messages:['{"text":"probe"}','{"text":"sign 38"}','{"text":""}','{"text":""}']}}
-setblock 40 180 54 minecraft:oak_sign[rotation=8]{front_text:{messages:['{"text":"probe"}','{"text":"sign 40"}','{"text":""}','{"text":""}']}}
-setblock 42 180 54 minecraft:oak_sign[rotation=8]{front_text:{messages:['{"text":"probe"}','{"text":"sign 42"}','{"text":""}','{"text":""}']}}
-setblock 44 180 54 minecraft:oak_sign[rotation=8]{front_text:{messages:['{"text":"probe"}','{"text":"sign 44"}','{"text":""}','{"text":""}']}}
-setblock 46 180 54 minecraft:oak_sign[rotation=8]{front_text:{messages:['{"text":"probe"}','{"text":"sign 46"}','{"text":""}','{"text":""}']}}
-setblock 2 180 56 minecraft:white_banner
-setblock 3 180 56 minecraft:white_banner
-setblock 4 180 56 minecraft:white_banner
-setblock 5 180 56 minecraft:white_banner
-setblock 6 180 56 minecraft:white_banner
-setblock 7 180 56 minecraft:white_banner
-setblock 8 180 56 minecraft:white_banner
-setblock 9 180 56 minecraft:white_banner
-setblock 10 180 56 minecraft:white_banner
-setblock 11 180 56 minecraft:white_banner
-setblock 12 180 56 minecraft:white_banner
-setblock 13 180 56 minecraft:white_banner
-setblock 14 180 56 minecraft:white_banner
-setblock 15 180 56 minecraft:white_banner
-setblock 16 180 56 minecraft:white_banner
-setblock 17 180 56 minecraft:white_banner
-setblock 18 180 56 minecraft:white_banner
-setblock 19 180 56 minecraft:white_banner
-setblock 20 180 56 minecraft:white_banner
-setblock 21 180 56 minecraft:white_banner
-setblock 22 180 56 minecraft:white_banner
-setblock 23 180 56 minecraft:white_banner
-setblock 24 180 56 minecraft:white_banner
-setblock 25 180 56 minecraft:white_banner
-setblock 26 180 56 minecraft:white_banner
-setblock 27 180 56 minecraft:white_banner
-setblock 28 180 56 minecraft:white_banner
-setblock 29 180 56 minecraft:white_banner
-setblock 30 180 56 minecraft:white_banner
-setblock 31 180 56 minecraft:white_banner
-setblock 32 180 56 minecraft:white_banner
-setblock 33 180 56 minecraft:white_banner
-setblock 34 180 56 minecraft:white_banner
-setblock 35 180 56 minecraft:white_banner
-setblock 36 180 56 minecraft:white_banner
-setblock 37 180 56 minecraft:white_banner
-setblock 38 180 56 minecraft:white_banner
-setblock 39 180 56 minecraft:white_banner
-setblock 40 180 56 minecraft:white_banner
-setblock 41 180 56 minecraft:white_banner
-setblock 42 180 56 minecraft:white_banner
-setblock 43 180 56 minecraft:white_banner
-setblock 44 180 56 minecraft:white_banner
-setblock 45 180 56 minecraft:white_banner
-setblock 46 180 56 minecraft:white_banner
-setblock 47 180 56 minecraft:white_banner
-summon minecraft:cow 2.5 180 58.5 {NoAI:1b}
-summon minecraft:cow 2.5 180 60.5 {NoAI:1b}
-summon minecraft:cow 2.5 180 62.5 {NoAI:1b}
-summon minecraft:cow 2.5 180 59.5 {NoAI:1b}
-summon minecraft:cow 5.5 180 58.5 {NoAI:1b}
-summon minecraft:cow 5.5 180 60.5 {NoAI:1b}
-summon minecraft:cow 5.5 180 62.5 {NoAI:1b}
-summon minecraft:cow 5.5 180 59.5 {NoAI:1b}
-summon minecraft:cow 8.5 180 58.5 {NoAI:1b}
-summon minecraft:cow 8.5 180 60.5 {NoAI:1b}
-summon minecraft:cow 8.5 180 62.5 {NoAI:1b}
-summon minecraft:cow 8.5 180 59.5 {NoAI:1b}
-summon minecraft:cow 11.5 180 58.5 {NoAI:1b}
-summon minecraft:cow 11.5 180 60.5 {NoAI:1b}
-summon minecraft:cow 11.5 180 62.5 {NoAI:1b}
-summon minecraft:cow 11.5 180 59.5 {NoAI:1b}
-summon minecraft:cow 14.5 180 58.5 {NoAI:1b}
-summon minecraft:cow 14.5 180 60.5 {NoAI:1b}
-summon minecraft:cow 14.5 180 62.5 {NoAI:1b}
-summon minecraft:cow 14.5 180 59.5 {NoAI:1b}
-summon minecraft:cow 17.5 180 58.5 {NoAI:1b}
-summon minecraft:cow 17.5 180 60.5 {NoAI:1b}
-summon minecraft:cow 17.5 180 62.5 {NoAI:1b}
-summon minecraft:cow 17.5 180 59.5 {NoAI:1b}
-summon minecraft:cow 20.5 180 58.5 {NoAI:1b}
-summon minecraft:cow 20.5 180 60.5 {NoAI:1b}
-summon minecraft:cow 20.5 180 62.5 {NoAI:1b}
-summon minecraft:cow 20.5 180 59.5 {NoAI:1b}
-summon minecraft:cow 23.5 180 58.5 {NoAI:1b}
-summon minecraft:cow 23.5 180 60.5 {NoAI:1b}
-summon minecraft:cow 23.5 180 62.5 {NoAI:1b}
-summon minecraft:cow 23.5 180 59.5 {NoAI:1b}
-summon minecraft:cow 26.5 180 58.5 {NoAI:1b}
-summon minecraft:cow 26.5 180 60.5 {NoAI:1b}
-summon minecraft:cow 26.5 180 62.5 {NoAI:1b}
-summon minecraft:cow 26.5 180 59.5 {NoAI:1b}
-summon minecraft:cow 29.5 180 58.5 {NoAI:1b}
-summon minecraft:cow 29.5 180 60.5 {NoAI:1b}
-summon minecraft:cow 29.5 180 62.5 {NoAI:1b}
-summon minecraft:cow 29.5 180 59.5 {NoAI:1b}
-summon minecraft:cow 32.5 180 58.5 {NoAI:1b}
-summon minecraft:cow 32.5 180 60.5 {NoAI:1b}
-summon minecraft:cow 32.5 180 62.5 {NoAI:1b}
-summon minecraft:cow 32.5 180 59.5 {NoAI:1b}
-summon minecraft:cow 35.5 180 58.5 {NoAI:1b}
-summon minecraft:cow 35.5 180 60.5 {NoAI:1b}
-summon minecraft:cow 35.5 180 62.5 {NoAI:1b}
-summon minecraft:cow 35.5 180 59.5 {NoAI:1b}
-summon minecraft:cow 38.5 180 58.5 {NoAI:1b}
-summon minecraft:cow 38.5 180 60.5 {NoAI:1b}
-summon minecraft:cow 38.5 180 62.5 {NoAI:1b}
-summon minecraft:cow 38.5 180 59.5 {NoAI:1b}
-summon minecraft:cow 41.5 180 58.5 {NoAI:1b}
-summon minecraft:cow 41.5 180 60.5 {NoAI:1b}
-summon minecraft:cow 41.5 180 62.5 {NoAI:1b}
-summon minecraft:cow 41.5 180 59.5 {NoAI:1b}
-summon minecraft:cow 44.5 180 58.5 {NoAI:1b}
-summon minecraft:cow 44.5 180 60.5 {NoAI:1b}
-summon minecraft:cow 44.5 180 62.5 {NoAI:1b}
-summon minecraft:cow 44.5 180 59.5 {NoAI:1b}
+# 120 armour stands, 235 item frames, 69 chests, 69 signs, 46 skulls, seen from above.
+gamerule doDaylightCycle false
+gamerule doWeatherCycle false
+time set noon
+weather clear
+fill 0 249 16 48 249 64 minecraft:smooth_stone
+fill 0 250 64 48 260 64 minecraft:stone
+summon minecraft:armor_stand 2.5 250 18.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
+summon minecraft:armor_stand 2.5 250 21.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
+summon minecraft:armor_stand 2.5 250 24.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
+summon minecraft:armor_stand 2.5 250 27.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
+summon minecraft:armor_stand 2.5 250 30.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
+summon minecraft:armor_stand 2.5 250 33.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
+summon minecraft:armor_stand 2.5 250 36.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
+summon minecraft:armor_stand 2.5 250 39.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
+summon minecraft:armor_stand 5.5 250 18.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
+summon minecraft:armor_stand 5.5 250 21.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
+summon minecraft:armor_stand 5.5 250 24.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
+summon minecraft:armor_stand 5.5 250 27.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
+summon minecraft:armor_stand 5.5 250 30.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
+summon minecraft:armor_stand 5.5 250 33.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
+summon minecraft:armor_stand 5.5 250 36.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
+summon minecraft:armor_stand 5.5 250 39.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
+summon minecraft:armor_stand 8.5 250 18.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
+summon minecraft:armor_stand 8.5 250 21.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
+summon minecraft:armor_stand 8.5 250 24.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
+summon minecraft:armor_stand 8.5 250 27.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
+summon minecraft:armor_stand 8.5 250 30.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
+summon minecraft:armor_stand 8.5 250 33.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
+summon minecraft:armor_stand 8.5 250 36.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
+summon minecraft:armor_stand 8.5 250 39.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
+summon minecraft:armor_stand 11.5 250 18.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
+summon minecraft:armor_stand 11.5 250 21.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
+summon minecraft:armor_stand 11.5 250 24.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
+summon minecraft:armor_stand 11.5 250 27.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
+summon minecraft:armor_stand 11.5 250 30.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
+summon minecraft:armor_stand 11.5 250 33.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
+summon minecraft:armor_stand 11.5 250 36.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
+summon minecraft:armor_stand 11.5 250 39.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
+summon minecraft:armor_stand 14.5 250 18.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
+summon minecraft:armor_stand 14.5 250 21.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
+summon minecraft:armor_stand 14.5 250 24.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
+summon minecraft:armor_stand 14.5 250 27.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
+summon minecraft:armor_stand 14.5 250 30.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
+summon minecraft:armor_stand 14.5 250 33.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
+summon minecraft:armor_stand 14.5 250 36.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
+summon minecraft:armor_stand 14.5 250 39.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
+summon minecraft:armor_stand 17.5 250 18.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
+summon minecraft:armor_stand 17.5 250 21.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
+summon minecraft:armor_stand 17.5 250 24.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
+summon minecraft:armor_stand 17.5 250 27.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
+summon minecraft:armor_stand 17.5 250 30.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
+summon minecraft:armor_stand 17.5 250 33.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
+summon minecraft:armor_stand 17.5 250 36.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
+summon minecraft:armor_stand 17.5 250 39.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
+summon minecraft:armor_stand 20.5 250 18.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
+summon minecraft:armor_stand 20.5 250 21.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
+summon minecraft:armor_stand 20.5 250 24.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
+summon minecraft:armor_stand 20.5 250 27.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
+summon minecraft:armor_stand 20.5 250 30.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
+summon minecraft:armor_stand 20.5 250 33.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
+summon minecraft:armor_stand 20.5 250 36.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
+summon minecraft:armor_stand 20.5 250 39.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
+summon minecraft:armor_stand 23.5 250 18.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
+summon minecraft:armor_stand 23.5 250 21.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
+summon minecraft:armor_stand 23.5 250 24.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
+summon minecraft:armor_stand 23.5 250 27.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
+summon minecraft:armor_stand 23.5 250 30.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
+summon minecraft:armor_stand 23.5 250 33.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
+summon minecraft:armor_stand 23.5 250 36.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
+summon minecraft:armor_stand 23.5 250 39.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
+summon minecraft:armor_stand 26.5 250 18.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
+summon minecraft:armor_stand 26.5 250 21.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
+summon minecraft:armor_stand 26.5 250 24.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
+summon minecraft:armor_stand 26.5 250 27.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
+summon minecraft:armor_stand 26.5 250 30.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
+summon minecraft:armor_stand 26.5 250 33.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
+summon minecraft:armor_stand 26.5 250 36.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
+summon minecraft:armor_stand 26.5 250 39.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
+summon minecraft:armor_stand 29.5 250 18.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
+summon minecraft:armor_stand 29.5 250 21.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
+summon minecraft:armor_stand 29.5 250 24.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
+summon minecraft:armor_stand 29.5 250 27.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
+summon minecraft:armor_stand 29.5 250 30.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
+summon minecraft:armor_stand 29.5 250 33.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
+summon minecraft:armor_stand 29.5 250 36.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
+summon minecraft:armor_stand 29.5 250 39.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
+summon minecraft:armor_stand 32.5 250 18.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
+summon minecraft:armor_stand 32.5 250 21.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
+summon minecraft:armor_stand 32.5 250 24.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
+summon minecraft:armor_stand 32.5 250 27.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
+summon minecraft:armor_stand 32.5 250 30.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
+summon minecraft:armor_stand 32.5 250 33.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
+summon minecraft:armor_stand 32.5 250 36.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
+summon minecraft:armor_stand 32.5 250 39.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
+summon minecraft:armor_stand 35.5 250 18.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
+summon minecraft:armor_stand 35.5 250 21.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
+summon minecraft:armor_stand 35.5 250 24.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
+summon minecraft:armor_stand 35.5 250 27.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
+summon minecraft:armor_stand 35.5 250 30.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
+summon minecraft:armor_stand 35.5 250 33.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
+summon minecraft:armor_stand 35.5 250 36.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
+summon minecraft:armor_stand 35.5 250 39.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
+summon minecraft:armor_stand 38.5 250 18.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
+summon minecraft:armor_stand 38.5 250 21.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
+summon minecraft:armor_stand 38.5 250 24.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
+summon minecraft:armor_stand 38.5 250 27.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
+summon minecraft:armor_stand 38.5 250 30.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
+summon minecraft:armor_stand 38.5 250 33.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
+summon minecraft:armor_stand 38.5 250 36.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
+summon minecraft:armor_stand 38.5 250 39.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
+summon minecraft:armor_stand 41.5 250 18.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
+summon minecraft:armor_stand 41.5 250 21.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
+summon minecraft:armor_stand 41.5 250 24.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
+summon minecraft:armor_stand 41.5 250 27.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
+summon minecraft:armor_stand 41.5 250 30.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
+summon minecraft:armor_stand 41.5 250 33.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
+summon minecraft:armor_stand 41.5 250 36.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
+summon minecraft:armor_stand 41.5 250 39.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
+summon minecraft:armor_stand 44.5 250 18.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
+summon minecraft:armor_stand 44.5 250 21.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
+summon minecraft:armor_stand 44.5 250 24.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
+summon minecraft:armor_stand 44.5 250 27.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
+summon minecraft:armor_stand 44.5 250 30.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
+summon minecraft:armor_stand 44.5 250 33.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
+summon minecraft:armor_stand 44.5 250 36.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
+summon minecraft:armor_stand 44.5 250 39.5 {ShowArms:1b,ArmorItems:[{id:"minecraft:diamond_boots",count:1},{id:"minecraft:diamond_leggings",count:1},{id:"minecraft:diamond_chestplate",count:1},{id:"minecraft:diamond_helmet",count:1}],HandItems:[{id:"minecraft:diamond_sword",count:1},{}]}
+summon minecraft:item_frame 1 251 63 {Facing:2b,Item:{id:"minecraft:diamond_sword",count:1}}
+summon minecraft:item_frame 1 253 63 {Facing:2b,Item:{id:"minecraft:bow",count:1}}
+summon minecraft:item_frame 1 255 63 {Facing:2b,Item:{id:"minecraft:apple",count:1}}
+summon minecraft:item_frame 1 257 63 {Facing:2b,Item:{id:"minecraft:golden_apple",count:1}}
+summon minecraft:item_frame 1 259 63 {Facing:2b,Item:{id:"minecraft:iron_pickaxe",count:1}}
+summon minecraft:item_frame 2 251 63 {Facing:2b,Item:{id:"minecraft:shield",count:1}}
+summon minecraft:item_frame 2 253 63 {Facing:2b,Item:{id:"minecraft:book",count:1}}
+summon minecraft:item_frame 2 255 63 {Facing:2b,Item:{id:"minecraft:carrot",count:1}}
+summon minecraft:item_frame 2 257 63 {Facing:2b,Item:{id:"minecraft:stick",count:1}}
+summon minecraft:item_frame 2 259 63 {Facing:2b,Item:{id:"minecraft:bread",count:1}}
+summon minecraft:item_frame 3 251 63 {Facing:2b,Item:{id:"minecraft:diamond_sword",count:1}}
+summon minecraft:item_frame 3 253 63 {Facing:2b,Item:{id:"minecraft:bow",count:1}}
+summon minecraft:item_frame 3 255 63 {Facing:2b,Item:{id:"minecraft:apple",count:1}}
+summon minecraft:item_frame 3 257 63 {Facing:2b,Item:{id:"minecraft:golden_apple",count:1}}
+summon minecraft:item_frame 3 259 63 {Facing:2b,Item:{id:"minecraft:iron_pickaxe",count:1}}
+summon minecraft:item_frame 4 251 63 {Facing:2b,Item:{id:"minecraft:shield",count:1}}
+summon minecraft:item_frame 4 253 63 {Facing:2b,Item:{id:"minecraft:book",count:1}}
+summon minecraft:item_frame 4 255 63 {Facing:2b,Item:{id:"minecraft:carrot",count:1}}
+summon minecraft:item_frame 4 257 63 {Facing:2b,Item:{id:"minecraft:stick",count:1}}
+summon minecraft:item_frame 4 259 63 {Facing:2b,Item:{id:"minecraft:bread",count:1}}
+summon minecraft:item_frame 5 251 63 {Facing:2b,Item:{id:"minecraft:diamond_sword",count:1}}
+summon minecraft:item_frame 5 253 63 {Facing:2b,Item:{id:"minecraft:bow",count:1}}
+summon minecraft:item_frame 5 255 63 {Facing:2b,Item:{id:"minecraft:apple",count:1}}
+summon minecraft:item_frame 5 257 63 {Facing:2b,Item:{id:"minecraft:golden_apple",count:1}}
+summon minecraft:item_frame 5 259 63 {Facing:2b,Item:{id:"minecraft:iron_pickaxe",count:1}}
+summon minecraft:item_frame 6 251 63 {Facing:2b,Item:{id:"minecraft:shield",count:1}}
+summon minecraft:item_frame 6 253 63 {Facing:2b,Item:{id:"minecraft:book",count:1}}
+summon minecraft:item_frame 6 255 63 {Facing:2b,Item:{id:"minecraft:carrot",count:1}}
+summon minecraft:item_frame 6 257 63 {Facing:2b,Item:{id:"minecraft:stick",count:1}}
+summon minecraft:item_frame 6 259 63 {Facing:2b,Item:{id:"minecraft:bread",count:1}}
+summon minecraft:item_frame 7 251 63 {Facing:2b,Item:{id:"minecraft:diamond_sword",count:1}}
+summon minecraft:item_frame 7 253 63 {Facing:2b,Item:{id:"minecraft:bow",count:1}}
+summon minecraft:item_frame 7 255 63 {Facing:2b,Item:{id:"minecraft:apple",count:1}}
+summon minecraft:item_frame 7 257 63 {Facing:2b,Item:{id:"minecraft:golden_apple",count:1}}
+summon minecraft:item_frame 7 259 63 {Facing:2b,Item:{id:"minecraft:iron_pickaxe",count:1}}
+summon minecraft:item_frame 8 251 63 {Facing:2b,Item:{id:"minecraft:shield",count:1}}
+summon minecraft:item_frame 8 253 63 {Facing:2b,Item:{id:"minecraft:book",count:1}}
+summon minecraft:item_frame 8 255 63 {Facing:2b,Item:{id:"minecraft:carrot",count:1}}
+summon minecraft:item_frame 8 257 63 {Facing:2b,Item:{id:"minecraft:stick",count:1}}
+summon minecraft:item_frame 8 259 63 {Facing:2b,Item:{id:"minecraft:bread",count:1}}
+summon minecraft:item_frame 9 251 63 {Facing:2b,Item:{id:"minecraft:diamond_sword",count:1}}
+summon minecraft:item_frame 9 253 63 {Facing:2b,Item:{id:"minecraft:bow",count:1}}
+summon minecraft:item_frame 9 255 63 {Facing:2b,Item:{id:"minecraft:apple",count:1}}
+summon minecraft:item_frame 9 257 63 {Facing:2b,Item:{id:"minecraft:golden_apple",count:1}}
+summon minecraft:item_frame 9 259 63 {Facing:2b,Item:{id:"minecraft:iron_pickaxe",count:1}}
+summon minecraft:item_frame 10 251 63 {Facing:2b,Item:{id:"minecraft:shield",count:1}}
+summon minecraft:item_frame 10 253 63 {Facing:2b,Item:{id:"minecraft:book",count:1}}
+summon minecraft:item_frame 10 255 63 {Facing:2b,Item:{id:"minecraft:carrot",count:1}}
+summon minecraft:item_frame 10 257 63 {Facing:2b,Item:{id:"minecraft:stick",count:1}}
+summon minecraft:item_frame 10 259 63 {Facing:2b,Item:{id:"minecraft:bread",count:1}}
+summon minecraft:item_frame 11 251 63 {Facing:2b,Item:{id:"minecraft:diamond_sword",count:1}}
+summon minecraft:item_frame 11 253 63 {Facing:2b,Item:{id:"minecraft:bow",count:1}}
+summon minecraft:item_frame 11 255 63 {Facing:2b,Item:{id:"minecraft:apple",count:1}}
+summon minecraft:item_frame 11 257 63 {Facing:2b,Item:{id:"minecraft:golden_apple",count:1}}
+summon minecraft:item_frame 11 259 63 {Facing:2b,Item:{id:"minecraft:iron_pickaxe",count:1}}
+summon minecraft:item_frame 12 251 63 {Facing:2b,Item:{id:"minecraft:shield",count:1}}
+summon minecraft:item_frame 12 253 63 {Facing:2b,Item:{id:"minecraft:book",count:1}}
+summon minecraft:item_frame 12 255 63 {Facing:2b,Item:{id:"minecraft:carrot",count:1}}
+summon minecraft:item_frame 12 257 63 {Facing:2b,Item:{id:"minecraft:stick",count:1}}
+summon minecraft:item_frame 12 259 63 {Facing:2b,Item:{id:"minecraft:bread",count:1}}
+summon minecraft:item_frame 13 251 63 {Facing:2b,Item:{id:"minecraft:diamond_sword",count:1}}
+summon minecraft:item_frame 13 253 63 {Facing:2b,Item:{id:"minecraft:bow",count:1}}
+summon minecraft:item_frame 13 255 63 {Facing:2b,Item:{id:"minecraft:apple",count:1}}
+summon minecraft:item_frame 13 257 63 {Facing:2b,Item:{id:"minecraft:golden_apple",count:1}}
+summon minecraft:item_frame 13 259 63 {Facing:2b,Item:{id:"minecraft:iron_pickaxe",count:1}}
+summon minecraft:item_frame 14 251 63 {Facing:2b,Item:{id:"minecraft:shield",count:1}}
+summon minecraft:item_frame 14 253 63 {Facing:2b,Item:{id:"minecraft:book",count:1}}
+summon minecraft:item_frame 14 255 63 {Facing:2b,Item:{id:"minecraft:carrot",count:1}}
+summon minecraft:item_frame 14 257 63 {Facing:2b,Item:{id:"minecraft:stick",count:1}}
+summon minecraft:item_frame 14 259 63 {Facing:2b,Item:{id:"minecraft:bread",count:1}}
+summon minecraft:item_frame 15 251 63 {Facing:2b,Item:{id:"minecraft:diamond_sword",count:1}}
+summon minecraft:item_frame 15 253 63 {Facing:2b,Item:{id:"minecraft:bow",count:1}}
+summon minecraft:item_frame 15 255 63 {Facing:2b,Item:{id:"minecraft:apple",count:1}}
+summon minecraft:item_frame 15 257 63 {Facing:2b,Item:{id:"minecraft:golden_apple",count:1}}
+summon minecraft:item_frame 15 259 63 {Facing:2b,Item:{id:"minecraft:iron_pickaxe",count:1}}
+summon minecraft:item_frame 16 251 63 {Facing:2b,Item:{id:"minecraft:shield",count:1}}
+summon minecraft:item_frame 16 253 63 {Facing:2b,Item:{id:"minecraft:book",count:1}}
+summon minecraft:item_frame 16 255 63 {Facing:2b,Item:{id:"minecraft:carrot",count:1}}
+summon minecraft:item_frame 16 257 63 {Facing:2b,Item:{id:"minecraft:stick",count:1}}
+summon minecraft:item_frame 16 259 63 {Facing:2b,Item:{id:"minecraft:bread",count:1}}
+summon minecraft:item_frame 17 251 63 {Facing:2b,Item:{id:"minecraft:diamond_sword",count:1}}
+summon minecraft:item_frame 17 253 63 {Facing:2b,Item:{id:"minecraft:bow",count:1}}
+summon minecraft:item_frame 17 255 63 {Facing:2b,Item:{id:"minecraft:apple",count:1}}
+summon minecraft:item_frame 17 257 63 {Facing:2b,Item:{id:"minecraft:golden_apple",count:1}}
+summon minecraft:item_frame 17 259 63 {Facing:2b,Item:{id:"minecraft:iron_pickaxe",count:1}}
+summon minecraft:item_frame 18 251 63 {Facing:2b,Item:{id:"minecraft:shield",count:1}}
+summon minecraft:item_frame 18 253 63 {Facing:2b,Item:{id:"minecraft:book",count:1}}
+summon minecraft:item_frame 18 255 63 {Facing:2b,Item:{id:"minecraft:carrot",count:1}}
+summon minecraft:item_frame 18 257 63 {Facing:2b,Item:{id:"minecraft:stick",count:1}}
+summon minecraft:item_frame 18 259 63 {Facing:2b,Item:{id:"minecraft:bread",count:1}}
+summon minecraft:item_frame 19 251 63 {Facing:2b,Item:{id:"minecraft:diamond_sword",count:1}}
+summon minecraft:item_frame 19 253 63 {Facing:2b,Item:{id:"minecraft:bow",count:1}}
+summon minecraft:item_frame 19 255 63 {Facing:2b,Item:{id:"minecraft:apple",count:1}}
+summon minecraft:item_frame 19 257 63 {Facing:2b,Item:{id:"minecraft:golden_apple",count:1}}
+summon minecraft:item_frame 19 259 63 {Facing:2b,Item:{id:"minecraft:iron_pickaxe",count:1}}
+summon minecraft:item_frame 20 251 63 {Facing:2b,Item:{id:"minecraft:shield",count:1}}
+summon minecraft:item_frame 20 253 63 {Facing:2b,Item:{id:"minecraft:book",count:1}}
+summon minecraft:item_frame 20 255 63 {Facing:2b,Item:{id:"minecraft:carrot",count:1}}
+summon minecraft:item_frame 20 257 63 {Facing:2b,Item:{id:"minecraft:stick",count:1}}
+summon minecraft:item_frame 20 259 63 {Facing:2b,Item:{id:"minecraft:bread",count:1}}
+summon minecraft:item_frame 21 251 63 {Facing:2b,Item:{id:"minecraft:diamond_sword",count:1}}
+summon minecraft:item_frame 21 253 63 {Facing:2b,Item:{id:"minecraft:bow",count:1}}
+summon minecraft:item_frame 21 255 63 {Facing:2b,Item:{id:"minecraft:apple",count:1}}
+summon minecraft:item_frame 21 257 63 {Facing:2b,Item:{id:"minecraft:golden_apple",count:1}}
+summon minecraft:item_frame 21 259 63 {Facing:2b,Item:{id:"minecraft:iron_pickaxe",count:1}}
+summon minecraft:item_frame 22 251 63 {Facing:2b,Item:{id:"minecraft:shield",count:1}}
+summon minecraft:item_frame 22 253 63 {Facing:2b,Item:{id:"minecraft:book",count:1}}
+summon minecraft:item_frame 22 255 63 {Facing:2b,Item:{id:"minecraft:carrot",count:1}}
+summon minecraft:item_frame 22 257 63 {Facing:2b,Item:{id:"minecraft:stick",count:1}}
+summon minecraft:item_frame 22 259 63 {Facing:2b,Item:{id:"minecraft:bread",count:1}}
+summon minecraft:item_frame 23 251 63 {Facing:2b,Item:{id:"minecraft:diamond_sword",count:1}}
+summon minecraft:item_frame 23 253 63 {Facing:2b,Item:{id:"minecraft:bow",count:1}}
+summon minecraft:item_frame 23 255 63 {Facing:2b,Item:{id:"minecraft:apple",count:1}}
+summon minecraft:item_frame 23 257 63 {Facing:2b,Item:{id:"minecraft:golden_apple",count:1}}
+summon minecraft:item_frame 23 259 63 {Facing:2b,Item:{id:"minecraft:iron_pickaxe",count:1}}
+summon minecraft:item_frame 24 251 63 {Facing:2b,Item:{id:"minecraft:shield",count:1}}
+summon minecraft:item_frame 24 253 63 {Facing:2b,Item:{id:"minecraft:book",count:1}}
+summon minecraft:item_frame 24 255 63 {Facing:2b,Item:{id:"minecraft:carrot",count:1}}
+summon minecraft:item_frame 24 257 63 {Facing:2b,Item:{id:"minecraft:stick",count:1}}
+summon minecraft:item_frame 24 259 63 {Facing:2b,Item:{id:"minecraft:bread",count:1}}
+summon minecraft:item_frame 25 251 63 {Facing:2b,Item:{id:"minecraft:diamond_sword",count:1}}
+summon minecraft:item_frame 25 253 63 {Facing:2b,Item:{id:"minecraft:bow",count:1}}
+summon minecraft:item_frame 25 255 63 {Facing:2b,Item:{id:"minecraft:apple",count:1}}
+summon minecraft:item_frame 25 257 63 {Facing:2b,Item:{id:"minecraft:golden_apple",count:1}}
+summon minecraft:item_frame 25 259 63 {Facing:2b,Item:{id:"minecraft:iron_pickaxe",count:1}}
+summon minecraft:item_frame 26 251 63 {Facing:2b,Item:{id:"minecraft:shield",count:1}}
+summon minecraft:item_frame 26 253 63 {Facing:2b,Item:{id:"minecraft:book",count:1}}
+summon minecraft:item_frame 26 255 63 {Facing:2b,Item:{id:"minecraft:carrot",count:1}}
+summon minecraft:item_frame 26 257 63 {Facing:2b,Item:{id:"minecraft:stick",count:1}}
+summon minecraft:item_frame 26 259 63 {Facing:2b,Item:{id:"minecraft:bread",count:1}}
+summon minecraft:item_frame 27 251 63 {Facing:2b,Item:{id:"minecraft:diamond_sword",count:1}}
+summon minecraft:item_frame 27 253 63 {Facing:2b,Item:{id:"minecraft:bow",count:1}}
+summon minecraft:item_frame 27 255 63 {Facing:2b,Item:{id:"minecraft:apple",count:1}}
+summon minecraft:item_frame 27 257 63 {Facing:2b,Item:{id:"minecraft:golden_apple",count:1}}
+summon minecraft:item_frame 27 259 63 {Facing:2b,Item:{id:"minecraft:iron_pickaxe",count:1}}
+summon minecraft:item_frame 28 251 63 {Facing:2b,Item:{id:"minecraft:shield",count:1}}
+summon minecraft:item_frame 28 253 63 {Facing:2b,Item:{id:"minecraft:book",count:1}}
+summon minecraft:item_frame 28 255 63 {Facing:2b,Item:{id:"minecraft:carrot",count:1}}
+summon minecraft:item_frame 28 257 63 {Facing:2b,Item:{id:"minecraft:stick",count:1}}
+summon minecraft:item_frame 28 259 63 {Facing:2b,Item:{id:"minecraft:bread",count:1}}
+summon minecraft:item_frame 29 251 63 {Facing:2b,Item:{id:"minecraft:diamond_sword",count:1}}
+summon minecraft:item_frame 29 253 63 {Facing:2b,Item:{id:"minecraft:bow",count:1}}
+summon minecraft:item_frame 29 255 63 {Facing:2b,Item:{id:"minecraft:apple",count:1}}
+summon minecraft:item_frame 29 257 63 {Facing:2b,Item:{id:"minecraft:golden_apple",count:1}}
+summon minecraft:item_frame 29 259 63 {Facing:2b,Item:{id:"minecraft:iron_pickaxe",count:1}}
+summon minecraft:item_frame 30 251 63 {Facing:2b,Item:{id:"minecraft:shield",count:1}}
+summon minecraft:item_frame 30 253 63 {Facing:2b,Item:{id:"minecraft:book",count:1}}
+summon minecraft:item_frame 30 255 63 {Facing:2b,Item:{id:"minecraft:carrot",count:1}}
+summon minecraft:item_frame 30 257 63 {Facing:2b,Item:{id:"minecraft:stick",count:1}}
+summon minecraft:item_frame 30 259 63 {Facing:2b,Item:{id:"minecraft:bread",count:1}}
+summon minecraft:item_frame 31 251 63 {Facing:2b,Item:{id:"minecraft:diamond_sword",count:1}}
+summon minecraft:item_frame 31 253 63 {Facing:2b,Item:{id:"minecraft:bow",count:1}}
+summon minecraft:item_frame 31 255 63 {Facing:2b,Item:{id:"minecraft:apple",count:1}}
+summon minecraft:item_frame 31 257 63 {Facing:2b,Item:{id:"minecraft:golden_apple",count:1}}
+summon minecraft:item_frame 31 259 63 {Facing:2b,Item:{id:"minecraft:iron_pickaxe",count:1}}
+summon minecraft:item_frame 32 251 63 {Facing:2b,Item:{id:"minecraft:shield",count:1}}
+summon minecraft:item_frame 32 253 63 {Facing:2b,Item:{id:"minecraft:book",count:1}}
+summon minecraft:item_frame 32 255 63 {Facing:2b,Item:{id:"minecraft:carrot",count:1}}
+summon minecraft:item_frame 32 257 63 {Facing:2b,Item:{id:"minecraft:stick",count:1}}
+summon minecraft:item_frame 32 259 63 {Facing:2b,Item:{id:"minecraft:bread",count:1}}
+summon minecraft:item_frame 33 251 63 {Facing:2b,Item:{id:"minecraft:diamond_sword",count:1}}
+summon minecraft:item_frame 33 253 63 {Facing:2b,Item:{id:"minecraft:bow",count:1}}
+summon minecraft:item_frame 33 255 63 {Facing:2b,Item:{id:"minecraft:apple",count:1}}
+summon minecraft:item_frame 33 257 63 {Facing:2b,Item:{id:"minecraft:golden_apple",count:1}}
+summon minecraft:item_frame 33 259 63 {Facing:2b,Item:{id:"minecraft:iron_pickaxe",count:1}}
+summon minecraft:item_frame 34 251 63 {Facing:2b,Item:{id:"minecraft:shield",count:1}}
+summon minecraft:item_frame 34 253 63 {Facing:2b,Item:{id:"minecraft:book",count:1}}
+summon minecraft:item_frame 34 255 63 {Facing:2b,Item:{id:"minecraft:carrot",count:1}}
+summon minecraft:item_frame 34 257 63 {Facing:2b,Item:{id:"minecraft:stick",count:1}}
+summon minecraft:item_frame 34 259 63 {Facing:2b,Item:{id:"minecraft:bread",count:1}}
+summon minecraft:item_frame 35 251 63 {Facing:2b,Item:{id:"minecraft:diamond_sword",count:1}}
+summon minecraft:item_frame 35 253 63 {Facing:2b,Item:{id:"minecraft:bow",count:1}}
+summon minecraft:item_frame 35 255 63 {Facing:2b,Item:{id:"minecraft:apple",count:1}}
+summon minecraft:item_frame 35 257 63 {Facing:2b,Item:{id:"minecraft:golden_apple",count:1}}
+summon minecraft:item_frame 35 259 63 {Facing:2b,Item:{id:"minecraft:iron_pickaxe",count:1}}
+summon minecraft:item_frame 36 251 63 {Facing:2b,Item:{id:"minecraft:shield",count:1}}
+summon minecraft:item_frame 36 253 63 {Facing:2b,Item:{id:"minecraft:book",count:1}}
+summon minecraft:item_frame 36 255 63 {Facing:2b,Item:{id:"minecraft:carrot",count:1}}
+summon minecraft:item_frame 36 257 63 {Facing:2b,Item:{id:"minecraft:stick",count:1}}
+summon minecraft:item_frame 36 259 63 {Facing:2b,Item:{id:"minecraft:bread",count:1}}
+summon minecraft:item_frame 37 251 63 {Facing:2b,Item:{id:"minecraft:diamond_sword",count:1}}
+summon minecraft:item_frame 37 253 63 {Facing:2b,Item:{id:"minecraft:bow",count:1}}
+summon minecraft:item_frame 37 255 63 {Facing:2b,Item:{id:"minecraft:apple",count:1}}
+summon minecraft:item_frame 37 257 63 {Facing:2b,Item:{id:"minecraft:golden_apple",count:1}}
+summon minecraft:item_frame 37 259 63 {Facing:2b,Item:{id:"minecraft:iron_pickaxe",count:1}}
+summon minecraft:item_frame 38 251 63 {Facing:2b,Item:{id:"minecraft:shield",count:1}}
+summon minecraft:item_frame 38 253 63 {Facing:2b,Item:{id:"minecraft:book",count:1}}
+summon minecraft:item_frame 38 255 63 {Facing:2b,Item:{id:"minecraft:carrot",count:1}}
+summon minecraft:item_frame 38 257 63 {Facing:2b,Item:{id:"minecraft:stick",count:1}}
+summon minecraft:item_frame 38 259 63 {Facing:2b,Item:{id:"minecraft:bread",count:1}}
+summon minecraft:item_frame 39 251 63 {Facing:2b,Item:{id:"minecraft:diamond_sword",count:1}}
+summon minecraft:item_frame 39 253 63 {Facing:2b,Item:{id:"minecraft:bow",count:1}}
+summon minecraft:item_frame 39 255 63 {Facing:2b,Item:{id:"minecraft:apple",count:1}}
+summon minecraft:item_frame 39 257 63 {Facing:2b,Item:{id:"minecraft:golden_apple",count:1}}
+summon minecraft:item_frame 39 259 63 {Facing:2b,Item:{id:"minecraft:iron_pickaxe",count:1}}
+summon minecraft:item_frame 40 251 63 {Facing:2b,Item:{id:"minecraft:shield",count:1}}
+summon minecraft:item_frame 40 253 63 {Facing:2b,Item:{id:"minecraft:book",count:1}}
+summon minecraft:item_frame 40 255 63 {Facing:2b,Item:{id:"minecraft:carrot",count:1}}
+summon minecraft:item_frame 40 257 63 {Facing:2b,Item:{id:"minecraft:stick",count:1}}
+summon minecraft:item_frame 40 259 63 {Facing:2b,Item:{id:"minecraft:bread",count:1}}
+summon minecraft:item_frame 41 251 63 {Facing:2b,Item:{id:"minecraft:diamond_sword",count:1}}
+summon minecraft:item_frame 41 253 63 {Facing:2b,Item:{id:"minecraft:bow",count:1}}
+summon minecraft:item_frame 41 255 63 {Facing:2b,Item:{id:"minecraft:apple",count:1}}
+summon minecraft:item_frame 41 257 63 {Facing:2b,Item:{id:"minecraft:golden_apple",count:1}}
+summon minecraft:item_frame 41 259 63 {Facing:2b,Item:{id:"minecraft:iron_pickaxe",count:1}}
+summon minecraft:item_frame 42 251 63 {Facing:2b,Item:{id:"minecraft:shield",count:1}}
+summon minecraft:item_frame 42 253 63 {Facing:2b,Item:{id:"minecraft:book",count:1}}
+summon minecraft:item_frame 42 255 63 {Facing:2b,Item:{id:"minecraft:carrot",count:1}}
+summon minecraft:item_frame 42 257 63 {Facing:2b,Item:{id:"minecraft:stick",count:1}}
+summon minecraft:item_frame 42 259 63 {Facing:2b,Item:{id:"minecraft:bread",count:1}}
+summon minecraft:item_frame 43 251 63 {Facing:2b,Item:{id:"minecraft:diamond_sword",count:1}}
+summon minecraft:item_frame 43 253 63 {Facing:2b,Item:{id:"minecraft:bow",count:1}}
+summon minecraft:item_frame 43 255 63 {Facing:2b,Item:{id:"minecraft:apple",count:1}}
+summon minecraft:item_frame 43 257 63 {Facing:2b,Item:{id:"minecraft:golden_apple",count:1}}
+summon minecraft:item_frame 43 259 63 {Facing:2b,Item:{id:"minecraft:iron_pickaxe",count:1}}
+summon minecraft:item_frame 44 251 63 {Facing:2b,Item:{id:"minecraft:shield",count:1}}
+summon minecraft:item_frame 44 253 63 {Facing:2b,Item:{id:"minecraft:book",count:1}}
+summon minecraft:item_frame 44 255 63 {Facing:2b,Item:{id:"minecraft:carrot",count:1}}
+summon minecraft:item_frame 44 257 63 {Facing:2b,Item:{id:"minecraft:stick",count:1}}
+summon minecraft:item_frame 44 259 63 {Facing:2b,Item:{id:"minecraft:bread",count:1}}
+summon minecraft:item_frame 45 251 63 {Facing:2b,Item:{id:"minecraft:diamond_sword",count:1}}
+summon minecraft:item_frame 45 253 63 {Facing:2b,Item:{id:"minecraft:bow",count:1}}
+summon minecraft:item_frame 45 255 63 {Facing:2b,Item:{id:"minecraft:apple",count:1}}
+summon minecraft:item_frame 45 257 63 {Facing:2b,Item:{id:"minecraft:golden_apple",count:1}}
+summon minecraft:item_frame 45 259 63 {Facing:2b,Item:{id:"minecraft:iron_pickaxe",count:1}}
+summon minecraft:item_frame 46 251 63 {Facing:2b,Item:{id:"minecraft:shield",count:1}}
+summon minecraft:item_frame 46 253 63 {Facing:2b,Item:{id:"minecraft:book",count:1}}
+summon minecraft:item_frame 46 255 63 {Facing:2b,Item:{id:"minecraft:carrot",count:1}}
+summon minecraft:item_frame 46 257 63 {Facing:2b,Item:{id:"minecraft:stick",count:1}}
+summon minecraft:item_frame 46 259 63 {Facing:2b,Item:{id:"minecraft:bread",count:1}}
+summon minecraft:item_frame 47 251 63 {Facing:2b,Item:{id:"minecraft:diamond_sword",count:1}}
+summon minecraft:item_frame 47 253 63 {Facing:2b,Item:{id:"minecraft:bow",count:1}}
+summon minecraft:item_frame 47 255 63 {Facing:2b,Item:{id:"minecraft:apple",count:1}}
+summon minecraft:item_frame 47 257 63 {Facing:2b,Item:{id:"minecraft:golden_apple",count:1}}
+summon minecraft:item_frame 47 259 63 {Facing:2b,Item:{id:"minecraft:iron_pickaxe",count:1}}
+setblock 2 250 44 minecraft:chest[facing=north]
+setblock 4 250 44 minecraft:chest[facing=north]
+setblock 6 250 44 minecraft:chest[facing=north]
+setblock 8 250 44 minecraft:chest[facing=north]
+setblock 10 250 44 minecraft:chest[facing=north]
+setblock 12 250 44 minecraft:chest[facing=north]
+setblock 14 250 44 minecraft:chest[facing=north]
+setblock 16 250 44 minecraft:chest[facing=north]
+setblock 18 250 44 minecraft:chest[facing=north]
+setblock 20 250 44 minecraft:chest[facing=north]
+setblock 22 250 44 minecraft:chest[facing=north]
+setblock 24 250 44 minecraft:chest[facing=north]
+setblock 26 250 44 minecraft:chest[facing=north]
+setblock 28 250 44 minecraft:chest[facing=north]
+setblock 30 250 44 minecraft:chest[facing=north]
+setblock 32 250 44 minecraft:chest[facing=north]
+setblock 34 250 44 minecraft:chest[facing=north]
+setblock 36 250 44 minecraft:chest[facing=north]
+setblock 38 250 44 minecraft:chest[facing=north]
+setblock 40 250 44 minecraft:chest[facing=north]
+setblock 42 250 44 minecraft:chest[facing=north]
+setblock 44 250 44 minecraft:chest[facing=north]
+setblock 46 250 44 minecraft:chest[facing=north]
+setblock 2 250 46 minecraft:chest[facing=north]
+setblock 4 250 46 minecraft:chest[facing=north]
+setblock 6 250 46 minecraft:chest[facing=north]
+setblock 8 250 46 minecraft:chest[facing=north]
+setblock 10 250 46 minecraft:chest[facing=north]
+setblock 12 250 46 minecraft:chest[facing=north]
+setblock 14 250 46 minecraft:chest[facing=north]
+setblock 16 250 46 minecraft:chest[facing=north]
+setblock 18 250 46 minecraft:chest[facing=north]
+setblock 20 250 46 minecraft:chest[facing=north]
+setblock 22 250 46 minecraft:chest[facing=north]
+setblock 24 250 46 minecraft:chest[facing=north]
+setblock 26 250 46 minecraft:chest[facing=north]
+setblock 28 250 46 minecraft:chest[facing=north]
+setblock 30 250 46 minecraft:chest[facing=north]
+setblock 32 250 46 minecraft:chest[facing=north]
+setblock 34 250 46 minecraft:chest[facing=north]
+setblock 36 250 46 minecraft:chest[facing=north]
+setblock 38 250 46 minecraft:chest[facing=north]
+setblock 40 250 46 minecraft:chest[facing=north]
+setblock 42 250 46 minecraft:chest[facing=north]
+setblock 44 250 46 minecraft:chest[facing=north]
+setblock 46 250 46 minecraft:chest[facing=north]
+setblock 2 250 48 minecraft:chest[facing=north]
+setblock 4 250 48 minecraft:chest[facing=north]
+setblock 6 250 48 minecraft:chest[facing=north]
+setblock 8 250 48 minecraft:chest[facing=north]
+setblock 10 250 48 minecraft:chest[facing=north]
+setblock 12 250 48 minecraft:chest[facing=north]
+setblock 14 250 48 minecraft:chest[facing=north]
+setblock 16 250 48 minecraft:chest[facing=north]
+setblock 18 250 48 minecraft:chest[facing=north]
+setblock 20 250 48 minecraft:chest[facing=north]
+setblock 22 250 48 minecraft:chest[facing=north]
+setblock 24 250 48 minecraft:chest[facing=north]
+setblock 26 250 48 minecraft:chest[facing=north]
+setblock 28 250 48 minecraft:chest[facing=north]
+setblock 30 250 48 minecraft:chest[facing=north]
+setblock 32 250 48 minecraft:chest[facing=north]
+setblock 34 250 48 minecraft:chest[facing=north]
+setblock 36 250 48 minecraft:chest[facing=north]
+setblock 38 250 48 minecraft:chest[facing=north]
+setblock 40 250 48 minecraft:chest[facing=north]
+setblock 42 250 48 minecraft:chest[facing=north]
+setblock 44 250 48 minecraft:chest[facing=north]
+setblock 46 250 48 minecraft:chest[facing=north]
+setblock 2 250 50 minecraft:oak_sign[rotation=8]{front_text:{messages:['{"text":"probe"}','{"text":"sign 2"}','{"text":""}','{"text":""}']}}
+setblock 4 250 50 minecraft:oak_sign[rotation=8]{front_text:{messages:['{"text":"probe"}','{"text":"sign 4"}','{"text":""}','{"text":""}']}}
+setblock 6 250 50 minecraft:oak_sign[rotation=8]{front_text:{messages:['{"text":"probe"}','{"text":"sign 6"}','{"text":""}','{"text":""}']}}
+setblock 8 250 50 minecraft:oak_sign[rotation=8]{front_text:{messages:['{"text":"probe"}','{"text":"sign 8"}','{"text":""}','{"text":""}']}}
+setblock 10 250 50 minecraft:oak_sign[rotation=8]{front_text:{messages:['{"text":"probe"}','{"text":"sign 10"}','{"text":""}','{"text":""}']}}
+setblock 12 250 50 minecraft:oak_sign[rotation=8]{front_text:{messages:['{"text":"probe"}','{"text":"sign 12"}','{"text":""}','{"text":""}']}}
+setblock 14 250 50 minecraft:oak_sign[rotation=8]{front_text:{messages:['{"text":"probe"}','{"text":"sign 14"}','{"text":""}','{"text":""}']}}
+setblock 16 250 50 minecraft:oak_sign[rotation=8]{front_text:{messages:['{"text":"probe"}','{"text":"sign 16"}','{"text":""}','{"text":""}']}}
+setblock 18 250 50 minecraft:oak_sign[rotation=8]{front_text:{messages:['{"text":"probe"}','{"text":"sign 18"}','{"text":""}','{"text":""}']}}
+setblock 20 250 50 minecraft:oak_sign[rotation=8]{front_text:{messages:['{"text":"probe"}','{"text":"sign 20"}','{"text":""}','{"text":""}']}}
+setblock 22 250 50 minecraft:oak_sign[rotation=8]{front_text:{messages:['{"text":"probe"}','{"text":"sign 22"}','{"text":""}','{"text":""}']}}
+setblock 24 250 50 minecraft:oak_sign[rotation=8]{front_text:{messages:['{"text":"probe"}','{"text":"sign 24"}','{"text":""}','{"text":""}']}}
+setblock 26 250 50 minecraft:oak_sign[rotation=8]{front_text:{messages:['{"text":"probe"}','{"text":"sign 26"}','{"text":""}','{"text":""}']}}
+setblock 28 250 50 minecraft:oak_sign[rotation=8]{front_text:{messages:['{"text":"probe"}','{"text":"sign 28"}','{"text":""}','{"text":""}']}}
+setblock 30 250 50 minecraft:oak_sign[rotation=8]{front_text:{messages:['{"text":"probe"}','{"text":"sign 30"}','{"text":""}','{"text":""}']}}
+setblock 32 250 50 minecraft:oak_sign[rotation=8]{front_text:{messages:['{"text":"probe"}','{"text":"sign 32"}','{"text":""}','{"text":""}']}}
+setblock 34 250 50 minecraft:oak_sign[rotation=8]{front_text:{messages:['{"text":"probe"}','{"text":"sign 34"}','{"text":""}','{"text":""}']}}
+setblock 36 250 50 minecraft:oak_sign[rotation=8]{front_text:{messages:['{"text":"probe"}','{"text":"sign 36"}','{"text":""}','{"text":""}']}}
+setblock 38 250 50 minecraft:oak_sign[rotation=8]{front_text:{messages:['{"text":"probe"}','{"text":"sign 38"}','{"text":""}','{"text":""}']}}
+setblock 40 250 50 minecraft:oak_sign[rotation=8]{front_text:{messages:['{"text":"probe"}','{"text":"sign 40"}','{"text":""}','{"text":""}']}}
+setblock 42 250 50 minecraft:oak_sign[rotation=8]{front_text:{messages:['{"text":"probe"}','{"text":"sign 42"}','{"text":""}','{"text":""}']}}
+setblock 44 250 50 minecraft:oak_sign[rotation=8]{front_text:{messages:['{"text":"probe"}','{"text":"sign 44"}','{"text":""}','{"text":""}']}}
+setblock 46 250 50 minecraft:oak_sign[rotation=8]{front_text:{messages:['{"text":"probe"}','{"text":"sign 46"}','{"text":""}','{"text":""}']}}
+setblock 2 250 52 minecraft:oak_sign[rotation=8]{front_text:{messages:['{"text":"probe"}','{"text":"sign 2"}','{"text":""}','{"text":""}']}}
+setblock 4 250 52 minecraft:oak_sign[rotation=8]{front_text:{messages:['{"text":"probe"}','{"text":"sign 4"}','{"text":""}','{"text":""}']}}
+setblock 6 250 52 minecraft:oak_sign[rotation=8]{front_text:{messages:['{"text":"probe"}','{"text":"sign 6"}','{"text":""}','{"text":""}']}}
+setblock 8 250 52 minecraft:oak_sign[rotation=8]{front_text:{messages:['{"text":"probe"}','{"text":"sign 8"}','{"text":""}','{"text":""}']}}
+setblock 10 250 52 minecraft:oak_sign[rotation=8]{front_text:{messages:['{"text":"probe"}','{"text":"sign 10"}','{"text":""}','{"text":""}']}}
+setblock 12 250 52 minecraft:oak_sign[rotation=8]{front_text:{messages:['{"text":"probe"}','{"text":"sign 12"}','{"text":""}','{"text":""}']}}
+setblock 14 250 52 minecraft:oak_sign[rotation=8]{front_text:{messages:['{"text":"probe"}','{"text":"sign 14"}','{"text":""}','{"text":""}']}}
+setblock 16 250 52 minecraft:oak_sign[rotation=8]{front_text:{messages:['{"text":"probe"}','{"text":"sign 16"}','{"text":""}','{"text":""}']}}
+setblock 18 250 52 minecraft:oak_sign[rotation=8]{front_text:{messages:['{"text":"probe"}','{"text":"sign 18"}','{"text":""}','{"text":""}']}}
+setblock 20 250 52 minecraft:oak_sign[rotation=8]{front_text:{messages:['{"text":"probe"}','{"text":"sign 20"}','{"text":""}','{"text":""}']}}
+setblock 22 250 52 minecraft:oak_sign[rotation=8]{front_text:{messages:['{"text":"probe"}','{"text":"sign 22"}','{"text":""}','{"text":""}']}}
+setblock 24 250 52 minecraft:oak_sign[rotation=8]{front_text:{messages:['{"text":"probe"}','{"text":"sign 24"}','{"text":""}','{"text":""}']}}
+setblock 26 250 52 minecraft:oak_sign[rotation=8]{front_text:{messages:['{"text":"probe"}','{"text":"sign 26"}','{"text":""}','{"text":""}']}}
+setblock 28 250 52 minecraft:oak_sign[rotation=8]{front_text:{messages:['{"text":"probe"}','{"text":"sign 28"}','{"text":""}','{"text":""}']}}
+setblock 30 250 52 minecraft:oak_sign[rotation=8]{front_text:{messages:['{"text":"probe"}','{"text":"sign 30"}','{"text":""}','{"text":""}']}}
+setblock 32 250 52 minecraft:oak_sign[rotation=8]{front_text:{messages:['{"text":"probe"}','{"text":"sign 32"}','{"text":""}','{"text":""}']}}
+setblock 34 250 52 minecraft:oak_sign[rotation=8]{front_text:{messages:['{"text":"probe"}','{"text":"sign 34"}','{"text":""}','{"text":""}']}}
+setblock 36 250 52 minecraft:oak_sign[rotation=8]{front_text:{messages:['{"text":"probe"}','{"text":"sign 36"}','{"text":""}','{"text":""}']}}
+setblock 38 250 52 minecraft:oak_sign[rotation=8]{front_text:{messages:['{"text":"probe"}','{"text":"sign 38"}','{"text":""}','{"text":""}']}}
+setblock 40 250 52 minecraft:oak_sign[rotation=8]{front_text:{messages:['{"text":"probe"}','{"text":"sign 40"}','{"text":""}','{"text":""}']}}
+setblock 42 250 52 minecraft:oak_sign[rotation=8]{front_text:{messages:['{"text":"probe"}','{"text":"sign 42"}','{"text":""}','{"text":""}']}}
+setblock 44 250 52 minecraft:oak_sign[rotation=8]{front_text:{messages:['{"text":"probe"}','{"text":"sign 44"}','{"text":""}','{"text":""}']}}
+setblock 46 250 52 minecraft:oak_sign[rotation=8]{front_text:{messages:['{"text":"probe"}','{"text":"sign 46"}','{"text":""}','{"text":""}']}}
+setblock 2 250 54 minecraft:oak_sign[rotation=8]{front_text:{messages:['{"text":"probe"}','{"text":"sign 2"}','{"text":""}','{"text":""}']}}
+setblock 4 250 54 minecraft:oak_sign[rotation=8]{front_text:{messages:['{"text":"probe"}','{"text":"sign 4"}','{"text":""}','{"text":""}']}}
+setblock 6 250 54 minecraft:oak_sign[rotation=8]{front_text:{messages:['{"text":"probe"}','{"text":"sign 6"}','{"text":""}','{"text":""}']}}
+setblock 8 250 54 minecraft:oak_sign[rotation=8]{front_text:{messages:['{"text":"probe"}','{"text":"sign 8"}','{"text":""}','{"text":""}']}}
+setblock 10 250 54 minecraft:oak_sign[rotation=8]{front_text:{messages:['{"text":"probe"}','{"text":"sign 10"}','{"text":""}','{"text":""}']}}
+setblock 12 250 54 minecraft:oak_sign[rotation=8]{front_text:{messages:['{"text":"probe"}','{"text":"sign 12"}','{"text":""}','{"text":""}']}}
+setblock 14 250 54 minecraft:oak_sign[rotation=8]{front_text:{messages:['{"text":"probe"}','{"text":"sign 14"}','{"text":""}','{"text":""}']}}
+setblock 16 250 54 minecraft:oak_sign[rotation=8]{front_text:{messages:['{"text":"probe"}','{"text":"sign 16"}','{"text":""}','{"text":""}']}}
+setblock 18 250 54 minecraft:oak_sign[rotation=8]{front_text:{messages:['{"text":"probe"}','{"text":"sign 18"}','{"text":""}','{"text":""}']}}
+setblock 20 250 54 minecraft:oak_sign[rotation=8]{front_text:{messages:['{"text":"probe"}','{"text":"sign 20"}','{"text":""}','{"text":""}']}}
+setblock 22 250 54 minecraft:oak_sign[rotation=8]{front_text:{messages:['{"text":"probe"}','{"text":"sign 22"}','{"text":""}','{"text":""}']}}
+setblock 24 250 54 minecraft:oak_sign[rotation=8]{front_text:{messages:['{"text":"probe"}','{"text":"sign 24"}','{"text":""}','{"text":""}']}}
+setblock 26 250 54 minecraft:oak_sign[rotation=8]{front_text:{messages:['{"text":"probe"}','{"text":"sign 26"}','{"text":""}','{"text":""}']}}
+setblock 28 250 54 minecraft:oak_sign[rotation=8]{front_text:{messages:['{"text":"probe"}','{"text":"sign 28"}','{"text":""}','{"text":""}']}}
+setblock 30 250 54 minecraft:oak_sign[rotation=8]{front_text:{messages:['{"text":"probe"}','{"text":"sign 30"}','{"text":""}','{"text":""}']}}
+setblock 32 250 54 minecraft:oak_sign[rotation=8]{front_text:{messages:['{"text":"probe"}','{"text":"sign 32"}','{"text":""}','{"text":""}']}}
+setblock 34 250 54 minecraft:oak_sign[rotation=8]{front_text:{messages:['{"text":"probe"}','{"text":"sign 34"}','{"text":""}','{"text":""}']}}
+setblock 36 250 54 minecraft:oak_sign[rotation=8]{front_text:{messages:['{"text":"probe"}','{"text":"sign 36"}','{"text":""}','{"text":""}']}}
+setblock 38 250 54 minecraft:oak_sign[rotation=8]{front_text:{messages:['{"text":"probe"}','{"text":"sign 38"}','{"text":""}','{"text":""}']}}
+setblock 40 250 54 minecraft:oak_sign[rotation=8]{front_text:{messages:['{"text":"probe"}','{"text":"sign 40"}','{"text":""}','{"text":""}']}}
+setblock 42 250 54 minecraft:oak_sign[rotation=8]{front_text:{messages:['{"text":"probe"}','{"text":"sign 42"}','{"text":""}','{"text":""}']}}
+setblock 44 250 54 minecraft:oak_sign[rotation=8]{front_text:{messages:['{"text":"probe"}','{"text":"sign 44"}','{"text":""}','{"text":""}']}}
+setblock 46 250 54 minecraft:oak_sign[rotation=8]{front_text:{messages:['{"text":"probe"}','{"text":"sign 46"}','{"text":""}','{"text":""}']}}
+setblock 2 250 56 minecraft:skeleton_skull[rotation=8]
+setblock 3 250 56 minecraft:skeleton_skull[rotation=8]
+setblock 4 250 56 minecraft:skeleton_skull[rotation=8]
+setblock 5 250 56 minecraft:skeleton_skull[rotation=8]
+setblock 6 250 56 minecraft:skeleton_skull[rotation=8]
+setblock 7 250 56 minecraft:skeleton_skull[rotation=8]
+setblock 8 250 56 minecraft:skeleton_skull[rotation=8]
+setblock 9 250 56 minecraft:skeleton_skull[rotation=8]
+setblock 10 250 56 minecraft:skeleton_skull[rotation=8]
+setblock 11 250 56 minecraft:skeleton_skull[rotation=8]
+setblock 12 250 56 minecraft:skeleton_skull[rotation=8]
+setblock 13 250 56 minecraft:skeleton_skull[rotation=8]
+setblock 14 250 56 minecraft:skeleton_skull[rotation=8]
+setblock 15 250 56 minecraft:skeleton_skull[rotation=8]
+setblock 16 250 56 minecraft:skeleton_skull[rotation=8]
+setblock 17 250 56 minecraft:skeleton_skull[rotation=8]
+setblock 18 250 56 minecraft:skeleton_skull[rotation=8]
+setblock 19 250 56 minecraft:skeleton_skull[rotation=8]
+setblock 20 250 56 minecraft:skeleton_skull[rotation=8]
+setblock 21 250 56 minecraft:skeleton_skull[rotation=8]
+setblock 22 250 56 minecraft:skeleton_skull[rotation=8]
+setblock 23 250 56 minecraft:skeleton_skull[rotation=8]
+setblock 24 250 56 minecraft:skeleton_skull[rotation=8]
+setblock 25 250 56 minecraft:skeleton_skull[rotation=8]
+setblock 26 250 56 minecraft:skeleton_skull[rotation=8]
+setblock 27 250 56 minecraft:skeleton_skull[rotation=8]
+setblock 28 250 56 minecraft:skeleton_skull[rotation=8]
+setblock 29 250 56 minecraft:skeleton_skull[rotation=8]
+setblock 30 250 56 minecraft:skeleton_skull[rotation=8]
+setblock 31 250 56 minecraft:skeleton_skull[rotation=8]
+setblock 32 250 56 minecraft:skeleton_skull[rotation=8]
+setblock 33 250 56 minecraft:skeleton_skull[rotation=8]
+setblock 34 250 56 minecraft:skeleton_skull[rotation=8]
+setblock 35 250 56 minecraft:skeleton_skull[rotation=8]
+setblock 36 250 56 minecraft:skeleton_skull[rotation=8]
+setblock 37 250 56 minecraft:skeleton_skull[rotation=8]
+setblock 38 250 56 minecraft:skeleton_skull[rotation=8]
+setblock 39 250 56 minecraft:skeleton_skull[rotation=8]
+setblock 40 250 56 minecraft:skeleton_skull[rotation=8]
+setblock 41 250 56 minecraft:skeleton_skull[rotation=8]
+setblock 42 250 56 minecraft:skeleton_skull[rotation=8]
+setblock 43 250 56 minecraft:skeleton_skull[rotation=8]
+setblock 44 250 56 minecraft:skeleton_skull[rotation=8]
+setblock 45 250 56 minecraft:skeleton_skull[rotation=8]
+setblock 46 250 56 minecraft:skeleton_skull[rotation=8]
+setblock 47 250 56 minecraft:skeleton_skull[rotation=8]

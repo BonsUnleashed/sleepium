@@ -5,6 +5,8 @@ import java.util.Locale;
 /** State and counters of the client-side optimisations (render thread unless noted). */
 public final class ClientCounters {
     public static long biomeSkips, samplerHits;
+    /** frame-hash runs: animated textures stop (FrameHashFreezeMixin) */
+    public static volatile boolean freezeTextures;
     /** changes whenever the set of loaded chunks or their biomes may have changed (AmbientChunksMixin) */
     public static long ambientVersion;
 

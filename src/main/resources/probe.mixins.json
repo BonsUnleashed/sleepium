@@ -33,6 +33,9 @@
     "EntSleepHolderMixin",
     "EntSleepDataMixin"
   ],
+  "client": [
+    "FrameHashFreezeMixin"
+  ],
   "injectors": {
     "defaultRequire": 1
   },
