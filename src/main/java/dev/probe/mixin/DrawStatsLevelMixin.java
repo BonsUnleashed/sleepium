@@ -24,10 +24,12 @@ public abstract class DrawStatsLevelMixin {
     @Inject(method = "render", at = @At("HEAD"))
     private void probe$renderBegin(DeltaTracker dt, boolean level, CallbackInfo ci) {
         DrawStats.phaseBegin(2);
+        dev.probe.GpuTimer.begin();
     }
 
     @Inject(method = "render", at = @At("RETURN"))
     private void probe$renderEnd(DeltaTracker dt, boolean level, CallbackInfo ci) {
         DrawStats.phaseEnd(2);
+        dev.probe.GpuTimer.end();
     }
 }

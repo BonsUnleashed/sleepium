@@ -85,7 +85,9 @@
     "SectionListsMixin",
     "LevelRendererVisibleAccessor",
     "ClientBiomeMemoMixin",
-    "ClientChunkCacheBiomeMixin"
+    "ClientChunkCacheBiomeMixin",
+    "UniformDedupeMixin",
+    "SamplerUnitDedupeMixin"
   ],
   "injectors": {
     "defaultRequire": 1

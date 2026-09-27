@@ -38,6 +38,7 @@ public final class DrawStats {
         OBJECTS.clear();
         java.util.Arrays.fill(PHASE, 0);
         java.util.Arrays.fill(PHASE_START, 0);
+        GpuTimer.reset();
         frames = 0;
         active = true;
     }
@@ -82,6 +83,7 @@ public final class DrawStats {
             v += t[1];
             b += t[2];
         }
+        sb.append("\n  ").append(GpuTimer.report());
         for (int i = 0; i < PHASE.length; i++) sb.append(String.format(Locale.ROOT, "\n  %s: %.3f ms per frame", PHASE_NAMES[i], PHASE[i] / 1e6 / frames));
         sb.append(String.format(Locale.ROOT, "\n  immediate draws %.1f, vertices %.0f, uploaded %.0f KiB", d / (double) frames, v / (double) frames, b / 1024.0 / frames));
         List<Map.Entry<String, long[]>> ts = new ArrayList<>(TYPES.entrySet());
