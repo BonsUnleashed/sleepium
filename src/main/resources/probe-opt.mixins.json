@@ -94,7 +94,8 @@
     "Vec3FromRgbMixin",
     "OverworldFogMixin",
     "EntityCullNoAllocMixin",
-    "FrustumInvoker"
+    "FrustumInvoker",
+    "ItemFrameOffsetMixin"
   ],
   "injectors": {
     "defaultRequire": 1

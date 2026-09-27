@@ -22,7 +22,8 @@ public abstract class ModelPartIterMixin {
     @Shadow @Final private List<ModelPart.Cube> cubes;
     @Shadow @Final private Map<String, ModelPart> children;
 
-    @Unique private final ArrayIter probe$childIter = new ArrayIter(), probe$cubeIter = new ArrayIter();
+    @Unique private final dev.probe.optsupport.MixinHelpers.ArrayIter probe$childIter = new dev.probe.optsupport.MixinHelpers.ArrayIter(),
+            probe$cubeIter = new dev.probe.optsupport.MixinHelpers.ArrayIter();
     @Unique private Object[] probe$children, probe$cubes;
 
     @Redirect(method = "render(Lcom/mojang/blaze3d/vertex/PoseStack;Lcom/mojang/blaze3d/vertex/VertexConsumer;III)V", at = @At(value = "INVOKE",
@@ -38,27 +39,5 @@ public abstract class ModelPartIterMixin {
         Object[] a = probe$cubes;
         if (a == null || a.length != cubes.size()) probe$cubes = a = cubes.toArray();
         return probe$cubeIter.reset(a);
-    }
-
-    @Unique
-    private static final class ArrayIter implements Iterator<Object> {
-        private Object[] a;
-        private int i;
-
-        ArrayIter reset(Object[] a) {
-            this.a = a;
-            this.i = 0;
-            return this;
-        }
-
-        @Override
-        public boolean hasNext() {
-            return i < a.length;
-        }
-
-        @Override
-        public Object next() {
-            return a[i++];
-        }
     }
 }

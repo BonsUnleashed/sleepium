@@ -2,33 +2,31 @@ package dev.probe.opt;
 
 import net.minecraft.world.phys.Vec3;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Overwrite;
 import org.spongepowered.asm.mixin.Unique;
-import org.spongepowered.asm.mixin.injection.At;
-import org.spongepowered.asm.mixin.injection.Inject;
-import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 /**
  * exp/frame-garbage (client): the overworld's brightness-dependent fog colour (a multiply per fetched colour, 216 per
  * frame) remembered per input colour instance and brightness: with Vec3FromRgbMixin the inputs are the same few
- * instances, and the function is pure (a product of the same doubles).
+ * instances, and the function is pure (the same product of the same doubles). An overwrite, so no callback object per
+ * call.
  */
 @Mixin(targets = "net.minecraft.client.renderer.DimensionSpecialEffects$OverworldEffects")
 public abstract class OverworldFogMixin {
-    @Unique
-    private record Entry(Vec3 in, int brightness, Vec3 out) {}
+    @Unique private static final dev.probe.optsupport.MixinHelpers.FogEntry[] probe$fog = new dev.probe.optsupport.MixinHelpers.FogEntry[64];
 
-    @Unique private static final Entry[] probe$fog = new Entry[64];
-
-    @Inject(method = "getBrightnessDependentFogColor", at = @At("HEAD"), cancellable = true)
-    private void probe$hit(Vec3 color, float brightness, CallbackInfoReturnable<Vec3> cir) {
+    /**
+     * @author probe
+     * @reason vanilla's product, remembered per input instance and brightness (see the class comment)
+     */
+    @Overwrite
+    public Vec3 getBrightnessDependentFogColor(Vec3 color, float brightness) {
         int b = Float.floatToRawIntBits(brightness);
-        Entry e = probe$fog[(System.identityHashCode(color) ^ b * 31) & 63];
-        if (e != null && e.in() == color && e.brightness() == b) cir.setReturnValue(e.out());
-    }
-
-    @Inject(method = "getBrightnessDependentFogColor", at = @At("RETURN"))
-    private void probe$keep(Vec3 color, float brightness, CallbackInfoReturnable<Vec3> cir) {
-        int b = Float.floatToRawIntBits(brightness);
-        probe$fog[(System.identityHashCode(color) ^ b * 31) & 63] = new Entry(color, b, cir.getReturnValue());
+        int i = (System.identityHashCode(color) ^ b * 31) & 63;
+        var e = probe$fog[i];
+        if (e != null && e.in() == color && e.brightness() == b) return e.out();
+        Vec3 out = color.multiply((double) (brightness * 0.94F + 0.06F), (double) (brightness * 0.94F + 0.06F), (double) (brightness * 0.91F + 0.09F));
+        probe$fog[i] = new dev.probe.optsupport.MixinHelpers.FogEntry(color, b, out);
+        return out;
     }
 }
