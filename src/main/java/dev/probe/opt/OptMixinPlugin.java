@@ -71,6 +71,7 @@ public final class OptMixinPlugin implements IMixinConfigPlugin {
             on = Boolean.getBoolean("lab.opt.all") || Boolean.getBoolean("lab.opt.FrameGarbageMixin");
         if (simple.equals("ClientLightCallbackMixin") || simple.equals("ClientLevelLightQueueAccessor") || simple.equals("ClientLightJoinMixin"))
             on = Boolean.getBoolean("lab.opt.all") || Boolean.getBoolean("lab.opt.ClientLightAsyncMixin");
+        if (simple.equals("LightRecipeVerifyMixin")) on = Boolean.getBoolean("lab.lightrecipe.verify");   // measurement only
         if (simple.startsWith("LightScout")) on = Boolean.getBoolean("lab.lightscout");   // measurement only
         if (simple.equals("LightTimingMixin")) on = Boolean.getBoolean("lab.lighttime");   // measurement only
         if (simple.startsWith("Scout") && simple.endsWith("Mixin"))   // measurement only, never with lab.opt.all

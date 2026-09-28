@@ -124,7 +124,8 @@
     "LightScoutMixin",
     "LightScoutAoMixin",
     "LightScoutFlatMixin",
-    "LightScoutFluidMixin"
+    "LightScoutFluidMixin",
+    "LightRecipeVerifyMixin"
   ],
   "injectors": {
     "defaultRequire": 1
