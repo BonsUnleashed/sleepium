@@ -53,7 +53,13 @@
     "ChunkTickMemoEpochMixin",
     "AsyncChunkSaveMixin",
     "AsyncChunkSaveEncodeMixin",
-    "AsyncChunkSaveStorageMixin"
+    "AsyncChunkSaveStorageMixin",
+    "ScoutLevelMixin",
+    "ScoutChunkMixin",
+    "ScoutBlockEntityMixin",
+    "ScoutMiscMixin",
+    "ScoutRandomMixin",
+    "ScoutEntityMixin"
   ],
   "client": [
     "SectionLayerMaskMixin",
