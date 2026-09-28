@@ -49,6 +49,12 @@ final class ProbeCommand {
                                     say(ctx, "probe: genbench started");
                                     return 1;
                                 }))))
+                .then(Commands.literal("idle")
+                        .then(Commands.argument("seconds", IntegerArgumentType.integer(1, 600)).executes(ctx -> {
+                            IdleBench.start(IntegerArgumentType.getInteger(ctx, "seconds"));
+                            say(ctx, "probe: idle measurement started");
+                            return 1;
+                        })))
                 .then(Commands.literal("busbench").executes(ctx -> {
                     if (EventCounter.INSTANCE.enabled()) {
                         say(ctx, "probe: run /probe stop first");
@@ -371,6 +377,7 @@ final class ProbeCommand {
     /** From ServerTickEvent.Post (LOWEST). */
     static void onTickEnd(MinecraftServer server) {
         GenBench.onTickEnd(server);
+        IdleBench.onTickEnd(server);
         if (autoStopAtTick >= 0 && (server.tickRateManager().isSprinting() ? System.nanoTime() >= autoStopAtNanos : TickTimer.INSTANCE.ticks() >= autoStopAtTick)) {
             autoStopAtTick = -1;
             Path file = finish(server, autoLabel);

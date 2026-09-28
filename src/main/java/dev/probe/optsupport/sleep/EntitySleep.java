@@ -219,7 +219,7 @@ public final class EntitySleep {
                 return x;
             });
             s = new ES(e, c);
-            if (c.refuse != null || e.getBlockX() < MIN_X) s.st = St.NEVER;
+            if (c.refuse != null || e.getBlockX() < MIN_X || dev.probe.api.Compat.entitySleepExcluded(e)) s.st = St.NEVER;
             ((EntSleeperHolder) e).probe$setEs(s);
         }
         if (s.st == St.ASLEEP) {

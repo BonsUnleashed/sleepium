@@ -268,7 +268,7 @@ public final class RenderCache {
     public static void render(Object obj, Class<?> rendererClass, Draw d, float pt, PoseStack pose, MultiBufferSource buffers, int light, int overlay,
             float yaw, long key, net.minecraft.client.renderer.entity.EntityRenderDispatcher camera) {
         var level = Minecraft.getInstance().level;
-        if (level == null || !(buffers instanceof MultiBufferSource.BufferSource)) {
+        if (level == null || !(buffers instanceof MultiBufferSource.BufferSource) || dev.probe.api.Compat.renderCacheExcluded(obj)) {
             vanilla++;
             d.draw(pose, buffers, pt);
             return;

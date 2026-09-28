@@ -120,7 +120,9 @@ final class JvmStats {
         Map<String, long[]> groups = new TreeMap<>();   // group -> {cpu, user, threads}
         for (Map.Entry<Long, ThreadSample> e : sampleThreads().entrySet()) {
             ThreadSample s0 = threadsAtStart.get(e.getKey());
-            long[] g = groups.computeIfAbsent(e.getValue().group(), k -> new long[3]);
+            // group by the name at the window start: vanilla renames a worker while it runs a mailbox task
+            String name = s0 != null ? s0.group() : e.getValue().group();
+            long[] g = groups.computeIfAbsent(name, k -> new long[3]);
             g[0] += e.getValue().cpu() - (s0 == null ? 0 : s0.cpu());
             g[1] += e.getValue().user() - (s0 == null ? 0 : s0.user());
             g[2]++;

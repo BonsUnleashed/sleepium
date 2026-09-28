@@ -73,8 +73,26 @@ public final class OptMixinPlugin implements IMixinConfigPlugin {
             on = Boolean.getBoolean("lab.opt.all") || Boolean.getBoolean("lab.opt.ClientLightAsyncMixin");
         if (simple.equals("ShaderLightCompileMixin") || simple.equals("ShaderLightMeshMixin") || simple.equals("ShaderLightChunkCacheMixin") || simple.equals("ShaderLightFrameMixin") || simple.equals("ShaderLightFluidMixin") || simple.equals("ShaderLightTranslucentMixin"))
             on = Boolean.getBoolean("lab.opt.all") || Boolean.getBoolean("lab.opt.ShaderLightMixin");
+        if (simple.startsWith("WorldgenAlloc") || simple.equals("SurfaceRuleInvoker") || simple.startsWith("Xoroshiro"))
+            on = Boolean.getBoolean("lab.opt.all") || Boolean.getBoolean("lab.opt.WorldgenAlloc");
+        if (simple.startsWith("WorldgenSkip") || simple.equals("FluidStatusAccessor") || simple.equals("NoiseChunkStateInvoker"))
+            on = Boolean.getBoolean("lab.opt.all") || Boolean.getBoolean("lab.opt.WorldgenSkip");
+        if (simple.equals("NoiseInterpolatorAccessor"))
+            on = Boolean.getBoolean("lab.opt.all") || Boolean.getBoolean("lab.opt.WorldgenSkip") || Boolean.getBoolean("lab.opt.WorldgenShare");
+        if (simple.startsWith("WorldgenShare"))
+            on = Boolean.getBoolean("lab.opt.all") || Boolean.getBoolean("lab.opt.WorldgenShare");
+        if (simple.equals("WorldgenAllocPlacementMixin") || simple.equals("WorldgenAllocJointMixin"))   // FEATURES: not yet verified
+            on = Boolean.getBoolean("lab.opt.WorldgenFeatureAlloc");
+        if (simple.equals("WorldgenReactorMixin") || simple.startsWith("Reactor"))
+            on = Boolean.getBoolean("lab.opt.all") || Boolean.getBoolean("lab.opt.WorldgenReactor");
+        if (simple.startsWith("MainReactor") || simple.equals("EventLoopQueueAccessor") || simple.equals("ChunkCacheExecutorAccessor"))
+            on = Boolean.getBoolean("lab.opt.all") || Boolean.getBoolean("lab.opt.MainReactor");
+        if (simple.startsWith("MainReactorScout")) on = Boolean.getBoolean("lab.reactor.scout");   // measurement only
+        if (simple.equals("StructurePlaceLockMixin"))
+            on = Boolean.getBoolean("lab.opt.all") || Boolean.getBoolean("lab.opt.ParallelWorldgenMixin");
         if (simple.equals("LightRecipeVerifyMixin")) on = Boolean.getBoolean("lab.lightrecipe.verify");   // measurement only
         if (simple.startsWith("LightScout")) on = Boolean.getBoolean("lab.lightscout");   // measurement only
+        if (simple.startsWith("GenScout")) on = Boolean.getBoolean("lab.genscout");   // measurement only
         if (simple.equals("LightTimingMixin")) on = Boolean.getBoolean("lab.lighttime");   // measurement only
         if (simple.startsWith("Scout") && simple.endsWith("Mixin"))   // measurement only, never with lab.opt.all
             on = Boolean.getBoolean("lab.scout");
@@ -136,6 +154,8 @@ public final class OptMixinPlugin implements IMixinConfigPlugin {
     @Override public void postApply(String targetClassName, ClassNode targetClass, String mixinClassName, IMixinInfo mixinInfo) {
         if (mixinClassName.endsWith(".EventSiteMixin") || mixinClassName.endsWith(".ClientEventSiteMixin"))
             dev.probe.optsupport.EventSiteTransformer.transform(targetClass);
+        if (mixinClassName.endsWith(".WorldgenAllocAp2Mixin"))
+            dev.probe.optsupport.ScratchArrays.transform(targetClass);
         if (mixinClassName.endsWith(".VertexSortRadixMixin"))
             dev.probe.optsupport.QuadSort.transform(targetClass);
     }

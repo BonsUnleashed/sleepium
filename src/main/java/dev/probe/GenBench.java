@@ -27,11 +27,28 @@ final class GenBench {
     private static String label = "";
     private static int runIndex;
     private static boolean active;
+    private static CpuWindow cpu;
     /** Hash of each chunk taken at ChunkEvent.Load (end of the FULL step), before post-processing or any tick. */
     private static final it.unimi.dsi.fastutil.longs.Long2LongOpenHashMap loadHashes = new it.unimi.dsi.fastutil.longs.Long2LongOpenHashMap();
 
+    /**
+     * -Dprobe.genbench.hash: "carvers,full" (default), "carvers", "full" or "none". Hashing reads all ~98k block states
+     * of a chunk: the FULL hash runs on the server thread (a quarter of its time at 140 chunks/s, inflating MSPT), the
+     * CARVERS hash on the worker that finished the step. Throughput runs use "none".
+     */
+    static final String HASH = System.getProperty("probe.genbench.hash", "carvers,full");
+    static final boolean HASH_FULL = HASH.contains("full"), HASH_CARVERS = HASH.contains("carvers");
+
+    /** chunks of this level that reached FULL (ChunkEvent.Load) during the current tick, any position */
+    private static int loadsThisTick;
+    /** per tick of the run: FULL loads during it, and its duration (ns) */
+    private static final it.unimi.dsi.fastutil.ints.IntArrayList TICK_LOADS = new it.unimi.dsi.fastutil.ints.IntArrayList();
+    private static final it.unimi.dsi.fastutil.longs.LongArrayList TICK_NANOS = new it.unimi.dsi.fastutil.longs.LongArrayList();
+    private static long lastTickEnd;
+
     static void onChunkLoad(net.neoforged.neoforge.event.level.ChunkEvent.Load e) {
-        if (!active || e.getLevel() != level) return;
+        if (active && e.getLevel() == level) loadsThisTick++;
+        if (!active || !HASH_FULL || e.getLevel() != level) return;
         ChunkPos p = e.getChunk().getPos();
         if (p.x < x0 || p.x >= x0 + side || p.z < z0 || p.z >= z0 + side) return;
         loadHashes.put(p.toLong(), hashChunk(e.getChunk()));
@@ -61,7 +78,12 @@ final class GenBench {
     }
 
     static void start(MinecraftServer server, int sideChunks, String l) {
-        level = server.overworld();
+        // -Dprobe.genbench.dim=minecraft:the_nether | minecraft:the_end (default the overworld)
+        String dim = System.getProperty("probe.genbench.dim");
+        level = dim == null ? server.overworld()
+                : server.getLevel(net.minecraft.resources.ResourceKey.create(net.minecraft.core.registries.Registries.DIMENSION,
+                        net.minecraft.resources.ResourceLocation.parse(dim)));
+        if (level == null) level = server.overworld();
         side = sideChunks;
         total = side * side;
         label = l;
@@ -77,6 +99,7 @@ final class GenBench {
         ProbeCommand.startRecording();
         startTick = TickTimer.INSTANCE.ticks();
         startNanos = System.nanoTime();
+        cpu = new CpuWindow();
         for (int dx = 0; dx < side; dx++) {
             for (int dz = 0; dz < side; dz++) {
                 // Async FORCED ticket (ticket level 31). NOT level.setChunkForced(): that also calls getChunk()
@@ -121,12 +144,37 @@ final class GenBench {
         } catch (IOException e) {
             ProbeMod.LOGGER.error("Cannot write {}", f, e);
         }
-        String par = dev.probe.optsupport.ParallelGen.ENABLED
-                ? String.format(java.util.Locale.ROOT, "; parallel worldgen: offloaded %d steps, %d feature jobs, %d contended locks",
-                        dev.probe.optsupport.ParallelGen.OFFLOADED.sumThenReset(), dev.probe.optsupport.ParallelGen.FEATURE_JOBS.sumThenReset(),
-                        dev.probe.optsupport.ParallelGen.LOCK_CONTENDED.sumThenReset())
-                : "";
+        String par = dev.probe.optsupport.ParallelGen.ENABLED ? "; " + dev.probe.optsupport.ParallelGen.report() : "";
+        if (dev.probe.optsupport.GenReactor.ENABLED) par += "; " + dev.probe.optsupport.GenReactor.report();
+        if (dev.probe.optsupport.FullRing.ENABLED) par += "; " + dev.probe.optsupport.FullRing.report();
+        if (dev.probe.optsupport.LightNotifyRing.ENABLED) par += "; " + dev.probe.optsupport.LightNotifyRing.report();
+        if (dev.probe.optsupport.GenReactor.ENABLED) par += "; " + dev.probe.optsupport.ReadJournal.report();
+        if (dev.probe.optsupport.MainReactor.ENABLED) par += "; " + dev.probe.optsupport.MainReactor.wakeReport();
+        if (Boolean.getBoolean("lab.reactor.scout")) par += "; " + dev.probe.optsupport.MainReactor.scoutReport();
         return "world hash " + Long.toHexString(all) + par + " /" + " (" + total + " chunks, per-chunk hashes in " + f.getFileName() + ")";
+    }
+
+    /**
+     * FULL loads per tick (includes chunks generated in the margin), and whether ticks after a burst are long: the
+     * loads of tick i against the end-to-end duration of tick i + 1 (its new chunks' first ticks).
+     */
+    private static String burstReport() {
+        int n = TICK_LOADS.size();
+        if (n < 3) return "loads per tick: n/a";
+        int[] l = TICK_LOADS.toIntArray();
+        int[] sorted = l.clone();
+        java.util.Arrays.sort(sorted);
+        long heavy = 0, light = 0;
+        int nh = 0, nl = 0;
+        for (int i = 1; i + 1 < n; i++) {
+            long d = TICK_NANOS.getLong(i + 1);
+            if (l[i] >= 16) { heavy += d; nh++; } else { light += d; nl++; }
+        }
+        TICK_LOADS.clear();
+        TICK_NANOS.clear();
+        lastTickEnd = 0;
+        return String.format(Locale.ROOT, "loads per tick: p50 %d, p90 %d, max %d; next tick after >= 16 loads %.1f ms (%d ticks), after < 16 %.1f ms (%d ticks)",
+                sorted[n / 2], sorted[(int) (n * 0.9)], sorted[n - 1], nh == 0 ? 0 : heavy / 1e6 / nh, nh, nl == 0 ? 0 : light / 1e6 / nl, nl);
     }
 
     /** Server thread, end of every tick. */
@@ -134,6 +182,11 @@ final class GenBench {
         if (!active) {
             return;
         }
+        long now = System.nanoTime();
+        TICK_LOADS.add(loadsThisTick);
+        TICK_NANOS.add(lastTickEnd == 0 ? 0 : now - lastTickEnd);
+        loadsThisTick = 0;
+        lastTickEnd = now;
         int done = 0;
         for (int dx = 0; dx < side; dx++) {
             for (int dz = 0; dz < side; dz++) {
@@ -151,7 +204,10 @@ final class GenBench {
         int ticks = TickTimer.INSTANCE.ticks() - startTick;
         String line = String.format(Locale.ROOT, "genbench '%s': %d/%d chunks FULL in %.2f s (%d ticks) = %.1f chunks/s",
                 label, done, total, secs, ticks, done / secs);
-        String hashLine = writeChunkHashes(server);
+        String cpuLine = burstReport() + System.lineSeparator() + cpu.report(secs, 12) + System.lineSeparator() + GenProfile.reportAndReset(done)
+                + (Boolean.getBoolean("lab.genscout") ? System.lineSeparator() + dev.probe.optsupport.GenScout.reportAndReset() + System.lineSeparator() + dev.probe.optsupport.GenScout.perlinBench()
+                        + System.lineSeparator() + dev.probe.optsupport.ColumnBound.report() : "");
+        String hashLine = writeChunkHashes(server) + "\n" + cpuLine;
         Path report = ProbeCommand.finishRecording(server, "genbench-" + label, line + "\n" + hashLine);
         for (int dx = 0; dx < side; dx++) {
             for (int dz = 0; dz < side; dz++) {
@@ -170,5 +226,6 @@ final class GenBench {
         }
         server.getPlayerList().broadcastSystemMessage(Component.literal("probe: " + line), false);
         ProbeMod.LOGGER.info("probe: {} -> {}", line, report);
+        ProbeMod.LOGGER.info("probe: genbench '{}' {}", label, cpuLine);
     }
 }

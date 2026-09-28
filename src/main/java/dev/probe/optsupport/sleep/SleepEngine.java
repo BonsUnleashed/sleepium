@@ -271,6 +271,8 @@ public final class SleepEngine {
             SleepAnalysis.Plan p = SleepAnalysis.analyze(be.getClass(), be.getBlockState().getBlock().getClass());
             if (p.eligible() && (p.clocks().stream().anyMatch(java.util.Objects::isNull) || p.conds().stream().anyMatch(x -> x.mod() == 0 && x.clock() == null)))
                 p = new SleepAnalysis.Plan(false, "inaccessible clock", p.clocks(), p.conds());
+            if (p.eligible() && dev.probe.api.Compat.sleepExcluded(be))
+                p = new SleepAnalysis.Plan(false, "excluded through dev.probe.api.Compat", p.clocks(), p.conds());
             ClassInfo ci = new ClassInfo(p);
             System.out.println("[probe/sleep] " + be.getClass().getSimpleName() + ": " + (p.eligible() ? "ELIGIBLE " : "no: ") + p.reason()
                     + "  clocks=" + p.clocks().stream().map(f -> f == null ? "?" : f.getName()).toList()

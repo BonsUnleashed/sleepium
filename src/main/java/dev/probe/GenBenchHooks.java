@@ -20,9 +20,16 @@ public final class GenBenchHooks {
     }
 
     public static void onStepDone(ChunkStep step, ChunkAccess chunk) {
-        if (step.targetStatus() != ChunkStatus.CARVERS) return;
+        if (step.targetStatus() != ChunkStatus.CARVERS || !GenBench.HASH_CARVERS) return;
         ChunkPos p = chunk.getPos();
         if (p.x < x0 || p.x >= x0 + side || p.z < z0 || p.z >= z0 + side) return;
-        CARVERS.put(p.toLong(), GenBench.hashChunk(chunk));
+        long h = GenBench.hashChunk(chunk);
+        // plus the post-processing marks (fluid updates the aquifer asked for): they are not block states
+        it.unimi.dsi.fastutil.shorts.ShortList[] pp = chunk.getPostProcessing();
+        for (int i = 0; i < pp.length; i++) {
+            h = (h ^ (i + 1)) * 1099511628211L;
+            if (pp[i] != null) for (int n = 0; n < pp[i].size(); n++) h = (h ^ pp[i].getShort(n)) * 1099511628211L;
+        }
+        CARVERS.put(p.toLong(), h);
     }
 }

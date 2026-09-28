@@ -232,7 +232,7 @@ public final class ParallelRender {
         Minecraft mc = Minecraft.getInstance();
         EntityRenderDispatcher d = mc.getEntityRenderDispatcher();
         if (buffers != mc.renderBuffers().bufferSource() || e instanceof AbstractClientPlayer || e.hasCustomName() || e.displayFireAnimation()
-                || d.shouldRenderHitBoxes() || listened) return false;
+                || d.shouldRenderHitBoxes() || listened || dev.probe.api.Compat.parallelRenderExcluded(e)) return false;
         return !Boolean.getBoolean("lab.opt.RenderCacheMixin") || RenderCache.animated(e);
     }
 
