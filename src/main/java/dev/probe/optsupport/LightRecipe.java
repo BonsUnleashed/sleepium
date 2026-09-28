@@ -100,6 +100,21 @@ public final class LightRecipe {
         out[r[3]] = pack(code(pos, e3), code(pos, e1), code(pos, cD), ce, local);
     }
 
+    /** second sample code markers: 30 = one sample with the block light raised to the quad's own emission (s2); 29 = full bright */
+    public static final int FLAT_SELF = 30, FULL_BRIGHT = 29;
+
+    /**
+     * A flat quad lit the way ModelBlockRenderer's flat paths and NeoForge's calculateFaceWithoutAO light it:
+     * LevelRenderer.getLightColor(level, state of the quad's own block, sample) — the sample's light, but the block
+     * light at least the block's own emission, or full bright for an emissive-rendering state.
+     */
+    public static int flatSelf(BlockAndTintGetter level, BlockState self, BlockPos pos, BlockPos sample) {
+        int local = ((pos.getX() & 15) << 8) | ((pos.getY() & 15) << 4) | (pos.getZ() & 15);
+        if (self.emissiveRendering(level, sample)) return pack(0, FULL_BRIGHT, 0, 0, local);
+        int e = self.getLightEmission(level, sample);
+        return pack(code(pos, sample), FLAT_SELF, Math.min(15, e), 0, local);
+    }
+
     /** a flat quad's recipe: its one light sample, four times (blend(x, x, x, x) = x) */
     public static int flat(BlockPos pos, BlockPos sample) {
         int c = code(pos, sample);
@@ -121,6 +136,13 @@ public final class LightRecipe {
 
     /** What the shader computes: vanilla's integer blend of the four samples (the fourth, the center, fills zeros). */
     public static int emulate(BlockAndTintGetter level, BlockPos pos, int recipe) {
+        int marker = recipe >>> 5 & 31;
+        if (marker == FULL_BRIGHT) return 0xF000F0;
+        if (marker == FLAT_SELF) {
+            int lc = light(level, at(pos, recipe & 31)), e = recipe >>> 10 & 31;
+            int block = Math.max(lc >> 4 & 15, e);
+            return (lc & 0xF00000) | block << 4;
+        }
         int a = light(level, at(pos, recipe & 31)), b = light(level, at(pos, recipe >>> 5 & 31)), c = light(level, at(pos, recipe >>> 10 & 31)),
                 d = light(level, at(pos, recipe >>> 15 & 31));
         if (a == 0) a = d;

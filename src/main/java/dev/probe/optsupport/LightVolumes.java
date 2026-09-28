@@ -80,6 +80,12 @@ public final class LightVolumes {
 
     /** After ModelBlockRenderer.putQuadData: the quad's four vertices are the builder's last four. */
     public static void quadWritten(BlockAndTintGetter level, BlockState state, BlockPos pos, BakedQuad quad, java.util.BitSet shapeFlags, VertexConsumer consumer, boolean ao) {
+        quadWritten(level, state, pos, quad, shapeFlags, consumer, ao, false);
+    }
+
+    /** culledFlat: tesselateWithoutAO's culled faces, lit at pos + the face direction (no shape flags computed for them) */
+    public static void quadWritten(BlockAndTintGetter level, BlockState state, BlockPos pos, BakedQuad quad, java.util.BitSet shapeFlags, VertexConsumer consumer, boolean ao,
+                                   boolean culledFlat) {
         Compile c = STATE.get();
         if (!c.on || !blockBuilder(consumer)) return;
         BufferBuilder bb = (BufferBuilder) consumer;
@@ -92,9 +98,10 @@ public final class LightVolumes {
             have = LightRecipe.integerPath(quad.getDirection(), shapeFlags);
             if (have) LightRecipe.recipes(level, pos, quad.getDirection(), shapeFlags, c.rec);
         } else {
-            // NeoForge's calculateFaceWithoutAO (quads without AO) and flat lighting: one sample, four times
-            BlockPos lp = shapeFlags.get(0) ? pos.relative(quad.getDirection()) : pos;
-            int one = LightRecipe.flat(pos, lp);
+            // NeoForge's calculateFaceWithoutAO (quads without AO) and flat lighting: one sample, with the quad's own
+            // block's emission (LevelRenderer.getLightColor(level, state, sample))
+            BlockPos lp = culledFlat || shapeFlags.get(0) ? pos.relative(quad.getDirection()) : pos;
+            int one = LightRecipe.flatSelf(level, state, pos, lp);
             c.rec[0] = c.rec[1] = c.rec[2] = c.rec[3] = one;
             have = true;
         }
@@ -367,6 +374,15 @@ public final class LightVolumes {
                 if (w < 0.0 || ProbeRecipe == 0xFFFFFFFFu) return UV2;
                 int vol = int(w);
                 ivec3 bp = ivec3(int((ProbeRecipe >> 28u) & 15u), int((ProbeRecipe >> 24u) & 15u), int((ProbeRecipe >> 20u) & 15u));
+                uint marker = (ProbeRecipe >> 5u) & 31u;
+                if (marker == 29u) return ivec2(240, 240);
+                if (marker == 30u) {
+                    int c0 = int(ProbeRecipe & 31u);
+                    uint lc = probeSample(vol, bp + ivec3(c0 / 9 - 1, (c0 / 3) % 3 - 1, c0 % 3 - 1));
+                    uint blk = max((lc >> 4u) & 15u, (ProbeRecipe >> 10u) & 31u);
+                    lc = (lc & 0xF00000u) | (blk << 4u);
+                    return ivec2(int(lc & 0xFFFFu), int(lc >> 16u));
+                }
                 uint s[4];
                 for (int k = 0; k < 4; k++) {
                     int c = int((ProbeRecipe >> uint(5 * k)) & 31u);

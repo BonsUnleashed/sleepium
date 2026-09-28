@@ -38,8 +38,8 @@ public abstract class ShaderLightMixin {
     @Redirect(method = "renderModelFaceFlat", at = @At(value = "INVOKE", target = PUT))
     private void probe$flat(ModelBlockRenderer self, BlockAndTintGetter level, BlockState state, BlockPos pos, VertexConsumer consumer, PoseStack.Pose pose,
                             BakedQuad quad, float b0, float b1, float b2, float b3, int l0, int l1, int l2, int l3, int overlay,
-                            @Local(argsOnly = true) BitSet shapeFlags) {
+                            @Local(argsOnly = true) BitSet shapeFlags, @Local(argsOnly = true) boolean repackLight) {
         putQuadData(level, state, pos, consumer, pose, quad, b0, b1, b2, b3, l0, l1, l2, l3, overlay);
-        LightVolumes.quadWritten(level, state, pos, quad, shapeFlags, consumer, false);
+        LightVolumes.quadWritten(level, state, pos, quad, shapeFlags, consumer, false, !repackLight);
     }
 }
