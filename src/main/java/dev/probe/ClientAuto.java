@@ -79,6 +79,7 @@ final class ClientAuto {
             hashAt = ticks + 60;
         }
         if (STEADY) {
+            if (dev.probe.optsupport.LightTiming.ON) dev.probe.optsupport.LightTiming.reset();
             ClientProbe.start(30, LABEL);   // stationary: rendering only, no loading in the window
             enter(Phase.FINISH);
         } else {
@@ -273,6 +274,7 @@ final class ClientAuto {
                         recording = null;
                     }
                     log(dev.probe.optsupport.ClientCounters.report());
+                    if (dev.probe.optsupport.LightTiming.ON) log(dev.probe.optsupport.LightTiming.report());
                     if (DrawStats.ON) log(DrawStats.report());
                     log("thread census:\n" + census());
                     enter(Phase.DONE);
