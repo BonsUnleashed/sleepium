@@ -24,7 +24,7 @@ public abstract class ScoutLevelMixin {
 
     @Inject(method = "tickNonPassenger", at = @At("HEAD"))
     private void probe$entityStart(Entity e, CallbackInfo ci) {
-        ParallelTickScout.begin(ParallelTickScout.ENTITY, e.getBlockX(), e.getBlockY(), e.getBlockZ());
+        ParallelTickScout.begin(ParallelTickScout.ENTITY, e.getBlockX(), e.getBlockY(), e.getBlockZ(), e.getId());
         ParallelTickScout.entityWrite(e.getBlockX(), e.getBlockY(), e.getBlockZ());
     }
 
@@ -36,7 +36,7 @@ public abstract class ScoutLevelMixin {
 
     @Inject(method = "tickChunk", at = @At("HEAD"))
     private void probe$chunkStart(LevelChunk chunk, int speed, CallbackInfo ci) {
-        ParallelTickScout.begin(ParallelTickScout.CHUNK, chunk.getPos().getMinBlockX() + 8, 64, chunk.getPos().getMinBlockZ() + 8);
+        ParallelTickScout.begin(ParallelTickScout.CHUNK, chunk.getPos().getMinBlockX() + 8, 64, chunk.getPos().getMinBlockZ() + 8, chunk.getPos().toLong());
     }
 
     @Inject(method = "tickChunk", at = @At("RETURN"))

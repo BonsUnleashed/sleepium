@@ -39,6 +39,14 @@ public final class ParallelTickScout {
     /** entity queries and entity moves: a separate kind of data (an entity moving does not change the blocks) */
     private static final LongOpenHashSet entityReads = new LongOpenHashSet(), entityWrites = new LongOpenHashSet();
     private static int rng, spawned;
+    /** the task's identity for the draw-count prediction (chunk pos, entity id, block pos) */
+    private static long taskKey;
+    private static final it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap[] LAST_DRAWS = new it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap[5];
+    static { for (int i = 0; i < 5; i++) { LAST_DRAWS[i] = new it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap(); LAST_DRAWS[i].defaultReturnValue(-1); } }
+    /** per tick, among the tasks that draw from the level RNG: have all earlier ones been predicted right so far */
+    private static boolean chainIntact;
+    // per kind: drawing tasks predicted right, drawing tasks after the first wrong prediction of their tick (re-run by the shift)
+    private static final long[][] RNG_STATS = new long[5][2];
     private static final LongOpenHashSet written = new LongOpenHashSet(), entityWritten = new LongOpenHashSet();
     private static final Long2LongOpenHashMap[] writer = {new Long2LongOpenHashMap(), new Long2LongOpenHashMap(), new Long2LongOpenHashMap()};
     private static final Long2LongOpenHashMap[] entityWriter = {new Long2LongOpenHashMap(), new Long2LongOpenHashMap(), new Long2LongOpenHashMap()};
@@ -52,6 +60,7 @@ public final class ParallelTickScout {
     public static void beginTick(Object random) {
         levelRandom = random;
         owner = Thread.currentThread();
+        chainIntact = true;
         written.clear();
         entityWritten.clear();
         for (Long2LongOpenHashMap m : writer) m.clear();
@@ -68,9 +77,14 @@ public final class ParallelTickScout {
     }
 
     public static void begin(int k, int blockX, int blockY, int blockZ) {
+        begin(k, blockX, blockY, blockZ, net.minecraft.core.BlockPos.asLong(blockX, blockY, blockZ));
+    }
+
+    public static void begin(int k, int blockX, int blockY, int blockZ, long key) {
         if (Thread.currentThread() != owner) return;
         if (depth++ > 0) return;   // nested: part of the outer task
         kind = k;
+        taskKey = key;
         int cx = blockX >> 4, cz = blockZ >> 4;
         for (int i = 0; i < 3; i++) myRegion[i] = region(cx, cz, REGION_SHIFT[i]);
         reads.clear();
@@ -97,6 +111,13 @@ public final class ParallelTickScout {
         if (rng > 0) {
             s[5]++;
             s[6] += rng;
+        }
+        int last = LAST_DRAWS[kind].put(taskKey, rng);
+        if (rng > 0 || last > 0) {
+            // a task that draws (now or last tick): its start state needs every earlier drawing task's count
+            if (!chainIntact) RNG_STATS[kind][1]++;
+            if (last == rng) RNG_STATS[kind][0]++;
+            else chainIntact = false;
         }
         if (spawned > 0) s[7]++;
         s[8] += reads.size() + entityReads.size();
@@ -175,6 +196,8 @@ public final class ParallelTickScout {
                     "%n  %-14s tasks %8d | conflicts: all parallel %5.1f %%, lanes 1x1 %5.1f %%, 2x2 %5.1f %%, 4x4 %5.1f %% | level RNG in %5.1f %% (%.1f draws each) | spawn %4.1f %% | reads %.1f, writes %.2f sections",
                     KIND[k], s[0], 100 * s[1] / n, 100 * s[2] / n, 100 * s[3] / n, 100 * s[4] / n, 100 * s[5] / n, s[5] == 0 ? 0 : (double) s[6] / s[5],
                     100 * s[7] / n, s[8] / n, s[9] / n));
+            b.append(String.format(java.util.Locale.ROOT, "%n  %-14s   draw count same as last tick: %5.1f %% of drawing tasks; drawing tasks after a wrong prediction in their tick: %5.1f %% of all tasks",
+                    "", 100.0 * RNG_STATS[k][0] / Math.max(1, s[5]), 100.0 * RNG_STATS[k][1] / n));
         }
         return b.toString();
     }
