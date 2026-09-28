@@ -104,7 +104,10 @@
     "ClientLevelLightQueueAccessor",
     "ClientLightJoinMixin",
     "BlockMeshMemoMixin",
-    "BlockMeshDirtyMixin"
+    "BlockMeshDirtyMixin",
+    "ChunkTickMemoMixin",
+    "ChunkTickMemoChunkMixin",
+    "ChunkTickMemoEpochMixin"
   ],
   "injectors": {
     "defaultRequire": 1

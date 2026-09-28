@@ -56,8 +56,12 @@ final class ClientAuto {
     private static final String JFR = System.getProperty("probe.clientAuto.jfr");
     private static jdk.jfr.Recording recording;
 
+    /** -Dprobe.clientAuto.serverProbe=true: the integrated server's tick stats over the same window (probe run) */
+    private static final boolean SERVER_PROBE = Boolean.getBoolean("probe.clientAuto.serverProbe");
+
     private static void startMeasuring() {
         if (DrawStats.ON) DrawStats.start();
+        if (SERVER_PROBE) command(Minecraft.getInstance(), "probe run 30 " + LABEL + "-srv");
         if (JFR != null) {
             try {
                 String[] j = JFR.split(";");
