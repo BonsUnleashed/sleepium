@@ -120,7 +120,11 @@
     "ClientLevelLightQueueAccessor",
     "ClientLightJoinMixin",
     "BlockMeshMemoMixin",
-    "BlockMeshDirtyMixin"
+    "BlockMeshDirtyMixin",
+    "LightScoutMixin",
+    "LightScoutAoMixin",
+    "LightScoutFlatMixin",
+    "LightScoutFluidMixin"
   ],
   "injectors": {
     "defaultRequire": 1

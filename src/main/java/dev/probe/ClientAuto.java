@@ -275,6 +275,7 @@ final class ClientAuto {
                     }
                     log(dev.probe.optsupport.ClientCounters.report());
                     if (dev.probe.optsupport.LightTiming.ON) log(dev.probe.optsupport.LightTiming.report());
+                    if (dev.probe.optsupport.LightScout.ON) log(dev.probe.optsupport.LightScout.report());
                     if (DrawStats.ON) log(DrawStats.report());
                     log("thread census:\n" + census());
                     enter(Phase.DONE);
