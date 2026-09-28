@@ -47,7 +47,13 @@
     "CubeShapeMixin",
     "VoxelShapeAccessor",
     "FluidSpreadMixin",
-    "TickSchedulerMixin"
+    "TickSchedulerMixin",
+    "ChunkTickMemoMixin",
+    "ChunkTickMemoChunkMixin",
+    "ChunkTickMemoEpochMixin",
+    "AsyncChunkSaveMixin",
+    "AsyncChunkSaveEncodeMixin",
+    "AsyncChunkSaveStorageMixin"
   ],
   "client": [
     "SectionLayerMaskMixin",
@@ -104,10 +110,7 @@
     "ClientLevelLightQueueAccessor",
     "ClientLightJoinMixin",
     "BlockMeshMemoMixin",
-    "BlockMeshDirtyMixin",
-    "ChunkTickMemoMixin",
-    "ChunkTickMemoChunkMixin",
-    "ChunkTickMemoEpochMixin"
+    "BlockMeshDirtyMixin"
   ],
   "injectors": {
     "defaultRequire": 1
