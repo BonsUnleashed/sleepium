@@ -128,7 +128,9 @@
     "LightRecipeVerifyMixin",
     "ShaderLightMixin",
     "ShaderLightCompileMixin",
-    "ShaderLightMeshMixin"
+    "ShaderLightMeshMixin",
+    "ShaderLightChunkCacheMixin",
+    "ShaderLightFrameMixin"
   ],
   "injectors": {
     "defaultRequire": 1

@@ -46,6 +46,8 @@ public final class ChunkMultiDraw {
     private static final int UBO_BINDING = 7;
     /** vertex shader names patched by ChunkShaderPatchMixin */
     public static final Set<String> PATCHED = java.util.concurrent.ConcurrentHashMap.newKeySet();
+    /** exp/shader-light: programs patched to take light from recipes and volumes */
+    public static final Set<String> LIGHT_PATCHED = java.util.concurrent.ConcurrentHashMap.newKeySet();
     public static final Set<String> SUPPORTED = Set.of("rendertype_solid", "rendertype_cutout_mipped", "rendertype_cutout");
     public static long multiDraws, sectionsMulti, sectionsVanilla, sectionsSkipped, uploads, grows, quadsTotal, quadsDrawn;
 
@@ -78,6 +80,13 @@ public final class ChunkMultiDraw {
                         : "layout(std140) uniform ProbeChunkOffsets { vec4 ProbeOffsets[" + MAX_DRAWS + "]; };"))
                 .replace(use, "vec3 pos = (ProbeMultiDraw == 2 ? (Position - 2048.0) * 0.00390625 : Position) + (ProbeMultiDraw != 0 ? ProbeOffsets[gl_DrawIDARB].xyz : ChunkOffset);")
                 .replace(uv, "texCoord0 = ProbeMultiDraw == 2 ? UV0 * 0.0000152587890625 : UV0;");
+        String light = "vertexColor = Color * minecraft_sample_lightmap(Sampler2, UV2);";
+        if (LightVolumes.ON && ssbo() && out.contains(light)) {
+            out = out.replaceFirst("#extension GL_ARB_shader_draw_parameters : require", "#extension GL_ARB_shader_draw_parameters : require\n#extension GL_ARB_explicit_attrib_location : require")
+                    .replace("void main() {", LightVolumes.glsl() + "\nvoid main() {")
+                    .replace(light, "vertexColor = Color * minecraft_sample_lightmap(Sampler2, ProbeMultiDraw != 0 ? probeUV2(ProbeOffsets[gl_DrawIDARB].w) : UV2);");
+            LIGHT_PATCHED.add(name);
+        }
         PATCHED.add(name);
         return out;
     }
@@ -91,6 +100,9 @@ public final class ChunkMultiDraw {
     static final class Entry {
         Arena arena;
         int start, vertices, indexCount;
+        /** exp/shader-light: the mesh has light recipes; the section's light volume (-1: none, baked light) */
+        boolean recipes;
+        int vol = -1;
         long origin;
         final int[] bq = new int[8];
         /** per bucket: the face plane nearest the camera side that could see it (+ buckets min, - buckets max coordinate, section-relative) */
@@ -322,6 +334,7 @@ public final class ChunkMultiDraw {
             for (int k = 4; k < 8; k++) e.bq[k] = verts / 4;
         }
         e.origin = o.asLong();
+        e.recipes = LightVolumes.hasRecipes(mesh);
         uploads++;
         // meshes with light recipes (exp/shader-light) keep the 32-byte format: the packed one has no room for them
         if (PACK && ds.format() == DefaultVertexFormat.BLOCK && verts % 4 == 0 && !LightVolumes.hasRecipes(mesh)) {
@@ -442,6 +455,29 @@ public final class ChunkMultiDraw {
     /** From RenderSection.reset (origin change, release): every layer's entry. */
     public static void release(SectionRenderDispatcher.RenderSection section) {
         for (RenderType t : LAYERS) release(section, t);
+        if (LightVolumes.ON) LightVolumes.released(section);
+    }
+
+    /**
+     * RenderSection.setCompiled: a layer the new compile does not have is gone — vanilla stops drawing it
+     * (CompiledSection.isEmpty) and no upload replaces its entry, so the entry is released here, at the same moment.
+     */
+    public static void compiled(SectionRenderDispatcher.RenderSection section, SectionRenderDispatcher.CompiledSection compiled) {
+        // setCompiled runs on the compile task's thread: the arenas belong to the render thread, which drains this
+        PENDING_COMPILED.add(new Object[] {section, compiled});
+    }
+
+    private static final java.util.concurrent.ConcurrentLinkedQueue<Object[]> PENDING_COMPILED = new java.util.concurrent.ConcurrentLinkedQueue<>();
+
+    /** Render thread, before drawing: the entries of layers the sections' current compiles no longer have. */
+    private static void drainCompiled() {
+        Object[] p;
+        while ((p = PENDING_COMPILED.poll()) != null) {
+            var section = (SectionRenderDispatcher.RenderSection) p[0];
+            var compiled = (SectionRenderDispatcher.CompiledSection) p[1];
+            if (section.getCompiled() != compiled) continue;   // a newer compile (or a reset) came since
+            for (RenderType t : LAYERS) if (compiled.isEmpty(t)) release(section, t);
+        }
     }
 
     private static void release(SectionRenderDispatcher.RenderSection section, RenderType layer) {
@@ -501,6 +537,7 @@ public final class ChunkMultiDraw {
             net.minecraft.client.renderer.ShaderInstance shader) {
         int li = LAYERS.indexOf(layer);
         if (li < 0) return false;
+        if (!PENDING_COMPILED.isEmpty()) drainCompiled();
         int[] ps = programState(shader.getId());
         if (ps == null) return false;
         var uniform = shader.CHUNK_OFFSET;
@@ -652,6 +689,7 @@ public final class ChunkMultiDraw {
             GL15C.nglBufferData(GL40C.GL_DRAW_INDIRECT_BUFFER, bytes, c, GL15C.GL_STREAM_DRAW);
         }
         RenderSystem.AutoStorageIndexBuffer seq = RenderSystem.getSequentialBuffer(VertexFormat.Mode.QUADS);
+        if (LightVolumes.ON && sb) GL30C.glBindBufferBase(GL43C.GL_SHADER_STORAGE_BUFFER, LightVolumes.BINDING, LightVolumes.buffer());
         int mode = -1;
         for (int pass = 0; pass < 2; pass++) {
             for (Arena a : LISTED) {
@@ -725,7 +763,7 @@ public final class ChunkMultiDraw {
                     if (runStart < 0) runStart = bq[k];
                     runEnd = bq[k + 1];
                 } else if (!empty && runStart >= 0) {   // an invisible, non-empty bucket (or the end) closes the run
-                    addDraw(a, e.start + runStart * 4, (runEnd - runStart) * 6, ox, oy, oz);
+                    addDraw(a, e.start + runStart * 4, (runEnd - runStart) * 6, ox, oy, oz, e.recipes ? e.vol : -1);
                     quadsDrawn += runEnd - runStart;
                     runStart = -1;
                 }
@@ -736,11 +774,11 @@ public final class ChunkMultiDraw {
     private static final double EPS = 1.0 / 64;
     private static final boolean SECTION_LISTS = Boolean.getBoolean("lab.opt.SectionListsMixin");
 
-    private static void addDraw(Arena a, int baseVertex, int indices, float ox, float oy, float oz) {
+    private static void addDraw(Arena a, int baseVertex, int indices, float ox, float oy, float oz, int vol) {
         int i = a.n++;
         MemoryUtil.memPutInt(a.counts + 4L * i, indices);
         MemoryUtil.memPutInt(a.bases + 4L * i, baseVertex);
-        a.offsets.putFloat(16 * i, ox).putFloat(16 * i + 4, oy).putFloat(16 * i + 8, oz);
+        a.offsets.putFloat(16 * i, ox).putFloat(16 * i + 4, oy).putFloat(16 * i + 8, oz).putFloat(16 * i + 12, vol);
         if (indices > a.maxIndices) a.maxIndices = indices;
     }
 
@@ -757,6 +795,7 @@ public final class ChunkMultiDraw {
         GL15C.glBufferSubData(GL31C.GL_UNIFORM_BUFFER, 0, a.offsets);
         a.offsets.clear();
         GL31C.glBindBufferBase(GL31C.GL_UNIFORM_BUFFER, UBO_BINDING, ubo());
+        if (LightVolumes.ON && ssbo()) GL30C.glBindBufferBase(GL43C.GL_SHADER_STORAGE_BUFFER, LightVolumes.BINDING, LightVolumes.buffer());
         GL32C.nglMultiDrawElementsBaseVertex(GL15C.GL_TRIANGLES, a.counts, seq.type().asGLType, a.indices, a.n, a.bases);
         GL20C.glUniform1i(ps[0], 0);
         multiDraws++;
@@ -805,6 +844,10 @@ public final class ChunkMultiDraw {
             } else {
                 if (sb) GL43C.glShaderStorageBlockBinding(program, block, UBO_BINDING);
                 else GL31C.glUniformBlockBinding(program, block, UBO_BINDING);
+                if (sb && LightVolumes.ON) {
+                    int lv = GL43C.glGetProgramResourceIndex(program, GL43C.GL_SHADER_STORAGE_BLOCK, "ProbeLightVolumes");
+                    if (lv != GL31C.GL_INVALID_INDEX) GL43C.glShaderStorageBlockBinding(program, lv, LightVolumes.BINDING);
+                }
                 s = new int[] {flag};
             }
             PROGRAM_STATE.put(program, s);
@@ -827,6 +870,10 @@ public final class ChunkMultiDraw {
             GL30C.glVertexAttribIPointer(3, 2, GL11C.GL_UNSIGNED_BYTE, PACKED_STRIDE, 6);
         } else {
             layer.format().setupBufferState();
+            if (LightVolumes.ON && a.stride == 32) {
+                GL20C.glEnableVertexAttribArray(7);
+                GL30C.glVertexAttribIPointer(7, 1, GL11C.GL_UNSIGNED_INT, 32, 28);
+            }
         }
         a.vaoStale = false;
     }

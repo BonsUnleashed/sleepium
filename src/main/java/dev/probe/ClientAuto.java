@@ -48,6 +48,8 @@ final class ClientAuto {
     /** -Dprobe.clientAuto.scene=client_entities: run that probe function after the terrain is ready, then look at it */
     private static final String SCENE = System.getProperty("probe.clientAuto.scene");
     private static final String SCENE_TP = "tp @s 24 258 4 0 25";
+    /** -Dprobe.clientAuto.sceneWait=S: the scene is measured no earlier than S seconds after it was built (scenes that change for a while) */
+    private static final int SCENE_MIN_S = Integer.getInteger("probe.clientAuto.sceneWait", 0);
     /** -Dprobe.clientAuto.framehash=true: freeze, then hash the frame's pixels and save it as a PNG (render exactness) */
     private static final boolean FRAMEHASH = Boolean.getBoolean("probe.clientAuto.framehash");
     private static int hashAt = -1, idleTicks, sceneAt;
@@ -78,6 +80,9 @@ final class ClientAuto {
             // no /tick freeze: frozen, the server stops sending the light that new sections need to be built
             dev.probe.optsupport.ClientCounters.freezeTextures = true;
             hashAt = ticks + 60;
+            // -Dprobe.clientAuto.remesh=true: the scene's sections re-meshed first (the plain re-mesh path, light as it is
+            // now): every renderer takes the light at the same moment, whatever each kept since the last light change
+            if (Boolean.getBoolean("probe.clientAuto.remesh")) Minecraft.getInstance().levelRenderer.setBlocksDirty(-16, 216, 0, 64, 272, 80);
         }
         if (STEADY) {
             if (dev.probe.optsupport.LightTiming.ON) dev.probe.optsupport.LightTiming.reset();
@@ -241,7 +246,7 @@ final class ClientAuto {
                 var d = mc.levelRenderer.getSectionRenderDispatcher();
                 boolean idle = ticks > sceneAt + 20 && d != null && mc.levelRenderer.hasRenderedAllSections() && d.getToUpload() == 0 && d.getToBatchCount() == 0;
                 idleTicks = idle ? idleTicks + 1 : 0;
-                if (idleTicks >= 100 || ticks > sceneAt + 1200) {
+                if ((idleTicks >= 100 && ticks >= sceneAt + SCENE_MIN_S * 20) || ticks > sceneAt + 1200) {
                     log(String.format(Locale.ROOT, "scene built and meshed after %.1f s%s", (ticks - sceneAt) / 20.0, idleTicks >= 100 ? "" : " TIMEOUT"));
                     idleTicks = 0;
                     startMeasuring();

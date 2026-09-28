@@ -98,7 +98,10 @@ public final class ClientLightAsync {
             DIRTY.clear();
         }
         var lr = Minecraft.getInstance().levelRenderer;
-        for (long p : marks) lr.setSectionDirty(SectionPos.x(p), SectionPos.y(p), SectionPos.z(p));
+        for (long p : marks) {
+            if (LightVolumes.ON) LightVolumes.lightChanged(SectionPos.x(p), SectionPos.y(p), SectionPos.z(p));
+            else lr.setSectionDirty(SectionPos.x(p), SectionPos.y(p), SectionPos.z(p));
+        }
         replayed += marks.length;
     }
 

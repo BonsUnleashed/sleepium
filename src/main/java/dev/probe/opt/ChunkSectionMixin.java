@@ -56,6 +56,11 @@ public abstract class ChunkSectionMixin implements ChunkMultiDraw.ChunkEntries {
         for (var e : buffers.entrySet()) ((ChunkBufferTag) e.getValue()).probe$tag((SectionRenderDispatcher.RenderSection) (Object) this, e.getKey());
     }
 
+    @Inject(method = "setCompiled", at = @At("HEAD"))
+    private void probe$compiled(SectionRenderDispatcher.CompiledSection compiled, CallbackInfo ci) {
+        ChunkMultiDraw.compiled((SectionRenderDispatcher.RenderSection) (Object) this, compiled);
+    }
+
     @Inject(method = "reset", at = @At("HEAD"))
     private void probe$reset(CallbackInfo ci) {
         dev.probe.optsupport.SectionLists.changed();
