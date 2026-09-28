@@ -100,6 +100,13 @@ public final class LightRecipe {
         out[r[3]] = pack(code(pos, e3), code(pos, e1), code(pos, cD), ce, local);
     }
 
+    /** a flat quad's recipe: its one light sample, four times (blend(x, x, x, x) = x) */
+    public static int flat(BlockPos pos, BlockPos sample) {
+        int c = code(pos, sample);
+        int local = ((pos.getX() & 15) << 8) | ((pos.getY() & 15) << 4) | (pos.getZ() & 15);
+        return pack(c, c, c, c, local);
+    }
+
     private static int pack(int s0, int s1, int s2, int s3, int local) {
         return s0 | s1 << 5 | s2 << 10 | s3 << 15 | local << 20;
     }

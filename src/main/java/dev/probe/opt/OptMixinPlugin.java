@@ -53,7 +53,7 @@ public final class OptMixinPlugin implements IMixinConfigPlugin {
             on = Boolean.getBoolean("lab.opt.all") || Boolean.getBoolean("lab.opt.ParallelEntitiesMixin");
         if (simple.equals("BufferBuilderAccessor") || simple.equals("BufferSourceAccessor"))
             on = Boolean.getBoolean("lab.opt.all") || Boolean.getBoolean("lab.opt.RenderCacheMixin") || Boolean.getBoolean("lab.opt.ParallelEntitiesMixin")
-                    || Boolean.getBoolean("lab.opt.PartBatchMixin") || Boolean.getBoolean("lab.opt.BlockMeshMemoMixin");
+                    || Boolean.getBoolean("lab.opt.PartBatchMixin") || Boolean.getBoolean("lab.opt.BlockMeshMemoMixin") || Boolean.getBoolean("lab.opt.ShaderLightMixin");
         if (simple.equals("VertexSortDirectMixin") || simple.equals("MeshDataAccessor"))   // part of the radix sort flag
             on = Boolean.getBoolean("lab.opt.all") || Boolean.getBoolean("lab.opt.VertexSortRadixMixin");
         if (simple.equals("SectionListsMixin") || simple.equals("LevelRendererVisibleAccessor"))   // needs the multi-draw entry slots
@@ -71,6 +71,8 @@ public final class OptMixinPlugin implements IMixinConfigPlugin {
             on = Boolean.getBoolean("lab.opt.all") || Boolean.getBoolean("lab.opt.FrameGarbageMixin");
         if (simple.equals("ClientLightCallbackMixin") || simple.equals("ClientLevelLightQueueAccessor") || simple.equals("ClientLightJoinMixin"))
             on = Boolean.getBoolean("lab.opt.all") || Boolean.getBoolean("lab.opt.ClientLightAsyncMixin");
+        if (simple.equals("ShaderLightCompileMixin") || simple.equals("ShaderLightMeshMixin"))
+            on = Boolean.getBoolean("lab.opt.all") || Boolean.getBoolean("lab.opt.ShaderLightMixin");
         if (simple.equals("LightRecipeVerifyMixin")) on = Boolean.getBoolean("lab.lightrecipe.verify");   // measurement only
         if (simple.startsWith("LightScout")) on = Boolean.getBoolean("lab.lightscout");   // measurement only
         if (simple.equals("LightTimingMixin")) on = Boolean.getBoolean("lab.lighttime");   // measurement only

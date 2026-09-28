@@ -323,7 +323,8 @@ public final class ChunkMultiDraw {
         }
         e.origin = o.asLong();
         uploads++;
-        if (PACK && ds.format() == DefaultVertexFormat.BLOCK && verts % 4 == 0) {
+        // meshes with light recipes (exp/shader-light) keep the 32-byte format: the packed one has no room for them
+        if (PACK && ds.format() == DefaultVertexFormat.BLOCK && verts % 4 == 0 && !LightVolumes.hasRecipes(mesh)) {
             Entry pe = new Entry();
             pe.origin = e.origin;
             System.arraycopy(e.plane, 0, pe.plane, 0, 7);

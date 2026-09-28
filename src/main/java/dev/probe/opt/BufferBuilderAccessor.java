@@ -21,6 +21,9 @@ public interface BufferBuilderAccessor {
     @Accessor("vertexPointer")
     void probe$setVertexPointer(long p);
 
+    @Accessor("vertexPointer")
+    long probe$vertexPointer();
+
     @Accessor("elementsToFill")
     int probe$elementsToFill();
 

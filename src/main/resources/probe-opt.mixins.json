@@ -125,7 +125,10 @@
     "LightScoutAoMixin",
     "LightScoutFlatMixin",
     "LightScoutFluidMixin",
-    "LightRecipeVerifyMixin"
+    "LightRecipeVerifyMixin",
+    "ShaderLightMixin",
+    "ShaderLightCompileMixin",
+    "ShaderLightMeshMixin"
   ],
   "injectors": {
     "defaultRequire": 1
