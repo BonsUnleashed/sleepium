@@ -74,10 +74,42 @@ final class ClientProbe {
         TaskStats.reset();
         startNanos = System.nanoTime();
         cpuAtStart = processCpu();
+        threadsAtStart = threadCpu();
         stopAtNanos = startNanos + seconds * 1_000_000_000L;
     }
 
     private static long cpuAtStart;
+    private static java.util.Map<Long, long[]> threadsAtStart = java.util.Map.of();
+    private static final java.util.Map<Long, String> NAMES = new java.util.HashMap<>();
+
+    /** CPU time per live thread (ns), names remembered */
+    private static java.util.Map<Long, long[]> threadCpu() {
+        var mx = java.lang.management.ManagementFactory.getThreadMXBean();
+        java.util.Map<Long, long[]> m = new java.util.HashMap<>();
+        for (Thread t : Thread.getAllStackTraces().keySet()) {
+            long c = mx.getThreadCpuTime(t.threadId());
+            if (c >= 0) {
+                m.put(t.threadId(), new long[] {c});
+                NAMES.put(t.threadId(), t.getName().replaceAll("\\d+", "N"));
+            }
+        }
+        return m;
+    }
+
+    /** Java threads' CPU in the window by group, busiest first (JVM-internal threads: the rest of process CPU) */
+    private static String threadReport(double secs) {
+        java.util.Map<Long, long[]> now = threadCpu();
+        java.util.Map<String, Long> by = new java.util.TreeMap<>();
+        for (var e : now.entrySet()) {
+            long[] a = threadsAtStart.get(e.getKey());
+            long d = e.getValue()[0] - (a == null ? 0 : a[0]);
+            by.merge(NAMES.getOrDefault(e.getKey(), "?"), d, Long::sum);
+        }
+        StringBuilder b = new StringBuilder("java threads (cores):");
+        by.entrySet().stream().sorted((x, y) -> Long.compare(y.getValue(), x.getValue())).limit(10)
+                .forEach(e -> b.append(String.format(Locale.ROOT, " %s %.2f;", e.getKey(), e.getValue() / 1e9 / secs)));
+        return b.toString();
+    }
 
     /** CPU time of the whole process (render thread, driver threads, workers, the integrated server), ns; -1 if unknown */
     private static long processCpu() {
@@ -133,6 +165,7 @@ final class ClientProbe {
         sb.append("# probe client report '").append(label).append("' ").append(LocalDateTime.now()).append('\n')
                 .append(String.format(Locale.ROOT, "window %.1f s, %d frames, %.1f fps avg%n", secs, n, n / secs))
                 .append(String.format(Locale.ROOT, "process CPU %.1f s (%.2f cores), %.3f ms per frame%n", cpuSecs, cpuSecs / secs, cpuSecs * 1e3 / Math.max(1, n)))
+                .append(threadReport(secs)).append('\n')
                 .append(mc.getLaunchedVersion()).append(", ").append(com.mojang.blaze3d.platform.GlUtil.getRenderer()).append("\n\n")
                 .append("frame   ").append(f.asMillis()).append('\n')
                 .append("render  ").append(r.asMillis()).append("   (GameRenderer.render, CPU side)\n")

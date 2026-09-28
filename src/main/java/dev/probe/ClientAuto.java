@@ -60,6 +60,7 @@ final class ClientAuto {
     private static final boolean SERVER_PROBE = Boolean.getBoolean("probe.clientAuto.serverProbe");
 
     private static void startMeasuring() {
+        log("measuring started");   // the marker external profilers wait for (uprof_run.sh)
         if (DrawStats.ON) DrawStats.start();
         if (SERVER_PROBE) command(Minecraft.getInstance(), "probe run 30 " + LABEL + "-srv");
         if (JFR != null) {
