@@ -59,7 +59,9 @@
     "ScoutBlockEntityMixin",
     "ScoutMiscMixin",
     "ScoutRandomMixin",
-    "ScoutEntityMixin"
+    "ScoutEntityMixin",
+    "ScoutEffectsMixin",
+    "ScoutRemoveMixin"
   ],
   "client": [
     "SectionLayerMaskMixin",

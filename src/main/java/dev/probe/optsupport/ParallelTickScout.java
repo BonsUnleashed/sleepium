@@ -39,6 +39,14 @@ public final class ParallelTickScout {
     /** entity queries and entity moves: a separate kind of data (an entity moving does not change the blocks) */
     private static final LongOpenHashSet entityReads = new LongOpenHashSet(), entityWrites = new LongOpenHashSet();
     private static int rng, spawned;
+    /** what the task did beyond its own state: bits of EFFECT_NAMES */
+    private static int effects;
+    private static long startNanos;
+    public static final int SET_BLOCK = 1, ENTITY_ADD_REMOVE = 2, GAME_EVENT = 4, BLOCK_EVENT_Q = 8, PACKETS = 16, LEVEL_RNG = 32, READ_OTHER_CHUNK = 64, READ_OTHER_REGION = 128;
+    private static final String[] EFFECT_NAMES = {"setBlock", "entity add/remove", "game event", "block event", "sound/particle/level event", "level RNG", "read other chunk", "read other 4x4 region"};
+    // per kind: pure tasks (no effect bit below READ_OTHER_CHUNK), their nanos, all nanos, tasks per effect bit
+    private static final long[][] PURE = new long[5][3 + 8];
+    private static int myChunkX, myChunkZ;
     /** the task's identity for the draw-count prediction (chunk pos, entity id, block pos) */
     private static long taskKey;
     private static final it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap[] LAST_DRAWS = new it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap[5];
@@ -93,6 +101,10 @@ public final class ParallelTickScout {
         entityWrites.clear();
         rng = 0;
         spawned = 0;
+        effects = 0;
+        myChunkX = blockX >> 4;
+        myChunkZ = blockZ >> 4;
+        startNanos = System.nanoTime();
     }
 
     public static void end() {
@@ -104,6 +116,16 @@ public final class ParallelTickScout {
         }
         long[] s = STATS[kind];
         s[0]++;
+        long dt = System.nanoTime() - startNanos;
+        if (rng > 0) effects |= LEVEL_RNG;
+        if (spawned > 0) effects |= ENTITY_ADD_REMOVE;
+        long[] pu = PURE[kind];
+        pu[2] += dt;
+        if ((effects & (READ_OTHER_CHUNK - 1)) == 0) {
+            pu[0]++;
+            pu[1] += dt;
+        }
+        for (int bit = 0; bit < 8; bit++) if ((effects & (1 << bit)) != 0) pu[3 + bit]++;
         boolean[] lane = new boolean[3];
         boolean full = conflicts(reads, written, writer, lane) | conflicts(entityReads, entityWritten, entityWriter, lane);
         if (full) s[1]++;
@@ -160,11 +182,25 @@ public final class ParallelTickScout {
     }
 
     public static void read(int blockX, int blockY, int blockZ) {
-        if (depth > 0 && Thread.currentThread() == owner) reads.add(SectionPos.asLong(blockX >> 4, blockY >> 4, blockZ >> 4));
+        if (depth > 0 && Thread.currentThread() == owner) {
+            reads.add(SectionPos.asLong(blockX >> 4, blockY >> 4, blockZ >> 4));
+            int cx = blockX >> 4, cz = blockZ >> 4;
+            if (cx != myChunkX || cz != myChunkZ) {
+                effects |= READ_OTHER_CHUNK;
+                if ((cx >> 2) != (myChunkX >> 2) || (cz >> 2) != (myChunkZ >> 2)) effects |= READ_OTHER_REGION;
+            }
+        }
+    }
+
+    public static void effect(int bit) {
+        if (depth > 0 && Thread.currentThread() == owner) effects |= bit;
     }
 
     public static void write(int blockX, int blockY, int blockZ) {
-        if (depth > 0 && Thread.currentThread() == owner) writes.add(SectionPos.asLong(blockX >> 4, blockY >> 4, blockZ >> 4));
+        if (depth > 0 && Thread.currentThread() == owner) {
+            writes.add(SectionPos.asLong(blockX >> 4, blockY >> 4, blockZ >> 4));
+            effects |= SET_BLOCK;
+        }
     }
 
     public static void readBox(AABB b) {
@@ -196,6 +232,11 @@ public final class ParallelTickScout {
                     "%n  %-14s tasks %8d | conflicts: all parallel %5.1f %%, lanes 1x1 %5.1f %%, 2x2 %5.1f %%, 4x4 %5.1f %% | level RNG in %5.1f %% (%.1f draws each) | spawn %4.1f %% | reads %.1f, writes %.2f sections",
                     KIND[k], s[0], 100 * s[1] / n, 100 * s[2] / n, 100 * s[3] / n, 100 * s[4] / n, 100 * s[5] / n, s[5] == 0 ? 0 : (double) s[6] / s[5],
                     100 * s[7] / n, s[8] / n, s[9] / n));
+            long[] pu = PURE[k];
+            StringBuilder why = new StringBuilder();
+            for (int bit = 0; bit < 8; bit++) if (pu[3 + bit] > 0) why.append(String.format(java.util.Locale.ROOT, "%s %.1f %%, ", EFFECT_NAMES[bit], 100.0 * pu[3 + bit] / n));
+            b.append(String.format(java.util.Locale.ROOT, "%n  %-14s   pure (own state + reads only): %5.1f %% of tasks, %5.1f %% of their time (%.1f us per task avg) | %s",
+                    "", 100.0 * pu[0] / n, pu[2] == 0 ? 0 : 100.0 * pu[1] / pu[2], pu[2] / n / 1000.0, why));
             b.append(String.format(java.util.Locale.ROOT, "%n  %-14s   draw count same as last tick: %5.1f %% of drawing tasks; drawing tasks after a wrong prediction in their tick: %5.1f %% of all tasks",
                     "", 100.0 * RNG_STATS[k][0] / Math.max(1, s[5]), 100.0 * RNG_STATS[k][1] / n));
         }
