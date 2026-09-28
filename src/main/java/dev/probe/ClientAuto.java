@@ -61,6 +61,52 @@ final class ClientAuto {
     /** -Dprobe.clientAuto.serverProbe=true: the integrated server's tick stats over the same window (probe run) */
     private static final boolean SERVER_PROBE = Boolean.getBoolean("probe.clientAuto.serverProbe");
 
+    /**
+     * Frame hashes: every animated texture (water, lava, fire, portals...) put on its first frame before the freeze —
+     * a plain stop leaves each on whatever frame the run's tick count reached, different from run to run.
+     */
+    private static void resetAnimations() {
+        try {
+            var tm = Minecraft.getInstance().getTextureManager();
+            java.lang.reflect.Field byPath = net.minecraft.client.renderer.texture.TextureManager.class.getDeclaredField("byPath");
+            byPath.setAccessible(true);
+            java.lang.reflect.Field animated = net.minecraft.client.renderer.texture.TextureAtlas.class.getDeclaredField("animatedTextures");
+            animated.setAccessible(true);
+            int n = 0;
+            for (Object t : ((java.util.Map<?, ?>) byPath.get(tm)).values()) {
+                if (!(t instanceof net.minecraft.client.renderer.texture.TextureAtlas atlas)) continue;
+                atlas.bind();
+                for (Object tk : (java.util.List<?>) animated.get(atlas)) {
+                    java.lang.reflect.Field st = tk.getClass().getDeclaredField("val$spriteticker"), owner = tk.getClass().getDeclaredField("this$0");
+                    st.setAccessible(true);
+                    owner.setAccessible(true);
+                    Object ticker = st.get(tk);
+                    var sprite = (net.minecraft.client.renderer.texture.TextureAtlasSprite) owner.get(tk);
+                    Class<?> tc = ticker.getClass();
+                    java.lang.reflect.Field frame = tc.getDeclaredField("frame"), sub = tc.getDeclaredField("subFrame"), info = tc.getDeclaredField("animationInfo");
+                    frame.setAccessible(true);
+                    sub.setAccessible(true);
+                    info.setAccessible(true);
+                    Object anim = info.get(ticker);
+                    java.lang.reflect.Field frames = anim.getClass().getDeclaredField("frames");
+                    frames.setAccessible(true);
+                    Object first = ((java.util.List<?>) frames.get(anim)).get(0);
+                    java.lang.reflect.Field index = first.getClass().getDeclaredField("index");
+                    index.setAccessible(true);
+                    java.lang.reflect.Method upload = anim.getClass().getDeclaredMethod("uploadFrame", int.class, int.class, int.class);
+                    upload.setAccessible(true);
+                    frame.setInt(ticker, 0);
+                    sub.setInt(ticker, 0);
+                    upload.invoke(anim, sprite.getX(), sprite.getY(), index.getInt(first));
+                    n++;
+                }
+            }
+            log("frame hash: " + n + " animated textures reset to their first frame");
+        } catch (ReflectiveOperationException | RuntimeException e) {
+            log("frame hash: animation reset failed: " + e);
+        }
+    }
+
     private static void startMeasuring() {
         log("measuring started");   // the marker external profilers wait for (uprof_run.sh)
         if (DrawStats.ON) DrawStats.start();
@@ -79,6 +125,7 @@ final class ClientAuto {
         if (FRAMEHASH) {
             // no /tick freeze: frozen, the server stops sending the light that new sections need to be built
             dev.probe.optsupport.ClientCounters.freezeTextures = true;
+            resetAnimations();
             hashAt = ticks + 60;
             // -Dprobe.clientAuto.remesh=true: the scene's sections re-meshed first (the plain re-mesh path, light as it is
             // now): every renderer takes the light at the same moment, whatever each kept since the last light change
@@ -283,6 +330,7 @@ final class ClientAuto {
                     if (dev.probe.optsupport.LightTiming.ON) log(dev.probe.optsupport.LightTiming.report());
                     if (dev.probe.optsupport.LightScout.ON) log(dev.probe.optsupport.LightScout.report());
                     if (dev.probe.optsupport.LightRecipe.VERIFY) log(dev.probe.optsupport.LightRecipe.report());
+                    if (Boolean.getBoolean("lab.shaderlight.diag")) log(dev.probe.optsupport.LightVolumes.diagReport());
                     if (DrawStats.ON) log(DrawStats.report());
                     log("thread census:\n" + census());
                     enter(Phase.DONE);

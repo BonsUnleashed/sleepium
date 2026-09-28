@@ -68,6 +68,7 @@ public final class ChunkMultiDraw {
 
     /** Shader source patch: the vanilla chunk vertex shader, offset from the uniform block while multi-drawing. */
     public static String patch(String name, String src) {
+        if ("rendertype_translucent".equals(name)) return LightVolumes.patchTranslucent(src);
         String decl = "uniform vec3 ChunkOffset;";
         String use = "vec3 pos = Position + ChunkOffset;";
         String uv = "texCoord0 = UV0;";

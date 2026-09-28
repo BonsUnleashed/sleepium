@@ -101,7 +101,13 @@ public final class LightRecipe {
     }
 
     /** second sample code markers: 30 = one sample with the block light raised to the quad's own emission (s2); 29 = full bright */
-    public static final int FLAT_SELF = 30, FULL_BRIGHT = 29;
+    public static final int FLAT_SELF = 30, FULL_BRIGHT = 29, FLUID_MAX = 28;
+
+    /** LiquidBlockRenderer.getLightColor(level, p): per channel the max of p's and p.above()'s light */
+    public static int fluid(BlockPos fluidPos, BlockPos p) {
+        int local = ((fluidPos.getX() & 15) << 8) | ((fluidPos.getY() & 15) << 4) | (fluidPos.getZ() & 15);
+        return pack(code(fluidPos, p), FLUID_MAX, code(fluidPos, p.above()), 0, local);
+    }
 
     /**
      * A flat quad lit the way ModelBlockRenderer's flat paths and NeoForge's calculateFaceWithoutAO light it:
@@ -138,6 +144,10 @@ public final class LightRecipe {
     public static int emulate(BlockAndTintGetter level, BlockPos pos, int recipe) {
         int marker = recipe >>> 5 & 31;
         if (marker == FULL_BRIGHT) return 0xF000F0;
+        if (marker == FLUID_MAX) {
+            int i = light(level, at(pos, recipe & 31)), j = light(level, at(pos, recipe >>> 10 & 31));
+            return Math.max(i & 255, j & 255) | Math.max(i >> 16 & 255, j >> 16 & 255) << 16;
+        }
         if (marker == FLAT_SELF) {
             int lc = light(level, at(pos, recipe & 31)), e = recipe >>> 10 & 31;
             int block = Math.max(lc >> 4 & 15, e);

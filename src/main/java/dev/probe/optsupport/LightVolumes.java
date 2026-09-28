@@ -52,6 +52,8 @@ public final class LightVolumes {
     private static final class Compile {
         boolean on;
         CompileInfo info;
+        /** LiquidBlockRenderer: the recipe of the light its last getLightColor call computed */
+        int fluidRec = SENTINEL;
         final IdentityHashMap<BufferBuilder, BitSet> written = new IdentityHashMap<>();
         final int[] rec = new int[4];
     }
@@ -111,8 +113,12 @@ public final class LightVolumes {
             int value = SENTINEL;
             if (have) {
                 int uv2 = MemoryUtil.memGetInt(v + UV2);
-                if (LightRecipe.emulate(level, pos, c.rec[i]) == uv2) value = c.rec[i];
-                else rejected.incrementAndGet();
+                int em = LightRecipe.emulate(level, pos, c.rec[i]);
+                if (em == uv2) value = c.rec[i];
+                else {
+                    rejected.incrementAndGet();
+                    if (DIAG) diag(state, quad, ao, culledFlat, shapeFlags, em, uv2);
+                }
             }
             MemoryUtil.memPutInt(v + NORMAL, value);
             if (value == SENTINEL) c.info.sentinels++;
@@ -120,6 +126,102 @@ public final class LightVolumes {
             else recipeVertices.incrementAndGet();
             w.set(n - 4 + i);
         }
+    }
+
+    /** -Dlab.shaderlight.diag=true: UV2-check rejects grouped by block and path, with an example each */
+    private static final boolean DIAG = Boolean.getBoolean("lab.shaderlight.diag");
+    private static final java.util.concurrent.ConcurrentHashMap<String, long[]> REJECTS = new java.util.concurrent.ConcurrentHashMap<>();
+    private static final java.util.concurrent.ConcurrentHashMap<String, String> EXAMPLES = new java.util.concurrent.ConcurrentHashMap<>();
+
+    private static void diag(BlockState state, BakedQuad quad, boolean ao, boolean culledFlat, java.util.BitSet flags, int emulated, int written) {
+        String k = state.getBlock().getDescriptionId().replace("block.minecraft.", "") + " " + (ao ? "ao" : culledFlat ? "flat-culled" : "flat") + " " + quad.getDirection()
+                + (ao ? " flags" + flags : "") + " quadAO=" + quad.hasAmbientOcclusion() + " shade=" + quad.isShade();
+        REJECTS.computeIfAbsent(k, x -> new long[1])[0]++;
+        EXAMPLES.putIfAbsent(k, "recipe " + Integer.toHexString(emulated) + " written " + Integer.toHexString(written));
+    }
+
+    public static String diagReport() {
+        StringBuilder b = new StringBuilder("shader light rejects:");
+        REJECTS.entrySet().stream().sorted((x, y) -> Long.compare(y.getValue()[0], x.getValue()[0])).limit(25)
+                .forEach(e -> b.append(System.lineSeparator()).append("  ").append(e.getValue()[0]).append("  ").append(e.getKey()).append("  (").append(EXAMPLES.get(e.getKey())).append(")"));
+        return b.toString();
+    }
+
+    /** LiquidBlockRenderer.getLightColor(level, p) while tesselating the fluid at fluidPos */
+    public static void fluidLight(BlockPos fluidPos, BlockPos p) {
+        Compile c = STATE.get();
+        if (c.on) c.fluidRec = LightRecipe.fluid(fluidPos, p);
+    }
+
+    /** after one LiquidBlockRenderer.vertex: the builder's last vertex gets the current fluid recipe (UV2-checked) */
+    public static void fluidVertex(BlockAndTintGetter level, BlockPos fluidPos, VertexConsumer consumer) {
+        Compile c = STATE.get();
+        if (!c.on || !blockBuilder(consumer)) return;
+        BufferBuilderAccessor a = (BufferBuilderAccessor) consumer;
+        int n = a.probe$vertices();
+        if (n < 1) return;
+        long v = a.probe$vertexPointer();
+        int value = SENTINEL;
+        if (c.fluidRec != SENTINEL && LightRecipe.emulate(level, fluidPos, c.fluidRec) == MemoryUtil.memGetInt(v + UV2)) value = c.fluidRec;
+        else rejected.incrementAndGet();
+        MemoryUtil.memPutInt(v + NORMAL, value);
+        if (value == SENTINEL) {
+            c.info.sentinels++;
+            bakedVertices.incrementAndGet();
+        } else recipeVertices.incrementAndGet();
+        c.written.computeIfAbsent((BufferBuilder) consumer, k -> new BitSet()).set(n - 1);
+    }
+
+    // ---- the translucent layer (water, glass, ice…) stays on vanilla's per-section draws: its shader takes the
+    // section's volume from a uniform set before each draw; its VAO exposes the recipe as attribute 7
+    public static volatile boolean translucentPatched;
+    private static final it.unimi.dsi.fastutil.ints.Int2IntOpenHashMap VOLUME_UNIFORM = new it.unimi.dsi.fastutil.ints.Int2IntOpenHashMap();
+    private static long boundFrame = -1;
+
+    public static String patchTranslucent(String src) {
+        String light = "vertexColor = Color * minecraft_sample_lightmap(Sampler2, UV2);";
+        if (!ON || !ChunkMultiDraw.ssbo() || !src.startsWith("#version 150") || !src.contains(light) || !src.contains("void main() {")) return src;
+        translucentPatched = true;
+        return src.replaceFirst("#version 150", "#version 150\n#extension GL_ARB_explicit_attrib_location : require\n#extension GL_ARB_shader_storage_buffer_object : require")
+                .replace("void main() {", "uniform int ProbeVolume;\n" + glsl() + "\nvoid main() {")
+                .replace(light, "vertexColor = Color * minecraft_sample_lightmap(Sampler2, probeUV2(float(ProbeVolume)));");
+    }
+
+    /** the vanilla section VAO of a BLOCK-format layer: the normal + padding bytes as integer attribute 7 */
+    public static void vanillaBufferUploaded() {
+        org.lwjgl.opengl.GL20C.glEnableVertexAttribArray(7);
+        org.lwjgl.opengl.GL30C.glVertexAttribIPointer(7, 1, org.lwjgl.opengl.GL11C.GL_UNSIGNED_INT, STRIDE, NORMAL);
+    }
+
+    /** LevelRenderer.renderSectionLayer, before a translucent section's draw: its volume, or -1 (baked light) */
+    public static void translucentDraw(net.minecraft.client.renderer.chunk.SectionRenderDispatcher.RenderSection section) {
+        if (!translucentPatched) return;
+        net.minecraft.client.renderer.ShaderInstance sh = com.mojang.blaze3d.systems.RenderSystem.getShader();
+        if (sh == null) return;
+        int program = sh.getId();
+        int loc = VOLUME_UNIFORM.getOrDefault(program, Integer.MIN_VALUE);
+        if (loc == Integer.MIN_VALUE) {
+            loc = org.lwjgl.opengl.GL20C.glGetUniformLocation(program, "ProbeVolume");
+            int block = org.lwjgl.opengl.GL43C.glGetProgramResourceIndex(program, org.lwjgl.opengl.GL43C.GL_SHADER_STORAGE_BLOCK, "ProbeLightVolumes");
+            if (block != org.lwjgl.opengl.GL31C.GL_INVALID_INDEX) org.lwjgl.opengl.GL43C.glShaderStorageBlockBinding(program, block, BINDING);
+            VOLUME_UNIFORM.put(program, loc);
+        }
+        if (loc < 0) return;
+        if (boundFrame != frame) {
+            boundFrame = frame;
+            org.lwjgl.opengl.GL30C.glBindBufferBase(org.lwjgl.opengl.GL43C.GL_SHADER_STORAGE_BUFFER, BINDING, buffer());
+        }
+        Sec sec = SECS.get(key(section));
+        org.lwjgl.opengl.GL20C.glUniform1i(loc, sec != null && sec.vol >= 0 && sec.ready && sec.translucentRecipes ? sec.vol : -1);
+    }
+
+    /** after the draw: the uniform back to -1 (the shader serves other translucent draws too) */
+    public static void translucentDrawn() {
+        if (!translucentPatched) return;
+        net.minecraft.client.renderer.ShaderInstance sh = com.mojang.blaze3d.systems.RenderSystem.getShader();
+        if (sh == null) return;
+        int loc = VOLUME_UNIFORM.getOrDefault(sh.getId(), -1);
+        if (loc >= 0) org.lwjgl.opengl.GL20C.glUniform1i(loc, -1);
     }
 
     /** SectionCompiler, before a layer's builder is built: the vertices no quad hook wrote get the sentinel. */
@@ -143,7 +245,8 @@ public final class LightVolumes {
     /** SectionCompiler.getOrBeginLayer: a layer that is not drawn from our arenas keeps its baked light (incomplete). */
     public static void layerUsed(net.minecraft.client.renderer.RenderType type) {
         Compile c = STATE.get();
-        if (c.on && !ChunkMultiDraw.layerSupported(type)) c.info.foreignLayer = true;
+        if (c.on && !ChunkMultiDraw.layerSupported(type) && !(type == net.minecraft.client.renderer.RenderType.translucent() && translucentPatched))
+            c.info.foreignLayer = true;
     }
 
     /** the compile's info, for the mesh being built */
@@ -181,12 +284,18 @@ public final class LightVolumes {
     static final class Sec {
         int vol = -1;
         CompileInfo info;
+        /** its translucent layer (vanilla draws) was built with recipes */
+        boolean translucentRecipes;
         boolean dirty;
         /** the latest refill submitted: an older one finishing later is dropped */
         int seq;
+        /** the volume holds light at least as new as the section's meshes: draws may read it (else baked UV2) */
+        boolean ready;
     }
 
     private static final it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap<Sec> SECS = new it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap<>();
+    private static final it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap<net.minecraft.client.renderer.chunk.SectionRenderDispatcher.RenderSection> SECTIONS =
+            new it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap<>();
     private static final java.util.ArrayList<Long> DIRTY = new java.util.ArrayList<>();
     private static int buffer, capacity, used;
     private static final it.unimi.dsi.fastutil.ints.IntArrayList FREE = new it.unimi.dsi.fastutil.ints.IntArrayList();
@@ -229,26 +338,35 @@ public final class LightVolumes {
     }
 
     /** ChunkUploadMixin, after ChunkMultiDraw.store: a layer mesh of the section reached the GPU (ours: in an arena). */
-    public static void uploaded(net.minecraft.client.renderer.chunk.SectionRenderDispatcher.RenderSection section, MeshData mesh, boolean ours) {
+    public static void uploaded(net.minecraft.client.renderer.chunk.SectionRenderDispatcher.RenderSection section, net.minecraft.client.renderer.RenderType layer,
+                                MeshData mesh, boolean ours) {
         CompileInfo info = mesh instanceof RecipeMesh r ? r.probe$recipeInfo() : null;
         long k = key(section);
         if (!FIRST_SEEN.containsKey(k)) FIRST_SEEN.put(k, System.nanoTime());
         Sec sec = SECS.get(k);
+        boolean translucent = layer == net.minecraft.client.renderer.RenderType.translucent();
+        boolean volumeDrawn = ours || translucent && translucentPatched;   // a layer whose draws read the volume
         if (info == null) {
-            if (sec != null && !ours) sec.info = null;   // a baked layer drawn the vanilla way: light-only updates would miss it
+            if (sec != null && !volumeDrawn) sec.info = null;   // a baked layer drawn the vanilla way: light-only updates would miss it
+            if (sec != null && translucent) sec.translucentRecipes = false;
             return;
         }
         if (sec == null) SECS.put(k, sec = new Sec());
-        sec.info = ours ? info : null;
+        SECTIONS.put(k, section);
+        sec.info = volumeDrawn ? info : null;
+        if (translucent) sec.translucentRecipes = true;
         if (sec.vol < 0) {
             sec.vol = allocSlot();
             if (sec.vol < 0) return;   // out of volumes: stays on baked light
         }
-        // every recipe mesh brings a fresh fill: a re-mesh also comes from paths that are not onLightUpdate (the
-        // server's light packets mark sections directly), and the volume must hold the light the mesh was built for
-        // or newer
-        fill(sec, section.getOrigin());
-        assign(section, sec.vol);
+        // a new mesh carries baked light as new as its compile: until a refill of the volume (on the frame pool) lands,
+        // its draws use that baked light — what vanilla shows — then the volume again (also covers the first fill)
+        sec.ready = false;
+        assign(section, -1);
+        if (!sec.dirty) {
+            sec.dirty = true;
+            DIRTY.add(k);
+        }
     }
 
     /** the section's arena entries with recipes point at its volume */
@@ -262,6 +380,7 @@ public final class LightVolumes {
     public static void released(net.minecraft.client.renderer.chunk.SectionRenderDispatcher.RenderSection section) {
         FIRST_SEEN.remove(key(section));
         LIGHT_COUNT.remove(key(section));
+        SECTIONS.remove(key(section));
         Sec sec = SECS.remove(key(section));
         if (sec != null && sec.vol >= 0) FREE.add(sec.vol);
     }
@@ -273,7 +392,7 @@ public final class LightVolumes {
     public static void lightChanged(int x, int y, int z) {
         long k = SectionPos.asLong(x, y, z);
         Sec sec = SECS.get(k);
-        if (sec != null && sec.vol >= 0 && sec.info != null && sec.info.complete) {
+        if (sec != null && sec.vol >= 0 && sec.ready && sec.info != null && sec.info.complete) {
             if (!sec.dirty) {
                 sec.dirty = true;
                 DIRTY.add(k);
@@ -300,7 +419,11 @@ public final class LightVolumes {
      * light changed are refilled on the frame's worker pool — reading the level as vanilla's section compile workers
      * do. Until a refill lands the volume keeps the previous light (vanilla keeps its old mesh until the re-mesh).
      */
+    /** renderLevel count (the translucent pass binds the volume buffer once per frame) */
+    static long frame;
+
     public static void frame() {
+        frame++;
         FrameReactor.drain();
         if (DIRTY.isEmpty()) return;
         for (int i = 0; i < DIRTY.size(); i++) {
@@ -308,14 +431,21 @@ public final class LightVolumes {
             Sec sec = SECS.get(k);
             if (sec == null || sec.vol < 0) continue;
             sec.dirty = false;
-            if (SYNC_FILL) fill(sec, SectionPos.of(k).origin());
-            else submit(k, sec);
+            if (SYNC_FILL) {
+                fill(sec, SectionPos.of(k).origin());
+                var section = SECTIONS.get(k);
+                if (!sec.ready && section != null) {
+                    sec.ready = true;
+                    assign(section, sec.vol);
+                }
+            } else submit(k, sec);
         }
         DIRTY.clear();
     }
 
     private static void submit(long k, Sec sec) {
         int seq = ++sec.seq, vol = sec.vol;
+        var section = SECTIONS.get(k);
         BlockPos origin = SectionPos.of(k).origin();
         java.nio.ByteBuffer b = BUFFERS.poll();
         java.nio.ByteBuffer buf = b != null ? b : MemoryUtil.memAlloc(VOLUME_BYTES);
@@ -324,8 +454,13 @@ public final class LightVolumes {
         FrameReactor.pool().execute(() -> {
             compute(level, origin, buf);
             FrameReactor.complete(() -> {
-                if (SECS.get(k) == sec && sec.vol == vol && sec.seq == seq) upload(vol, buf);
-                else droppedFills++;
+                if (SECS.get(k) == sec && sec.vol == vol && sec.seq == seq) {
+                    upload(vol, buf);
+                    if (!sec.ready && section != null) {
+                        sec.ready = true;
+                        assign(section, vol);
+                    }
+                } else droppedFills++;
                 BUFFERS.add(buf);
             });
         });
@@ -376,6 +511,13 @@ public final class LightVolumes {
                 ivec3 bp = ivec3(int((ProbeRecipe >> 28u) & 15u), int((ProbeRecipe >> 24u) & 15u), int((ProbeRecipe >> 20u) & 15u));
                 uint marker = (ProbeRecipe >> 5u) & 31u;
                 if (marker == 29u) return ivec2(240, 240);
+                if (marker == 28u) {
+                    int ca = int(ProbeRecipe & 31u), cb = int((ProbeRecipe >> 10u) & 31u);
+                    uint la = probeSample(vol, bp + ivec3(ca / 9 - 1, (ca / 3) % 3 - 1, ca % 3 - 1));
+                    uint lb = probeSample(vol, bp + ivec3(cb / 9 - 1, (cb / 3) % 3 - 1, cb % 3 - 1));
+                    uint lm = max(la & 255u, lb & 255u) | (max((la >> 16u) & 255u, (lb >> 16u) & 255u) << 16u);
+                    return ivec2(int(lm & 0xFFFFu), int(lm >> 16u));
+                }
                 if (marker == 30u) {
                     int c0 = int(ProbeRecipe & 31u);
                     uint lc = probeSample(vol, bp + ivec3(c0 / 9 - 1, (c0 / 3) % 3 - 1, c0 % 3 - 1));

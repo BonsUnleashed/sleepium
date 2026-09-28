@@ -130,7 +130,9 @@
     "ShaderLightCompileMixin",
     "ShaderLightMeshMixin",
     "ShaderLightChunkCacheMixin",
-    "ShaderLightFrameMixin"
+    "ShaderLightFrameMixin",
+    "ShaderLightFluidMixin",
+    "ShaderLightTranslucentMixin"
   ],
   "injectors": {
     "defaultRequire": 1
