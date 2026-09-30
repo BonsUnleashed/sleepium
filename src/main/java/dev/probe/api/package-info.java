@@ -14,6 +14,8 @@
  *       deadline, an AIMD window over tick length).</li>
  *   <li>{@link dev.probe.api.Compat}: opt a mod's entity or block entity types out of parallel rendering, the render
  *       cache and the sleep engines.</li>
+ *   <li>{@link dev.probe.api.NetContent} (v2): large content to clients by content hash — client cache, deltas, resume,
+ *       pacing by the connection (the network engine, notes/34).</li>
  * </ul>
  *
  * <h2>Using it from another mod</h2>

@@ -31,7 +31,13 @@ public enum Feature {
     /** client: light for chunk sections computed in the shader from light volumes */
     SHADER_LIGHT("ShaderLightMixin", true),
     /** client: light updates as a pool job that may span frames */
-    CLIENT_LIGHT_ASYNC("ClientLightAsyncMixin", true);
+    CLIENT_LIGHT_ASYNC("ClientLightAsyncMixin", true),
+    /** server: a flush's packets per connection go to netty as one task with one socket write (every packet, any mod) */
+    NET_REACTOR("NetReactor", true),
+    /** content sets sent by content hash: client cache, deltas, resume, transport-paced (see NetContent) */
+    NET_BULK("NetBulk", true),
+    /** server → probe clients: a flush's frames as one container of a per-connection deflate stream */
+    NET_COALESCE("NetCoalesce", true);
 
     private final String flag;
     private final boolean inAll;

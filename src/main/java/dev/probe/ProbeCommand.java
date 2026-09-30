@@ -55,6 +55,26 @@ final class ProbeCommand {
                             say(ctx, "probe: idle measurement started");
                             return 1;
                         })))
+                .then(Commands.literal("bulktest")
+                        .then(Commands.argument("entries", IntegerArgumentType.integer(1, 4096))
+                        .then(Commands.argument("kb", IntegerArgumentType.integer(1, 8192))
+                        .then(Commands.argument("changed", IntegerArgumentType.integer(0, 4096))
+                        .then(Commands.argument("seed", IntegerArgumentType.integer()).executes(ctx -> {
+                            String r = dev.probe.net.BulkSelfTest.publish(IntegerArgumentType.getInteger(ctx, "entries"), IntegerArgumentType.getInteger(ctx, "kb"),
+                                    IntegerArgumentType.getInteger(ctx, "changed"), IntegerArgumentType.getInteger(ctx, "seed"));
+                            ProbeMod.LOGGER.info("probe: bulktest published: {}", r);
+                            say(ctx, "probe: bulktest published: " + r);
+                            for (var p : ctx.getSource().getServer().getPlayerList().getPlayers())
+                                if (!dev.probe.net.Bulk.capable(p)) say(ctx, "probe: bulktest: " + p.getScoreboardName() + " is not on the bulk path");
+                            return 1;
+                        }))))))
+                .then(Commands.literal("net")
+                        .then(Commands.argument("seconds", IntegerArgumentType.integer(1, 600))
+                                .then(Commands.argument("label", StringArgumentType.word()).executes(ctx -> {
+                                    NetBench.start(IntegerArgumentType.getInteger(ctx, "seconds"), StringArgumentType.getString(ctx, "label"));
+                                    say(ctx, "probe: net measurement started");
+                                    return 1;
+                                }))))
                 .then(Commands.literal("busbench").executes(ctx -> {
                     if (EventCounter.INSTANCE.enabled()) {
                         say(ctx, "probe: run /probe stop first");
@@ -378,6 +398,7 @@ final class ProbeCommand {
     static void onTickEnd(MinecraftServer server) {
         GenBench.onTickEnd(server);
         IdleBench.onTickEnd(server);
+        NetBench.onTickEnd(server);
         if (autoStopAtTick >= 0 && (server.tickRateManager().isSprinting() ? System.nanoTime() >= autoStopAtNanos : TickTimer.INSTANCE.ticks() >= autoStopAtTick)) {
             autoStopAtTick = -1;
             Path file = finish(server, autoLabel);

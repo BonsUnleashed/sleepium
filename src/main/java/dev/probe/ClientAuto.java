@@ -47,6 +47,8 @@ final class ClientAuto {
     private static final int SETTLE_S = Integer.getInteger("probe.clientAuto.settle", 0);
     /** -Dprobe.clientAuto.scene=client_entities: run that probe function after the terrain is ready, then look at it */
     private static final String SCENE = System.getProperty("probe.clientAuto.scene");
+    /** -Dprobe.clientAuto.server=host:port: join that server instead of creating a world (commands go as chat commands; op the player) */
+    private static final String SERVER = System.getProperty("probe.clientAuto.server");
     private static final String SCENE_TP = "tp @s 24 258 4 0 25";
     /** -Dprobe.clientAuto.sceneWait=S: the scene is measured no earlier than S seconds after it was built (scenes that change for a while) */
     private static final int SCENE_MIN_S = Integer.getInteger("probe.clientAuto.sceneWait", 0);
@@ -111,6 +113,8 @@ final class ClientAuto {
         log("measuring started");   // the marker external profilers wait for (uprof_run.sh)
         if (DrawStats.ON) DrawStats.start();
         if (SERVER_PROBE) command(Minecraft.getInstance(), "probe run 30 " + LABEL + "-srv");
+        if (SERVER != null && !"false".equals(System.getProperty("probe.clientAuto.netBench"))) command(Minecraft.getInstance(), "probe net "
+                + (STEADY ? Integer.getInteger("probe.clientAuto.steadySeconds", 30) : 40) + " " + LABEL);
         if (JFR != null) {
             try {
                 String[] j = JFR.split(";");
@@ -209,6 +213,10 @@ final class ClientAuto {
 
     private static void command(Minecraft mc, String cmd) {
         IntegratedServer server = mc.getSingleplayerServer();
+        if (server == null && mc.player != null && mc.getConnection() != null) {   // a remote server: a chat command
+            mc.getConnection().sendCommand(cmd);
+            return;
+        }
         if (server == null || mc.player == null) return;
         server.execute(() -> {
             ServerPlayer sp = server.getPlayerList().getPlayer(mc.player.getUUID());
@@ -251,6 +259,13 @@ final class ClientAuto {
                     mc.options.framerateLimit().set(FPS_CAP);
                     mc.getWindow().updateVsync(false);
                     mc.getWindow().setFramerateLimit(FPS_CAP);
+                    if (SERVER != null) {
+                        enter(Phase.JOIN);
+                        net.minecraft.client.gui.screens.ConnectScreen.startConnecting(new TitleScreen(), mc,
+                                net.minecraft.client.multiplayer.resolver.ServerAddress.parseString(SERVER),
+                                new net.minecraft.client.multiplayer.ServerData("probe", SERVER, net.minecraft.client.multiplayer.ServerData.Type.OTHER), false, null);
+                        return;
+                    }
                     Path dir = mc.getLevelSource().getBaseDir().resolve(WORLD);
                     deleteTree(dir);
                     LevelSettings settings = new LevelSettings(WORLD, GameType.CREATIVE, false, Difficulty.PEACEFUL, true,

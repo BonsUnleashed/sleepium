@@ -62,6 +62,7 @@ public abstract class MainReactorServerMixin {
      */
     @Overwrite
     public void waitForTasks() {
+        dev.probe.net.NetReactor.beforeSleep();   // what the thread just sent leaves before it sleeps
         boolean flag = this.isTickTimeLoggingEnabled();
         long i = flag ? Util.getNanos() : 0L;
         if (MainReactor.idle) {
