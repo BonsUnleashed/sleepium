@@ -23,7 +23,10 @@ public abstract class ChunkShaderPatchMixin {
                     || name.startsWith("rendertype_item_entity"))
                     && dev.probe.optsupport.PartBatch.capable()) {
                 src = dev.probe.optsupport.PartBatch.patch(name, src);
+                src = dev.probe.optsupport.Materials.patchVertex(name, src);
             }
+        } else if (type == Program.Type.FRAGMENT && Boolean.getBoolean("lab.opt.PartBatchMixin")) {
+            src = dev.probe.optsupport.Materials.patchFragment(name, src);
         }
         return pp.process(src);
     }

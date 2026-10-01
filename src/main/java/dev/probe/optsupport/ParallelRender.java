@@ -47,7 +47,64 @@ public final class ParallelRender {
     public static final boolean VERIFY = Boolean.getBoolean("lab.prender.verify");
     /** renderer sets in use at once = the reactor's workers (+1 for the render thread helping) */
     private static final int THREADS = FrameReactor.threads();
-    public static long jobs, parallel, sequential, failed, verified, mismatches, helped;
+    public static long jobs, parallel, sequential, failed, verified, mismatches, helped, refused, journaled, mergeNanos;
+
+    // ------------------------------------------------------------------ the job as a unit of side effects
+
+    /** the job this thread renders now (a worker, or the render thread helping) */
+    private static final ThreadLocal<Job> CURRENT = new ThreadLocal<>();
+
+    public static boolean inJob() {
+        return CURRENT.get() != null;
+    }
+
+    /**
+     * RenderSystem.recordRenderCall inside a job (render-thread work a renderer defers): kept in the job and run on
+     * the render thread when the job is merged, in the job order (vanilla ran it in place, during the entity loop).
+     * Also for other side effects a mod renderer makes (GeckoLib keyframe sounds / particles). False outside jobs.
+     */
+    public static boolean journal(com.mojang.blaze3d.pipeline.RenderCall call) {
+        Job j = CURRENT.get();
+        if (j == null) return false;
+        j.calls.add(call);
+        return true;
+    }
+
+    /**
+     * Per-job state for a mod's globals (GeckoLib's Molang actor and variables): empty at the start of each job, so the
+     * result does not depend on which worker ran what before. Null outside jobs (the globals then as they are).
+     */
+    public static java.util.IdentityHashMap<Object, Object> jobLocals() {
+        Job j = CURRENT.get();
+        return j == null ? null : j.locals;
+    }
+
+    /** The current job's part records (null outside jobs, and in verify mode: the bytes are compared there). */
+    public static PartBatch.JobParts jobParts() {
+        Job j = CURRENT.get();
+        return j == null || VERIFY ? null : j.parts;
+    }
+
+    /** true while ParallelRender builds its renderer sets: objects made now belong to a worker set */
+    public static volatile boolean buildingSets;
+
+    /**
+     * Thrown inside a job to hand it to the render thread: transient (state not ready yet: a texture without GL id, a
+     * cache miss whose fill needs the render thread) or permanent (the renderer shares mutable state with the render
+     * thread, or posts an event somebody listens to): that entity type stays on the render thread.
+     */
+    public static final class Refusal extends RuntimeException {
+        final boolean permanent;
+
+        Refusal(String why, boolean permanent) {
+            super(why, null, false, false);
+            this.permanent = permanent;
+        }
+    }
+
+    public static final Refusal REFUSE_NOT_READY = new Refusal("render-thread state not ready", false);
+    public static final Refusal REFUSE_SHARED = new Refusal("renderer state shared with the render thread", true);
+    public static final Refusal REFUSE_LISTENED = new Refusal("event with listeners posted from a worker", true);
     private static volatile int epoch;
 
     private ParallelRender() {}
@@ -105,7 +162,12 @@ public final class ParallelRender {
         if (any != null && any.epoch == e && SETS.size() == THREADS + 1) return;
         SETS.clear();
         long t0 = System.nanoTime();
-        for (int i = 0; i < THREADS + 1; i++) SETS.add(new Set(e));   // one more: the render thread helps
+        buildingSets = true;
+        try {
+            for (int i = 0; i < THREADS + 1; i++) SETS.add(new Set(e));   // one more: the render thread helps
+        } finally {
+            buildingSets = false;
+        }
         System.out.printf("[probe/opt] parallel render: %d renderer sets built in %.1f ms%n", THREADS, (System.nanoTime() - t0) / 1e6);
     }
 
@@ -120,6 +182,10 @@ public final class ParallelRender {
         boolean parallel;
         volatile boolean done, ok;
         final RenderCache.Rec out = new RenderCache.Rec();
+        final List<com.mojang.blaze3d.pipeline.RenderCall> calls = new ArrayList<>();
+        /** records of model parts drawn from VRAM (GeckoLib bones), queued at the merge */
+        final PartBatch.JobParts parts = new PartBatch.JobParts();
+        final java.util.IdentityHashMap<Object, Object> locals = new java.util.IdentityHashMap<>();
 
         /** worker or render thread: whoever claims the job first renders it */
         final java.util.concurrent.atomic.AtomicBoolean claimed = new java.util.concurrent.atomic.AtomicBoolean();
@@ -129,12 +195,27 @@ public final class ParallelRender {
             if (!claimed.compareAndSet(false, true)) return;   // the render thread took it while waiting
             if (PIN_WORKERS != null && !PINNED.get()) pinWorker();
             Set s = SETS.poll();
+            calls.clear();
+            locals.clear();
+            parts.clear();
+            CURRENT.set(this);
             try {
                 ok = s != null && render(s, this);
+            } catch (Refusal r) {
+                ok = false;
+                refused++;
+                if (r.permanent && WORKER_REFUSED.add(entity.getType()))
+                    System.out.println("[probe/opt] parallel render: " + entity.getType() + " kept on the render thread: " + r.getMessage());
             } catch (Throwable t) {
                 ok = false;
                 if (failed++ < 5) System.out.println("[probe/opt] parallel render: " + entity.getType() + " failed on a worker: " + t);
+                learnFailure(entity.getType(), t);
             } finally {
+                CURRENT.remove();
+                if (!ok) {   // the render thread renders it again, side effects included
+                    calls.clear();
+                    parts.clear();
+                }
                 if (s != null) SETS.add(s);
                 done = true;
                 synchronized (this) {
@@ -228,12 +309,56 @@ public final class ParallelRender {
         if (j.parallel) pool().execute(j);
     }
 
+    /**
+     * Entity types whose renderer failed on a worker FAIL_LIMIT times: rendered on the render thread from then on
+     * (a renderer that touches render-thread-only state fails every time, after doing its work and its side effects
+     * on the worker). Learned by observation, for any mod's renderer.
+     */
+    private static final int FAIL_LIMIT = Integer.getInteger("lab.prender.failLimit", 3);
+    private static final java.util.concurrent.ConcurrentHashMap<net.minecraft.world.entity.EntityType<?>, java.util.concurrent.atomic.AtomicInteger> FAILS =
+            new java.util.concurrent.ConcurrentHashMap<>();
+    private static final java.util.Set<net.minecraft.world.entity.EntityType<?>> WORKER_REFUSED = java.util.concurrent.ConcurrentHashMap.newKeySet();
+
+    private static void learnFailure(net.minecraft.world.entity.EntityType<?> type, Throwable t) {
+        if (FAILS.computeIfAbsent(type, k -> new java.util.concurrent.atomic.AtomicInteger()).incrementAndGet() == FAIL_LIMIT) {
+            WORKER_REFUSED.add(type);
+            System.out.println("[probe/opt] parallel render: " + type + " kept on the render thread after " + FAIL_LIMIT + " failures (" + t + ")");
+        }
+    }
+
+    /**
+     * Renderer libraries known to keep per-render state in globals (static caches, shared model objects): their
+     * renderers go to workers only when probe's adapter for them is applied (it sets the property). GeckoLib: bones of
+     * the cached BakedGeoModel, Molang actor and variables (probe-geo mixins, -Dlab.opt.GeoParallelMixin=true).
+     * Without this, a GeckoLib job that no longer fails on a worker races on those globals.
+     */
+    private static final String[][] SHARED_STATE_LIBS = {{"software.bernie.geckolib.renderer.GeoRenderer", "probe.adapter.geckolib"}};
+
+    private static final ClassValue<Boolean> LIB_UNSAFE = new ClassValue<>() {
+        @Override
+        protected Boolean computeValue(Class<?> c) {
+            for (String[] lib : SHARED_STATE_LIBS) if (!Boolean.getBoolean(lib[1]) && implementsNamed(c, lib[0])) return true;
+            return false;
+        }
+    };
+
+    static boolean implementsNamed(Class<?> c, String name) {
+        for (Class<?> k = c; k != null; k = k.getSuperclass()) {
+            if (k.getName().equals(name)) return true;
+            for (Class<?> i : k.getInterfaces()) if (implementsNamed(i, name)) return true;
+        }
+        return false;
+    }
+
     private static boolean eligible(Entity e, MultiBufferSource buffers) {
+        if (!WORKER_REFUSED.isEmpty() && WORKER_REFUSED.contains(e.getType())) return false;
         Minecraft mc = Minecraft.getInstance();
         EntityRenderDispatcher d = mc.getEntityRenderDispatcher();
+        if (LIB_UNSAFE.get(d.getRenderer(e).getClass())) return false;
         if (buffers != mc.renderBuffers().bufferSource() || e instanceof AbstractClientPlayer || e.hasCustomName() || e.displayFireAnimation()
                 || d.shouldRenderHitBoxes() || listened || dev.probe.api.Compat.parallelRenderExcluded(e)) return false;
-        return !Boolean.getBoolean("lab.opt.RenderCacheMixin") || RenderCache.animated(e);
+        // with the render cache on: what it draws the vanilla way (animated, or excluded from it by Compat)
+        return !Boolean.getBoolean("lab.opt.RenderCacheMixin") || RenderCache.animated(e) || dev.probe.api.Compat.renderCacheExcluded(e);
     }
 
     /** After the loop: every job in order. */
@@ -251,8 +376,20 @@ public final class ParallelRender {
                     }
                 }
                 j.await();
+                if (j.ok && j.parts.size() > 0) {
+                    long t0 = System.nanoTime();
+                    boolean merged = PartBatch.mergeJob(j.parts, j.buffers);
+                    mergeNanos += System.nanoTime() - t0;
+                    if (!merged) {
+                        j.ok = false;   // a record's type is not a batch here: the object the vanilla way, without the job's side effects
+                        j.calls.clear();
+                    }
+                }
                 if (j.ok) {
                     if (VERIFY) verify(inv, j);
+                    for (int c = 0; c < j.calls.size(); c++) j.calls.get(c).execute();   // the job's deferred side effects, in place
+                    journaled += j.calls.size();
+                    j.calls.clear();
                     RenderCache.append(j.out, j.buffers);
                     parallel++;
                     j.entity = null;
@@ -332,7 +469,7 @@ public final class ParallelRender {
     }
 
     public static String report() {
-        return String.format(java.util.Locale.ROOT, "parallel render: %d workers, jobs %d, on workers %d (render thread helped %d), on the render thread %d, failed %d%s", THREADS, jobs, parallel,
-                helped, sequential, failed, VERIFY ? ", verified " + verified + ", mismatches " + mismatches : "");
+        return String.format(java.util.Locale.ROOT, "parallel render: %d workers, jobs %d, on workers %d (render thread helped %d), on the render thread %d, failed %d, refused %d, journaled calls %d, part records merged in %.0f ms%s", THREADS, jobs, parallel,
+                helped, sequential, failed, refused, journaled, mergeNanos / 1e6, (WORKER_REFUSED.isEmpty() ? "" : ", kept on the render thread " + WORKER_REFUSED) + (VERIFY ? ", verified " + verified + ", mismatches " + mismatches : ""));
     }
 }

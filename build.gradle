@@ -202,3 +202,9 @@ idea {
         downloadJavadoc = true
     }
 }
+
+// GeckoLib for the GeckoLib mixins (applied only when GeckoLib is loaded): compile only
+dependencies {
+    compileOnly files('../geckolib-neoforge-1.21.1-4.9.3.jar')
+}
+tasks.named('compileJava', JavaCompile).configure { options.encoding = 'UTF-8' }

@@ -15,6 +15,8 @@ import org.lwjgl.system.MemoryUtil;
  */
 public final class RecordingBuilder implements VertexConsumer {
     final VertexFormat format;
+    /** the render type this builder records (set by RenderCache.Recorder) */
+    public net.minecraft.client.renderer.RenderType type;
     final int vertexSize;
     private final int posOff, colorOff, uv0Off, uv1Off, uv2Off, normalOff;
     private final int initialFill;

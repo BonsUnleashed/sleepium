@@ -86,7 +86,8 @@ public final class PartBatch {
         StringBuilder pre = new StringBuilder();
         pre.append("struct ProbePart { mat4 pose; vec4 n0; vec4 n1; vec4 n2; vec4 color; ivec4 lo; };\n");
         pre.append("layout(std430) readonly buffer ProbeParts { ProbePart probeParts[]; };\n");
-        pre.append("uniform int ProbePartMode;\n\n");
+        pre.append("uniform int ProbePartMode;\n");
+        pre.append("layout(location = 15) in float ProbeFlags;\n\n");   // part geometry's 4th normal byte (GeckoLib flat cubes)
         pre.append("void main() {\n");
         pre.append("    vec3 probe_Position = Position;\n    vec4 probe_Color = Color;\n    vec3 probe_Normal = Normal;\n");
         if (uv1 != null) pre.append("    ").append(uv1).append(" probe_UV1 = UV1;\n");
@@ -96,13 +97,16 @@ public final class PartBatch {
         pre.append("    } else if (ProbePartMode != 0) {\n");
         pre.append("        ProbePart probe_d = probeParts[gl_DrawIDARB];\n");
         pre.append("        probe_Position = (probe_d.pose * vec4(Position, 1.0)).xyz;\n");
-        pre.append("        vec3 probe_n = normalize(mat3(probe_d.n0.xyz, probe_d.n1.xyz, probe_d.n2.xyz) * Normal);\n");
+        pre.append("        vec3 probe_n = mat3(probe_d.n0.xyz, probe_d.n1.xyz, probe_d.n2.xyz) * Normal;\n");
+        pre.append("        if (ProbePartMode == 1) probe_n = normalize(probe_n);\n");   // mode 3 (GeckoLib bones): as emitted, not normalised
+        // GeckoLib's fixInvertedFlatCube: on a flat cube's axes a negative (posed) component is flipped: abs()
+        pre.append("        if (ProbePartMode == 3) { int probe_f = int(ProbeFlags + 0.5); if ((probe_f & 1) != 0) probe_n.x = abs(probe_n.x); if ((probe_f & 2) != 0) probe_n.y = abs(probe_n.y); if ((probe_f & 4) != 0) probe_n.z = abs(probe_n.z); }\n");
         pre.append("        probe_Normal = trunc(clamp(probe_n, -1.0, 1.0) * 127.0) / 127.0;\n");   // as BufferBuilder packs it
         pre.append("        probe_Color = probe_d.color;\n");
         if (uv1 != null) pre.append("        probe_UV1 = ").append(uv1).append("(probe_d.lo.zw);\n");
         if (uv2 != null) pre.append("        probe_UV2 = probe_d.lo.xy;\n");
         pre.append("    }");
-        String out = head.replaceFirst("#version 150", "#version 150\n#extension GL_ARB_shader_draw_parameters : require\n#extension GL_ARB_shader_storage_buffer_object : require")
+        String out = head.replaceFirst("#version 150", "#version 150\n#extension GL_ARB_shader_draw_parameters : require\n#extension GL_ARB_shader_storage_buffer_object : require\n#extension GL_ARB_explicit_attrib_location : require")
                 + pre + body;
         PATCHED.add(name);
         return out;
@@ -113,16 +117,27 @@ public final class PartBatch {
     static final int STRIDE = 24;
     private static int vbo, vao, capacity, used;   // in vertices
     private static boolean vaoStale = true;
-    private static final Map<ModelPart, int[]> GEOMETRY = new IdentityHashMap<>();   // part -> {first vertex, quads}
+    private static final Map<Object, int[]> GEOMETRY = new IdentityHashMap<>();   // part / bone key -> {first vertex, quads}; {-1, 0}: not supported
     private static ByteBuffer geomScratch = MemoryUtil.memAlloc(1 << 16);
 
     /** A consumer that keeps position, UV and normal of what a part's compile emits (identity pose: local space). */
-    static final class GeometryRecorder implements VertexConsumer {
-        int n;
+    /** A geometry consumer that takes per-cube flags (GeckoLib flat cubes) for the vertices that follow. */
+    public interface Flagged {
+        void probe$flags(int flags);
+    }
+
+    static final class GeometryRecorder implements VertexConsumer, Flagged {
+        int n, flags;
+
+        @Override
+        public void probe$flags(int f) {
+            flags = f;
+        }
         float nx, ny, nz;
 
         void reset() {
             n = 0;
+            flags = 0;
         }
 
         private void ensure() {
@@ -162,7 +177,7 @@ public final class PartBatch {
             MemoryUtil.memPutByte(p, normalByte(x));
             MemoryUtil.memPutByte(p + 1, normalByte(y));
             MemoryUtil.memPutByte(p + 2, normalByte(z));
-            MemoryUtil.memPutByte(p + 3, (byte) 0);
+            MemoryUtil.memPutByte(p + 3, (byte) flags);
             return this;
         }
     }
@@ -180,8 +195,14 @@ public final class PartBatch {
         if (g != null) return g;
         GEOM.reset();
         compiler.probe$geometry(IDENTITY.last(), GEOM);
+        return upload(part);
+    }
+
+    /** What GEOM recorded, into the arena under this key ({-1, 0} if empty or not whole quads). */
+    private static int[] upload(Object key) {
+        int[] g;
         if (GEOM.n == 0 || GEOM.n % 4 != 0) {
-            GEOMETRY.put(part, g = new int[] {-1, 0});
+            GEOMETRY.put(key, g = new int[] {-1, 0});
             return g;
         }
         if (used + GEOM.n > capacity) grow(GEOM.n);
@@ -191,7 +212,7 @@ public final class PartBatch {
         geomScratch.clear();
         g = new int[] {used, GEOM.n / 4};
         used += GEOM.n;
-        GEOMETRY.put(part, g);
+        GEOMETRY.put(key, g);
         geometries++;
         return g;
     }
@@ -238,7 +259,7 @@ public final class PartBatch {
         }
     }
 
-    private static final Map<RenderType, Queue> QUEUES = new IdentityHashMap<>(), RESIDENT = new IdentityHashMap<>();
+    private static final Map<RenderType, Queue> QUEUES = new IdentityHashMap<>(), GEO_QUEUES = new IdentityHashMap<>(), RESIDENT = new IdentityHashMap<>();
 
     // ------------------------------------------------------------------ resident recordings (render cache in VRAM)
 
@@ -319,18 +340,76 @@ public final class PartBatch {
      * Only for a buffer EntityBatch batches, of the NEW_ENTITY format, whose render type's shader is patched.
      */
     public static boolean capture(ModelPart part, PoseStack.Pose pose, VertexConsumer buffer, int light, int overlay, int color, PartCompiler compiler) {
-        if (!(buffer instanceof BufferBuilder bb) || !RenderSystem.isOnRenderThread()) return false;
-        RenderType type = EntityBatch.typeOf(bb);
-        if (type == null || type.format() != DefaultVertexFormat.NEW_ENTITY || type.mode() != VertexFormat.Mode.QUADS || !typeOk(type) || !capable()) return false;
+        RenderType type = batchedType(buffer);
+        if (type == null) return false;
         int[] g = geometry(part, compiler);
         if (g[0] < 0) return false;
+        queue(QUEUES, type, (BufferBuilder) buffer, g, pose, light, overlay, color);
+        parts++;
+        return true;
+    }
+
+    /** Emits a key's geometry (local space, identity pose) into the consumer; false if it cannot be drawn this way. */
+    public interface GeometrySource {
+        boolean probe$emit(Object a, Object b, VertexConsumer consumer);
+    }
+
+    public static long geoParts;
+
+    /**
+     * GeckoLib bones (mode 3: normals transformed as GeckoLib emits them, not normalised): as capture, with the
+     * geometry under {@code key}, built once from {@code src.probe$emit(a, b, ...)}.
+     */
+    public static boolean captureGeo(Object key, GeometrySource src, Object a, Object b, PoseStack.Pose pose, VertexConsumer buffer, int light, int overlay, int color) {
+        RenderType type = batchedType(buffer);
+        if (type == null) return false;
+        int[] g = GEOMETRY.get(key);
+        if (g == null) {
+            GEOM.reset();
+            if (src.probe$emit(a, b, GEOM)) g = upload(key);
+            else GEOMETRY.put(key, g = new int[] {-1, 0});
+        }
+        if (g[0] < 0) return false;
+        queue(GEO_QUEUES, type, (BufferBuilder) buffer, g, pose, light, overlay, color);
+        geoParts++;
+        return true;
+    }
+
+    /** The buffer's render type when it is a batch (EntityBatch) PartBatch can draw from VRAM, on the render thread. */
+    private static RenderType batchedType(VertexConsumer buffer) {
+        if (!(buffer instanceof BufferBuilder bb) || !RenderSystem.isOnRenderThread()) return null;
+        RenderType type = EntityBatch.typeOf(bb);
+        if (type == null || type.format() != DefaultVertexFormat.NEW_ENTITY || type.mode() != VertexFormat.Mode.QUADS || !typeOk(type) || !capable()) return null;
+        return type;
+    }
+
+    private static void queue(Map<RenderType, Queue> queues, RenderType type, BufferBuilder bb, int[] g, PoseStack.Pose pose, int light, int overlay, int color) {
+        Queue q = slot(queues, type, bb);
+        writeRecord(q.mem + 144L * q.n, pose, light, overlay, color);
+        commit(q, g[0], g[1]);
+    }
+
+    /** The type's queue with room for one more record (the batch gets its empty quad if it has no vertices yet). */
+    private static Queue slot(Map<RenderType, Queue> queues, RenderType type, BufferBuilder bb) {
         dev.probe.opt.BufferBuilderAccessor a = (dev.probe.opt.BufferBuilderAccessor) bb;
         if (a.probe$vertices() == 0) {   // the batch must be drawn even if every part of it is queued: one empty quad
-            for (int i = 0; i < 4; i++) bb.addVertex(0, 0, 0, 0, 0, 0, overlay, light, 0, 1, 0);
+            for (int i = 0; i < 4; i++) bb.addVertex(0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0);
         }
-        Queue q = QUEUES.computeIfAbsent(type, t -> new Queue());
+        Queue q = queues.computeIfAbsent(type, t -> new Queue());
         q.ensure();
-        long r = q.mem + 144L * q.n;
+        return q;
+    }
+
+    private static void commit(Queue q, int first, int quads) {
+        int idx = quads * 6;
+        MemoryUtil.memPutInt(q.counts + 4L * q.n, idx);
+        MemoryUtil.memPutInt(q.bases + 4L * q.n, first);
+        if (idx > q.maxIndices) q.maxIndices = idx;
+        q.n++;
+    }
+
+    /** One 144-byte record: pose, normal matrix columns (vec4 each), colour (RGBA floats), light / overlay (ints). */
+    static void writeRecord(long r, PoseStack.Pose pose, int light, int overlay, int color) {
         Matrix4f m = pose.pose();
         m.getToAddress(r);
         Matrix3f nm = pose.normal();
@@ -352,12 +431,130 @@ public final class PartBatch {
         MemoryUtil.memPutInt(r + 132, (short) (light >> 16 & 0xFFFF));
         MemoryUtil.memPutInt(r + 136, (short) (overlay & 0xFFFF));
         MemoryUtil.memPutInt(r + 140, (short) (overlay >> 16 & 0xFFFF));
-        int idx = g[1] * 6;
-        MemoryUtil.memPutInt(q.counts + 4L * q.n, idx);
-        MemoryUtil.memPutInt(q.bases + 4L * q.n, g[0]);
-        if (idx > q.maxIndices) q.maxIndices = idx;
-        q.n++;
-        parts++;
+    }
+
+    // ------------------------------------------------------------------ GeckoLib bones from ParallelRender's workers
+
+    /**
+     * A worker job's bone records ({@link #captureGeoInJob}), queued by the render thread when the job is merged
+     * ({@link #mergeJob}). Kept per job object, reused (no garbage).
+     */
+    public static final class JobParts {
+        RenderType[] types = new RenderType[64];
+        int[] first = new int[64], quads = new int[64];
+        long mem = MemoryUtil.nmemAlloc(144L * 64);
+        int n, cap = 64;
+
+        public void clear() {
+            n = 0;
+        }
+
+        public int size() {
+            return n;
+        }
+
+        long next(RenderType t, int[] g) {
+            if (n == cap) {
+                cap *= 2;
+                types = java.util.Arrays.copyOf(types, cap);
+                first = java.util.Arrays.copyOf(first, cap);
+                quads = java.util.Arrays.copyOf(quads, cap);
+                mem = MemoryUtil.nmemRealloc(mem, 144L * cap);
+            }
+            types[n] = t;
+            first[n] = g[0];
+            quads[n] = g[1];
+            return mem + 144L * n++;
+        }
+    }
+
+    /** read by workers: render types PartBatch draws (batched, NEW_ENTITY quads, patched shader) and bone geometries */
+    private static volatile java.util.Set<RenderType> workerTypes = java.util.Set.of();
+    private static volatile Map<Object, int[]> geoSnapshot = new IdentityHashMap<>();
+    private static final java.util.Set<RenderType> ASKED = java.util.Collections.newSetFromMap(new java.util.concurrent.ConcurrentHashMap<>());
+    private static final java.util.Set<Object> ASKED_GEO = java.util.Collections.newSetFromMap(new java.util.concurrent.ConcurrentHashMap<>());
+    public static long jobBones, jobMerged, jobRefused;
+
+    /**
+     * Inside a ParallelRender job: the bone becomes a record in the job, when its render type and geometry are known
+     * (else they are prepared on the render thread for the next frame, through the job's journal, and the bone is
+     * drawn the CPU way this time).
+     */
+    public static boolean captureGeoInJob(Object key, GeometrySource src, Object a, Object b, PoseStack.Pose pose, RenderType type, JobParts parts, int light, int overlay, int color) {
+        if (!workerTypes.contains(type)) {
+            if (ASKED.add(type)) ParallelRender.journal(() -> learnType(type));
+            return false;
+        }
+        int[] g = geoSnapshot.get(key);
+        if (g == null) {
+            if (ASKED_GEO.add(key)) ParallelRender.journal(() -> {
+                ASKED_GEO.remove(key);
+                if (GEOMETRY.get(key) == null) {
+                    GEOM.reset();
+                    if (src.probe$emit(a, b, GEOM)) upload(key);
+                    else GEOMETRY.put(key, new int[] {-1, 0});
+                }
+                publishGeo(key);
+            });
+            return false;
+        }
+        if (g[0] < 0) return false;
+        writeRecord(parts.next(type, g), pose, light, overlay, color);
+        jobBones++;
+        return true;
+    }
+
+    /** Render thread: whether PartBatch can draw this type from VRAM (checked here: GL queries); published for workers. */
+    private static void learnType(RenderType type) {
+        ASKED.remove(type);
+        if (EntityBatch.commutes(type) && type.format() == DefaultVertexFormat.NEW_ENTITY && type.mode() == VertexFormat.Mode.QUADS && typeOk(type) && capable()) {
+            java.util.Set<RenderType> s = java.util.Collections.newSetFromMap(new IdentityHashMap<>());
+            s.addAll(workerTypes);
+            s.add(type);
+            workerTypes = s;
+        }
+    }
+
+    private static void publishGeo(Object key) {
+        int[] g = GEOMETRY.get(key);
+        if (g == null) return;
+        Map<Object, int[]> m = new IdentityHashMap<>(geoSnapshot);
+        m.put(key, g);
+        geoSnapshot = m;
+    }
+
+    /**
+     * At the job's merge (render thread): true if every record's type is a batch here (then they are queued), false if
+     * not (nothing queued: the caller renders the object the vanilla way instead).
+     */
+    public static boolean mergeJob(JobParts parts, net.minecraft.client.renderer.MultiBufferSource buffers) {
+        // the buffer is looked up once per run of records of one type (an object's bones are mostly one type)
+        RenderType last = null;
+        for (int i = 0; i < parts.n; i++) {
+            if (parts.types[i] == last) continue;
+            last = parts.types[i];
+            if (!(buffers.getBuffer(last) instanceof BufferBuilder bb) || EntityBatch.typeOf(bb) != last) {
+                jobRefused++;
+                parts.n = 0;
+                return false;
+            }
+        }
+        last = null;
+        BufferBuilder bb = null;
+        Queue q = null;
+        for (int i = 0; i < parts.n; i++) {
+            if (parts.types[i] != last) {
+                last = parts.types[i];
+                bb = (BufferBuilder) buffers.getBuffer(last);
+                q = GEO_QUEUES.get(last);
+            }
+            if (q == null || q.n == q.cap || ((dev.probe.opt.BufferBuilderAccessor) bb).probe$vertices() == 0) q = slot(GEO_QUEUES, last, bb);
+            MemoryUtil.memCopy(parts.mem + 144L * i, q.mem + 144L * q.n, 144);
+            commit(q, parts.first[i], parts.quads[i]);
+        }
+        jobMerged += parts.n;
+        geoParts += parts.n;
+        parts.n = 0;
         return true;
     }
 
@@ -393,10 +590,11 @@ public final class PartBatch {
     public static void afterDraw(ShaderInstance shader) {
         RenderType t = current;
         if (t == null) return;
-        Queue q = QUEUES.get(t), r = RESIDENT.get(t);
-        boolean parts = q != null && q.n > 0, res = r != null && r.n > 0;
-        if (!parts && !res) return;
+        Queue q = QUEUES.get(t), r = RESIDENT.get(t), gq = GEO_QUEUES.get(t);
+        boolean parts = q != null && q.n > 0, res = r != null && r.n > 0, geo = gq != null && gq.n > 0;
+        if (!parts && !res && !geo) return;
         if (parts) drawQueue(shader, q, 1);
+        if (geo) drawQueue(shader, gq, 3);
         if (res) {
             if (t.sortOnUpload()) sortBackToFront(r);
             drawQueue(shader, r, 2);
@@ -444,7 +642,7 @@ public final class PartBatch {
         long bytes = 144L * q.n;
         GL15C.nglBufferData(GL43C.GL_SHADER_STORAGE_BUFFER, bytes, q.mem, GL15C.GL_STREAM_DRAW);
         GL30C.glBindBufferBase(GL43C.GL_SHADER_STORAGE_BUFFER, SSBO_BINDING, ssbo);
-        if (mode == 1) {
+        if (mode != 2) {   // part geometry (modes 1, 3); mode 2 draws resident recordings
             if (vaoStale || vao == 0) setupVao();
             GL30C.glBindVertexArray(vao);
         } else {
@@ -478,7 +676,9 @@ public final class PartBatch {
         if (cmdBuf == 0) cmdBuf = GL15C.glGenBuffers();
         GL15C.glBindBuffer(org.lwjgl.opengl.GL40C.GL_DRAW_INDIRECT_BUFFER, cmdBuf);
         GL15C.nglBufferData(org.lwjgl.opengl.GL40C.GL_DRAW_INDIRECT_BUFFER, bytes20, cmdMem, GL15C.GL_STREAM_DRAW);
+        boolean mat = mode != 2 && Materials.begin(shader, current);   // a material mask beside the type's texture
         GL43C.glMultiDrawElementsIndirect(GL11C.GL_TRIANGLES, seq.type().asGLType, 0L, q.n, 20);
+        if (mat) Materials.end(shader);
         GL15C.glBindBuffer(org.lwjgl.opengl.GL40C.GL_DRAW_INDIRECT_BUFFER, 0);
         GL20C.glUniform1i(flag, 0);
         draws++;
@@ -497,26 +697,32 @@ public final class PartBatch {
         GL20C.glVertexAttribPointer(2, 2, GL11C.GL_FLOAT, false, STRIDE, 12);
         GL20C.glEnableVertexAttribArray(5);
         GL20C.glVertexAttribPointer(5, 3, GL11C.GL_BYTE, true, STRIDE, 20);
+        GL20C.glEnableVertexAttribArray(15);   // ProbeFlags (the normal's pad byte)
+        GL20C.glVertexAttribPointer(15, 1, GL11C.GL_UNSIGNED_BYTE, false, STRIDE, 23);
         vaoStale = false;
     }
 
     /** End of a frame's level render: nothing queued may outlive it (a type never drawn this frame). */
     public static void endFrame() {
+        ASKED.clear();   // a request journaled by a job that then failed was dropped: asked again next frame
+        ASKED_GEO.clear();
         for (Queue q : RESIDENT.values()) {
             if (q.n > 0) fallbacks += q.n;
             q.n = 0;
             q.maxIndices = 0;
         }
-        for (Queue q : QUEUES.values()) {
-            if (q.n > 0) fallbacks += q.n;
-            q.n = 0;
-            q.maxIndices = 0;
+        for (Map<RenderType, Queue> m : java.util.List.of(QUEUES, GEO_QUEUES)) {
+            for (Queue q : m.values()) {
+                if (q.n > 0) fallbacks += q.n;
+                q.n = 0;
+                q.maxIndices = 0;
+            }
         }
     }
 
     public static String report() {
-        return String.format(java.util.Locale.ROOT, "part batch: shaders patched %s, parts %d, multi-draws %d, geometries %d (%.1f MB), lost %d; resident draws %d, uploads %d (arena %.1f MB)",
-                PATCHED, parts, draws, geometries, (double) used * STRIDE / 1048576.0, fallbacks, residentDraws, residentUploads,
+        return String.format(java.util.Locale.ROOT, "part batch: shaders patched %s, parts %d, GeckoLib bones %d (from workers %d, jobs refused at merge %d), multi-draws %d, geometries %d (%.1f MB), lost %d; resident draws %d, uploads %d (arena %.1f MB)",
+                PATCHED, parts, geoParts, jobMerged, jobRefused, draws, geometries, (double) used * STRIDE / 1048576.0, fallbacks, residentDraws, residentUploads,
                 (double) RES_ARENA.capacity * RES_ARENA.stride / 1048576.0);
     }
 }

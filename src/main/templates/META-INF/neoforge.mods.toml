@@ -32,3 +32,6 @@ config="${mod_id}-opt.mixins.json"
 
 [[mixins]]
 config="foreign-test.mixins.json"
+
+[[mixins]]
+config="probe-geo.mixins.json"

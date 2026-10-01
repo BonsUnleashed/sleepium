@@ -49,7 +49,12 @@ public final class RenderCache {
     private static final int VOLATILE_TICKS = 40;
     public static long translations, residentSegments;
     public static long hits, records, animated, unsupported, verified, mismatches, replayedVertices, vanilla;
-    private static final Map<Class<?>, long[]> BY_CLASS = new HashMap<>();   // hits, records, animated, unsupported, mismatches
+    private static final Map<Class<?>, long[]> BY_CLASS = new HashMap<>();   // hits, records, animated, unsupported, mismatches, learned
+    /** RenderCacheClockMixin: the thread whose Blaze3D.getTime() is moved by CLOCK_SHIFT seconds (the probe's third look) */
+    public static volatile Thread clockShiftThread;
+    public static final double CLOCK_SHIFT = 0.35;
+    /** a renderer class is drawn the vanilla way for good once this many of its recordings, and 7 in 8, were animated */
+    private static final int LEARN_ANIMATED = Integer.getInteger("lab.rcache.learnAnimated", 32);
 
     private RenderCache() {}
 
@@ -166,7 +171,10 @@ public final class RenderCache {
         @Override
         public VertexConsumer getBuffer(RenderType type) {
             RecordingBuilder b = builders.get(type);
-            if (b == null) builders.put(type, b = new RecordingBuilder(type.format()));
+            if (b == null) {
+                builders.put(type, b = new RecordingBuilder(type.format()));
+                b.type = type;
+            }
             if (used.add(type)) {
                 b.reset();
                 order.add(type);
@@ -199,6 +207,22 @@ public final class RenderCache {
     private static int recordDepth;
     private static final Rec PROBE = new Rec();
     private static final Map<Object, Rec> RECS = new WeakHashMap<>();
+
+    /**
+     * Renderers of animation libraries animate by time by design (their output changes every frame): marked learned
+     * from the start, so the cache neither records nor probes them. The probe renders an object at a shifted time,
+     * which for such a library moves its animation state (controllers, keyframe events) as if that time had come.
+     */
+    private static final String[] TIME_ANIMATED_LIBS = {"software.bernie.geckolib.renderer.GeoRenderer"};
+
+    private static long[] classCounters(Class<?> rendererClass) {
+        long[] cs = new long[6];
+        for (String lib : TIME_ANIMATED_LIBS) if (ParallelRender.implementsNamed(rendererClass, lib)) cs[5] = 1;
+        // players: few, always moving, and mods replace their rendering inside PlayerRenderer (RenderPlayerEvent, e.g. a
+        // GeckoLib model driven by a controller) where the probe would move that animation's state too
+        if (net.minecraft.client.renderer.entity.player.PlayerRenderer.class.isAssignableFrom(rendererClass)) cs[5] = 1;
+        return cs;
+    }
 
     private static final Map<VertexFormat, boolean[]> USED = new java.util.concurrent.ConcurrentHashMap<>();
 
@@ -275,9 +299,10 @@ public final class RenderCache {
         }
         real = (MultiBufferSource.BufferSource) buffers;
         long tick = level.getGameTime();
-        long[] cs = BY_CLASS.computeIfAbsent(rendererClass, c -> new long[5]);
+        long[] cs = BY_CLASS.computeIfAbsent(rendererClass, RenderCache::classCounters);
         Rec rec = RECS.get(obj);
         if (rec == null) RECS.put(obj, rec = new Rec());
+        if (cs[5] != 0) rec.skipUntil = Long.MAX_VALUE;   // learned: animates by time (ParallelRender takes it too)
         if (rec.skipUntil > tick) {
             vanilla++;
             d.draw(pose, buffers, pt);
@@ -336,10 +361,23 @@ public final class RenderCache {
                     e.tickCount -= 7;
                 }
             }
+            if (!animated) {   // the wall clock (GLFW time), for renderers that animate by it
+                clockShiftThread = Thread.currentThread();
+                try {
+                    animated = record(d, pt, PROBE) != OK || !PROBE.sameAs(rec);
+                } finally {
+                    clockShiftThread = null;
+                }
+            }
             if (animated) {
                 rec.skipUntil = tick + VOLATILE_TICKS;
                 RenderCache.animated++;
                 cs[2]++;
+                if (cs[5] == 0 && cs[2] >= LEARN_ANIMATED && cs[2] * 8 >= cs[1] * 7) {
+                    cs[5] = 1;
+                    System.out.println("[probe/opt] render cache: " + rendererClass.getSimpleName() + " animated in " + cs[2] + " of "
+                            + cs[1] + " recordings: drawn the vanilla way from now on, no more probes");
+                }
                 d.draw(pose, buffers, pt);
                 return;
             }
@@ -526,7 +564,7 @@ public final class RenderCache {
                 "render cache: hits %d, records %d, animated %d, unsupported %d, vanilla %d, replayed vertices %d%s", hits, records, animated, unsupported, vanilla,
                 replayedVertices, VERIFY ? ", verified " + verified + ", mismatches " + mismatches : ""));
         BY_CLASS.forEach((c, v) -> sb.append(String.format(java.util.Locale.ROOT, "\n    %s: hits %d, records %d, animated %d, unsupported %d%s", c.getSimpleName(),
-                v[0], v[1], v[2], v[3], VERIFY ? ", mismatches " + v[4] : "")));
+                v[0], v[1], v[2], v[3], (v[5] != 0 ? ", learned: animated" : "") + (VERIFY ? ", mismatches " + v[4] : ""))));
         return sb.toString();
     }
 }

@@ -32,17 +32,16 @@ public final class ProbeMod {
         EventCounter.INSTANCE.attach(gameBus);
         EventBench.registerListeners(gameBus);
         gameBus.addListener(ProbeCommand::register);
-        // network engine (dev.probe.net, notes/34)
         gameBus.addListener(net.neoforged.neoforge.event.tick.ServerTickEvent.Pre.class, e -> NetBench.onTickStart());
         modBus.addListener(net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent.class, dev.probe.net.BulkPayloads::register);
         gameBus.addListener(net.neoforged.neoforge.event.tick.ServerTickEvent.Post.class, e -> dev.probe.net.Bulk.pump(e.getServer()));
         gameBus.addListener(net.neoforged.neoforge.event.entity.player.PlayerEvent.PlayerLoggedOutEvent.class, e -> {
             if (e.getEntity() instanceof net.minecraft.server.level.ServerPlayer sp) dev.probe.net.Bulk.onLogout(sp);
         });
-        gameBus.addListener(net.neoforged.neoforge.event.entity.player.PlayerEvent.PlayerLoggedInEvent.class, e -> {
-            if (e.getEntity() instanceof net.minecraft.server.level.ServerPlayer sp) dev.probe.net.Coalesce.enable(sp);   // before anything big goes out
-        });
         dev.probe.net.BulkSelfTest.register();
+        gameBus.addListener(net.neoforged.neoforge.event.entity.player.PlayerEvent.PlayerLoggedInEvent.class, e -> {   // the controllers to a joining player
+            if (e.getEntity() instanceof net.minecraft.server.level.ServerPlayer p0) dev.probe.net.Coalesce.enable(p0);   // before anything big goes out
+        });
         gameBus.addListener(net.neoforged.neoforge.event.level.ChunkEvent.Load.class, GenBench::onChunkLoad);
         if (FMLEnvironment.dist.isClient()) {
             ClientProbe.register(gameBus);   // class is only loaded on the physical client
