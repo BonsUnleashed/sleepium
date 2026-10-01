@@ -54,7 +54,8 @@ public final class MainReactor {
     /** server thread, idle phase: sleep until the deadline or a signal */
     public static void park(long deadlineNanos, Queue<?>... queues) {
         main = Thread.currentThread();
-        long now = System.nanoTime();
+        // the server's deadlines are in Util.getNanos() time: on the client that is GLFW's timer, not System.nanoTime
+        long now = net.minecraft.Util.getNanos();
         long wait = Math.min(deadlineNanos - now, MAX_PARK_NANOS);
         if (wait <= 0) return;
         eventNanos = 0;
@@ -71,7 +72,7 @@ public final class MainReactor {
                 WAKE_NANOS.add(d);
                 WAKE_HIST[d < 20_000 ? 0 : d < 100_000 ? 1 : d < 500_000 ? 2 : d < 1_000_000 ? 3 : d < 2_000_000 ? 4 : 5]++;
             }
-            if (System.nanoTime() - now < wait - 200_000L) EARLY.increment();
+            if (net.minecraft.Util.getNanos() - now < wait - 200_000L) EARLY.increment();
             else if (SCOUT) afterTimeout = true;
         } finally {
             parked = false;

@@ -166,11 +166,14 @@ public final class CompositeEventBus implements IEventBus {
         return false;
     }
 
+    private static final boolean PHYSICAL_CLIENT = net.neoforged.fml.loading.FMLEnvironment.dist.isClient();
+
     /** Full post: first posts, listener changes, dispatch, fallbacks and statistics. */
     private <T extends Event> T postFull(T event) {
         // ParallelRender: a mod renderer posting an event somebody listens to (GeckoLib's GeoRenderEvent) from a worker job:
         // the listener must not run there; the job goes to the render thread and the type stays there
-        if (ParallelRender.inJob() && mayHaveListeners(event.getClass())) throw ParallelRender.REFUSE_LISTENED;
+        // (client only: ParallelRender is a client class; touching it on a dedicated server loads client classes)
+        if (PHYSICAL_CLIENT && ParallelRender.inJob() && mayHaveListeners(event.getClass())) throw ParallelRender.REFUSE_LISTENED;
         if (fallbackAlways || (boolean) shutdown.getVolatile(delegate)) {
             if (STATS) count(4, holders.get(event.getClass()));
             return delegate.post(event);   // identical vanilla behaviour (incl. returning early when shut down)

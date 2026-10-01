@@ -76,6 +76,30 @@ public final class GenReactor {
         }
     }
 
+    /** diagnostics (-Dlab.reactor.debug=true): queue sizes by level, the non-empty bits, totals so far */
+    public static String debug() {
+        StringBuilder q = new StringBuilder();
+        for (int i = 0; i < LEVELS; i++) if (!QUEUES[i].isEmpty()) q.append(' ').append(i).append(':').append(QUEUES[i].size());
+        return "gen reactor: queues{" + q + " } bits " + Long.toBinaryString(NONEMPTY.get()) + ", posted " + POSTED.sum() + ", run " + RAN.sum() + ", gated " + GATED.sum();
+    }
+
+    static {
+        if (Boolean.getBoolean("lab.reactor.debug")) {
+            Thread t = new Thread(() -> {
+                while (true) {
+                    try {
+                        Thread.sleep(5000);
+                    } catch (InterruptedException e) {
+                        return;
+                    }
+                    org.slf4j.LoggerFactory.getLogger("probe").info("[probe/reactor-debug] {} | {}", debug(), FullRing.debug());
+                }
+            }, "probe-reactor-debug");
+            t.setDaemon(true);
+            t.start();
+        }
+    }
+
     public static String report() {
         return String.format(java.util.Locale.ROOT, "worldgen reactor: %d task runs posted, %d run, %d waited for their data", POSTED.sumThenReset(), RAN.sumThenReset(), GATED.sumThenReset());
     }

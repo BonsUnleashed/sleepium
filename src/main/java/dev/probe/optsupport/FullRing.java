@@ -74,29 +74,40 @@ public final class FullRing {
         }
     }
 
-    /** main thread, idle: may a FULL task run now? */
-    private static boolean mayRun() {
+    /** main thread, idle: may a FULL task run now? take: the caller runs it now (spends the window's first-task pass) */
+    private static boolean mayRun(boolean take) {
         refillWithoutTicks();
         if (allowance <= 0) {
             HELD_BY_WINDOW.increment();
             return false;
         }
-        if (System.nanoTime() + 2 * costNanos > deadlineNanos) {
+        // progress: the first task of every idle window runs whatever its measured cost. Otherwise a window shorter than
+        // twice the average (prepareLevels gives 10 ms; the first FULL tasks of a fresh JVM cost several ms) would hold
+        // every task forever, and the average, measured only on tasks that run, would never come down.
+        if (deadlineNanos != firstOfWindow) {
+            if (take) firstOfWindow = deadlineNanos;
+            return true;
+        }
+        // deadlineNanos is the server's (Util.getNanos(): GLFW time on the client, System.nanoTime on a dedicated server)
+        if (net.minecraft.Util.getNanos() + 2 * costNanos > deadlineNanos) {
             HELD_BY_TIME.increment();
             return false;
         }
         return true;
     }
 
+    /** the deadline of the window whose first task was let through (main thread) */
+    private static long firstOfWindow = Long.MIN_VALUE;
+
     /** main thread, idle: would runOne() run something now? (so the reactor does not sleep past work it may do) */
     public static boolean pending() {
-        return SIZE.get() > 0 && mayRun();
+        return SIZE.get() > 0 && mayRun(false);
     }
 
     /** main thread: run one FULL task if allowed; true if one ran */
     public static boolean runOne() {
         if (SIZE.get() == 0) return false;
-        if (idle && !mayRun()) return false;
+        if (idle && !mayRun(true)) return false;
         for (int i = 0; i < LEVELS; i++) {
             Runnable r = QUEUES[i].poll();
             if (r != null) {
@@ -111,6 +122,14 @@ public final class FullRing {
             }
         }
         return false;
+    }
+
+    /** diagnostics (racy reads, -Dlab.reactor.debug=true) */
+    public static String debug() {
+        StringBuilder q = new StringBuilder();
+        for (int i = 0; i < LEVELS; i++) if (!QUEUES[i].isEmpty()) q.append(' ').append(i).append(':').append(QUEUES[i].size());
+        return String.format(java.util.Locale.ROOT, "full ring: size %d queues{%s } idle %b, allowance %d, cwnd %.1f, deadline in %.1f ms, cost %.0f us, ran %d, held window %d / time %d",
+                SIZE.get(), q, idle, allowance, cwnd, (deadlineNanos - net.minecraft.Util.getNanos()) / 1e6, costNanos / 1e3, RAN.sum(), HELD_BY_WINDOW.sum(), HELD_BY_TIME.sum());
     }
 
     public static String report() {

@@ -150,6 +150,12 @@ public final class OptMixinPlugin implements IMixinConfigPlugin {
             for (String f : UNIVERSAL) if (!except.contains(f)) System.setProperty("lab.opt." + f, "true");
             System.out.println("[probe/opt] lab.opt.universal: " + String.join(", ", UNIVERSAL));
         }
+        // the worldgen reactor removes the worldgen actor; FEATURES of neighbouring chunks are then kept apart only by
+        // ParallelGen's 3x3 claims (ParallelWorldgenMixin): without them two chunks' features write one section at once
+        if (Boolean.getBoolean("lab.opt.WorldgenReactor") && !Boolean.getBoolean("lab.opt.ParallelWorldgenMixin") && !Boolean.getBoolean("lab.opt.all")) {
+            System.setProperty("lab.opt.ParallelWorldgenMixin", "true");
+            System.out.println("[probe/opt] lab.opt.WorldgenReactor needs ParallelWorldgenMixin (its FEATURES claims): turned on");
+        }
     }
     @Override public String getRefMapperConfig() { return null; }
     @Override public void acceptTargets(Set<String> myTargets, Set<String> otherTargets) {}
