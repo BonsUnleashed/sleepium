@@ -44,8 +44,15 @@ public final class Materials {
         int main = src.indexOf("void main() {");
         if (end < 0 || main < 0) return src;
         VERTEX_PATCHED.add(name);
-        return src.substring(0, main) + "out vec3 probeMatN;\nout vec3 probeMatP;\n" + src.substring(main, end)
-                + "    probeMatN = probe_Normal;\n    probeMatP = probe_Position;\n" + src.substring(end);
+        // the coatings (Coatings): the packed amounts and the height up the model in its bind pose (the recorded geometry's
+        // own position: a coat stays where it lies on the body however it moves), from the part's record
+        String coat = "    probeCoat = 0;\n    probeCoatH = 0.0;\n"
+                + "    if (ProbePartMode == 1 || ProbePartMode == 3) {\n"
+                + "        probeCoat = int(probeParts[gl_DrawIDARB].n0.w + 0.5);\n"
+                + "        if (probeCoat != 0) probeCoatH = Position.y / max(probeParts[gl_DrawIDARB].n2.w, 0.1);\n"
+                + "    }\n";
+        return src.substring(0, main) + "out vec3 probeMatN;\nout vec3 probeMatP;\nflat out int probeCoat;\nout float probeCoatH;\n" + src.substring(main, end)
+                + "    probeMatN = probe_Normal;\n    probeMatP = probe_Position;\n" + coat + src.substring(end);
     }
 
     public static String patchFragment(String name, String src) {
@@ -53,7 +60,7 @@ public final class Materials {
         int main = src.indexOf("void main() {");
         if (main < 0) return src;
         String decl = "uniform sampler2D ProbeMaterial;\nuniform int ProbeMaterialOn;\nuniform vec3 Light0_Direction;\nuniform vec3 Light1_Direction;\n"
-                + "in vec3 probeMatN;\nin vec3 probeMatP;\n\n";
+                + "in vec3 probeMatN;\nin vec3 probeMatP;\nflat in int probeCoat;\nin float probeCoatH;\n\n";
         String shade = """
                     if (ProbeMaterialOn != 0) {
                         vec4 probe_m = texture(ProbeMaterial, texCoord0);
@@ -77,6 +84,41 @@ public final class Materials {
                         if (probe_metal) color.rgb *= mix(1.0, 0.35, probe_s);   // metal: little diffuse, mostly what it reflects
                         color.rgb += probe_add * probe_lit;
                         color.rgb = mix(color.rgb, probe_alb * 1.15, probe_e);
+                    }
+                    if (probeCoat != 0) {   // the coatings: wet, mud from the feet up, snow on what faces up, ice in patches
+                        float c_wet = float(probeCoat & 63) / 63.0, c_mud = float((probeCoat >> 6) & 63) / 63.0;
+                        float c_snow = float((probeCoat >> 12) & 63) / 63.0, c_ice = float((probeCoat >> 18) & 63) / 63.0;
+                        vec2 c_tx = floor(texCoord0 * vec2(textureSize(Sampler0, 0)));   // a value per texel: the coat in the texture's own pixels
+                        float c_r = fract(sin(dot(c_tx, vec2(12.9898, 78.233))) * 43758.5453);
+                        vec3 c_N = normalize(probeMatN), c_V = normalize(-probeMatP);
+                        if (dot(c_N, c_V) < 0.0) c_N = -c_N;
+                        vec3 c_light = vertexColor.rgb * lightMapColor.rgb;   // what lights the surface here (the diffuse shading, the light map)
+                        float c_lit = max(max(lightMapColor.r, lightMapColor.g), lightMapColor.b);
+                        float c_gloss = 0.0;
+                        if (c_mud > 0.0) {   // mud: from the feet up, ragged at its edge, matte
+                            float m = step(probeCoatH + (c_r - 0.5) * 0.12, c_mud * 0.45);
+                            color.rgb = mix(color.rgb, vec3(0.30, 0.22, 0.15) * (0.8 + 0.4 * c_r) * c_light, 0.9 * m);
+                        }
+                        if (c_snow > 0.0) {   // snow: on the faces that look up, more of them the more it lies
+                            float m = step(1.0 - c_snow, clamp(c_N.y * 1.4 - 0.2, 0.0, 1.0) + (c_r - 0.5) * 0.3) * step(0.45 - c_snow * 0.4, probeCoatH);   // the upper body (the feet too only when it lies deep)
+                            color.rgb = mix(color.rgb, vec3(0.90, 0.92, 0.95) * c_light, 0.92 * m);
+                        }
+                        if (c_ice > 0.0) {   // ice: a pale blue rime in patches of a few texels, thicker on what faces up, glossy
+                            float c_r3 = fract(sin(dot(floor(c_tx / 3.0), vec2(39.346, 11.135))) * 43758.5453);
+                            float m = smoothstep(1.0 - c_ice, 1.15 - c_ice, c_r3 * 0.75 + 0.25 * clamp(c_N.y, 0.0, 1.0) + (c_r - 0.5) * 0.1);
+                            color.rgb = mix(color.rgb, vec3(0.74, 0.85, 0.95) * c_light, 0.55 * m);
+                            c_gloss = max(c_gloss, 0.8 * m);
+                        }
+                        if (c_wet > 0.0) {   // wet: darker, and a sheen
+                            color.rgb *= mix(1.0, 0.62, c_wet);
+                            c_gloss = max(c_gloss, c_wet * 0.7);
+                        }
+                        if (c_gloss > 0.0) {
+                            vec3 c_H0 = normalize(normalize(Light0_Direction) + c_V), c_H1 = normalize(normalize(Light1_Direction) + c_V);
+                            float c_spec = pow(max(dot(c_N, c_H0), 0.0), 24.0) + 0.6 * pow(max(dot(c_N, c_H1), 0.0), 24.0);
+                            float c_fres = pow(1.0 - max(dot(c_N, c_V), 0.0), 4.0);
+                            color.rgb += vec3(0.85, 0.9, 1.0) * (c_spec * 0.55 + c_fres * 0.25) * c_gloss * c_lit;
+                        }
                     }
                 """;
         int fog = src.indexOf("fragColor = linear_fog(", main);

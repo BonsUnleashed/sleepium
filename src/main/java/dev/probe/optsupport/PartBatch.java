@@ -385,7 +385,7 @@ public final class PartBatch {
 
     private static void queue(Map<RenderType, Queue> queues, RenderType type, BufferBuilder bb, int[] g, PoseStack.Pose pose, int light, int overlay, int color) {
         Queue q = slot(queues, type, bb);
-        writeRecord(q.mem + 144L * q.n, pose, light, overlay, color);
+        writeRecord(q.mem + 144L * q.n, pose, light, overlay, color, Coatings.rtCoat, Coatings.rtHeight);
         commit(q, g[0], g[1]);
     }
 
@@ -408,8 +408,9 @@ public final class PartBatch {
         q.n++;
     }
 
-    /** One 144-byte record: pose, normal matrix columns (vec4 each), colour (RGBA floats), light / overlay (ints). */
-    static void writeRecord(long r, PoseStack.Pose pose, int light, int overlay, int color) {
+    /** One 144-byte record: pose, normal matrix columns (vec4 each: their w the coatings - n0.w the packed amounts, n2.w
+     *  the entity's height, Coatings), colour (RGBA floats), light / overlay (ints). */
+    static void writeRecord(long r, PoseStack.Pose pose, int light, int overlay, int color, float coat, float height) {
         Matrix4f m = pose.pose();
         m.getToAddress(r);
         Matrix3f nm = pose.normal();
@@ -422,6 +423,9 @@ public final class PartBatch {
         MemoryUtil.memPutFloat(r + 96, nm.m20());
         MemoryUtil.memPutFloat(r + 100, nm.m21());
         MemoryUtil.memPutFloat(r + 104, nm.m22());
+        MemoryUtil.memPutFloat(r + 76, coat);
+        MemoryUtil.memPutFloat(r + 92, 0);
+        MemoryUtil.memPutFloat(r + 108, height);
         // colour as BufferBuilder writes it (ARGB int -> RGBA bytes), normalised as the attribute is
         MemoryUtil.memPutFloat(r + 112, (color >> 16 & 255) / 255.0F);
         MemoryUtil.memPutFloat(r + 116, (color >> 8 & 255) / 255.0F);
@@ -444,6 +448,8 @@ public final class PartBatch {
         int[] first = new int[64], quads = new int[64];
         long mem = MemoryUtil.nmemAlloc(144L * 64);
         int n, cap = 64;
+        /** the job's entity's coatings (packed) and height, for its records (Coatings) */
+        public float coat, height;
 
         public void clear() {
             n = 0;
@@ -499,7 +505,7 @@ public final class PartBatch {
             return false;
         }
         if (g[0] < 0) return false;
-        writeRecord(parts.next(type, g), pose, light, overlay, color);
+        writeRecord(parts.next(type, g), pose, light, overlay, color, parts.coat, parts.height);
         jobBones++;
         return true;
     }
