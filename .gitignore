@@ -39,3 +39,6 @@ run/
 repo/
 !**/src/**/repo/
 run2/
+
+### Python ###
+__pycache__/
