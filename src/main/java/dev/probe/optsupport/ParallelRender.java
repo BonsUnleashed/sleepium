@@ -436,8 +436,9 @@ public final class ParallelRender {
     /** renderEntity + EntityRenderDispatcher.render (without hitboxes), with a worker's renderers. */
     private static boolean render(Set s, Job j) {
         Entity e = j.entity;
-        int coat = Coatings.of(e);
-        j.parts.coat = coat;
+        long coat = Coatings.of(e);
+        j.parts.coat = Coatings.word0(coat);
+        j.parts.coat2 = Coatings.word1(coat);
         j.parts.height = coat == 0 ? 0 : Math.max(0.1f, e.getBbHeight());
         float pt = j.pt;
         EntityRenderer<? super Entity> r = s.renderer(e);

@@ -24,7 +24,7 @@ public abstract class RenderCacheMixin {
             target = "Lnet/minecraft/client/renderer/entity/EntityRenderer;render(Lnet/minecraft/world/entity/Entity;FFLcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/MultiBufferSource;I)V"))
     @SuppressWarnings({"unchecked", "rawtypes"})
     private void probe$cached(EntityRenderer r, Entity e, float yaw, float pt, PoseStack pose, MultiBufferSource buffers, int light) {
-        int coat = dev.probe.optsupport.Coatings.of(e);
+        long coat = dev.probe.optsupport.Coatings.of(e);
         if (coat != 0 && com.mojang.blaze3d.systems.RenderSystem.isOnRenderThread()) {   // coated: live (the cache's vertices carry no records)
             dev.probe.optsupport.Coatings.begin(e, coat);
             try {

@@ -46,12 +46,13 @@ public final class Materials {
         VERTEX_PATCHED.add(name);
         // the coatings (Coatings): the packed amounts and the height up the model in its bind pose (the recorded geometry's
         // own position: a coat stays where it lies on the body however it moves), from the part's record
-        String coat = "    probeCoat = 0;\n    probeCoatH = 0.0;\n"
+        String coat = "    probeCoat = 0;\n    probeCoat2 = 0;\n    probeCoatH = 0.0;\n"
                 + "    if (ProbePartMode == 1 || ProbePartMode == 3) {\n"
                 + "        probeCoat = int(probeParts[gl_DrawIDARB].n0.w + 0.5);\n"
-                + "        if (probeCoat != 0) probeCoatH = Position.y / max(probeParts[gl_DrawIDARB].n2.w, 0.1);\n"
+                + "        probeCoat2 = int(probeParts[gl_DrawIDARB].n1.w + 0.5);\n"
+                + "        if (probeCoat != 0 || probeCoat2 != 0) probeCoatH = Position.y / max(probeParts[gl_DrawIDARB].n2.w, 0.1);\n"
                 + "    }\n";
-        return src.substring(0, main) + "out vec3 probeMatN;\nout vec3 probeMatP;\nflat out int probeCoat;\nout float probeCoatH;\n" + src.substring(main, end)
+        return src.substring(0, main) + "out vec3 probeMatN;\nout vec3 probeMatP;\nflat out int probeCoat;\nflat out int probeCoat2;\nout float probeCoatH;\n" + src.substring(main, end)
                 + "    probeMatN = probe_Normal;\n    probeMatP = probe_Position;\n" + coat + src.substring(end);
     }
 
@@ -60,7 +61,7 @@ public final class Materials {
         int main = src.indexOf("void main() {");
         if (main < 0) return src;
         String decl = "uniform sampler2D ProbeMaterial;\nuniform int ProbeMaterialOn;\nuniform vec3 Light0_Direction;\nuniform vec3 Light1_Direction;\n"
-                + "in vec3 probeMatN;\nin vec3 probeMatP;\nflat in int probeCoat;\nin float probeCoatH;\n\n";
+                + "in vec3 probeMatN;\nin vec3 probeMatP;\nflat in int probeCoat;\nflat in int probeCoat2;\nin float probeCoatH;\n\n";
         String shade = """
                     if (ProbeMaterialOn != 0) {
                         vec4 probe_m = texture(ProbeMaterial, texCoord0);
@@ -85,9 +86,10 @@ public final class Materials {
                         color.rgb += probe_add * probe_lit;
                         color.rgb = mix(color.rgb, probe_alb * 1.15, probe_e);
                     }
-                    if (probeCoat != 0) {   // the coatings: wet, mud from the feet up, snow on what faces up, ice in patches
+                    if (probeCoat != 0 || probeCoat2 != 0) {   // the coatings: wet, mud from the feet up, snow on what faces up, ice in patches, blood, soot
                         float c_wet = float(probeCoat & 63) / 63.0, c_mud = float((probeCoat >> 6) & 63) / 63.0;
                         float c_snow = float((probeCoat >> 12) & 63) / 63.0, c_ice = float((probeCoat >> 18) & 63) / 63.0;
+                        float c_blood = float(probeCoat2 & 63) / 63.0, c_soot = float((probeCoat2 >> 6) & 63) / 63.0;
                         vec2 c_tx = floor(texCoord0 * vec2(textureSize(Sampler0, 0)));   // a value per texel: the coat in the texture's own pixels
                         float c_r = fract(sin(dot(c_tx, vec2(12.9898, 78.233))) * 43758.5453);
                         vec3 c_N = normalize(probeMatN), c_V = normalize(-probeMatP);
@@ -95,6 +97,16 @@ public final class Materials {
                         vec3 c_light = vertexColor.rgb * lightMapColor.rgb;   // what lights the surface here (the diffuse shading, the light map)
                         float c_lit = max(max(lightMapColor.r, lightMapColor.g), lightMapColor.b);
                         float c_gloss = 0.0;
+                        float c_r2 = fract(sin(dot(floor(c_tx / 2.0), vec2(27.619, 57.583))) * 43758.5453);   // patches of 2 x 2 texels
+                        if (c_soot > 0.0) {   // soot: blackened patches, heavier toward the feet (the fire was below), matte
+                            float m = step(c_r2 * 0.75 + probeCoatH * 0.35 + (c_r - 0.5) * 0.1, c_soot * 1.05);
+                            color.rgb *= mix(1.0, 0.28, 0.85 * m);
+                        }
+                        if (c_blood > 0.0) {   // blood: dark red splashes over the body and the arms (not the feet), wet while fresh
+                            float m = step(1.0 - c_blood * 0.3, c_r2 * 0.8 + c_r * 0.2) * step(0.3, probeCoatH) * step(probeCoatH, 0.88);   // a third of it at the most
+                            color.rgb = mix(color.rgb, vec3(0.21, 0.035, 0.025) * c_light, 0.8 * m);
+                            c_gloss = max(c_gloss, 0.35 * m * c_blood);
+                        }
                         if (c_mud > 0.0) {   // mud: from the feet up, ragged at its edge, matte
                             float m = step(probeCoatH + (c_r - 0.5) * 0.12, c_mud * 0.45);
                             color.rgb = mix(color.rgb, vec3(0.30, 0.22, 0.15) * (0.8 + 0.4 * c_r) * c_light, 0.9 * m);
