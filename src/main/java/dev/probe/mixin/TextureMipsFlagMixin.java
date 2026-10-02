@@ -1,0 +1,29 @@
+package dev.probe.mixin;
+
+import dev.probe.optsupport.TextureMips;
+import net.minecraft.client.renderer.texture.AbstractTexture;
+import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Unique;
+import org.spongepowered.asm.mixin.injection.At;
+import org.spongepowered.asm.mixin.injection.ModifyVariable;
+
+/** TextureMips: a marked texture keeps its mip filter whatever filter a render type asks for when it binds it */
+@Mixin(AbstractTexture.class)
+public abstract class TextureMipsFlagMixin implements TextureMips.Flag {
+    @Unique private boolean probe$mips;
+
+    @Override
+    public boolean probe$mips() {
+        return probe$mips;
+    }
+
+    @Override
+    public void probe$setMips(boolean on) {
+        probe$mips = on;
+    }
+
+    @ModifyVariable(method = "setFilter", at = @At("HEAD"), argsOnly = true, ordinal = 1)
+    private boolean probe$mipFilter(boolean mipmap) {
+        return mipmap || probe$mips;
+    }
+}

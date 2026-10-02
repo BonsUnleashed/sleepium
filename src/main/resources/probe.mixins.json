@@ -59,7 +59,9 @@
     "DrawStatsFrameMixin",
     "DrawStatsLevelMixin",
     "ClientAutoMouseMixin",
-    "ClientAutoFlickerMixin"
+    "ClientAutoFlickerMixin",
+    "TextureMipsFlagMixin",
+    "TextureMipsLoadMixin"
   ],
   "injectors": {
     "defaultRequire": 1
