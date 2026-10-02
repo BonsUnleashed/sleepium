@@ -349,6 +349,11 @@ public final class ClientAuto {
                     mc.options.framerateLimit().set(FPS_CAP);
                     mc.getWindow().updateVsync(false);
                     mc.getWindow().setFramerateLimit(FPS_CAP);
+                    String gs = System.getProperty("probe.clientAuto.guiScale");   // the interface's scale in the shots (0: auto)
+                    if (gs != null) {
+                        mc.options.guiScale().set(Integer.parseInt(gs));
+                        mc.resizeDisplay();
+                    }
                     if (SERVER != null) {
                         enter(Phase.JOIN);
                         net.minecraft.client.gui.screens.ConnectScreen.startConnecting(new TitleScreen(), mc,
