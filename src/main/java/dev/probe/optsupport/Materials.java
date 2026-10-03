@@ -20,7 +20,10 @@ import org.lwjgl.opengl.GL20C;
  * R perceptual smoothness, G reflectance (230 and up: metal, tinted by the albedo), A emission (255: none). The
  * entity fragment shaders get: highlights from the two world lights, a sky reflection and a grazing rim for smooth
  * surfaces (metal tinted, dielectrics faint), all scaled by the lightmap (nothing shines in the dark), and emission
- * (full albedo whatever the light). A model without a mask draws exactly as before (the branch is off).
+ * (full albedo whatever the light). The mask's B (LabPBR's porosity, unused by our models) is ours: 1..127 an
+ * iridescence (10-04: "blades that shimmer" - a thin film's colours turning with the angle, over what the surface
+ * reflects), 128..255 a texel that glows with the entity's glow coating (Coatings.GLOW: a blade's edge under a buff).
+ * A model without a mask draws exactly as before (the branch is off), and so does one whose B is 0.
  * {@code -Dprobe.materials=false} turns it off.
  */
 public final class Materials {
@@ -80,6 +83,13 @@ public final class Materials {
                         vec3 probe_R = reflect(-probe_V, probe_N);
                         vec3 probe_sky = mix(vec3(0.13, 0.11, 0.10), mix(vec3(0.52, 0.55, 0.58), vec3(0.70, 0.78, 0.92), clamp(probe_R.y, 0.0, 1.0)), smoothstep(-0.3, 0.15, probe_R.y));
                         vec3 probe_tint = probe_metal ? probe_alb : vec3(1.0);
+                        float probe_irid = probe_m.b > 0.002 && probe_m.b < 0.5 ? probe_m.b * 2.0 : 0.0;
+                        if (probe_irid > 0.0) {   // a thin film: its colours turn with the angle and with what the surface faces
+                            float probe_t = 1.0 - max(dot(probe_N, probe_V), 0.0);
+                            vec3 probe_film = 0.5 + 0.5 * cos(6.2831 * (probe_t * 1.4 + probe_R.y * 0.35 + vec3(0.0, 0.33, 0.67)));
+                            probe_tint = mix(probe_tint, probe_film * 1.4, probe_irid);
+                            color.rgb = mix(color.rgb, color.rgb * (0.6 + 0.8 * probe_film), probe_irid * 0.45);
+                        }
                         vec3 probe_add = probe_tint * probe_f0 * (probe_spec * probe_s * 1.6 + probe_sky * probe_s * (probe_metal ? 0.95 : 0.25))
                                 + probe_sky * probe_fres * probe_s * (probe_metal ? 0.5 : 0.12);
                         if (probe_metal) color.rgb *= mix(1.0, 0.35, probe_s);   // metal: little diffuse, mostly what it reflects
@@ -98,6 +108,16 @@ public final class Materials {
                         float c_lit = max(max(lightMapColor.r, lightMapColor.g), lightMapColor.b);
                         float c_gloss = 0.0;
                         float c_r2 = fract(sin(dot(floor(c_tx / 2.0), vec2(27.619, 57.583))) * 43758.5453);   // patches of 2 x 2 texels
+                        float c_glow = float((probeCoat2 >> 12) & 63) / 63.0;
+                        if (c_glow > 0.0 && ProbeMaterialOn != 0) {   // a glow: the texels marked for it (B 128..255) lit by themselves in its hue
+                            float c_b = texture(ProbeMaterial, texCoord0).b;
+                            if (c_b >= 0.5) {
+                                float c_hue = float((probeCoat2 >> 18) & 63) / 63.0;
+                                vec3 c_col = mix(vec3(1.0), clamp(abs(fract(c_hue + vec3(0.0, 2.0 / 3.0, 1.0 / 3.0)) * 6.0 - 3.0) - 1.0, 0.0, 1.0), 0.75);
+                                float c_lum = dot(texture(Sampler0, texCoord0).rgb, vec3(0.3, 0.5, 0.2));   // the steel's own grain through it
+                                color.rgb = mix(color.rgb, c_col * (0.45 + 1.1 * c_lum), c_glow * 0.85);
+                            }
+                        }
                         if (c_soot > 0.0) {   // soot: blackened patches, heavier toward the feet (the fire was below), matte
                             float m = step(c_r2 * 0.75 + probeCoatH * 0.35 + (c_r - 0.5) * 0.1, c_soot * 1.05);
                             color.rgb *= mix(1.0, 0.28, 0.85 * m);
