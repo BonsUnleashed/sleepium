@@ -171,6 +171,14 @@ var generateModMetadata = tasks.register("generateModMetadata", ProcessResources
     from "src/main/templates"
     into "build/generated/sources/modMetadata"
 }
+// the engine's default flags (tools/game_opts.txt) in the jar: on by default in production (dev.probe.optsupport.GameDefaults)
+processResources {
+    from('tools/game_opts.txt') {
+        into 'probe'
+        filter { line -> line.contains('NetLagMixin') ? null : line }
+    }
+}
+
 // Include the output of "generateModMetadata" as an input directory for the build
 // this works with both building through Gradle and the IDE.
 sourceSets.main.resources.srcDir generateModMetadata

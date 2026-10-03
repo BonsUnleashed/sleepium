@@ -139,13 +139,15 @@
 -Dlab.opt.TagCacheMixin=true
 -Dlab.opt.TextureIdWorkerMixin=true
 -Dlab.opt.TextureRegisterWorkerMixin=true
--Dlab.opt.TickMemoMixin=true-Dlab.opt.AmbientChunksMixin=true
+-Dlab.opt.TickMemoMixin=true
+-Dlab.opt.AmbientChunksMixin=true
 -Dlab.opt.TickSchedulerMixin=true
 -Dlab.opt.UniformDedupeMixin=true
 -Dlab.opt.UtilMemoizeMixin=true
 -Dlab.opt.Vec3FromRgbMixin=true
 -Dlab.opt.VertexSortDirectMixin=true
--Dlab.opt.VertexSortRadixMixin=true-Dlab.opt.GenScoutAquiferMixin=true
+-Dlab.opt.VertexSortRadixMixin=true
+-Dlab.opt.GenScoutAquiferMixin=true
 -Dlab.opt.WorldgenAlloc=true
 -Dlab.opt.WorldgenAllocAp2Mixin=true
 -Dlab.opt.WorldgenAllocDepthMixin=true
@@ -170,5 +172,5 @@
 -Dlab.opt.WorldgenSkipBeardMixin=true
 -Dlab.opt.WorldgenSkipCellsMixin=true
 -Dlab.opt.WorldgenSkipFillMixin=true
--Dlab.opt.mailboxBatch=true-Dlab.opt.AsyncChunkSaveEncodeMixin=true
+-Dlab.opt.AsyncChunkSaveEncodeMixin=true
 -Dlab.opt.universal=true

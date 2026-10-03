@@ -8,6 +8,10 @@ import org.spongepowered.asm.mixin.extensibility.IMixinInfo;
 
 /** Measurement mixins are always on, except the expensive read probes (ReadProbe*), which need -Dprobe.beReads=true. */
 public final class ProbeMixinPlugin implements IMixinConfigPlugin {
+    static {
+        dev.probe.optsupport.GameDefaults.ensure();   // a built jar's flags before any is read
+    }
+
     @Override
     public boolean shouldApplyMixin(String targetClassName, String mixinClassName) {
         String simple = mixinClassName.substring(mixinClassName.lastIndexOf('.') + 1);

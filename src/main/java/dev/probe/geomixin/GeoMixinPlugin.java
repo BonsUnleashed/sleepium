@@ -11,6 +11,10 @@ import org.spongepowered.asm.mixin.extensibility.IMixinInfo;
  * ({@code -Dlab.opt.GeoParallelMixin=true} with ParallelEntitiesMixin) and bones from VRAM (GeoCubesMixin, below).
  */
 public final class GeoMixinPlugin implements IMixinConfigPlugin {
+    static {
+        dev.probe.optsupport.GameDefaults.ensure();   // a built jar's flags before ON is read
+    }
+
     private static final boolean ON = (Boolean.getBoolean("lab.opt.all") || Boolean.getBoolean("lab.opt.GeoParallelMixin"))
             && (Boolean.getBoolean("lab.opt.all") || Boolean.getBoolean("lab.opt.ParallelEntitiesMixin"));
 

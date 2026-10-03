@@ -13,6 +13,10 @@ import org.spongepowered.asm.mixin.extensibility.IMixinInfo;
  * Everything is OFF by default: the probe must not change the game unless asked to.
  */
 public final class OptMixinPlugin implements IMixinConfigPlugin {
+    static {
+        dev.probe.optsupport.GameDefaults.ensure();   // a built jar's flags before any is read
+    }
+
     @Override
     public boolean shouldApplyMixin(String targetClassName, String mixinClassName) {
         String simple = mixinClassName.substring(mixinClassName.lastIndexOf('.') + 1);
