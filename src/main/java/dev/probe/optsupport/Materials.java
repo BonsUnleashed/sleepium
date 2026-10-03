@@ -20,10 +20,11 @@ import org.lwjgl.opengl.GL20C;
  * R perceptual smoothness, G reflectance (230 and up: metal, tinted by the albedo), A emission (255: none). The
  * entity fragment shaders get: highlights from the two world lights, a sky reflection and a grazing rim for smooth
  * surfaces (metal tinted, dielectrics faint), all scaled by the lightmap (nothing shines in the dark), and emission
- * (full albedo whatever the light). The mask's B (LabPBR's porosity, unused by our models) is ours: 1..127 an
- * iridescence (10-04: "blades that shimmer" - a thin film's colours turning with the angle, over what the surface
- * reflects), 128..255 a texel that glows with the entity's glow coating (Coatings.GLOW: a blade's edge under a buff).
- * A model without a mask draws exactly as before (the branch is off), and so does one whose B is 0.
+ * (full albedo whatever the light). The mask's B (LabPBR's porosity, unused by our models) is ours: a polish - B 1..127
+ * its strength, B 128..255 the same less 128 on a texel that may glow besides (Coatings.GLOW: a blade under a buff).
+ * A polish is a sharp highlight and the sky's bright horizon (and the ground's glint) sliding over the metal as it
+ * turns (10-04, the user: "a stronger shine, light running over the metal" - no colours the forge could not give).
+ * A model without a mask draws exactly as before (the branch is off), and so does one whose B is 0 or 128.
  * {@code -Dprobe.materials=false} turns it off.
  */
 public final class Materials {
@@ -83,15 +84,16 @@ public final class Materials {
                         vec3 probe_R = reflect(-probe_V, probe_N);
                         vec3 probe_sky = mix(vec3(0.13, 0.11, 0.10), mix(vec3(0.52, 0.55, 0.58), vec3(0.70, 0.78, 0.92), clamp(probe_R.y, 0.0, 1.0)), smoothstep(-0.3, 0.15, probe_R.y));
                         vec3 probe_tint = probe_metal ? probe_alb : vec3(1.0);
-                        float probe_irid = probe_m.b > 0.002 && probe_m.b < 0.5 ? probe_m.b * 2.0 : 0.0;
-                        if (probe_irid > 0.0) {   // a thin film: its colours turn with the angle and with what the surface faces
-                            float probe_t = 1.0 - max(dot(probe_N, probe_V), 0.0);
-                            vec3 probe_film = 0.5 + 0.5 * cos(6.2831 * (probe_t * 1.4 + probe_R.y * 0.35 + vec3(0.0, 0.33, 0.67)));
-                            probe_tint = mix(probe_tint, probe_film * 1.4, probe_irid);
-                            color.rgb = mix(color.rgb, color.rgb * (0.6 + 0.8 * probe_film), probe_irid * 0.45);
-                        }
                         vec3 probe_add = probe_tint * probe_f0 * (probe_spec * probe_s * 1.6 + probe_sky * probe_s * (probe_metal ? 0.95 : 0.25))
                                 + probe_sky * probe_fres * probe_s * (probe_metal ? 0.5 : 0.12);
+                        int probe_bi = int(probe_m.b * 255.0 + 0.5);
+                        float probe_pol = probe_bi < 128 ? float(probe_bi) / 127.0 : float(probe_bi - 128) / 127.0;
+                        if (probe_pol > 0.0) {   // a polish: a sharp highlight, the horizon's bright line and the ground's glint sliding over it
+                            float probe_ps = mix(40.0, 160.0, probe_pol);
+                            float probe_pspec = (pow(max(dot(probe_N, probe_H0), 0.0), probe_ps) + 0.6 * pow(max(dot(probe_N, probe_H1), 0.0), probe_ps)) * (probe_ps + 8.0) / 40.0;
+                            float probe_band = exp(-abs(probe_R.y - 0.08) * 22.0) + 0.5 * exp(-abs(probe_R.y + 0.35) * 14.0);
+                            probe_add += probe_tint * probe_pol * (probe_pspec * 1.4 + probe_band * 0.9);
+                        }
                         if (probe_metal) color.rgb *= mix(1.0, 0.35, probe_s);   // metal: little diffuse, mostly what it reflects
                         color.rgb += probe_add * probe_lit;
                         color.rgb = mix(color.rgb, probe_alb * 1.15, probe_e);
