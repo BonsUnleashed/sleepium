@@ -208,7 +208,10 @@ public final class ParallelRender {
                     System.out.println("[probe/opt] parallel render: " + entity.getType() + " kept on the render thread: " + r.getMessage());
             } catch (Throwable t) {
                 ok = false;
-                if (failed++ < 5) System.out.println("[probe/opt] parallel render: " + entity.getType() + " failed on a worker: " + t);
+                if (failed++ < 5) {
+                    System.out.println("[probe/opt] parallel render: " + entity.getType() + " failed on a worker: " + t);
+                    if (STACK) for (StackTraceElement el : java.util.Arrays.copyOf(t.getStackTrace(), Math.min(14, t.getStackTrace().length))) System.out.println("    at " + el);
+                }
                 learnFailure(entity.getType(), t);
             } finally {
                 CURRENT.remove();
@@ -308,6 +311,11 @@ public final class ParallelRender {
         jobs++;
         if (j.parallel) pool().execute(j);
     }
+
+    /**
+     * (-Dprobe.parallel.stack=true: a worker's failure printed with where it happened)
+     */
+    private static final boolean STACK = Boolean.getBoolean("probe.parallel.stack");
 
     /**
      * Entity types whose renderer failed on a worker FAIL_LIMIT times: rendered on the render thread from then on
