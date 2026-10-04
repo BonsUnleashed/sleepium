@@ -33,14 +33,15 @@ public final class GeoMixinPlugin implements IMixinConfigPlugin {
     /** MolangJitMixin: GeckoLib's Molang compiled to bytecode, {@code -Dlab.opt.MolangJitMixin=true} */
     private static final boolean JIT = Boolean.getBoolean("lab.opt.all") || Boolean.getBoolean("lab.opt.MolangJitMixin");
 
-    /** GeoMarkersMixin: always (a fix, not an optimisation: bones shared by entities no longer leak poses) */
+    /** GeoMarkersMixin: always (a fix, not an optimisation: bones shared by entities no longer leak poses); GeoBlendMixin
+     *  too (a blend turns each bone the short way round) */
 
     /** GeoAnim*Mixin: the animation runtime, {@code -Dlab.opt.GeoAnimMixin=true} */
     private static final boolean ANIM = Boolean.getBoolean("lab.opt.all") || Boolean.getBoolean("lab.opt.GeoAnimMixin");
 
     @Override
     public boolean shouldApplyMixin(String targetClassName, String mixinClassName) {
-        boolean on = (mixinClassName.endsWith(".GeoMarkersMixin") ? true : mixinClassName.endsWith(".GeoCubesMixin") ? PARTS : mixinClassName.contains(".GeoAnim") ? ANIM
+        boolean on = (mixinClassName.endsWith(".GeoMarkersMixin") || mixinClassName.endsWith(".GeoBlendMixin") ? true : mixinClassName.endsWith(".GeoCubesMixin") ? PARTS : mixinClassName.contains(".GeoAnim") ? ANIM
                 : mixinClassName.endsWith(".MolangJitMixin") ? JIT : ON) && geckoLib();
         if (on && mixinClassName.endsWith(".GeoModelWorkerMixin")) System.setProperty("probe.adapter.geckolib", "true");   // ParallelRender may take GeckoLib renderers
         if (on) System.out.println("[probe/opt] applying " + mixinClassName.substring(mixinClassName.lastIndexOf('.') + 1) + " -> " + targetClassName);
