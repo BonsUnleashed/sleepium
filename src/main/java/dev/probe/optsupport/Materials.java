@@ -134,7 +134,9 @@ public final class Materials {
                             color.rgb = mix(color.rgb, vec3(0.30, 0.22, 0.15) * (0.8 + 0.4 * c_r) * c_light, 0.9 * m);
                         }
                         if (c_snow > 0.0) {   // snow: on the faces that look up, more of them the more it lies
-                            float m = step(1.0 - c_snow, clamp(c_N.y * 1.4 - 0.2, 0.0, 1.0) + (c_r - 0.5) * 0.3) * step(0.45 - c_snow * 0.4, probeCoatH);   // the upper body (the feet too only when it lies deep)
+                            // only on what faces well up (tilted over ~25 degrees from the upright), in 2 x 2 patches: the per-texel noise
+                            // had speckled the half-tilted cloth, coming and going as a cloak swayed (10-05, the user: it lay crooked)
+                            float m = step(1.0 - c_snow, clamp((c_N.y - 0.42) * 2.6, 0.0, 1.0) + (c_r2 - 0.5) * 0.18) * step(0.45 - c_snow * 0.4, probeCoatH);   // the upper body (the feet too only when it lies deep)
                             color.rgb = mix(color.rgb, vec3(0.90, 0.92, 0.95) * c_light, 0.92 * m);
                         }
                         if (c_ice > 0.0) {   // ice: a pale blue rime in patches of a few texels, thicker on what faces up, glossy
