@@ -204,15 +204,17 @@ public final class ParallelRender {
             } catch (Refusal r) {
                 ok = false;
                 refused++;
-                if (r.permanent && WORKER_REFUSED.add(entity.getType()))
-                    System.out.println("[probe/opt] parallel render: " + entity.getType() + " kept on the render thread: " + r.getMessage());
+                var type = entity == null ? null : entity.getType();   // (a job may have no entity: the handler must not die - 10-05, a worker thread lost)
+                if (r.permanent && type != null && WORKER_REFUSED.add(type))
+                    System.out.println("[probe/opt] parallel render: " + type + " kept on the render thread: " + r.getMessage());
             } catch (Throwable t) {
                 ok = false;
+                var type = entity == null ? null : entity.getType();
                 if (failed++ < 5) {
-                    System.out.println("[probe/opt] parallel render: " + entity.getType() + " failed on a worker: " + t);
+                    System.out.println("[probe/opt] parallel render: " + type + " failed on a worker: " + t);
                     if (STACK) for (StackTraceElement el : java.util.Arrays.copyOf(t.getStackTrace(), Math.min(14, t.getStackTrace().length))) System.out.println("    at " + el);
                 }
-                learnFailure(entity.getType(), t);
+                if (type != null) learnFailure(type, t);
             } finally {
                 CURRENT.remove();
                 if (!ok) {   // the render thread renders it again, side effects included
