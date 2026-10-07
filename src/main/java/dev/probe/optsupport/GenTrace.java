@@ -74,7 +74,7 @@ public final class GenTrace {
         return String.format(java.util.Locale.ROOT, "server ticks %d: avg %.1f, p90 %.1f, max %.1f ms", n, sum / 1e6 / n, c[(int) (n * 0.9)] / 1e6, c[n - 1] / 1e6);
     }
 
-    private static long gcCount, gcMillis;
+    private static long gcCount, gcMillis, classes;
 
     /** collections and their time since the last call, the heap in use and committed */
     private static String gc() {
@@ -87,7 +87,28 @@ public final class GenTrace {
         gcCount = c;
         gcMillis = ms;
         var h = java.lang.management.ManagementFactory.getMemoryMXBean().getHeapMemoryUsage();
-        return String.format(java.util.Locale.ROOT, "gc %d (%d ms), heap %d / %d MB", dc, dm, h.getUsed() >> 20, h.getCommitted() >> 20);
+        long cl = java.lang.management.ManagementFactory.getClassLoadingMXBean().getTotalLoadedClassCount();
+        long dcl = cl - classes;
+        classes = cl;
+        return String.format(java.util.Locale.ROOT, "gc %d (%d ms), heap %d / %d MB, classes loaded %d", dc, dm, h.getUsed() >> 20, h.getCommitted() >> 20, dcl);
+    }
+
+    /** named parts of some piece of work: calls and ns (GenTraceSaveMixin) */
+    private static final java.util.Map<String, java.util.concurrent.atomic.LongAdder[]> PARTS = new java.util.concurrent.ConcurrentHashMap<>();
+
+    public static void part(String name, long ns) {
+        var a = PARTS.computeIfAbsent(name, k -> new java.util.concurrent.atomic.LongAdder[] {new java.util.concurrent.atomic.LongAdder(), new java.util.concurrent.atomic.LongAdder()});
+        a[0].increment();
+        a[1].add(ns);
+    }
+
+    private static String parts() {
+        StringBuilder sb = new StringBuilder();
+        for (var e : new java.util.TreeMap<>(PARTS).entrySet()) {
+            long n = e.getValue()[0].sumThenReset(), ns = e.getValue()[1].sumThenReset();
+            if (n > 0) sb.append(String.format(java.util.Locale.ROOT, " %s %dx %.1f ms;", e.getKey(), n, ns / 1e6));
+        }
+        return sb.toString();
     }
 
     private GenTrace() {}
@@ -109,6 +130,8 @@ public final class GenTrace {
                     int tbm = toBatchMax;
                     toBatchMax = 0;
                     if (sub + st + fin + tr + fu + se + cc + cl + nr + bt + up == 0) continue;
+                    String parts = parts();
+                    if (!parts.isEmpty()) System.out.println("[probe/gentrace] save parts:" + parts);
                     System.out.println("[probe/gentrace] " + ticks() + " | " + gc() + " | steps (count x avg/max ms):" + steps());
                     if (Boolean.getBoolean("lab.reactor.scout")) System.out.println("[probe/gentrace] " + MainReactor.scoutReport() + " | " + MainReactor.wakeReport());
                     System.out.println(String.format(java.util.Locale.ROOT,

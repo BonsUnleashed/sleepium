@@ -29,6 +29,10 @@ public final class ProbeMod {
                 gameBus.getClass().getModule(), gameBus.getClass().getClassLoader(),
                 net.minecraft.server.MinecraftServer.class.getClassLoader());
         if (Boolean.getBoolean("lab.opt.HeapReturn")) LOGGER.info("probe: {}", dev.probe.optsupport.HeapReturn.apply());   // memory back to the OS after bursts
+        // classes the game loads only while played, learned and preloaded in the background (lab.opt.ClassPreload)
+        gameBus.addListener(net.neoforged.neoforge.event.server.ServerAboutToStartEvent.class, e -> dev.probe.optsupport.ClassPreload.preload());
+        gameBus.addListener(net.neoforged.neoforge.event.server.ServerStartedEvent.class, e -> dev.probe.optsupport.ClassPreload.started());
+        gameBus.addListener(net.neoforged.neoforge.event.server.ServerStoppedEvent.class, e -> dev.probe.optsupport.ClassPreload.stopped());
         TickTimer.INSTANCE.register(gameBus);
         EventCounter.INSTANCE.attach(gameBus);
         EventBench.registerListeners(gameBus);
