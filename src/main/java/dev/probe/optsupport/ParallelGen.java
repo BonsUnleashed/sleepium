@@ -58,17 +58,45 @@ public final class ParallelGen {
     /** Runs the vanilla step body on the pool; `vanilla` re-enters ChunkMap.applyStep with the bypass flag set. */
     public static CompletableFuture<ChunkAccess> submit(ChunkPos pos, ChunkStep step, Supplier<CompletableFuture<ChunkAccess>> vanilla) {
         OFFLOADED.increment();
-        if (step.targetStatus() != ChunkStatus.FEATURES) return CompletableFuture.supplyAsync(() -> run(vanilla), pool());
+        if (GenTrace.ON) GenTrace.submitted.increment();
+        long t0 = GenTrace.ON ? System.nanoTime() : 0;
+        if (step.targetStatus() != ChunkStatus.FEATURES) return CompletableFuture.supplyAsync(() -> traced(t0, vanilla), pool());
         FEATURE_JOBS.increment();
-        FeatureJob job = new FeatureJob(pos.x, pos.z, vanilla);
+        FeatureJob job = new FeatureJob(pos.x, pos.z, vanilla, t0);
         ArrayList<FeatureJob> start;
         synchronized (CLAIMS_LOCK) {
             WAITING.add(job);
             start = startable();
         }
-        if (!start.contains(job)) WAITED.increment();
+        if (!start.contains(job)) {
+            WAITED.increment();
+            job.waited = true;
+        }
         startAll(start);
         return job.result;
+    }
+
+    /** a step body with the trace's timing (GenTrace: to a worker, running, done) */
+    private static ChunkAccess traced(long t0, Supplier<CompletableFuture<ChunkAccess>> vanilla) {
+        if (!GenTrace.ON) return run(vanilla);
+        long t1 = System.nanoTime();
+        GenTrace.started.increment();
+        GenTrace.queueNs.add(t1 - t0);
+        GenTrace.maxOf(GenTrace.queueMax, t1 - t0);
+        GenTrace.running.incrementAndGet();
+        try {
+            return run(vanilla);
+        } finally {
+            GenTrace.running.decrementAndGet();
+            GenTrace.finished.increment();
+            GenTrace.runNs.add(System.nanoTime() - t1);
+        }
+    }
+
+    public static int waiting() {
+        synchronized (CLAIMS_LOCK) {
+            return WAITING.size();
+        }
     }
 
     private static ChunkAccess run(Supplier<CompletableFuture<ChunkAccess>> vanilla) {
@@ -85,19 +113,28 @@ public final class ParallelGen {
         final int x, z;
         final Supplier<CompletableFuture<ChunkAccess>> body;
         final CompletableFuture<ChunkAccess> result = new CompletableFuture<>();
+        final long t0;
+        boolean waited;
 
-        FeatureJob(int x, int z, Supplier<CompletableFuture<ChunkAccess>> body) {
+        FeatureJob(int x, int z, Supplier<CompletableFuture<ChunkAccess>> body, long t0) {
             this.x = x;
             this.z = z;
             this.body = body;
+            this.t0 = t0;
         }
 
         @Override
         public void run() {
             ChunkAccess c = null;
             Throwable err = null;
+            if (GenTrace.ON && waited) {
+                long w = System.nanoTime() - t0;
+                GenTrace.featureWaits.increment();
+                GenTrace.featureWaitNs.add(w);
+                GenTrace.maxOf(GenTrace.featureWaitMax, w);
+            }
             try {
-                c = ParallelGen.run(body);
+                c = ParallelGen.traced(t0, body);
             } catch (Throwable t) {
                 err = t;
             }

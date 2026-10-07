@@ -278,6 +278,13 @@ public final class ClientAuto {
     /** Meshing done: the compile queue is empty and nothing waits for upload, stable for 2 s. */
     private static boolean meshedStable(Minecraft mc) {
         var d = mc.levelRenderer.getSectionRenderDispatcher();
+        if (dev.probe.optsupport.GenTrace.ON && d != null) {   // what keeps the view from being stable
+            dev.probe.optsupport.GenTrace.clientTicks.increment();
+            if (!mc.levelRenderer.hasRenderedAllSections()) dev.probe.optsupport.GenTrace.notAllRendered.increment();
+            if (d.getToBatchCount() > 0) dev.probe.optsupport.GenTrace.batching.increment();
+            if (d.getToUpload() > 0) dev.probe.optsupport.GenTrace.uploading.increment();
+            dev.probe.optsupport.GenTrace.toBatchMax = Math.max(dev.probe.optsupport.GenTrace.toBatchMax, d.getToBatchCount());
+        }
         boolean idle = d != null && mc.levelRenderer.hasRenderedAllSections() && d.getToUpload() == 0 && d.getToBatchCount() == 0;
         stableTicks = idle ? stableTicks + 1 : 0;
         return stableTicks >= 40;
