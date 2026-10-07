@@ -17,10 +17,12 @@ public abstract class GenTraceTickMixin {
     @Inject(method = "tickServer", at = @At("HEAD"))
     private void probe$start(BooleanSupplier hasTimeLeft, CallbackInfo ci) {
         probe$t0 = System.nanoTime();
+        dev.probe.optsupport.TickSampler.tickStart(Thread.currentThread());
     }
 
     @Inject(method = "tickServer", at = @At("RETURN"))
     private void probe$end(BooleanSupplier hasTimeLeft, CallbackInfo ci) {
         GenTrace.tick(System.nanoTime() - probe$t0);
+        dev.probe.optsupport.TickSampler.tickEnd();
     }
 }

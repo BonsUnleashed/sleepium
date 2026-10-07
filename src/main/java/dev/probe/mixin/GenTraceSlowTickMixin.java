@@ -39,9 +39,11 @@ public abstract class GenTraceSlowTickMixin {
         if (a == null) return;
         ProfileResults r = a.getResults();
         long ns = r.getNanoDuration();
+        String samples = dev.probe.optsupport.TickSampler.lastTick();
         if (ns < probe$THRESHOLD) return;
         StringBuilder sb = new StringBuilder(String.format(java.util.Locale.ROOT, "[probe/slowtick] %.1f ms:", ns / 1e6));
         probe$walk(r, "root", ns, sb, 0);
+        if (!samples.isEmpty()) sb.append(samples);
         System.out.println(sb);
     }
 
