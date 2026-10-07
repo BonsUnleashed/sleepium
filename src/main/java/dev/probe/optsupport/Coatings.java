@@ -14,6 +14,11 @@ import net.minecraft.world.entity.Entity;
  * shows them, as with materials. An entity with a coating is drawn live, not from the render cache (its recorded
  * vertices carry no records); one without draws exactly as before (the shader's branch is off).
  * {@code -Dprobe.coatings=false} turns them off.
+ * <p>
+ * 10-07 (one's own armour showing its damage): the third word (n2.w) carries the height in its low 8 bits (tenths of
+ * a block) and the blows' marks above them: a game's {@link #damage} - three 4-bit amounts (the head, the body, the
+ * legs: where on the body by the height up the model) the shader draws as dents, gouges and cracks on the metal its
+ * material mask marks, cuts and grime on the rest.
  */
 public final class Coatings {
     private Coatings() {}
@@ -23,6 +28,22 @@ public final class Coatings {
 
     /** the game's: an entity's packed coatings (render thread or a ParallelRender worker; must not touch the world) */
     public static volatile ToLongFunction<Entity> provider;
+    /** the game's: an entity's blows' marks - head | body << 4 | legs << 8, each 0..15 (the same threads' rules) */
+    public static volatile java.util.function.ToIntFunction<Entity> damage;
+
+    /** the entity's marks (0: none) */
+    public static int damage(Entity e) {
+        var d = damage;
+        return !ON || d == null || e == null ? 0 : d.applyAsInt(e) & 0xFFF;
+    }
+
+    /** the third word: the height (tenths of a block, low 8 bits) and the marks; 0 when there is nothing to draw */
+    public static float word2(Entity e, long c) {
+        int d = damage(e);
+        if (c == 0 && d == 0) return 0;
+        int h = Math.max(1, Math.min(255, Math.round(Math.max(0.1f, e.getBbHeight()) * 10)));
+        return (float) (h | d << 8);
+    }
 
     /** the render thread's entity being drawn: its packed coatings (the two 24-bit words) and height (PartBatch's records) */
     static float rtCoat, rtCoat2, rtHeight;
@@ -59,7 +80,7 @@ public final class Coatings {
     public static void begin(Entity e, long c) {
         rtCoat = word0(c);
         rtCoat2 = word1(c);
-        rtHeight = c == 0 ? 0 : Math.max(0.1f, e.getBbHeight());
+        rtHeight = word2(e, c);
     }
 
     public static void end() {

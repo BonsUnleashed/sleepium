@@ -449,7 +449,7 @@ public final class ParallelRender {
         long coat = Coatings.of(e);
         j.parts.coat = Coatings.word0(coat);
         j.parts.coat2 = Coatings.word1(coat);
-        j.parts.height = coat == 0 ? 0 : Math.max(0.1f, e.getBbHeight());
+        j.parts.height = Coatings.word2(e, coat);   // (the height and the blows' marks)
         float pt = j.pt;
         EntityRenderer<? super Entity> r = s.renderer(e);
         if (r == null) return false;

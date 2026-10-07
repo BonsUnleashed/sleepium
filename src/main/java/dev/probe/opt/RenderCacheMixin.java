@@ -25,7 +25,7 @@ public abstract class RenderCacheMixin {
     @SuppressWarnings({"unchecked", "rawtypes"})
     private void probe$cached(EntityRenderer r, Entity e, float yaw, float pt, PoseStack pose, MultiBufferSource buffers, int light) {
         long coat = dev.probe.optsupport.Coatings.of(e);
-        if (coat != 0 && com.mojang.blaze3d.systems.RenderSystem.isOnRenderThread()) {   // coated: live (the cache's vertices carry no records)
+        if ((coat != 0 || dev.probe.optsupport.Coatings.damage(e) != 0) && com.mojang.blaze3d.systems.RenderSystem.isOnRenderThread()) {   // coated or marked: live (the cache's vertices carry no records)
             dev.probe.optsupport.Coatings.begin(e, coat);
             try {
                 r.render(e, yaw, pt, pose, buffers, light);

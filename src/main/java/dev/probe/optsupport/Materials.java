@@ -50,13 +50,15 @@ public final class Materials {
         VERTEX_PATCHED.add(name);
         // the coatings (Coatings): the packed amounts and the height up the model in its bind pose (the recorded geometry's
         // own position: a coat stays where it lies on the body however it moves), from the part's record
-        String coat = "    probeCoat = 0;\n    probeCoat2 = 0;\n    probeCoatH = 0.0;\n"
+        String coat = "    probeCoat = 0;\n    probeCoat2 = 0;\n    probeDmg = 0;\n    probeCoatH = 0.0;\n"
                 + "    if (ProbePartMode == 1 || ProbePartMode == 3) {\n"
                 + "        probeCoat = int(probeParts[gl_DrawIDARB].n0.w + 0.5);\n"
                 + "        probeCoat2 = int(probeParts[gl_DrawIDARB].n1.w + 0.5);\n"
-                + "        if (probeCoat != 0 || probeCoat2 != 0) probeCoatH = Position.y / max(probeParts[gl_DrawIDARB].n2.w, 0.1);\n"
+                + "        int probeW2 = int(probeParts[gl_DrawIDARB].n2.w + 0.5);\n"   // the height (tenths, 8 bits) and the blows' marks
+                + "        probeDmg = probeW2 >> 8;\n"
+                + "        if (probeW2 != 0) probeCoatH = Position.y / max(float(probeW2 & 255) / 10.0, 0.1);\n"
                 + "    }\n";
-        return src.substring(0, main) + "out vec3 probeMatN;\nout vec3 probeMatP;\nflat out int probeCoat;\nflat out int probeCoat2;\nout float probeCoatH;\n" + src.substring(main, end)
+        return src.substring(0, main) + "out vec3 probeMatN;\nout vec3 probeMatP;\nflat out int probeCoat;\nflat out int probeCoat2;\nflat out int probeDmg;\nout float probeCoatH;\n" + src.substring(main, end)
                 + "    probeMatN = probe_Normal;\n    probeMatP = probe_Position;\n" + coat + src.substring(end);
     }
 
@@ -65,7 +67,7 @@ public final class Materials {
         int main = src.indexOf("void main() {");
         if (main < 0) return src;
         String decl = "uniform sampler2D ProbeMaterial;\nuniform int ProbeMaterialOn;\nuniform vec3 Light0_Direction;\nuniform vec3 Light1_Direction;\n"
-                + "in vec3 probeMatN;\nin vec3 probeMatP;\nflat in int probeCoat;\nflat in int probeCoat2;\nin float probeCoatH;\n\n";
+                + "in vec3 probeMatN;\nin vec3 probeMatP;\nflat in int probeCoat;\nflat in int probeCoat2;\nflat in int probeDmg;\nin float probeCoatH;\n\n";
         String shade = """
                     if (ProbeMaterialOn != 0) {
                         vec4 probe_m = texture(ProbeMaterial, texCoord0);
@@ -98,7 +100,7 @@ public final class Materials {
                         color.rgb += probe_add * probe_lit;
                         color.rgb = mix(color.rgb, probe_alb * 1.15, probe_e);
                     }
-                    if (probeCoat != 0 || probeCoat2 != 0) {   // the coatings: wet, mud from the feet up, snow on what faces up, ice in patches, blood, soot
+                    if (probeCoat != 0 || probeCoat2 != 0 || probeDmg != 0) {   // the coatings: wet, mud from the feet up, snow on what faces up, ice in patches, blood, soot; the blows' marks
                         float c_wet = float(probeCoat & 63) / 63.0, c_mud = float((probeCoat >> 6) & 63) / 63.0;
                         float c_snow = float((probeCoat >> 12) & 63) / 63.0, c_ice = float((probeCoat >> 18) & 63) / 63.0;
                         float c_blood = float(probeCoat2 & 63) / 63.0, c_soot = float((probeCoat2 >> 6) & 63) / 63.0;
@@ -118,6 +120,26 @@ public final class Materials {
                                 vec3 c_col = mix(vec3(1.0), clamp(abs(fract(c_hue + vec3(0.0, 2.0 / 3.0, 1.0 / 3.0)) * 6.0 - 3.0) - 1.0, 0.0, 1.0), 0.75);
                                 float c_lum = dot(texture(Sampler0, texCoord0).rgb, vec3(0.3, 0.5, 0.2));   // the steel's own grain through it
                                 color.rgb = mix(color.rgb, c_col * (0.45 + 1.1 * c_lum), c_glow * 0.85);
+                            }
+                        }
+                        if (probeDmg != 0) {   // the blows' marks (10-07): by where on the body - the head, the body, the legs
+                            float d = (probeCoatH > 0.82 ? float(probeDmg & 15) : probeCoatH >= 0.45 ? float((probeDmg >> 4) & 15) : float((probeDmg >> 8) & 15)) / 15.0;
+                            if (d > 0.0) {
+                                vec3 d_alb = texture(Sampler0, texCoord0).rgb;
+                                float d_mx = max(d_alb.r, max(d_alb.g, d_alb.b)), d_mn = min(d_alb.r, min(d_alb.g, d_alb.b));
+                                bool d_metal = ProbeMaterialOn != 0 ? texture(ProbeMaterial, texCoord0).g > 0.898 : (d_mx - d_mn < 0.1 && d_mx > 0.3);   // (the mask's metal; without one a guess)
+                                vec2 d_c3 = floor(c_tx / 3.0), d_l = c_tx - d_c3 * 3.0;
+                                float d_r3 = fract(sin(dot(d_c3, vec2(71.31, 19.73))) * 43758.5453);
+                                float d_r4 = fract(sin(dot(floor(c_tx / 4.0), vec2(5.17, 93.11))) * 43758.5453);
+                                if (d_metal) {
+                                    if (d_r3 > 1.0 - d * 0.22) color.rgb *= d_l.y < 0.5 ? 1.22 : (d_l.y < 1.5 ? 0.72 : 0.62);   // a dent: its upper rim lit, its hollow dark
+                                    if (mod(c_tx.x + c_tx.y, 5.0) < 0.5 && d_r4 > 1.0 - d * 0.38)
+                                        color.rgb = mix(color.rgb, vec3(0.86, 0.87, 0.9) * c_light, 0.6);   // a gouge: the bare steel bright
+                                    if (d > 0.55 && mod(c_tx.x * 2.0 - c_tx.y, 7.0) < 0.5 && d_r3 < (d - 0.55) * 0.6) color.rgb *= 0.3;   // cracks
+                                } else {
+                                    if (mod(c_tx.x - c_tx.y * 2.0, 6.0) < 0.5 && d_r4 > 1.0 - d * 0.25) color.rgb *= 0.32;   // cuts
+                                    color.rgb *= 1.0 - 0.12 * d * c_r2;   // grime
+                                }
                             }
                         }
                         if (c_soot > 0.0) {   // soot: blackened patches, heavier toward the feet (the fire was below), matte
