@@ -68,6 +68,18 @@ final class ProbeCommand {
                                 if (!dev.probe.net.Bulk.capable(p)) say(ctx, "probe: bulktest: " + p.getScoreboardName() + " is not on the bulk path");
                             return 1;
                         }))))))
+                .then(Commands.literal("travel")   // a teleport that waits for the destination's chunks (dev.probe.api.Travel)
+                        .then(Commands.argument("x", IntegerArgumentType.integer())
+                        .then(Commands.argument("y", IntegerArgumentType.integer())
+                        .then(Commands.argument("z", IntegerArgumentType.integer()).executes(ctx -> {
+                            var p = ctx.getSource().getPlayerOrException();
+                            long t0 = System.nanoTime();
+                            dev.probe.api.Travel.teleportWhenReady(p, ctx.getSource().getLevel(), IntegerArgumentType.getInteger(ctx, "x") + 0.5,
+                                    IntegerArgumentType.getInteger(ctx, "y"), IntegerArgumentType.getInteger(ctx, "z") + 0.5, p.getYRot(), p.getXRot(),
+                                    ready -> ProbeMod.LOGGER.info("probe: travel done after {} ms ({})", (System.nanoTime() - t0) / 1_000_000L,
+                                            ready ? "the destination was ready" : "timed out"));
+                            return 1;
+                        })))))
                 .then(Commands.literal("net")
                         .then(Commands.argument("seconds", IntegerArgumentType.integer(1, 600))
                                 .then(Commands.argument("label", StringArgumentType.word()).executes(ctx -> {

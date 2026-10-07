@@ -421,7 +421,8 @@ public final class ClientAuto {
                 // empty sky at 2000 / 140 / 2000 for every scene)
                 if (since(phaseStart) > 3 && hashAt < 0) {
                     int[] p = TP[tpIndex];
-                    command(mc, "tp @s " + p[0] + " 140 " + p[1]);
+                    // -Dprobe.clientAuto.travel=true: through dev.probe.api.Travel (the destination loaded first, no stall)
+                    command(mc, (Boolean.getBoolean("probe.clientAuto.travel") ? "probe travel " : "tp @s ") + p[0] + " 140 " + p[1]);
                     enter(Phase.TP_WAIT_START);
                 }
             }

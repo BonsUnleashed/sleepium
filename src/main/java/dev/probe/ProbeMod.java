@@ -40,6 +40,7 @@ public final class ProbeMod {
         gameBus.addListener(net.neoforged.neoforge.event.tick.ServerTickEvent.Pre.class, e -> NetBench.onTickStart());
         modBus.addListener(net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent.class, dev.probe.net.BulkPayloads::register);
         gameBus.addListener(net.neoforged.neoforge.event.tick.ServerTickEvent.Post.class, e -> dev.probe.net.Bulk.pump(e.getServer()));
+        gameBus.addListener(net.neoforged.neoforge.event.tick.ServerTickEvent.Post.class, e -> dev.probe.api.Travel.tick());
         gameBus.addListener(net.neoforged.neoforge.event.entity.player.PlayerEvent.PlayerLoggedOutEvent.class, e -> {
             if (e.getEntity() instanceof net.minecraft.server.level.ServerPlayer sp) dev.probe.net.Bulk.onLogout(sp);
         });

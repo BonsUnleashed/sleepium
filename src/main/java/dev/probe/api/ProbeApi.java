@@ -3,7 +3,7 @@ package dev.probe.api;
 /** Entry point of the public API: version, active features, waking the server thread. */
 public final class ProbeApi {
     /** grows by one whenever something is added to {@code dev.probe.api} */
-    public static final int VERSION = 2;
+    public static final int VERSION = 3;   // 3: Travel (10-08)
 
     private ProbeApi() {}
 
