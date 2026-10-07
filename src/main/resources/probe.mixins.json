@@ -23,6 +23,7 @@
     "GenTraceSlowTickMixin",
     "GenTraceUnloadMixin",
     "GenTraceSaveMixin",
+    "GenTraceBlockingMixin",
     "GenTraceLightMixin",
     "DataLayerMapAccessor",
     "NetCoalesceClientMixin",
