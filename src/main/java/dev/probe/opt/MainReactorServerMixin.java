@@ -68,9 +68,15 @@ public abstract class MainReactorServerMixin {
         if (MainReactor.idle) {
             long deadline = this.mayHaveDelayedTasks ? this.delayedTasksMaxNextTickTimeNanos : this.nextTickTimeNanos;
             MainReactor.park(deadline, probe$queues());
-        } else {
-            Thread.yield();
-            LockSupport.parkNanos("waiting for tasks", 100000L);
+        } else {   // vanilla's wait (super.waitForTasks), with CondWakeMixin's arming that super would have done
+            java.util.concurrent.atomic.AtomicBoolean armed = dev.probe.optsupport.WakeFlags.current();
+            armed.set(true);
+            try {
+                Thread.yield();
+                LockSupport.parkNanos("waiting for tasks", 100000L);
+            } finally {
+                armed.set(false);
+            }
         }
         if (flag) {
             this.idleTimeNanos = this.idleTimeNanos + (Util.getNanos() - i);

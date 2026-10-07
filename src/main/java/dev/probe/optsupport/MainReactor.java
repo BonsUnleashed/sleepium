@@ -10,6 +10,8 @@ import java.util.concurrent.locks.LockSupport;
  * second with nothing to do. Here, in that idle phase only, it parks until the next tick deadline (at most
  * {@code lab.reactor.maxParkMs}, 50 ms by default: the deadline itself) unless a
  * producer signals: vanilla tell() (unpark), FullRing offers, light tasks (their scheduling is made event-driven).
+ * The park arms CondWakeMixin's per-thread flag like vanilla waitForTasks does: without it tell() skipped the unpark
+ * and every main-thread task posted during the sleep waited for the deadline (FULL steps 60-270 ms, 10-07).
  *
  * <p>No lost wake-up: the thread publishes "parked" (volatile), re-checks its queues, then parks; a producer enqueues
  * first and then reads "parked" (volatile) — one of the two always sees the other. Tasks still run in the same order
@@ -59,7 +61,11 @@ public final class MainReactor {
         long wait = Math.min(deadlineNanos - now, MAX_PARK_NANOS);
         if (wait <= 0) return;
         eventNanos = 0;
+        // CondWakeMixin's flag: vanilla tell() unparks this thread only while it is armed. Armed before the last look
+        // at the queues (a producer enqueues, then reads it), so a task told now either is seen or wakes the park.
+        java.util.concurrent.atomic.AtomicBoolean armed = WakeFlags.current();
         parked = true;
+        armed.set(true);
         try {
             for (Queue<?> q : queues) if (q != null && !q.isEmpty()) return;
             if (FullRing.pending()) return;
@@ -76,6 +82,7 @@ public final class MainReactor {
             else if (SCOUT) afterTimeout = true;
         } finally {
             parked = false;
+            armed.set(false);
         }
     }
 
