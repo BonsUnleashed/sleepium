@@ -19,6 +19,7 @@
     "GenTraceFullMixin",
     "GenTraceSendMixin",
     "GenTraceStepMixin",
+    "GenTraceTickMixin",
     "NetCoalesceClientMixin",
     "NetStatsSendMixin",
     "NetStatsBytesMixin",

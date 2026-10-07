@@ -28,6 +28,7 @@ public final class ProbeMod {
         LOGGER.info("probe: bus class {} module {} loader {}; game class loader {}", gameBus.getClass().getName(),
                 gameBus.getClass().getModule(), gameBus.getClass().getClassLoader(),
                 net.minecraft.server.MinecraftServer.class.getClassLoader());
+        if (Boolean.getBoolean("lab.opt.HeapReturn")) LOGGER.info("probe: {}", dev.probe.optsupport.HeapReturn.apply());   // memory back to the OS after bursts
         TickTimer.INSTANCE.register(gameBus);
         EventCounter.INSTANCE.attach(gameBus);
         EventBench.registerListeners(gameBus);

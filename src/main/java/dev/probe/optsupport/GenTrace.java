@@ -48,6 +48,48 @@ public final class GenTrace {
         return sb.toString();
     }
 
+    /** server tick wall times of the current second (main thread writes, the trace thread swaps) */
+    private static volatile long[] ticks = new long[64];
+    private static volatile int tickN;
+
+    public static void tick(long ns) {
+        long[] t = ticks;
+        int n = tickN;
+        if (n < t.length) {
+            t[n] = ns;
+            tickN = n + 1;
+        }
+    }
+
+    private static String ticks() {
+        long[] t = ticks;
+        int n = Math.min(tickN, t.length);
+        ticks = new long[64];
+        tickN = 0;
+        if (n == 0) return "no ticks";
+        long[] c = java.util.Arrays.copyOf(t, n);
+        java.util.Arrays.sort(c);
+        long sum = 0;
+        for (long v : c) sum += v;
+        return String.format(java.util.Locale.ROOT, "server ticks %d: avg %.1f, p90 %.1f, max %.1f ms", n, sum / 1e6 / n, c[(int) (n * 0.9)] / 1e6, c[n - 1] / 1e6);
+    }
+
+    private static long gcCount, gcMillis;
+
+    /** collections and their time since the last call, the heap in use and committed */
+    private static String gc() {
+        long c = 0, ms = 0;
+        for (var b : java.lang.management.ManagementFactory.getGarbageCollectorMXBeans()) {
+            c += Math.max(0, b.getCollectionCount());
+            ms += Math.max(0, b.getCollectionTime());
+        }
+        long dc = c - gcCount, dm = ms - gcMillis;
+        gcCount = c;
+        gcMillis = ms;
+        var h = java.lang.management.ManagementFactory.getMemoryMXBean().getHeapMemoryUsage();
+        return String.format(java.util.Locale.ROOT, "gc %d (%d ms), heap %d / %d MB", dc, dm, h.getUsed() >> 20, h.getCommitted() >> 20);
+    }
+
     private GenTrace() {}
 
     public static void maxOf(AtomicLong a, long v) {
@@ -67,7 +109,7 @@ public final class GenTrace {
                     int tbm = toBatchMax;
                     toBatchMax = 0;
                     if (sub + st + fin + tr + fu + se + cc + cl + nr + bt + up == 0) continue;
-                    System.out.println("[probe/gentrace] steps (count x avg/max ms):" + steps());
+                    System.out.println("[probe/gentrace] " + ticks() + " | " + gc() + " | steps (count x avg/max ms):" + steps());
                     if (Boolean.getBoolean("lab.reactor.scout")) System.out.println("[probe/gentrace] " + MainReactor.scoutReport() + " | " + MainReactor.wakeReport());
                     System.out.println(String.format(java.util.Locale.ROOT,
                             "[probe/gentrace] pool steps: given %d, started %d (to a worker %.2f ms avg, max %.1f), done %d (%.2f ms each), running %d, FEATURES waiting %d now, %d waited (%.1f ms avg, max %.1f) | tasks run %d (%.3f ms each) | FULL %d | sent %d, %s | client: chunks %d, light %d; of %d ticks not all rendered %d, batching %d (max %d), uploading %d",
