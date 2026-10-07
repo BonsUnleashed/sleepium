@@ -111,6 +111,15 @@ public final class GenTrace {
         return sb.toString();
     }
 
+    public static final LongAdder lightCopies = new LongAdder(), lightCopied = new LongAdder(), lightChanged = new LongAdder();
+
+    /** a light storage's visible snapshot taken: the whole map (size entries) copied for `changed` changed sections */
+    public static void lightCopy(int size, int changed) {
+        lightCopies.increment();
+        lightCopied.add(size);
+        lightChanged.add(changed);
+    }
+
     private GenTrace() {}
 
     public static void maxOf(AtomicLong a, long v) {
@@ -130,6 +139,9 @@ public final class GenTrace {
                     int tbm = toBatchMax;
                     toBatchMax = 0;
                     if (sub + st + fin + tr + fu + se + cc + cl + nr + bt + up == 0) continue;
+                    long lc = lightCopies.sumThenReset(), lce = lightCopied.sumThenReset(), lch = lightChanged.sumThenReset();
+                    if (lc > 0) System.out.println(String.format(java.util.Locale.ROOT, "[probe/gentrace] light snapshots %d: %d entries copied (%.0f each) for %d changed sections", lc, lce, (double) lce / lc, lch));
+                    if (Boolean.getBoolean("lab.opt.LightSnapshotMixin")) System.out.println("[probe/gentrace] " + LightSnapshot.report());
                     String parts = parts();
                     if (!parts.isEmpty()) System.out.println("[probe/gentrace] save parts:" + parts);
                     System.out.println("[probe/gentrace] " + ticks() + " | " + gc() + " | steps (count x avg/max ms):" + steps());

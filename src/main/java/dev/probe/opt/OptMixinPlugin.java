@@ -29,6 +29,8 @@ public final class OptMixinPlugin implements IMixinConfigPlugin {
             on = Boolean.getBoolean("lab.opt.all") || Boolean.getBoolean("lab.opt.EntitySectionIndexMixin");
         if (simple.equals("NeighborReactStateMixin"))
             on = Boolean.getBoolean("lab.opt.all") || Boolean.getBoolean("lab.opt.NeighborReactMixin");
+        if (simple.startsWith("LightSnapshot"))   // one feature: light snapshots as base + delta (LightSnapshot)
+            on = Boolean.getBoolean("lab.opt.all") || Boolean.getBoolean("lab.opt.LightSnapshotMixin");
         if (simple.equals("ChunkCacheClearMixin"))
             on = Boolean.getBoolean("lab.opt.all") || Boolean.getBoolean("lab.opt.ChunkCacheMixin");
         if (simple.equals("SectionStorageIndexMixin"))
