@@ -29,6 +29,8 @@ public final class OptMixinPlugin implements IMixinConfigPlugin {
             on = Boolean.getBoolean("lab.opt.all") || Boolean.getBoolean("lab.opt.EntitySectionIndexMixin");
         if (simple.equals("NeighborReactStateMixin"))
             on = Boolean.getBoolean("lab.opt.all") || Boolean.getBoolean("lab.opt.NeighborReactMixin");
+        if (simple.startsWith("ChunkIo"))   // one feature: encode on the pool, batched region writes (notes/38)
+            on = Boolean.getBoolean("lab.opt.all") || Boolean.getBoolean("lab.opt.ChunkIo");
         if (simple.equals("ChunkCacheClearMixin"))
             on = Boolean.getBoolean("lab.opt.all") || Boolean.getBoolean("lab.opt.ChunkCacheMixin");
         if (simple.equals("SectionStorageIndexMixin"))

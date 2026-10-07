@@ -235,6 +235,8 @@ public final class ClientAuto {
     }
     /** -Dprobe.clientAuto.settleExtra=S: keep waiting S more seconds after the terrain is ready (lighting, stragglers) */
     private static final int SETTLE_EXTRA = Integer.getInteger("probe.clientAuto.settleExtra", 0);
+    /** -Dprobe.clientAuto.stopInTp=S: quit the game S seconds after the last teleport's command (a shutdown during generation) */
+    private static final int STOP_IN_TP = Integer.getInteger("probe.clientAuto.stopInTp", -1);
     private static long meshedAt;
 
     private enum Phase { TITLE, JOIN, SETTLE, SCENE_WAIT, RECORD, TP_WAIT_START, TP_WAIT_DONE, FINISH, DONE }
@@ -419,7 +421,13 @@ public final class ClientAuto {
                 }
             }
             case TP_WAIT_START -> {
-                if (queueBusy(mc) || since(phaseStart) > 5) enter2Done();
+                if (STOP_IN_TP >= 0 && tpIndex == TP.length - 1 && since(phaseStart) > STOP_IN_TP) {
+                    log(String.format(Locale.ROOT, "stopping %d s into teleport %d (stopInTp: a shutdown while the server generates)", STOP_IN_TP, tpIndex + 1));
+                    enter(Phase.DONE);
+                    mc.stop();
+                    return;
+                }
+                if ((STOP_IN_TP < 0 || tpIndex < TP.length - 1) && (queueBusy(mc) || since(phaseStart) > 5)) enter2Done();
             }
             case TP_WAIT_DONE -> {
                 if (meshedStable(mc) || since(phaseStart) > 60) {

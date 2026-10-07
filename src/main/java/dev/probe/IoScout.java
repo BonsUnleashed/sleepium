@@ -59,6 +59,16 @@ public final class IoScout {
         if (pending > k.pendingMax) k.pendingMax = pending;
     }
 
+    /** ChunkIo's writer: one batch of n chunks */
+    public static void batch(String type, int n, long ns, int pending) {
+        Kind k = kind(type);
+        k.writes.add(n);
+        k.writeNs.add(ns);
+        k.writeMax.accumulateAndGet(ns, Math::max);
+        k.pending = pending;
+        if (pending > k.pendingMax) k.pendingMax = pending;
+    }
+
     public static void disk(long ns) {
         Kind k = CURRENT.get();
         if (k == null) return;
