@@ -100,7 +100,8 @@ public final class LightSnapshot {
             this.base = base;
             this.delta = delta;
             int n = base.size();
-            for (var e : delta.long2ObjectEntrySet()) {
+            for (var it = delta.long2ObjectEntrySet().fastIterator(); it.hasNext(); ) {
+                var e = it.next();
                 boolean inBase = base.containsKey(e.getLongKey());
                 if (e.getValue() == TOMB) { if (inBase) n--; } else if (!inBase) n++;
             }
@@ -140,7 +141,8 @@ public final class LightSnapshot {
             Long2ObjectOpenHashMap<DataLayer> m = merged;
             if (m == null) {
                 m = base.clone();
-                for (var e : delta.long2ObjectEntrySet()) {
+                for (var it = delta.long2ObjectEntrySet().fastIterator(); it.hasNext(); ) {
+                    var e = it.next();
                     if (e.getValue() == TOMB) m.remove(e.getLongKey());
                     else m.put(e.getLongKey(), e.getValue());
                 }

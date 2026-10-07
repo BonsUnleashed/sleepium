@@ -29,6 +29,8 @@ public final class OptMixinPlugin implements IMixinConfigPlugin {
             on = Boolean.getBoolean("lab.opt.all") || Boolean.getBoolean("lab.opt.EntitySectionIndexMixin");
         if (simple.equals("NeighborReactStateMixin"))
             on = Boolean.getBoolean("lab.opt.all") || Boolean.getBoolean("lab.opt.NeighborReactMixin");
+        if (simple.startsWith("AllocTrim"))   // one feature: temporary objects of hot paths reused (AllocTrim)
+            on = Boolean.getBoolean("lab.opt.all") || Boolean.getBoolean("lab.opt.AllocTrim");
         if (simple.startsWith("LightSnapshot"))   // one feature: light snapshots as base + delta (LightSnapshot)
             on = Boolean.getBoolean("lab.opt.all") || Boolean.getBoolean("lab.opt.LightSnapshotMixin");
         if (simple.equals("ChunkCacheClearMixin"))
@@ -172,6 +174,8 @@ public final class OptMixinPlugin implements IMixinConfigPlugin {
             dev.probe.optsupport.EventSiteTransformer.transform(targetClass);
         if (mixinClassName.endsWith(".WorldgenAllocAp2Mixin"))
             dev.probe.optsupport.ScratchArrays.transform(targetClass);
+        if (mixinClassName.endsWith(".AllocTrimPackMixin"))
+            dev.probe.optsupport.AllocTrim.transformPack(targetClass);
         if (mixinClassName.endsWith(".VertexSortRadixMixin"))
             dev.probe.optsupport.QuadSort.transform(targetClass);
     }
