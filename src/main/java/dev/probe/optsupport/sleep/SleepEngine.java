@@ -109,7 +109,7 @@ public final class SleepEngine {
         }
     }
 
-    private static final Map<Class<?>, ClassInfo> CLASSES = new HashMap<>();
+    private static final Map<Class<?>, ClassInfo> CLASSES = new java.util.concurrent.ConcurrentHashMap<>();   // filled by AsyncAnalysis
     private static final List<Sleeper> ALL = new ArrayList<>();
     private static final Long2ObjectOpenHashMap<List<Sleeper>> BY_POS = new Long2ObjectOpenHashMap<>();
     private static final Long2ObjectOpenHashMap<List<Sleeper>> BY_SECTION = new Long2ObjectOpenHashMap<>();
@@ -250,6 +250,7 @@ public final class SleepEngine {
             h.probe$setAge(age);
             if (age < MIN_AGE) return;
             s = create(be);
+            if (s == null) return;   // analysed in the background: vanilla's tick meanwhile
         }
         if (s.state == State.NEVER) return;
         if (level.getGameTime() < s.observeFrom) {
@@ -267,19 +268,24 @@ public final class SleepEngine {
     }
 
     private static Sleeper create(BlockEntity be) {
-        ClassInfo info = CLASSES.computeIfAbsent(be.getClass(), c -> {
-            SleepAnalysis.Plan p = SleepAnalysis.analyze(be.getClass(), be.getBlockState().getBlock().getClass());
+        Class<?> blockClass = be.getBlockState().getBlock().getClass();
+        boolean excluded = dev.probe.api.Compat.sleepExcluded(be);
+        String name = be.getClass().getSimpleName();
+        ClassInfo info = AsyncAnalysis.get(CLASSES, be.getClass(), c -> {
+            @SuppressWarnings("unchecked") Class<? extends net.minecraft.world.level.block.entity.BlockEntity> bc = (Class<? extends net.minecraft.world.level.block.entity.BlockEntity>) c;
+            SleepAnalysis.Plan p = SleepAnalysis.analyze(bc, blockClass);
             if (p.eligible() && (p.clocks().stream().anyMatch(java.util.Objects::isNull) || p.conds().stream().anyMatch(x -> x.mod() == 0 && x.clock() == null)))
                 p = new SleepAnalysis.Plan(false, "inaccessible clock", p.clocks(), p.conds());
-            if (p.eligible() && dev.probe.api.Compat.sleepExcluded(be))
+            if (p.eligible() && excluded)
                 p = new SleepAnalysis.Plan(false, "excluded through dev.probe.api.Compat", p.clocks(), p.conds());
             ClassInfo ci = new ClassInfo(p);
-            System.out.println("[probe/sleep] " + be.getClass().getSimpleName() + ": " + (p.eligible() ? "ELIGIBLE " : "no: ") + p.reason()
+            System.out.println("[probe/sleep] " + name + ": " + (p.eligible() ? "ELIGIBLE " : "no: ") + p.reason()
                     + "  clocks=" + p.clocks().stream().map(f -> f == null ? "?" : f.getName()).toList()
                     + " conds=" + p.conds().stream().map(SleepAnalysis.Cond::text).toList()
                     + (p.eligible() ? " watch=" + p.watch().stream().map(Field::getName).toList() + (SnapCompiler.failure != null ? " SNAP FALLBACK: " + SnapCompiler.failure : " (compiled snapshot)") : ""));
             return ci;
         });
+        if (info == null) return null;   // its class is being analysed in the background
         Sleeper s = new Sleeper(be, info);
         int x = be.getBlockPos().getX();
         if (!info.plan.eligible() || x < MIN_X || x >= MAX_X) s.state = State.NEVER;

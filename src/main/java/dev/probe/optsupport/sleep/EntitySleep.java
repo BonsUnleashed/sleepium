@@ -134,7 +134,7 @@ public final class EntitySleep {
         }
     }
 
-    private static final Map<Class<?>, EClass> CLASSES = new HashMap<>();
+    private static final Map<Class<?>, EClass> CLASSES = new java.util.concurrent.ConcurrentHashMap<>();   // filled by AsyncAnalysis
 
     // ------------------------------------------------------------------ per entity
 
@@ -209,7 +209,7 @@ public final class EntitySleep {
         if (now != lastPoll) poll(now);
         ES s = es(e);
         if (s == null) {
-            EClass c = CLASSES.computeIfAbsent(e.getClass(), k -> {
+            EClass c = AsyncAnalysis.get(CLASSES, e.getClass(), k -> {
                 EClass x = new EClass(k);
                 System.out.println("[probe/entsleep] " + k.getSimpleName() + ": " + (x.refuse == null ? "ELIGIBLE fields " + x.n + " (final "
                         + java.util.Arrays.stream(x.f).filter(q -> Modifier.isFinal(q.getModifiers())).count() + ", primitive "
@@ -218,6 +218,10 @@ public final class EntitySleep {
                         + " conds=" + x.plan.conds().stream().map(SleepAnalysis.Cond::text).toList() : "no: " + x.refuse));
                 return x;
             });
+            if (c == null) {   // its class is being analysed in the background: vanilla's tick meanwhile
+                e.tick();
+                return;
+            }
             s = new ES(e, c);
             if (c.refuse != null || e.getBlockX() < MIN_X || dev.probe.api.Compat.entitySleepExcluded(e)) s.st = St.NEVER;
             ((EntSleeperHolder) e).probe$setEs(s);
