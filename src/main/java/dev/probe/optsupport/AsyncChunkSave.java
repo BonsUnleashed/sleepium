@@ -35,7 +35,7 @@ import net.neoforged.neoforge.event.level.ChunkDataEvent;
  *
  * <p>Safety: saves of one chunk reach the IOWorker in the order they were made (a chain per position); a read of a
  * position whose save is still being encoded waits until it is handed to the IOWorker (whose single mailbox then
- * orders the read after the write); flushWorker / close wait for every pending save. Only LevelChunks, only when
+ * orders the read after the write); flushWorker / close wait for every pending save. LevelChunks and ProtoChunks, only when
  * nobody listens to ChunkDataEvent.Save (a listener may edit the tag on the main thread) and no legacy structure
  * handler is active. {@code -Dlab.asyncsave.verify=true}: every placeholder also encoded the vanilla way on the main
  * thread and compared byte for byte after the pool filled it.
@@ -62,7 +62,11 @@ public final class AsyncChunkSave {
     }
 
     public static boolean shouldDefer(ChunkStorage storage, ChunkAccess chunk) {
-        if (!(chunk instanceof LevelChunk)) return false;
+        // LevelChunks, and ProtoChunks too (10-08: over half of a teleport's saves - the generated ring around the view
+        // unloads unfinished): a chunk is saved with no generation task claiming it (unloads wait for isReadyForSaving,
+        // periodic saves skip plain ProtoChunks), and the palettes are copied right here, on the saving thread, as for
+        // a LevelChunk
+        if (!(chunk instanceof LevelChunk) && !(chunk instanceof net.minecraft.world.level.chunk.ProtoChunk)) return false;
         if (((StorageAccess) storage).probe$legacyHandler() != null) return false;
         return NeoForge.EVENT_BUS instanceof CompositeEventBus cb && !cb.mayHaveListeners(ChunkDataEvent.Save.class);
     }
