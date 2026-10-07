@@ -107,6 +107,7 @@
     "AsyncChunkSaveMixin",
     "AsyncChunkSaveEncodeMixin",
     "AsyncChunkSaveStorageMixin",
+    "UnloadRecheckMixin",
     "ScoutLevelMixin",
     "ScoutChunkMixin",
     "ScoutBlockEntityMixin",

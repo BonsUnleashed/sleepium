@@ -174,3 +174,4 @@
 -Dlab.opt.WorldgenSkipFillMixin=true
 -Dlab.opt.AsyncChunkSaveEncodeMixin=true
 -Dlab.opt.universal=true
+-Dlab.opt.UnloadRecheckMixin=true
