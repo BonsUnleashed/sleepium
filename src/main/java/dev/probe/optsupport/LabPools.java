@@ -8,7 +8,7 @@ import java.util.concurrent.ExecutorService;
  * Pool factories for LabPoolsMixin: vanilla's worker pools replaced by {@link LabRuntime} (persistent threads,
  * woken on demand, never created on demand).
  * <ul>
- *   <li>background ("Worker-Main"): {@code lab.opt.bgThreads} workers (default 4), BELOW_NORMAL, so the server
+ *   <li>background ("Worker-Main"): {@code lab.opt.bgThreads} workers (default 4; with ParallelWorldgen half the cores, 4 to 8), BELOW_NORMAL, so the server
  *       thread and the OS win any contention;</li>
  *   <li>IO ("IO-Worker"): {@code lab.opt.ioThreads} (default 4), ABOVE_NORMAL: disk and network wait on the OS, and
  *       when their data arrives they should run at once;</li>
@@ -17,7 +17,10 @@ import java.util.concurrent.ExecutorService;
  * Thread names keep vanilla's prefixes, so profiles and thread dumps stay comparable.
  */
 public final class LabPools {
-    private static final int BG = Integer.getInteger("lab.opt.bgThreads", 4);
+    /** the background workers: 4; with ParallelWorldgen (its steps wait for a worker with 4: notes/41) half the cores, 4 to 8 -
+     *  8 here (16 cores), 4 on a friend's 8-core machine; lab.opt.bgThreads sets it */
+    private static final int BG = Integer.getInteger("lab.opt.bgThreads", Boolean.getBoolean("lab.opt.ParallelWorldgenMixin")
+            ? Math.max(4, Math.min(8, Runtime.getRuntime().availableProcessors() / 2)) : 4);
     private static final int IO = Integer.getInteger("lab.opt.ioThreads", 4);
 
     private LabPools() {}
