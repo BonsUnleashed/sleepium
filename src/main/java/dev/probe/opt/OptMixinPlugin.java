@@ -33,6 +33,8 @@ public final class OptMixinPlugin implements IMixinConfigPlugin {
             on = Boolean.getBoolean("lab.opt.all") || Boolean.getBoolean("lab.opt.AllocTrim");
         if (simple.startsWith("LightSnapshot"))   // one feature: light snapshots as base + delta (LightSnapshot)
             on = Boolean.getBoolean("lab.opt.all") || Boolean.getBoolean("lab.opt.LightSnapshotMixin");
+        if (simple.startsWith("ChunkIo"))   // one feature: encode on the pool, batched region writes (notes/38)
+            on = Boolean.getBoolean("lab.opt.all") || Boolean.getBoolean("lab.opt.ChunkIo");
         if (simple.equals("ChunkCacheClearMixin"))
             on = Boolean.getBoolean("lab.opt.all") || Boolean.getBoolean("lab.opt.ChunkCacheMixin");
         if (simple.equals("SectionStorageIndexMixin"))
