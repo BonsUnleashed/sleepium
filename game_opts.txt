@@ -175,7 +175,6 @@
 -Dlab.opt.AsyncChunkSaveEncodeMixin=true
 -Dlab.opt.universal=true
 -Dlab.opt.UnloadRecheckMixin=true
--Dlab.opt.HeapReturn=true
 -Dlab.opt.LightSnapshotMixin=true
 -Dlab.opt.AllocTrim=true
 -Dlab.opt.ChunkIo=true
