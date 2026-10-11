@@ -28,13 +28,13 @@ public final class AnimStream {
     /** a streamed file is being baked (the tables are kept until its end) */
     public static final ThreadLocal<Boolean> BATCH = ThreadLocal.withInitial(() -> false);
     /** KeyframeInternMixin's tables: a value's Constant, a keyframe's first equal one */
-    public static final Map<Double, Object> CONSTANTS = new java.util.concurrent.ConcurrentHashMap<>();
-    public static final Map<Object, Object> KEYFRAMES = new java.util.concurrent.ConcurrentHashMap<>();
+    public static volatile Map<Double, Object> CONSTANTS = new java.util.concurrent.ConcurrentHashMap<>();
+    public static volatile Map<Object, Object> KEYFRAMES = new java.util.concurrent.ConcurrentHashMap<>();
     public static long files, animations;
 
-    public static void clearTables() {
-        CONSTANTS.clear();
-        KEYFRAMES.clear();
+    public static void clearTables() {   // (new tables: a cleared one keeps its grown array - 40 MB of empty slots)
+        CONSTANTS = new java.util.concurrent.ConcurrentHashMap<>();
+        KEYFRAMES = new java.util.concurrent.ConcurrentHashMap<>();
     }
 
     public static boolean batch() {
