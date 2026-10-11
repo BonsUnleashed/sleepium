@@ -38,6 +38,8 @@ public final class GeoMixinPlugin implements IMixinConfigPlugin {
 
     /** KeyframeInternMixin: equal keyframes and values of the baked animations shared, {@code -Dlab.opt.KeyframeInternMixin=true} */
     private static final boolean INTERN = Boolean.getBoolean("lab.opt.all") || Boolean.getBoolean("lab.opt.KeyframeInternMixin");
+    /** AnimStreamMixin: GeckoLib's animation files read as a stream, an animation at a time, {@code -Dlab.opt.AnimStreamMixin=true} */
+    private static final boolean STREAM = Boolean.getBoolean("lab.opt.all") || Boolean.getBoolean("lab.opt.AnimStreamMixin");
 
     /** GeoAnim*Mixin: the animation runtime, {@code -Dlab.opt.GeoAnimMixin=true} */
     private static final boolean ANIM = Boolean.getBoolean("lab.opt.all") || Boolean.getBoolean("lab.opt.GeoAnimMixin");
@@ -45,7 +47,7 @@ public final class GeoMixinPlugin implements IMixinConfigPlugin {
     @Override
     public boolean shouldApplyMixin(String targetClassName, String mixinClassName) {
         boolean on = (mixinClassName.endsWith(".GeoMarkersMixin") || mixinClassName.endsWith(".GeoBlendMixin") ? true : mixinClassName.endsWith(".GeoCubesMixin") ? PARTS : mixinClassName.contains(".GeoAnim") ? ANIM
-                : mixinClassName.endsWith(".MolangJitMixin") ? JIT : mixinClassName.endsWith(".KeyframeInternMixin") ? INTERN : ON) && geckoLib();
+                : mixinClassName.endsWith(".MolangJitMixin") ? JIT : mixinClassName.endsWith(".KeyframeInternMixin") ? INTERN : mixinClassName.endsWith(".AnimStreamMixin") ? STREAM : ON) && geckoLib();
         if (on && mixinClassName.endsWith(".GeoModelWorkerMixin")) System.setProperty("probe.adapter.geckolib", "true");   // ParallelRender may take GeckoLib renderers
         if (on) System.out.println("[probe/opt] applying " + mixinClassName.substring(mixinClassName.lastIndexOf('.') + 1) + " -> " + targetClassName);
         return on;
