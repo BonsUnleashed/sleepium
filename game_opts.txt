@@ -76,6 +76,7 @@
 -Dlab.opt.ModelPartIterMixin=true
 -Dlab.opt.ModelPartQuatMixin=true
 -Dlab.opt.MolangActorMixin=true
+-Dlab.opt.KeyframeInternMixin=true
 -Dlab.opt.MolangJitMixin=true
 -Dlab.opt.MolangVariableMixin=true
 -Dlab.opt.NeighborNotifySkipMixin=true

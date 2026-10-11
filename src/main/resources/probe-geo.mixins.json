@@ -4,6 +4,6 @@
   "package": "dev.probe.geomixin",
   "plugin": "dev.probe.geomixin.GeoMixinPlugin",
   "compatibilityLevel": "JAVA_21",
-  "client": ["GeoModelWorkerMixin", "MolangActorMixin", "MolangVariableMixin", "KeyframeJournalMixin", "GeoTextureDimsMixin", "GeoCubesMixin", "GeoAnimControllerMixin", "GeoAnimProcessorMixin", "GeoMarkersMixin", "GeoBlendMixin", "GeoAnimManagerAccessor", "MolangJitMixin"],
+  "client": ["GeoModelWorkerMixin", "MolangActorMixin", "MolangVariableMixin", "KeyframeJournalMixin", "GeoTextureDimsMixin", "GeoCubesMixin", "GeoAnimControllerMixin", "GeoAnimProcessorMixin", "GeoMarkersMixin", "GeoBlendMixin", "GeoAnimManagerAccessor", "MolangJitMixin", "KeyframeInternMixin"],
   "injectors": { "defaultRequire": 1 }
 }
