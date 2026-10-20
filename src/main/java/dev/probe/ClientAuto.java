@@ -208,7 +208,7 @@ public final class ClientAuto {
             if (s[6] > 0 && ticks >= s[6]) {
                 s[6] = 0;
                 try (com.mojang.blaze3d.platform.NativeImage img = net.minecraft.client.Screenshot.takeScreenshot(mc.getMainRenderTarget())) {
-                    Path out = mc.gameDirectory.toPath().resolve("probe").resolve("frame-" + LABEL + "-" + i + ".png");
+                    Path out = ProbeOut.dir(mc.gameDirectory.toPath(), "frame", LABEL).resolve("frame-" + LABEL + "-" + i + ".png");
                     Files.createDirectories(out.getParent());
                     img.writeToFile(out);
                     log("shot " + i + " -> " + out.getFileName());
@@ -225,7 +225,7 @@ public final class ClientAuto {
             int rows = (int) (img.getHeight() * 0.66);   // the scene; the terrain far below may still be loading
             for (int y = 0; y < rows; y++)
                 for (int x = 0; x < img.getWidth(); x++) h = (h ^ (img.getPixelRGBA(x, y) & 0x00FFFFFF)) * 1099511628211L;   // colour only: the framebuffer's alpha is arbitrary
-            Path out = mc.gameDirectory.toPath().resolve("probe").resolve("frame-" + LABEL + ".png");
+            Path out = ProbeOut.dir(mc.gameDirectory.toPath(), "frame", LABEL).resolve("frame-" + LABEL + ".png");
             Files.createDirectories(out.getParent());
             img.writeToFile(out);
             log(String.format(Locale.ROOT, "frame hash %016x (%dx%d) -> %s", h, img.getWidth(), img.getHeight(), out.getFileName()));
