@@ -283,6 +283,12 @@ public final class RenderCache {
         return OK;
     }
 
+    /** a recording or a probe of the cache is drawing now (its output not the frame's: a debug reading the bones skips it -
+     *  10-20, the bone recorder: a probe's draw of the player, the shared bones still another entity's, had read as 143-degree snaps) */
+    public static boolean recording() {
+        return recordDepth > 0;
+    }
+
     // ------------------------------------------------------------------ entry point
 
     /**
