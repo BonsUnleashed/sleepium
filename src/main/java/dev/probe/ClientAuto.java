@@ -192,6 +192,8 @@ public final class ClientAuto {
         }
     }
     private static int shotsBase = -1;
+    /** told of each shot taken: its index and its time in the run's seconds (a mod's trace can mark it) */
+    public static volatile java.util.function.BiConsumer<Integer, Double> onShot;
 
     private static void shotsTick(Minecraft mc) {
         if (SHOTS.isEmpty() || shotsBase < 0) return;
@@ -212,6 +214,8 @@ public final class ClientAuto {
                     Files.createDirectories(out.getParent());
                     img.writeToFile(out);
                     log("shot " + i + " -> " + out.getFileName());
+                    var hook = onShot;
+                    if (hook != null) hook.accept(i, s[0]);
                 } catch (Exception e) {
                     log("shot " + i + " failed: " + e);
                 }
