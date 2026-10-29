@@ -499,7 +499,7 @@ public final class LightVolumes {
     /** GLSL for ChunkMultiDraw's patched chunk vertex shaders: the vertex's light from its recipe and its section's volume. */
     public static final String GLSL = """
             layout(location = 7) in uint ProbeRecipe;
-            layout(std430) readonly buffer ProbeLightVolumes { uint ProbeLV[]; };
+            layout(std430) buffer ProbeLightVolumes { uint ProbeLV[]; };
             uint probeSample(int vol, ivec3 p) {
                 int idx = vol * 5832 + ((p.y + 1) * 18 + (p.z + 1)) * 18 + (p.x + 1);
                 uint b = (ProbeLV[idx >> 2] >> uint((idx & 3) * 8)) & 255u;

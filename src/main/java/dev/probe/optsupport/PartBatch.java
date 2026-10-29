@@ -85,7 +85,7 @@ public final class PartBatch {
         for (String v : new String[] {"Position", "Color", "Normal", "UV1", "UV2"}) body = body.replaceAll("\\b" + v + "\\b", "probe_" + v);
         StringBuilder pre = new StringBuilder();
         pre.append("struct ProbePart { mat4 pose; vec4 n0; vec4 n1; vec4 n2; vec4 color; ivec4 lo; };\n");
-        pre.append("layout(std430) readonly buffer ProbeParts { ProbePart probeParts[]; };\n");
+        pre.append("layout(std430) buffer ProbeParts { ProbePart probeParts[]; };\n");
         pre.append("uniform int ProbePartMode;\n");
         pre.append("layout(location = 15) in float ProbeFlags;\n\n");   // part geometry's 4th normal byte (GeckoLib flat cubes)
         pre.append("void main() {\n");
@@ -580,7 +580,7 @@ public final class PartBatch {
 
     private static RenderType current;
     private static long cmdMem, cmdCap;
-    private static int cmdBuf;
+    private static final IndirectCommands COMMANDS = new IndirectCommands();
     private static final java.util.HashMap<Integer, int[]> PROGRAMS = new java.util.HashMap<>();
     private static int ssbo, ssboSize;
 
@@ -679,11 +679,10 @@ public final class PartBatch {
             MemoryUtil.memPutInt(c + 12, MemoryUtil.memGetInt(q.bases + 4L * i));
             MemoryUtil.memPutInt(c + 16, 0);
         }
-        if (cmdBuf == 0) cmdBuf = GL15C.glGenBuffers();
-        GL15C.glBindBuffer(org.lwjgl.opengl.GL40C.GL_DRAW_INDIRECT_BUFFER, cmdBuf);
-        GL15C.nglBufferData(org.lwjgl.opengl.GL40C.GL_DRAW_INDIRECT_BUFFER, bytes20, cmdMem, GL15C.GL_STREAM_DRAW);
+        long cmdAt = COMMANDS.upload(cmdMem, bytes20);
         boolean mat = mode != 2 && Materials.begin(shader, current);   // a material mask beside the type's texture
-        GL43C.glMultiDrawElementsIndirect(GL11C.GL_TRIANGLES, seq.type().asGLType, 0L, q.n, 20);
+        GL43C.glMultiDrawElementsIndirect(GL11C.GL_TRIANGLES, seq.type().asGLType, cmdAt, q.n, 20);
+        if (IndirectDiag.ON) IndirectDiag.after("parts " + mode, seq.type().asGLType, cmdAt, q.n, 20);
         if (mat) Materials.end(shader);
         GL15C.glBindBuffer(org.lwjgl.opengl.GL40C.GL_DRAW_INDIRECT_BUFFER, 0);
         GL20C.glUniform1i(flag, 0);

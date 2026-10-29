@@ -77,7 +77,8 @@
     "ClientAutoMouseMixin",
     "ClientAutoFlickerMixin",
     "TextureMipsFlagMixin",
-    "TextureMipsLoadMixin"
+    "TextureMipsLoadMixin",
+    "GlTraceMixin"
   ],
   "injectors": {
     "defaultRequire": 1

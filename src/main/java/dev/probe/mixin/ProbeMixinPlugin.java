@@ -23,6 +23,7 @@ public final class ProbeMixinPlugin implements IMixinConfigPlugin {
         if (simple.startsWith("NetStats")) return Boolean.getBoolean("probe.net.stats");
         if (simple.startsWith("GenTrace") || simple.equals("DataLayerMapAccessor")) return Boolean.getBoolean("lab.pgen.trace");
         if (simple.startsWith("IoScout")) return Boolean.getBoolean("probe.ioScout");
+        if (simple.startsWith("GlTrace")) return Boolean.getBoolean("probe.glTrace");
         if (simple.equals("ClientAutoMouseMixin")) return System.getProperty("probe.clientAuto") != null;
         if (simple.startsWith("EntSleep")) return Boolean.getBoolean("lab.opt.EntitySleep") || System.getProperty("lab.entsleep.diag") != null;
         return !simple.startsWith("ReadProbe") || Boolean.getBoolean("probe.beReads") || sleep;

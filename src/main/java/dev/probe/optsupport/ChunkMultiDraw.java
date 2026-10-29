@@ -73,11 +73,12 @@ public final class ChunkMultiDraw {
         String use = "vec3 pos = Position + ChunkOffset;";
         String uv = "texCoord0 = UV0;";
         if (!SUPPORTED.contains(name) || !src.startsWith("#version 150") || !src.contains(decl) || !src.contains(use) || !src.contains(uv)) return src;
-        // packed (mode 2): integers as floats, minus a whole number, times a power of two: the stored floats exactly
+        // packed (mode 2): integers as floats, minus a whole number, times a power of two: the stored floats exactly.
+        // No 'readonly' on storage blocks: a memory qualifier needs GLSL 4.20 (Intel's compiler refuses it under 150)
         String out = src.replaceFirst("#version 150", "#version 150\n#extension GL_ARB_shader_draw_parameters : require"
                         + (ssbo() ? "\n#extension GL_ARB_shader_storage_buffer_object : require" : ""))
                 .replace(decl, decl + "\nuniform int ProbeMultiDraw;\n" + (ssbo()
-                        ? "layout(std430) readonly buffer ProbeChunkOffsets { vec4 ProbeOffsets[]; };"
+                        ? "layout(std430) buffer ProbeChunkOffsets { vec4 ProbeOffsets[]; };"
                         : "layout(std140) uniform ProbeChunkOffsets { vec4 ProbeOffsets[" + MAX_DRAWS + "]; };"))
                 .replace(use, "vec3 pos = (ProbeMultiDraw == 2 ? (Position - 2048.0) * 0.00390625 : Position) + (ProbeMultiDraw != 0 ? ProbeOffsets[gl_DrawIDARB].xyz : ChunkOffset);")
                 .replace(uv, "texCoord0 = ProbeMultiDraw == 2 ? UV0 * 0.0000152587890625 : UV0;");
@@ -660,6 +661,7 @@ public final class ChunkMultiDraw {
         GL15C.glBufferSubData(target, 0, staging);
         staging.clear();
         boolean indirect = indirect();
+        long cmdBase = 0;
         if (indirect) {
             // every arena's commands {count, 1 instance, first index 0, base vertex, base instance 0} in one upload
             int cmds = 0;
@@ -685,9 +687,7 @@ public final class ChunkMultiDraw {
                     MemoryUtil.memPutInt(p + 16, 0);
                 }
             }
-            if (indirectBuffer == 0) indirectBuffer = GL15C.glGenBuffers();
-            GL15C.glBindBuffer(GL40C.GL_DRAW_INDIRECT_BUFFER, indirectBuffer);
-            GL15C.nglBufferData(GL40C.GL_DRAW_INDIRECT_BUFFER, bytes, c, GL15C.GL_STREAM_DRAW);
+            cmdBase = COMMANDS.upload(c, bytes);
         }
         RenderSystem.AutoStorageIndexBuffer seq = RenderSystem.getSequentialBuffer(VertexFormat.Mode.QUADS);
         if (LightVolumes.ON && sb) GL30C.glBindBufferBase(GL43C.GL_SHADER_STORAGE_BUFFER, LightVolumes.BINDING, LightVolumes.buffer());
@@ -702,7 +702,8 @@ public final class ChunkMultiDraw {
                 seq.bind(a.maxIndices);
                 GL30C.glBindBufferRange(target, UBO_BINDING, buf, a.uboOffset, sb ? 16L * a.n : 16L * MAX_DRAWS);
                 if (dev.probe.DrawStats.ON) dev.probe.DrawStats.phaseBegin(3);
-                if (indirect) GL43C.glMultiDrawElementsIndirect(GL15C.GL_TRIANGLES, seq.type().asGLType, a.cmdOffset, a.n, 20);
+                if (indirect) GL43C.glMultiDrawElementsIndirect(GL15C.GL_TRIANGLES, seq.type().asGLType, cmdBase + a.cmdOffset, a.n, 20);
+                if (indirect && IndirectDiag.ON) IndirectDiag.after("chunks", seq.type().asGLType, cmdBase + a.cmdOffset, a.n, 20);
                 else GL32C.nglMultiDrawElementsBaseVertex(GL15C.GL_TRIANGLES, a.counts, seq.type().asGLType, a.indices, a.n, a.bases);
                 if (dev.probe.DrawStats.ON) dev.probe.DrawStats.phaseEnd(3);
                 multiDraws++;
@@ -717,7 +718,7 @@ public final class ChunkMultiDraw {
     }
 
     private static ByteBuffer cmdStaging = MemoryUtil.memAlloc(1 << 16);
-    private static int indirectBuffer;
+    private static final IndirectCommands COMMANDS = new IndirectCommands();
     private static Boolean indirect;
 
     /** GL 4.3 multi-draw indirect: the commands read by the GPU instead of walked by the driver (-Dlab.chunkmd.noIndirect). */
