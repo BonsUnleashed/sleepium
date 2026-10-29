@@ -64,7 +64,9 @@
     "SleepProbeDeadlineMixin",
     "EntSleepTickMixin",
     "EntSleepHolderMixin",
-    "EntSleepDataMixin"
+    "EntSleepDataMixin",
+    "MobQuietMixin",
+    "MobQuietRandomMixin"
   ],
   "client": [
     "GenTraceClientMixin",
