@@ -66,7 +66,12 @@
     "EntSleepHolderMixin",
     "EntSleepDataMixin",
     "MobQuietMixin",
-    "MobQuietRandomMixin"
+    "MobQuietRandomMixin",
+    "BrainTimeBehaviorMixin",
+    "BrainTimeOneShotMixin",
+    "BrainTimeGateMixin",
+    "BrainTimeSensorMixin",
+    "BrainTimeTickMixin"
   ],
   "client": [
     "GenTraceClientMixin",

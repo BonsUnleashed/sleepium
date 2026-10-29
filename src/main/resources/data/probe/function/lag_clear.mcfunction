@@ -47,3 +47,5 @@ schedule clear probe:physics_srv_tick
 kill @e[type=!minecraft:player,x=1800,y=-61,z=100,dx=48,dy=16,dz=48]
 fill 1800 -60 100 1848 -48 148 minecraft:air
 fill 1800 -61 132 1848 -61 148 minecraft:grass_block
+kill @e[type=!minecraft:player,x=2000,y=-61,z=100,dx=32,dy=10,dz=32]
+fill 2000 -60 100 2032 -52 132 minecraft:air
