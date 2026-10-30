@@ -901,12 +901,24 @@ final class SleepAnalysis {
     private boolean onThis(Frame<SourceValue> f, int fromTop, Frame<SourceValue>[] frames, MethodNode m) {
         if (f == null || f.getStackSize() < fromTop) return false;
         SourceValue v = f.getStack(f.getStackSize() - fromTop);
-        for (int hops = 0; hops < 4 && v.insns.size() == 1 && v.insns.iterator().next().getOpcode() == Opcodes.DUP; hops++) {
-            // DUP's copy: the value it duplicated (top of the stack at the DUP)
+        for (int hops = 0; hops < 4 && v.insns.size() == 1; hops++) {
             AbstractInsnNode d = v.insns.iterator().next();
-            Frame<SourceValue> df = frames[m.instructions.indexOf(d)];
-            if (df == null || df.getStackSize() < 1) return false;
-            v = df.getStack(df.getStackSize() - 1);
+            int op = d.getOpcode(), at = m.instructions.indexOf(d);
+            Frame<SourceValue> df = frames[at];
+            if (op == Opcodes.DUP) {
+                // DUP's copy: the value it duplicated (top of the stack at the DUP)
+                if (df == null || df.getStackSize() < 1) return false;
+                v = df.getStack(df.getStackSize() - 1);
+            } else if (op == Opcodes.DUP_X1) {
+                // [.., v2, v1] -> [.., v1, v2, v1] (javac's x.f++ in an expression): which of the three this value is,
+                // by its place in the frame after the DUP_X1, and so which value it was before
+                Frame<SourceValue> af = at + 1 < frames.length ? frames[at + 1] : null;
+                if (df == null || af == null || df.getStackSize() < 2) return false;
+                int s = af.getStackSize(), pos = -1;
+                for (int k = s - 3; k < s; k++) if (k >= 0 && af.getStack(k) == v) pos = s - 1 - k;   // 0 = top
+                if (pos < 0) return false;
+                v = df.getStack(df.getStackSize() - (pos == 1 ? 2 : 1));
+            } else break;
         }
         if (v.insns.size() != 1 || !(v.insns.iterator().next() instanceof VarInsnNode vi) || vi.getOpcode() != Opcodes.ALOAD || vi.var >= 31
                 || (selfMask & (1 << vi.var)) == 0) return false;

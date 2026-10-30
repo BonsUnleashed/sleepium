@@ -18,6 +18,12 @@ public final class MobQuiet {
     /** the mob being ticked (server thread), for the draw counter */
     public static Mob current;
     public static int own, shared;
+    /** -Dprobe.mobQuiet.sites=true: where the own draws come from (caller of the RandomSource method), per class */
+    public static final boolean SITES = Boolean.getBoolean("probe.mobQuiet.sites");
+    private static final StringBuilder SIG = new StringBuilder();
+    private static final Map<String, Map<String, long[]>> SITE_COUNT = new TreeMap<>();   // class -> site -> {draws, quiet-tick draws}
+    private static final Map<String, Map<String, long[]>> QUIET_SIGS = new TreeMap<>();   // class -> sequence of sites in a quiet tick -> count
+    private static final StackWalker WALKER = StackWalker.getInstance();
 
     private static final class Stats {
         long ticks, quiet, quietWithOwnDraws, ownDraws, sharedDraws, ticksWithShared, streaks, streakTicks;
@@ -31,9 +37,31 @@ public final class MobQuiet {
 
     private MobQuiet() {}
 
+    /** an own draw: the first frame outside the random classes is the site, the frame before it the API method */
+    public static void site() {
+        if (!SITES) return;
+        String s = WALKER.walk(st -> {
+            String api = "?";
+            for (var it = st.iterator(); it.hasNext(); ) {
+                var f = it.next();
+                String c = f.getClassName();
+                if (c.contains("RandomSource") || c.contains("MobQuiet")) {
+                    api = f.getMethodName();
+                    continue;
+                }
+                return c.substring(c.lastIndexOf('.') + 1) + "." + f.getMethodName() + ":" + f.getLineNumber() + " " + api;
+            }
+            return "?";
+        });
+        if (SIG.length() > 0) SIG.append(" | ");
+        SIG.append(s);
+        SITE_COUNT.computeIfAbsent(current.getClass().getSimpleName(), k -> new TreeMap<>()).computeIfAbsent(s, k -> new long[2])[0]++;
+    }
+
     public static void before(Mob m) {
         current = m;
         own = shared = 0;
+        SIG.setLength(0);
         BEFORE.put(m.getId(), hash(m));
     }
 
@@ -47,6 +75,7 @@ public final class MobQuiet {
         if (shared > 0) s.ticksWithShared++;
         int id = m.getId();
         if (quiet) {
+            if (SITES) QUIET_SIGS.computeIfAbsent(m.getClass().getSimpleName(), k -> new TreeMap<>()).computeIfAbsent(SIG.toString(), k -> new long[1])[0]++;
             s.quiet++;
             if (own > 0) s.quietWithOwnDraws++;
             STREAK.addTo(id, 1);
@@ -97,6 +126,20 @@ public final class MobQuiet {
                     100.0 * s.quiet / s.ticks, 100.0 * s.quietWithOwnDraws / s.ticks, (double) s.ownDraws / s.ticks, (double) s.sharedDraws / s.ticks,
                     100.0 * s.ticksWithShared / s.ticks, s.streaks == 0 ? 0.0 : (double) s.streakTicks / s.streaks));
             for (int i = 0; i < 8; i++) sb.append(i == 0 ? "" : "|").append(s.hist[i]);
+        }
+        if (SITES) {
+            for (var c : SITE_COUNT.entrySet()) {
+                sb.append(String.format(Locale.ROOT, "%n   draw sites of %s (draws in 600 ticks):", c.getKey()));
+                c.getValue().entrySet().stream().sorted((a, b) -> Long.compare(b.getValue()[0], a.getValue()[0])).limit(15)
+                        .forEach(e -> sb.append(String.format(Locale.ROOT, "%n      %8d  %s", e.getValue()[0], e.getKey())));
+            }
+            for (var c : QUIET_SIGS.entrySet()) {
+                sb.append(String.format(Locale.ROOT, "%n   quiet ticks of %s by their draws (top 8):", c.getKey()));
+                c.getValue().entrySet().stream().sorted((a, b) -> Long.compare(b.getValue()[0], a.getValue()[0])).limit(8)
+                        .forEach(e -> sb.append(String.format(Locale.ROOT, "%n      %8d  %s", e.getValue()[0], e.getKey().isEmpty() ? "(none)" : e.getKey())));
+            }
+            SITE_COUNT.clear();
+            QUIET_SIGS.clear();
         }
         System.out.println(sb);
         STATS.clear();

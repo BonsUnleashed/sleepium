@@ -14,7 +14,10 @@ public abstract class MobQuietRandomMixin {
     private void probe$draw(int bits, CallbackInfoReturnable<Integer> cir) {
         var m = MobQuiet.current;
         if (m == null || Thread.currentThread() != m.level().getServer().getRunningThread()) return;
-        if ((Object) this == m.getRandom()) MobQuiet.own++;
+        if ((Object) this == m.getRandom()) {
+            MobQuiet.own++;
+            MobQuiet.site();
+        }
         else MobQuiet.shared++;
     }
 }
