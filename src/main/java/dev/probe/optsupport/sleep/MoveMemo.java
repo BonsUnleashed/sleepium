@@ -63,9 +63,9 @@ public final class MoveMemo {
 
     /** per class */
     static final class K {
-        final Field[] f;
-        final SnapCompiler.Snapper snap;
-        final boolean[] skip;
+        Field[] f;
+        SnapCompiler.Snapper snap;
+        boolean[] skip;
         String refuse;
         int random = -1;
 
@@ -81,6 +81,13 @@ public final class MoveMemo {
                         refuse = "field not accessible: " + x.getName();
                     }
                 }
+            if (refuse == null) refuse = ownCodeReads(c);
+            // v2: only the fields move's code reads or writes (the scan's sets) - the rest it never touches
+            Set<String> rw = new HashSet<>(READ_SETS.getOrDefault(c, Set.of()));
+            rw.addAll(WRITE_SETS.getOrDefault(c, Set.of()));
+            fl.removeIf(x -> !rw.contains(x.getName()));
+            // synched data: by its modification counter (MoveMemoDataMixin), not a deep fingerprint of every item
+            fl.removeIf(x -> x.getName().equals("entityData") && x.getDeclaringClass() == Entity.class);
             f = fl.toArray(new Field[0]);
             skip = new boolean[f.length];
             for (int i = 0; i < f.length; i++) {
@@ -88,7 +95,6 @@ public final class MoveMemo {
                 if (f[i].getName().equals("random") && f[i].getDeclaringClass() == Entity.class) random = i;
             }
             snap = refuse == null ? SnapCompiler.compile(fl, true, new boolean[f.length]) : null;
-            if (refuse == null) refuse = ownCodeReads(c);
         }
     }
 
@@ -103,6 +109,8 @@ public final class MoveMemo {
         final BlockCollisionMemo region = new BlockCollisionMemo();
         // the record in progress
         long draws0, posts0, writes0, unobserved0, readers0;
+        int attrEpoch, dataEpoch;
+        long collidableEpoch = -1;
         double border0, border1, border2, border3;
     }
 
@@ -130,28 +138,37 @@ public final class MoveMemo {
     }
 
     /** Move's HEAD: true = skipped (the recorded result written back). */
+    static long tHit, tMissCheck, tMove, tRecord, nHit, nMiss;
+    private static long tStart, tMoveStart;
+
     public static boolean before(Entity e, MoverType type, Vec3 v) {
         if (recording != null || !eligible(e)) return false;
+        if (DIAG) tStart = System.nanoTime();
         if (((hits + misses + verified) & 0x3FFFF) == 0x3FFFF) System.out.println("[probe/opt] " + report());
         K k = KINDS.get(e.getClass());
         if (k == null) {
             KINDS.put(e.getClass(), k = new K(e.getClass()));
-            System.out.println("[probe/movememo] " + e.getClass().getSimpleName() + ": " + (k.refuse == null ? "ok, " + k.f.length + " fields" : "no: " + k.refuse));
+            System.out.println("[probe/movememo] " + e.getClass().getSimpleName() + ": " + (k.refuse == null ? "ok, " + k.f.length + " fields" : "no: " + k.refuse)
+                    + (DIAG ? "; move reads " + READ_SETS.getOrDefault(e.getClass(), Set.of()).size() + ": " + READ_SETS.get(e.getClass()) : ""));
         }
         if (k.refuse != null) return false;
         S s = (S) ((Holder) e).probe$moveMemo();
         if (s == null) ((Holder) e).probe$setMoveMemo(s = new S());
         if (s.before == null) s.before = new long[k.f.length];
         k.snap.snap(e, s.before);
-        if (s.valid && type == s.type && v.x == s.mx && v.y == s.my && v.z == s.mz && sameKey(k, s.before, s.key)
+        if (s.valid && type == s.type && v.x == s.mx && v.y == s.my && v.z == s.mz && attrEpoch(e) == s.attrEpoch && dataEpoch(e) == s.dataEpoch && sameKey(k, s.before, s.key)
                 && BlockCollisionMemo.unchanged(e.level(), s.region, regionBox(e, v)) && sameBorder(e, s)
-                && e.level().getEntityCollisions(e, regionBox(e, v)).isEmpty()) {
+                && (dev.probe.optsupport.EntityCollide.COLLIDABLE_EPOCH.get() == s.collidableEpoch || e.level().getEntityCollisions(e, regionBox(e, v)).isEmpty())) {
             if (VERIFY) {
                 verified++;
                 return false;   // the real move runs; after() compares
             }
             for (int i : s.diff) k.snap.put(e, i, s.after[i], s.afterRefs[i]);
             hits++;
+            if (DIAG) {
+                tHit += System.nanoTime() - tStart;
+                nHit++;
+            }
             return true;
         }
         misses++;
@@ -181,7 +198,15 @@ public final class MoveMemo {
         s.posts0 = CompositeEventBus.fullPosts;
         s.writes0 = dev.probe.BeTickStats.writes;
         s.unobserved0 = SleepEngine.unobservedAll;
+        s.attrEpoch = attrEpoch(e);
+        s.dataEpoch = dataEpoch(e);
         s.readers0 = readerRuns;
+        if (DIAG) {
+            long t = System.nanoTime();
+            tMissCheck += t - tStart;
+            nMiss++;
+            tMoveStart = t;
+        }
         return false;
     }
 
@@ -195,6 +220,16 @@ public final class MoveMemo {
             return;
         }
         recording = null;
+        long tRec = DIAG ? System.nanoTime() : 0;
+        if (DIAG) tMove += tRec - tMoveStart;
+        try {
+            recordAfter(e, v, s, k);
+        } finally {
+            if (DIAG) tRecord += System.nanoTime() - tRec;
+        }
+    }
+
+    private static void recordAfter(Entity e, Vec3 v, S s, K k) {
         if (s.after == null) {
             s.after = new long[k.f.length];
             s.afterRefs = new Object[k.f.length];
@@ -207,6 +242,8 @@ public final class MoveMemo {
         else if (dev.probe.BeTickStats.writes != s.writes0) why = "wrote to the world";
         else if (SleepEngine.unobservedAll != s.unobserved0) why = "unobserved read";
         else if (readerRuns != s.readers0) why = "ran a reader of an excluded field";
+        else if (attrEpoch(e) != s.attrEpoch) why = "changed its attributes";
+        else if (dataEpoch(e) != s.dataEpoch) why = "changed its synched data";
         else if (e.isRemoved() || e.isPassenger() || e.isVehicle()) why = "removed / riding";
         int nd = 0;
         int[] diff = new int[8];
@@ -220,7 +257,9 @@ public final class MoveMemo {
                 diff[nd++] = i;
             }
         }
+        long ce = dev.probe.optsupport.EntityCollide.COLLIDABLE_EPOCH.get();   // read before the check: a later change shows as a new epoch
         if (why == null && !e.level().getEntityCollisions(e, regionBox(e, v)).isEmpty()) why = "collidable entity near";
+        s.collidableEpoch = why == null ? ce : -1;
         if (why == null) why = recordRegion(e, v, s);
         if (why != null) {
             refusedRecords++;
@@ -252,6 +291,24 @@ public final class MoveMemo {
                 return;
             }
         }
+    }
+
+    /** AttributeMap's modification counter (MoveMemoAttributesMixin): attributes are read by value through it */
+    public interface AttrEpoch {
+        int probe$attrEpoch();
+    }
+
+    /** SynchedEntityData's modification counter (MoveMemoDataMixin) */
+    public interface DataEpoch {
+        int probe$dataEpoch();
+    }
+
+    private static int dataEpoch(Entity e) {
+        return ((DataEpoch) e.getEntityData()).probe$dataEpoch();
+    }
+
+    private static int attrEpoch(Entity e) {
+        return ((AttrEpoch) ((LivingEntity) e).getAttributes()).probe$attrEpoch();
     }
 
     /** collide reads the world border's shape near it: as it was at the record */
@@ -374,7 +431,14 @@ public final class MoveMemo {
         return ownCodeReads(c, Set.of());
     }
 
+    /** the last scan's read set: fields of the class chain read by the scanned methods (owner.name) */
+    static final Map<Class<?>, Set<String>> READ_SETS = new HashMap<>();
+    static final Map<Class<?>, Set<String>> WRITE_SETS = new HashMap<>();
+
     static String ownCodeReads(Class<?> c, Set<String> skipMethods) {
+        Set<String> reads = new java.util.TreeSet<>(), writes = new java.util.TreeSet<>();
+        READ_SETS.put(c, reads);
+        WRITE_SETS.put(c, writes);
         List<Class<?>> chain = new ArrayList<>();
         Set<String> owners = new HashSet<>();
         for (Class<?> k = c; k != null && k != Object.class; k = k.getSuperclass()) {
@@ -413,9 +477,14 @@ public final class MoveMemo {
             if (skipMethods.contains(at + "." + m.name) || INSTRUMENTED.contains(at + "." + m.name)) continue;
             if (dev.probe.optsupport.MixinTouch.touched(at, m.name)) return "mixin-changed " + at + "." + m.name;   // the scan reads the original bytes
             for (AbstractInsnNode in : m.instructions) {
-                if (in instanceof FieldInsnNode fi && fi.getOpcode() == Opcodes.GETFIELD && owners.contains(fi.owner) && EXCLUDED.contains(fi.name)
-                        && !fi.name.equals("random"))
-                    return "reads " + fi.name + " in " + at + "." + m.name;
+                if (in instanceof FieldInsnNode fw && fw.getOpcode() == Opcodes.PUTFIELD && owners.contains(fw.owner)) {
+                    writes.add(fw.name);
+                    if (EXCLUDED.contains(fw.name)) return "writes " + fw.name + " in " + at + "." + m.name;
+                }
+                if (in instanceof FieldInsnNode fi && fi.getOpcode() == Opcodes.GETFIELD && owners.contains(fi.owner)) {
+                    reads.add(fi.name);
+                    if (EXCLUDED.contains(fi.name) && !fi.name.equals("random")) return "reads " + fi.name + " in " + at + "." + m.name;
+                }
                 if (in instanceof MethodInsnNode mi) {
                     if (owners.contains(mi.owner)) {
                         if (mi.name.equals("getNoActionTime")) return "calls getNoActionTime in " + at + "." + m.name;
@@ -444,7 +513,9 @@ public final class MoveMemo {
     }
 
     public static String report() {
-        StringBuilder sb = new StringBuilder("move memo: hits " + hits + ", misses " + misses + ", records " + records + ", refused records " + refusedRecords
+        StringBuilder sb = new StringBuilder((DIAG ? String.format(java.util.Locale.ROOT, "costs (us): hit %.2f, miss check %.2f, recorded move %.2f, record %.2f; ",
+                tHit / 1e3 / Math.max(1, nHit), tMissCheck / 1e3 / Math.max(1, nMiss), tMove / 1e3 / Math.max(1, nMiss), tRecord / 1e3 / Math.max(1, nMiss)) : "")
+                + "move memo: hits " + hits + ", misses " + misses + ", records " + records + ", refused records " + refusedRecords
                 + (VERIFY ? ", verified " + verified + ", MISMATCHES " + mismatches : ""));
         for (var en : KINDS.entrySet()) if (en.getValue().refuse != null) sb.append("\n   class ").append(en.getKey().getSimpleName()).append(": ").append(en.getValue().refuse);
         MISS.entrySet().stream().sorted((a, b) -> Long.compare(b.getValue()[0], a.getValue()[0])).limit(10)

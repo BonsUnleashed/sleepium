@@ -90,6 +90,8 @@
     "MoveMemoRandomMixin",
     "MoveMemoReadersMixin",
     "MoveMemoHurtMixin",
+    "MoveMemoAttributesMixin",
+    "MoveMemoDataMixin",
     "SectionStorageIndexMixin",
     "PoiColumnMixin",
     "BlockBehaviourInvoker",

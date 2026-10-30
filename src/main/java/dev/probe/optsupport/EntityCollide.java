@@ -38,6 +38,8 @@ public final class EntityCollide {
             && !MixinTouch.touched("net/minecraft/world/entity/Entity", "canCollideWith");
 
     public static volatile long skipped, full;
+    /** moved on whenever a collidable entity joins or leaves an entity section (any level, any thread): MoveMemo */
+    public static final java.util.concurrent.atomic.AtomicLong COLLIDABLE_EPOCH = new java.util.concurrent.atomic.AtomicLong();
 
     private EntityCollide() {}
 
