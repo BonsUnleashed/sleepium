@@ -79,6 +79,31 @@ public final class EntitySleep {
         int[] refOrd;         // slot -> position in refSlots (-1: not compared)
         boolean[] forbidV;
         final int period;
+        // mob sleep (MobSleep): the composite state, the plan's extras, the draw conditions by call site
+        MobSleep.Composite comp;
+        SleepAnalysis.MobPlan mob;
+        Map<String, List<Integer>> drawSites;
+        int entN;                     // slots of the entity itself (part 0)
+        String[] slotPath;            // composite: the path of each slot's object
+        int[] ctxEntityRefs = new int[0];   // context slots holding entities: null or this one
+        int randomSlot = -1;
+        Field randomField;
+        int[] condSlot, condThreshold;   // per plan.conds(): the clock's slot and the threshold field's (-1)
+
+        /** the reference in slot i (the entity's field, or a context's) */
+        Object ref(int i, ES s) {
+            if (comp == null) return get(f[i], s.e);
+            return get(f[i], s.ctx[comp.partOf[i]]);
+        }
+
+        long hashOf(long[] v) {
+            return comp == null ? SnapCompiler.hashPrims(v, prim, special) : comp.hashOf(v);
+        }
+
+        int slot(String path, Field x) {
+            for (int i = 0; i < n; i++) if (f[i].equals(x) && (slotPath == null ? path.isEmpty() : slotPath[i].equals(path))) return i;
+            return -1;
+        }
 
         EClass(Class<?> c) {
             this(c, null);
@@ -101,6 +126,35 @@ public final class EntitySleep {
                     }
                 }
             }
+            entN = fl.size();
+            List<String> paths = new ArrayList<>();
+            List<Integer> partStart = new ArrayList<>();
+            List<Class<?>> partClass = new ArrayList<>();
+            if (plan.mob() != null && MobSleep.ON && plan.eligible()) {
+                mob = plan.mob();
+                partStart.add(0);
+                partClass.add(c);
+                paths.add("");
+                List<String> sp = new ArrayList<>();
+                for (int i = 0; i < entN; i++) sp.add("");
+                for (String path : mob.contexts()) {
+                    Object o = MobSleep.resolve(sample, path);
+                    if (o == null) {
+                        refuse = "context " + path + " missing on the sample";
+                        break;
+                    }
+                    partStart.add(fl.size());
+                    partClass.add(o.getClass());
+                    paths.add(path);
+                    for (Field x : MobSleep.instanceFields(o.getClass())) {
+                        fl.add(x);
+                        sp.add(path);
+                    }
+                }
+                slotPath = sp.toArray(new String[0]);
+                drawSites = MobSleep.sitesOf(mob.draws());
+                randomField = MobSleep.field(Entity.class, "random");
+            }
             f = fl.toArray(new Field[0]);
             n = f.length;
             period = (int) Math.min(Integer.MAX_VALUE, plan.period());
@@ -120,7 +174,32 @@ public final class EntitySleep {
                     special[i] = true;
                     continue;
                 }
-                if (plan.clocks().contains(x)) {
+                boolean isClock = false;
+                if (mob != null) {
+                    for (int j = 0; j < plan.clocks().size(); j++)
+                        if (plan.clocks().get(j).equals(x) && mob.clockPaths().get(j).equals(slotPath[i])) isClock = true;
+                    if (x.equals(randomField) && slotPath[i].isEmpty()) {
+                        randomSlot = i;
+                        special[i] = true;
+                        continue;
+                    }
+                    if (i >= entN) {
+                        if (Entity.class.isAssignableFrom(x.getType())) ctxEntityRefs = java.util.Arrays.copyOf(ctxEntityRefs, ctxEntityRefs.length + 1);
+                        if (Entity.class.isAssignableFrom(x.getType())) ctxEntityRefs[ctxEntityRefs.length - 1] = i;
+                        if (isClock) {
+                            if (!(x.getType() == int.class || x.getType() == long.class || x.getType() == short.class || x.getType() == byte.class)) {
+                                refuse = "clock of type " + x.getType();
+                                return;
+                            }
+                            cl.add(i);
+                            special[i] = true;
+                        }
+                        continue;
+                    }
+                } else {
+                    isClock = plan.clocks().contains(x);
+                }
+                if (isClock) {
                     if (!(x.getType() == int.class || x.getType() == long.class || x.getType() == short.class || x.getType() == byte.class)) {
                         refuse = "clock of type " + x.getType();
                         return;
@@ -134,9 +213,33 @@ public final class EntitySleep {
                 forbidV[i] = FORBID_V.contains(x.getName()) && x.getDeclaringClass() == Entity.class;
             }
             if (tickCount < 0) refuse = "no tickCount";
-            // one compiled class: snap() by value for observation, same() by value/identity for the replay check
-            snap = SnapCompiler.compile(fl, true, special);
-            refSlots = SnapCompiler.refSlots(fl, special);
+            if (refuse != null) return;
+            if (mob != null) {
+                // one compiled snapper per part, laid end to end
+                MobSleep.Part[] parts = new MobSleep.Part[paths.size()];
+                int refOff = 0;
+                for (int k = 0; k < parts.length; k++) {
+                    int a0 = partStart.get(k), a1 = k + 1 < parts.length ? partStart.get(k + 1) : n;
+                    parts[k] = new MobSleep.Part(paths.get(k), partClass.get(k), fl.subList(a0, a1), a0, java.util.Arrays.copyOfRange(special, a0, a1), refOff);
+                    refOff += parts[k].refSlots.length;
+                }
+                comp = new MobSleep.Composite(parts);
+                snap = comp;
+                refSlots = new int[refOff];
+                for (MobSleep.Part pt : parts) for (int k = 0; k < pt.refSlots.length; k++) refSlots[pt.refOff + k] = pt.off + pt.refSlots[k];
+                condSlot = new int[plan.conds().size()];
+                condThreshold = new int[plan.conds().size()];
+                for (int j = 0; j < condSlot.length; j++) {
+                    SleepAnalysis.Cond cd = plan.conds().get(j);
+                    String cp = mob.condPaths().get(j);
+                    condSlot[j] = cd.clock() == null ? -1 : slot(cp, cd.clock());
+                    condThreshold[j] = cd.thresholdField() == null ? -1 : slot(cp, cd.thresholdField());
+                }
+            } else {
+                // one compiled class: snap() by value for observation, same() by value/identity for the replay check
+                snap = SnapCompiler.compile(fl, true, special);
+                refSlots = SnapCompiler.refSlots(fl, special);
+            }
             refOrd = new int[n];
             java.util.Arrays.fill(refOrd, -1);
             for (int k = 0; k < refSlots.length; k++) refOrd[refSlots[k]] = k;
@@ -180,6 +283,16 @@ public final class EntitySleep {
         boolean woken;
         String wakeReason;
         int subEpoch;
+        // mob sleep
+        Object[] ctx;                 // the composite's objects (part 0: the entity)
+        LongArrayList[] drawLog;      // per observed tick of the window: the draws (key, value) pairs
+        int[][] dKind, dBound, dCond; // asleep: per phase, the draws to replay and their conditions
+        boolean[][] dOut;             // per phase and draw: the branch the observed tick took
+        net.minecraft.util.RandomSource random;
+        java.util.concurrent.atomic.AtomicLong seedRef;
+        long expSeed;
+        int attrEpoch = Integer.MIN_VALUE, goalEpoch0, goalEpoch1;
+        boolean readsWeather, readsPlayers;   // the window read them (observed while there is none)
 
         ES(Entity e, EClass c) {
             this.e = e;
@@ -204,6 +317,10 @@ public final class EntitySleep {
 
     private static ES es(Entity e) {
         return (ES) ((EntSleeperHolder) e).probe$es();
+    }
+
+    static ES esOf(Entity e) {
+        return es(e);
     }
 
     // ------------------------------------------------------------------ the tick
@@ -238,6 +355,7 @@ public final class EntitySleep {
             }
             s = new ES(e, c);
             if (c.refuse != null || e.getBlockX() < MIN_X || dev.probe.api.Compat.entitySleepExcluded(e)) s.st = St.NEVER;
+            else if (c.comp != null && (s.ctx = c.comp.resolveAll(e)) == null) s.st = St.NEVER;
             ((EntSleeperHolder) e).probe$setEs(s);
         }
         if (s.st == St.ASLEEP) {
@@ -263,8 +381,20 @@ public final class EntitySleep {
             SA = new long[n * 2];
         }
         long[] b = SB, a = SA;
-        c.snap.snap(e, b);
         boolean cont = s.k >= 0 && e.tickCount == s.lastTick + 1;
+        if (c.comp != null && !cont && (s.ctx = c.comp.resolveAll(e)) == null) {   // goals replaced: not this plan's mob now
+            s.k = -1;
+            e.tick();
+            fail(s, "contexts changed");
+            return;
+        }
+        if (c.comp != null && !cont) {
+            s.readsWeather = s.readsPlayers = false;
+            s.attrEpoch = attrEpoch(e);
+            s.goalEpoch0 = goalEpoch(e, true);
+            s.goalEpoch1 = goalEpoch(e, false);
+        }
+        c.snap.snap(e, b);
         obs = s;
         obsThread = Thread.currentThread();
         w0 = BeTickStats.writes;
@@ -287,17 +417,30 @@ public final class EntitySleep {
             }
             c.snap.refs(e, s.baseRefs);   // the objects of the state before tick 0
         }
+        Object rec = null;
+        if (c.comp != null) {
+            rec = get(c.randomField, e);
+            MobSleep.TICK.clear();
+            MobSleep.REC = rec;
+        }
         try {
             e.tick();
         } finally {
             obs = null;
+            MobSleep.REC = null;
         }
         observedTicks++;
+        if (c.comp != null && (attrEpoch(e) != s.attrEpoch || goalEpoch(e, true) != s.goalEpoch0 || goalEpoch(e, false) != s.goalEpoch1)) {
+            s.k = -1;
+            fail(s, "attributes or goals changed");
+            return;
+        }
         c.snap.snap(e, a);
         boolean quiet = BeTickStats.writes == w0 && SleepEngine.seed(level) == seed0 && unobservedE == u0 && !e.isRemoved();
         if (!quiet) {
             s.k = -1;
-            fail(s, "busy");
+            fail(s, c.comp == null ? "busy" : e.isRemoved() ? "busy: removed" : BeTickStats.writes != w0 ? "busy: world writes"
+                    : SleepEngine.seed(level) != seed0 ? "busy: shared random" : "busy: unobserved reads");
             return;
         }
         if (!cont) {
@@ -314,20 +457,28 @@ public final class EntitySleep {
                 int i = c.clocks[j];
                 if (b[i] != s.prevA[i] || a[i] - b[i] != s.rates[j]) {
                     s.k = -1;
-                    fail(s, "clock rate changed");
+                    fail(s, c.comp != null ? "clock rate changed: " + slotName(c, i) : "clock rate changed");
                     return;
                 }
             }
         }
         s.lastTick = e.tickCount;
         s.readHashAt[s.k] = readHash;
+        if (c.comp != null) {
+            if (s.drawLog == null || s.drawLog.length != L + 1) {
+                s.drawLog = new LongArrayList[L + 1];
+                for (int q = 0; q <= L; q++) s.drawLog[q] = new LongArrayList();
+            }
+            s.drawLog[s.k].clear();
+            s.drawLog[s.k].addAll(MobSleep.TICK);
+        }
         if (s.k == L) {
             // state before tick L must be the state before tick 0
             for (int i = 0; i < n; i++) {
                 if (!c.special[i] && b[i] != s.base[i]) {
                     s.k = -1;
-                    if (DEBUG && dbgP++ < 6) System.out.println("[probe/entsleep] not periodic: " + c.f[i].getName() + " #" + e.getId() + " t=" + e.tickCount + " now " + show(c.f[i], e));
-                    fail(s, "not periodic");
+                    if (DEBUG && dbgP++ < 6) System.out.println("[probe/entsleep] not periodic: " + slotName(c, i) + " #" + e.getId() + " t=" + e.tickCount);
+                    fail(s, c.comp != null ? "not periodic: " + slotName(c, i) : "not periodic");
                     return;
                 }
             }
@@ -351,7 +502,7 @@ public final class EntitySleep {
             if (a[i] != s.base[i]) {
                 s.diffs.add(((long) (kk * 2 + 1) << 16) | i);
                 s.diffs.add(a[i]);
-                s.diffRefs.add(c.f[i].getType().isPrimitive() ? null : get(c.f[i], e));
+                s.diffRefs.add(c.f[i].getType().isPrimitive() ? null : c.ref(i, s));
             }
         }
         System.arraycopy(a, 0, s.prevA, 0, n);
@@ -384,6 +535,18 @@ public final class EntitySleep {
         for (int i : c.zeros) if (((Number) get(c.f[i], e)).longValue() != 0) { fail(s, "needs zero " + c.f[i].getName()); return; }
         for (int i : c.entityRefs) if (get(c.f[i], e) != null) { fail(s, "holds entity " + c.f[i].getName()); return; }
         if (e.isPassenger() || e.isVehicle()) { fail(s, "riding"); return; }
+        long drawDeadline = Long.MAX_VALUE;
+        if (c.comp != null) {
+            String why = MobSleep.assumptionsFail(c.mob, e);
+            if (why != null) { fail(s, why); return; }
+            for (int i : c.ctxEntityRefs) {
+                Object x = c.ref(i, s);
+                if (x != null && x != e) { fail(s, "holds entity " + c.slotPath[i] + "." + c.f[i].getName()); return; }
+            }
+            String dw = mobDraws(s);
+            if (dw != null) { fail(s, dw); return; }
+            drawDeadline = lookAhead(s);
+        }
         // the fields that vary within the period
         boolean[] inV = new boolean[c.n];
         int nv = 0;
@@ -397,9 +560,9 @@ public final class EntitySleep {
         int[] v = new int[nv];
         for (int i = 0, j = 0; i < c.n; i++) if (inV[i]) v[j++] = i;
         for (int i : v) {
-            if (c.forbidV[i]) { fail(s, "varies " + c.f[i].getName()); return; }
+            if (c.forbidV[i]) { fail(s, "varies " + slotName(c, i)); return; }
             Class<?> t = c.f[i].getType();
-            if (!t.isPrimitive() && !valueType(t)) { fail(s, "varying reference " + c.f[i].getName()); return; }
+            if (!t.isPrimitive() && !valueType(t)) { fail(s, "varying reference " + slotName(c, i)); return; }
         }
         long[][] aV = new long[L][nv], bV = new long[L][nv];
         Object[][] aRef = new Object[L][];
@@ -433,8 +596,8 @@ public final class EntitySleep {
             for (Object o : aRef[p]) if (o != null && !valueType(o.getClass())) { fail(s, "varying mutable " + o.getClass().getSimpleName()); return; }
         }
         if (s.entityExposed && !neighboursAsleep(s)) { fail(s, "neighbours awake"); return; }
-        long d = deadline(s);
-        if (d <= L + 1) { fail(s, "deadline too close"); return; }
+        long d = Math.min(deadline(s), drawDeadline);
+        if (d <= L + 1) { fail(s, drawDeadline <= L + 1 ? "draw flips too soon" : "deadline too close"); return; }
         // a varying reference must not be replaced outside the tick (its expected identity is what the replay wrote)
         for (int j = 0; j < nv; j++) {
             if (c.f[v[j]].getType().isPrimitive()) continue;
@@ -449,7 +612,7 @@ public final class EntitySleep {
         s.hashB = new long[L];
         for (int p = 0; p < L; p++) {
             for (int j = 0; j < nv; j++) if (c.prim[v[j]]) cur[v[j]] = bV[p][j];
-            s.hashB[p] = SnapCompiler.hashPrims(cur, c.prim, c.special);
+            s.hashB[p] = c.hashOf(cur);
         }
         s.expClock = new long[c.clocks.length];
         for (int j = 0; j < c.clocks.length; j++) s.expClock[j] = c.snap.bits(e, c.clocks[j]);
@@ -458,6 +621,7 @@ public final class EntitySleep {
         s.bV = bV;
         s.aRef = aRef;
         s.wakeAt = d == Long.MAX_VALUE ? Long.MAX_VALUE : level.getGameTime() + d;
+        if (c.comp != null) s.expSeed = s.seedRef.get();
         s.woken = false;
         s.st = St.ASLEEP;
         s.failStreak = 0;
@@ -469,6 +633,124 @@ public final class EntitySleep {
             DEADLINES.add(s.wakeAt, s.id);
             SCHEDULED.put(s.id, s);
         }
+    }
+
+    private static String slotName(EClass c, int i) {
+        return c.slotPath == null || c.slotPath[i].isEmpty() ? c.f[i].getName() : c.slotPath[i] + "." + c.f[i].getName();
+    }
+
+    private static int attrEpoch(Entity e) {
+        return e instanceof net.minecraft.world.entity.LivingEntity le && le.getAttributes() instanceof MoveMemo.AttrEpoch a ? a.probe$attrEpoch() : 0;
+    }
+
+    private static int goalEpoch(Entity e, boolean goals) {
+        if (!(e instanceof net.minecraft.world.entity.Mob m)) return 0;
+        Object sel = MobSleep.fieldValue(m, goals ? "goalSelector" : "targetSelector");
+        return sel instanceof MobSleepHooks.GoalEpoch g ? g.probe$goalEpoch() : 0;
+    }
+
+    /**
+     * The window's draws: tick L draws as tick 0 did (same sites, kinds, bounds); each draw at a draw condition of the
+     * plan whose other side is known; its outcome the same under both readings of a clock compared with it (before or
+     * after the tick's change - which one the code reads is not known here). Fills the per-phase replay tables and the
+     * outcomes the look-ahead keeps. Null if all is well, else why not.
+     */
+    private static String mobDraws(ES s) {
+        EClass c = s.c;
+        int L = c.period;
+        if (!sameDraws(s.drawLog[0], s.drawLog[L])) return "draws not periodic";
+        s.dKind = new int[L][];
+        s.dBound = new int[L][];
+        s.dCond = new int[L][];
+        s.dOut = new boolean[L][];
+        for (int p = 0; p < L; p++) {
+            LongArrayList log = s.drawLog[p];
+            int m = log.size() / 2;
+            s.dKind[p] = new int[m];
+            s.dBound[p] = new int[m];
+            s.dCond[p] = new int[m];
+            s.dOut[p] = new boolean[m];
+            for (int j = 0; j < m; j++) {
+                long key = log.getLong(2 * j);
+                String site = MobSleep.SITES.get(MobSleep.siteOf(key));
+                List<Integer> cs = c.drawSites.get(site);
+                if (cs == null) return "draw outside the draw conditions: " + site;
+                if (cs.size() != 1) return "two draw conditions on one line: " + site;
+                SleepAnalysis.DrawCond d = c.mob.draws().get(cs.get(0));
+                if (d.other() == SleepAnalysis.DrawCond.UNKNOWN) return "draw compared with an unknown value: " + d.text();
+                int kind = MobSleep.kindOf(key);
+                double v = MobSleep.asNumber(kind, log.getLong(2 * j + 1));
+                double[] o = otherSide(s, d, p, 0);
+                if (o == null) return "draw condition's other side not found: " + d.text();
+                boolean a = MobSleep.taken(d, v, o[0]), b = MobSleep.taken(d, v, o[1]);
+                if (a != b) return "draw at its clock's edge";
+                s.dKind[p][j] = kind;
+                s.dBound[p][j] = MobSleep.boundOf(key);
+                s.dCond[p][j] = cs.get(0);
+                s.dOut[p][j] = a;
+            }
+        }
+        s.random = (net.minecraft.util.RandomSource) get(c.randomField, s.e);
+        s.seedRef = MobSleep.seedOf(s.random);
+        if (s.seedRef == null) return "random of another kind";
+        return null;
+    }
+
+    private static boolean sameDraws(LongArrayList x, LongArrayList y) {
+        if (x.size() != y.size()) return false;
+        for (int i = 0; i < x.size(); i += 2) if (x.getLong(i) != y.getLong(i)) return false;
+        return true;
+    }
+
+    /**
+     * The other side of a draw condition at window tick k (t ticks after the window's start): a constant, a final
+     * field, or a clock + constant - both readings of the clock: its value at the tick's start and after its change.
+     */
+    private static double[] otherSide(ES s, SleepAnalysis.DrawCond d, long k, long dummy) {
+        EClass c = s.c;
+        if (d.other() == SleepAnalysis.DrawCond.CONST) return new double[] {d.constant(), d.constant()};
+        int dot = d.path().lastIndexOf('.');
+        String holderPath = dot < 0 ? "" : d.path().substring(0, dot);
+        if (d.other() == SleepAnalysis.DrawCond.FINAL) {
+            Object h = MobSleep.resolve(s.e, holderPath);
+            Object v = h == null ? null : get(d.field(), h);
+            if (!(v instanceof Number n)) return null;
+            return new double[] {n.doubleValue(), n.doubleValue()};
+        }
+        int slot = c.slot(holderPath, d.field());
+        if (slot < 0) return null;
+        int j = -1;
+        for (int q = 0; q < c.clocks.length; q++) if (c.clocks[q] == slot) j = q;
+        if (j < 0) return null;
+        long r = s.rates[j];
+        long start = narrow(c.f[slot].getType(), s.base[slot] + r * k);
+        return new double[] {start + d.constant(), narrow(c.f[slot].getType(), start + r) + d.constant()};
+    }
+
+    /** The look-ahead horizon: past it the entity wakes to look again. */
+    private static final int HORIZON = Integer.getInteger("lab.entsleep.drawHorizon", 4000);
+
+    /**
+     * Ticks (in deadline() units) until a draw of the replayed ticks would take another branch than the observed one:
+     * the draws simulated on a copy of the random's seed, the clocks advanced by their rates.
+     */
+    private static long lookAhead(ES s) {
+        EClass c = s.c;
+        int L = c.period;
+        MobSleep.Lcg g = new MobSleep.Lcg(s.seedRef.get());
+        long el0 = (long) s.e.tickCount + 1 - s.startTick;   // the first replayed tick, from the window's start
+        for (long t = 0; t < HORIZON; t++) {
+            long el = el0 + t;
+            int p = (int) Math.floorMod(el, (long) L);
+            int[] dk = s.dKind[p];
+            for (int j = 0; j < dk.length; j++) {
+                SleepAnalysis.DrawCond d = c.mob.draws().get(s.dCond[p][j]);
+                double v = MobSleep.asNumber(dk[j], g.draw(dk[j], s.dBound[p][j]));
+                double[] o = otherSide(s, d, el, 0);
+                if (o == null || MobSleep.taken(d, v, o[0]) != s.dOut[p][j] || MobSleep.taken(d, v, o[1]) != s.dOut[p][j]) return t + 1;
+            }
+        }
+        return HORIZON;
     }
 
     private static boolean valueType(Class<?> t) {
@@ -492,13 +774,15 @@ public final class EntitySleep {
         EClass c = s.c;
         Entity e = s.e;
         long best = Long.MAX_VALUE;
-        for (SleepAnalysis.Cond cond : c.plan.conds()) {
+        List<SleepAnalysis.Cond> cs = c.plan.conds();
+        for (int cj = 0; cj < cs.size(); cj++) {
+            SleepAnalysis.Cond cond = cs.get(cj);
             if (cond.clockMod()) continue;   // inside the period
             if (cond.clock() == null) return 0;   // game-time modulo: not aligned with the entity's phase
             long cv, r;
-            int ci = index(c, cond.clock());
+            int ci = c.condSlot != null ? c.condSlot[cj] : index(c, cond.clock());
             if (ci < 0) return 0;
-            cv = longValue(c.f[ci], e);
+            cv = c.comp != null ? narrow(c.f[ci].getType(), c.snap.bits(e, ci)) : longValue(c.f[ci], e);
             r = ci == c.tickCount ? 1 : rateOf(s, ci);
             if (cond.age()) {   // the stamp's age: game time - stamp, one more each tick
                 if (r != 0) return 0;
@@ -514,9 +798,9 @@ public final class EntitySleep {
             if (r == 0) continue;
             long t = cond.thresholdConst();
             if (cond.thresholdField() != null) {
-                int ti = index(c, cond.thresholdField());
+                int ti = c.condThreshold != null ? c.condThreshold[cj] : index(c, cond.thresholdField());
                 if (ti < 0) return 0;
-                t += longValue(c.f[ti], e);
+                t += c.comp != null ? narrow(c.f[ti].getType(), c.snap.bits(e, ti)) : longValue(c.f[ti], e);
             }
             long dist = r > 0 ? t - cv : cv - t;
             if (dist < -1) continue;   // passed and moving away
@@ -569,7 +853,14 @@ public final class EntitySleep {
             // every field: primitives by a hash of their values, references by identity (the objects left by the last
             // replay); synched data changes arrive through its set() hook. Clocks separately.
             if (sn.hashPrims(e) != s.hashB[p] || !sn.sameRefs(e, s.expR)) return verifyFail(s, firstDiff(s, p));
-            for (int j = 0; j < cl.length; j++) if (sn.bits(e, cl[j]) != s.expClock[j]) return verifyFail(s, "clock " + c.f[cl[j]].getName());
+            for (int j = 0; j < cl.length; j++) if (sn.bits(e, cl[j]) != s.expClock[j]) return verifyFail(s, "clock " + slotName(c, cl[j]));
+        }
+        if (c.comp != null) {
+            if (!MobSleep.stillEmpty(c.mob, e)) return verifyFail(s, "a collection assumed empty");
+            if (attrEpoch(e) != s.attrEpoch || goalEpoch(e, true) != s.goalEpoch0 || goalEpoch(e, false) != s.goalEpoch1) return verifyFail(s, "attributes or goals");
+            if (s.seedRef.get() != s.expSeed) return verifyFail(s, "random drawn outside the tick");
+            if (s.readsWeather && !noWeather(e.level())) return verifyFail(s, "weather");
+            if (s.readsPlayers && !noPlayers(e.level())) return verifyFail(s, "players");
         }
         long[] ap = s.aV[p];
         Object[] ar = s.aRef[p];
@@ -591,20 +882,25 @@ public final class EntitySleep {
             s.expClock[j] = x;
             sn.put(e, cl[j], x, null);
         }
+        if (c.comp != null) {
+            int[] dk = s.dKind[p], db = s.dBound[p];
+            for (int j = 0; j < dk.length; j++) MobSleep.replay(s.random, dk[j], db[j]);
+            s.expSeed = s.seedRef.get();
+        }
         return true;
     }
 
     /** Which field broke the replay check (diagnostics, slow). */
     private static String firstDiff(ES s, int p) {
         EClass c = s.c;
-        for (int k = 0; k < c.refSlots.length; k++) if (get(c.f[c.refSlots[k]], s.e) != s.expR[k]) return c.f[c.refSlots[k]].getName();
+        for (int k = 0; k < c.refSlots.length; k++) if (c.ref(c.refSlots[k], s) != s.expR[k]) return slotName(c, c.refSlots[k]);
         long[] one = new long[c.n];
         c.snap.snap(s.e, one);
         // primitives: which one differs from the phase's expected values
         long[] exp = one.clone();
         for (int i = 0; i < c.n; i++) if (c.prim[i] && !c.special[i]) exp[i] = s.base[i];
         for (int j = 0; j < s.v.length; j++) if (c.prim[s.v[j]]) exp[s.v[j]] = s.bV[p][j];
-        for (int i = 0; i < c.n; i++) if (c.prim[i] && !c.special[i] && one[i] != exp[i]) return c.f[i].getName();
+        for (int i = 0; i < c.n; i++) if (c.prim[i] && !c.special[i] && one[i] != exp[i]) return slotName(c, i);
         return "primitive hash";
     }
 
@@ -613,7 +909,7 @@ public final class EntitySleep {
         if (DEBUG && dbg++ < 12) {
             long el = (long) s.e.tickCount - s.startTick;
             StringBuilder sb = new StringBuilder("[probe/entsleep] verify fail " + field + " #" + s.e.getId() + " el=" + el + " phase=" + Math.floorMod(el, (long) s.c.period) + " now=");
-            for (int j = 0; j < s.v.length; j++) sb.append(s.c.f[s.v[j]].getName()).append('=').append(show(s.c.f[s.v[j]], s.e)).append(' ');
+            for (int j = 0; j < s.v.length; j++) sb.append(slotName(s.c, s.v[j])).append(' ');
             sb.append(" table:");
             for (int p = 0; p < Math.min(8, s.c.period); p++) {
                 sb.append(" [").append(p).append(']');
@@ -697,7 +993,49 @@ public final class EntitySleep {
 
     static void unobservedRead() {
         unobservedE++;
+        if (UNOBS_WHY) {
+            String w = java.lang.StackWalker.getInstance().walk(fs -> fs.skip(3).limit(4).map(f -> f.getClassName().substring(f.getClassName().lastIndexOf('.') + 1) + "." + f.getMethodName())
+                    .reduce((x, y) -> x + " < " + y).orElse("?"));
+            REFUSED.merge("unobserved via " + w, 1L, Long::sum);
+        }
     }
+
+    private static final Field RAIN = MobSleep.field(Level.class, "rainLevel"), THUNDER = MobSleep.field(Level.class, "thunderLevel");
+    private static final Field PLAYERS = MobSleep.field(net.minecraft.server.level.ServerLevel.class, "players");
+
+    private static boolean noWeather(Level level) {
+        try {
+            return RAIN != null && THUNDER != null && RAIN.getFloat(level) == 0 && THUNDER.getFloat(level) == 0;
+        } catch (IllegalAccessException e) {
+            return false;
+        }
+    }
+
+    private static boolean noPlayers(Level level) {
+        try {
+            return PLAYERS != null && ((java.util.List<?>) PLAYERS.get(level)).isEmpty();
+        } catch (IllegalAccessException | ClassCastException e) {
+            return false;
+        }
+    }
+
+    /** a mob being observed read the weather: an observed read while there is none (true), else unobserved */
+    static boolean weatherRead(Level level) {
+        ES s = obs;
+        if (s.c.comp == null || !noWeather(level)) return false;
+        s.readsWeather = true;
+        return true;
+    }
+
+    /** a mob being observed read the player list: observed while the level has no players */
+    static boolean playersRead(java.util.List<?> players) {
+        ES s = obs;
+        if (s.c.comp == null || !players.isEmpty()) return false;
+        s.readsPlayers = true;
+        return true;
+    }
+
+    private static final boolean UNOBS_WHY = Boolean.getBoolean("lab.entsleep.unobsWhy");
 
     private static AABB union(AABB b, double x0, double y0, double z0, double x1, double y1, double z1) {
         if (b == null) return new AABB(x0, y0, z0, x1, y1, z1);
@@ -911,7 +1249,7 @@ public final class EntitySleep {
         long h = 17;
         for (Field f : fs) {
             String n = f.getName();
-            if (n.equals("id") || n.equals("uuid") || n.equals("stringUUID") || n.startsWith("probe$") || n.equals("bobOffs")) continue;   // per run
+            if (n.equals("id") || n.equals("uuid") || n.equals("stringUUID") || n.startsWith("probe$") || n.equals("bobOffs") || n.equals("timeOffs") || n.equals("rotA")) continue;   // per run (timeOffs, rotA: Math.random() in LivingEntity's constructor, cosmetic)
             Class<?> t = f.getType();
             // (random seeds are per run: RandomSource.create() is seeded from the clock)
             if (!t.isPrimitive() && !(valueType(t) || SynchedEntityData.class.isAssignableFrom(t))) continue;

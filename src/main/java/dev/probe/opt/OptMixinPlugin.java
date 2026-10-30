@@ -39,6 +39,10 @@ public final class OptMixinPlugin implements IMixinConfigPlugin {
             on = Boolean.getBoolean("lab.opt.all") || Boolean.getBoolean("lab.opt.JobSiteIndex");
         if (simple.startsWith("MoveMemo"))   // one feature: an unchanged move of a living entity skipped
             on = Boolean.getBoolean("lab.opt.all") || Boolean.getBoolean("lab.opt.MoveMemo");
+        // mob sleep's runtime (notes/47): draws recorded, goal selectors' and attribute maps' modification counters
+        boolean mobSleep = Boolean.getBoolean("lab.opt.EntitySleep") && Boolean.getBoolean("lab.sleep.components") && Boolean.getBoolean("lab.sleep.mobRuntime");
+        if (simple.startsWith("MobSleep")) on = mobSleep;
+        if (simple.equals("MoveMemoAttributesMixin")) on |= mobSleep;
         if (simple.equals("ChunkCacheClearMixin"))
             on = Boolean.getBoolean("lab.opt.all") || Boolean.getBoolean("lab.opt.ChunkCacheMixin");
         if (simple.equals("SectionStorageIndexMixin"))

@@ -26,6 +26,30 @@ import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.event.RegisterCommandsEvent;
 
 final class ProbeCommand {
+    /**
+     * NBT as text that does not depend on hash-map order: compound keys sorted, lists of compounds sorted (a mob's
+     * Attributes list follows the identity hashes of attribute holders, different every run).
+     */
+    static String canonNbt(net.minecraft.nbt.Tag t) {
+        if (t instanceof net.minecraft.nbt.CompoundTag c) {
+            StringBuilder sb = new StringBuilder("{");
+            for (String k : new java.util.TreeSet<>(c.getAllKeys())) sb.append(k).append(':').append(canonNbt(c.get(k))).append(',');
+            return sb.append('}').toString();
+        }
+        if (t instanceof net.minecraft.nbt.ListTag l && !l.isEmpty() && l.get(0) instanceof net.minecraft.nbt.CompoundTag) {
+            java.util.List<String> els = new java.util.ArrayList<>();
+            for (net.minecraft.nbt.Tag x : l) els.add(canonNbt(x));
+            java.util.Collections.sort(els);
+            return els.toString();
+        }
+        if (t instanceof net.minecraft.nbt.ListTag l) {
+            StringBuilder sb = new StringBuilder("[");
+            for (net.minecraft.nbt.Tag x : l) sb.append(canonNbt(x)).append(',');
+            return sb.append(']').toString();
+        }
+        return String.valueOf(t);
+    }
+
     private static final DateTimeFormatter FILE_TS = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss");
 
     private ProbeCommand() {}
@@ -151,6 +175,12 @@ final class ProbeCommand {
                                         return 0;
                                     }
                                 }))))
+                .then(Commands.literal("reseed").executes(ctx -> {
+                    // exactness tests: every level's shared random to a fixed seed, right before a scene is built
+                    for (var lv : ctx.getSource().getServer().getAllLevels()) lv.random.setSeed(lv.dimension().location().toString().hashCode() * 31L + 777);
+                    say(ctx, "levels' randoms reseeded");
+                    return 1;
+                }))
                 .then(Commands.literal("sleepents").executes(ctx -> {
                     String r = dev.probe.optsupport.sleep.SleepEngine.entityReport(ctx.getSource().getLevel());
                     ProbeMod.LOGGER.info("{}{}", System.lineSeparator(), r);
@@ -341,7 +371,7 @@ final class ProbeCommand {
                 e.saveWithoutId(tag);
                 tag.remove("UUID");
                 rows.add(net.minecraft.core.registries.BuiltInRegistries.ENTITY_TYPE.getKey(e.getType()) + " " + Double.doubleToLongBits(e.getX()) + " "
-                        + Double.doubleToLongBits(e.getY()) + " " + Double.doubleToLongBits(e.getZ()) + " " + e.getDeltaMovement() + " " + tag
+                        + Double.doubleToLongBits(e.getY()) + " " + Double.doubleToLongBits(e.getZ()) + " " + e.getDeltaMovement() + " " + canonNbt(tag)
                         + (Boolean.getBoolean("probe.hashEntitiesDeep") ? " deep=" + Long.toHexString(dev.probe.optsupport.sleep.EntitySleep.deepHash(e)) : ""));
             }
             java.util.Collections.sort(rows);

@@ -92,6 +92,8 @@
     "MoveMemoHurtMixin",
     "MoveMemoAttributesMixin",
     "MoveMemoDataMixin",
+    "MobSleepRandomMixin",
+    "MobSleepGoalsMixin",
     "SectionStorageIndexMixin",
     "PoiColumnMixin",
     "BlockBehaviourInvoker",

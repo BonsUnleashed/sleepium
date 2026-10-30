@@ -78,9 +78,9 @@ final class SleepAnalysis {
      * field set (behind a null test on it, or after a call on it) is excluded from the analysis.
      */
     record Plan(boolean eligible, String reason, List<Field> clocks, List<Cond> conds, List<Field> watch, long period, List<Field> nulls, List<Field> zeros,
-            List<DrawCond> draws) {
+            List<DrawCond> draws, MobPlan mob) {
         Plan(boolean eligible, String reason, List<Field> clocks, List<Cond> conds, List<Field> watch, long period, List<Field> nulls, List<Field> zeros) {
-            this(eligible, reason, clocks, conds, watch, period, nulls, zeros, List.of());
+            this(eligible, reason, clocks, conds, watch, period, nulls, zeros, List.of(), null);
         }
 
         Plan(boolean eligible, String reason, List<Field> clocks, List<Cond> conds) {
@@ -99,6 +99,15 @@ final class SleepAnalysis {
      * jump tests the draw itself, nextInt(n) != 0), which side the draw is, and the other side - a constant
      * ({@code constant}) or a clock (path + field, plus {@code constant}).
      */
+    /**
+     * Mob sleep (-Dlab.sleep.components with -Dlab.sleep.mobRuntime): what the runtime needs beyond the entity's own
+     * fields. Paths name objects from the entity ("" itself, "navigation", "goalSelector.availableGoals[3].goal").
+     * {@code clockPaths} / {@code condPaths}: the context of Plan.clocks / Plan.conds, in their order. Assumptions are
+     * "path.name" (a field, or a boolean method for {@code falseCalls}, "name#n" with an int argument).
+     */
+    record MobPlan(List<String> contexts, List<String> clockPaths, List<String> condPaths, Set<String> nulls, Set<String> zeros, Set<String> le0,
+            Set<String> ge0, Set<String> falseCalls, Set<String> empty, List<DrawCond> draws, Set<String> captured) {}
+
     record DrawCond(String site, String draw, int jumpOp, int cmpOp, boolean drawFirst, double constant, int other, String path, Field field, String text) {
         static final int CONST = 0, CLOCK = 1, FINAL = 2, UNKNOWN = 3;
     }
@@ -112,6 +121,13 @@ final class SleepAnalysis {
     private final ClassLoader loader;
     private final Map<String, Field> clocks = new LinkedHashMap<>();
     private final List<Cond> conds = new ArrayList<>();
+    /** the context path of each condition's clock ("" the entity), in the order of conds */
+    private final List<String> condPaths = new ArrayList<>();
+
+    private void addCond(Cond c) {
+        conds.add(c);
+        condPaths.add(ctxPath);
+    }
     /** fields the followed code writes, plus owned containers whose contents it may change in place */
     private final Map<String, Field> watch = new LinkedHashMap<>();
     private String reject;
@@ -357,12 +373,14 @@ final class SleepAnalysis {
             clocks.clear();
             clocks.put(fkey("net/minecraft/world/entity/Entity", "tickCount"), tickCount);
             conds.clear();
+            condPaths.clear();
             watch.clear();
             moduli.clear();
             reasons.clear();
             reasonGuards.clear();
             draws.clear();
             capturedContexts.clear();
+            contexts.clear();
             chainGuards = curGuards = Set.of();
             reject = null;
             nullCandidates.clear();
@@ -435,6 +453,7 @@ final class SleepAnalysis {
             rounds(decl, root, ec, tickCount, chainSet, seen);
             ok();
         }
+        if (sample != null && reasons.isEmpty() && reject == null && MOB_RUNTIME) return mobPlan(ec);
         if (sample != null && reasons.isEmpty() && (!falseCalls.isEmpty() || !forcedNulls.isEmpty() || !draws.isEmpty()))
             reasons.put("assumptions and " + draws.size() + " draw conditions not in the runtime yet"
                     + (capturedContexts.isEmpty() ? "" : ", whole state of " + capturedContexts) + ": " + draws.stream().map(DrawCond::text).toList(), 1);
@@ -463,6 +482,24 @@ final class SleepAnalysis {
         }
         return new Plan(true, "ok: period " + period + (nulls.isEmpty() ? "" : ", null: " + nullFields) + (zeros.isEmpty() ? "" : ", zero: " + zeroFields),
                 List.copyOf(clocks.values()), List.copyOf(conds), List.copyOf(watch.values()), period, List.copyOf(nulls), List.copyOf(zeros));
+    }
+
+    static final boolean MOB_RUNTIME = Boolean.getBoolean("lab.sleep.mobRuntime");
+
+    private Plan mobPlan(Class<?> ec) {
+        long period = 1;
+        for (long n : moduli) {
+            period = lcm(period, n);
+            if (period > 1_000_000) return new Plan(false, "period too long", List.copyOf(clocks.values()), List.copyOf(conds));
+        }
+        List<String> clockPaths = new ArrayList<>();
+        for (String k : clocks.keySet()) clockPaths.add(k.contains("|") ? k.substring(0, k.indexOf('|')) : "");
+        for (Field f : clocks.values()) if (f == null) return new Plan(false, "clock not accessible", List.of(), List.of());
+        MobPlan mob = new MobPlan(List.copyOf(contexts), List.copyOf(clockPaths), List.copyOf(condPaths), Set.copyOf(nullFields), Set.copyOf(zeroFields),
+                Set.copyOf(le0Fields), Set.copyOf(ge0Fields), Set.copyOf(falseCalls), Set.copyOf(emptyFields), List.copyOf(draws), Set.copyOf(capturedContexts));
+        String text = "ok (mob): period " + period + ", contexts " + contexts.size() + ", null " + nullFields + ", zero " + zeroFields + ", <=0 " + le0Fields
+                + ", >=0 " + ge0Fields + ", false " + falseCalls + ", empty " + emptyFields + ", draws " + draws.size() + ", whole " + capturedContexts;
+        return new Plan(true, text, List.copyOf(clocks.values()), List.copyOf(conds), List.copyOf(watch.values()), period, List.of(), List.of(), List.copyOf(draws), mob);
     }
 
     private static long lcm(long a, long b) {
@@ -591,14 +628,13 @@ final class SleepAnalysis {
                 reject = "writes " + simple(pf.owner) + "." + pf.name + " of a foreign object";
                 break;
             }
+            if (collect && in[i] instanceof MethodInsnNode cm && COLLECTION_MUTATORS.contains(cm.name) && cm.getOpcode() != Opcodes.INVOKESTATIC) {
+                // a collection of this object changed in place: its elements are state, not contexts
+                Operand r = operand(fr[i], Type.getArgumentTypes(cm.desc).length + 1, fr, m, 0);
+                if (r.kind == Kind.FIELD && r.self) writtenNow.add(declOf(r.owner, r.name) + "." + r.name);
+            }
             if (collect && op == Opcodes.PUTFIELD && in[i] instanceof FieldInsnNode wf0 && onThis(fr[i], 2, fr, m)) {   // another instance's field is not ours
-                // the declaring class, as reflection names it
-                String o = wf0.owner;
-                for (ClassNode cn = node(o); cn != null; cn = cn.superName == null ? null : node(cn.superName)) {
-                    boolean has = false;
-                    for (FieldNode fn : cn.fields) if (fn.name.equals(wf0.name)) has = true;
-                    if (has) { o = cn.name; break; }
-                }
+                String o = declOf(wf0.owner, wf0.name);
                 if (writtenNow.add(o + "." + wf0.name) && wf0.name.equals(WHO_WRITES)) System.out.println("[probe/sleep] " + o + "." + wf0.name + " written @" + simple(owner) + "." + m.name + " ctx=" + ctxPath);
             }
             if (op == Opcodes.PUTFIELD && in[i] instanceof FieldInsnNode f && beChain.contains(f.owner) && (!entityMode || onThis(fr[i], 2, fr, m))) {
@@ -842,7 +878,7 @@ final class SleepAnalysis {
         if (clocks.containsKey(k) && !stamps.contains(e.b.name)) return false;   // a counter, not a stamp
         Field f = field(beClass, e.b.name);
         if (f == null) return false;
-        conds.add(Cond.age(f, c.value, "gameTime - " + e.b.name + " ? " + c.value));
+        addCond(Cond.age(f, c.value, "gameTime - " + e.b.name + " ? " + c.value));
         return true;
     }
 
@@ -890,16 +926,16 @@ final class SleepAnalysis {
                 Operand o = a[b];
                 if (containsClock(o)) { reject = "two clocks in " + simple(mi.owner) + "." + mi.name; return; }
                 if (peerClock(o) && o.name.equals(clockOp.name) && c == 0) {
-                    conds.add(Cond.peer(clock, clockOp.name + " ? other." + o.name + " (" + mi.name + ")"));
+                    addCond(Cond.peer(clock, clockOp.name + " ? other." + o.name + " (" + mi.name + ")"));
                     continue;
                 }
                 if (entityMode && o.kind == Kind.FIELD && !o.self) { reject = "clock bounded by another object's " + o.name + " in " + mi.name; return; }
                 if (o.kind == Kind.CONST) {
-                    conds.add(new Cond(clock, null, o.value - c, 0, clockOp.name + " ? " + (o.value - c) + " (" + mi.name + ")"));
+                    addCond(new Cond(clock, null, o.value - c, 0, clockOp.name + " ? " + (o.value - c) + " (" + mi.name + ")"));
                 } else if (o.kind == Kind.FIELD && chain.contains(o.owner) && !BASE_FIELDS.contains(o.name)) {
                     Field tf = field(beClass, o.name);
                     if (tf == null) { reject = "field not accessible: " + o.name; return; }
-                    conds.add(new Cond(clock, tf, -c, 0, clockOp.name + " ? " + o.name + (c == 0 ? "" : " - " + c) + " (" + mi.name + ")"));
+                    addCond(new Cond(clock, tf, -c, 0, clockOp.name + " ? " + o.name + (c == 0 ? "" : " - " + c) + " (" + mi.name + ")"));
                 } else {
                     reject = "clock bounded by an unknown value in " + simple(mi.owner) + "." + mi.name;
                     return;
@@ -931,7 +967,7 @@ final class SleepAnalysis {
         if (xg || yg) {
             Operand g = xg ? x : y, other = xg ? y : x;
             if (other == null || other.kind != Kind.CONST) { reject = "game time modulo compared with non-constant"; return; }
-            conds.add(new Cond(null, null, other.value, g.value, "gameTime % " + g.value + " ? " + other.value));
+            addCond(new Cond(null, null, other.value, g.value, "gameTime % " + g.value + " ? " + other.value));
             return;
         }
         Operand c = xc ? x : y, t = xc ? y : x;
@@ -940,7 +976,7 @@ final class SleepAnalysis {
         switch (t.kind) {
             case CONST -> {
                 if (clock == null) { reject = "clock not accessible: " + c.name; return; }
-                conds.add(new Cond(clock, null, t.value, 0, c.name + " ? " + t.value));
+                addCond(new Cond(clock, null, t.value, 0, c.name + " ? " + t.value));
             }
             case ARITH -> {   // clock ? field +- const
                 Operand fa = t.a, cb = t.b;
@@ -949,7 +985,7 @@ final class SleepAnalysis {
                         && !BASE_FIELDS.contains(fa.name) && !isClock(fa) && cb.kind == Kind.CONST) {
                     Field tf = field(beClass, fa.name);
                     if (tf == null || clock == null) { reject = "field not accessible: " + fa.name; return; }
-                    conds.add(new Cond(clock, tf, add ? cb.value : -cb.value, 0, c.name + " ? " + fa.name + (add ? " + " : " - ") + cb.value));
+                    addCond(new Cond(clock, tf, add ? cb.value : -cb.value, 0, c.name + " ? " + fa.name + (add ? " + " : " - ") + cb.value));
                 } else {
                     reject = "clock " + c.name + " compared with ARITH";
                 }
@@ -957,14 +993,14 @@ final class SleepAnalysis {
             case FIELD -> {
                 if (peerClock(t) && t.name.equals(c.name)) {
                     if (clock == null) { reject = "clock not accessible: " + c.name; return; }
-                    conds.add(Cond.peer(clock, c.name + " ? other." + t.name));
+                    addCond(Cond.peer(clock, c.name + " ? other." + t.name));
                     return;
                 }
                 if (entityMode && !t.self) { reject = "clock compared with another object's " + t.name; return; }
                 if (!beChain.contains(t.owner)) { reject = "clock compared with foreign field " + t.name; return; }
                 Field tf = field(beClass, t.name);
                 if (tf == null || clock == null) { reject = "field not accessible: " + t.name; return; }
-                conds.add(new Cond(clock, tf, 0, 0, c.name + " ? " + t.name));
+                addCond(new Cond(clock, tf, 0, 0, c.name + " ? " + t.name));
             }
             default -> reject = "clock " + c.name + " compared with " + t.kind;
         }
@@ -1058,7 +1094,7 @@ final class SleepAnalysis {
         for (long n : ns) {
             if (n <= 0) { reject = "clock modulo " + n; return; }
             moduli.add(n);
-            conds.add(new Cond(clock, null, 0, n, "(" + clockOp.name + " + ..) % " + n, true));
+            addCond(new Cond(clock, null, 0, n, "(" + clockOp.name + " + ..) % " + n, true));
         }
     }
 
@@ -1475,6 +1511,15 @@ final class SleepAnalysis {
 
     /** fields (owner.name) any followed code writes, over all rounds: grown to a fixpoint with the null fields */
     private Set<String> writtenAny = new HashSet<>();
+    private static final Set<String> COLLECTION_MUTATORS = Set.of("add", "addAll", "remove", "removeAll", "removeIf", "retainAll", "clear", "put", "putAll",
+            "addFirst", "addLast", "removeFirst", "removeLast", "poll", "offer", "push", "pop", "set", "sort", "replaceAll", "compute", "computeIfAbsent", "merge");
+
+    /** the class declaring a field, as reflection names it */
+    private String declOf(String owner, String name) {
+        for (ClassNode cn = node(owner); cn != null; cn = cn.superName == null ? null : node(cn.superName))
+            for (FieldNode fn : cn.fields) if (fn.name.equals(name)) return cn.name;
+        return owner;
+    }
     /** this round's writes; the next round decides with them (until two rounds agree) */
     private Set<String> writtenNow = new HashSet<>();
 
@@ -2115,10 +2160,10 @@ final class SleepAnalysis {
             r = ownerOf0(owner, name, desc);
             String rej = reject;
             reject = savedReject;
-            r = rej != null ? " " + rej : r == null ? " " : r;
+            r = rej != null ? "\u0000" + rej : r == null ? "\u0000" : r;
             ownerCache.put(key, r);
         }
-        if (r.startsWith(" ")) {
+        if (r.startsWith("\u0000")) {
             if (r.length() > 1 && reject == null) reject = r.substring(1);   // the mixin-changed refusal, every time
             return null;
         }

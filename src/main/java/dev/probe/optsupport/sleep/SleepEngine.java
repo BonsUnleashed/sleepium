@@ -150,6 +150,24 @@ public final class SleepEngine {
         if (obs != null && Thread.currentThread() == obsThread) unobserved++;
     }
 
+    /** the level's weather read: a mob being observed may sleep on it while there is none (a change wakes it) */
+    public static void weatherRead(net.minecraft.world.level.Level level) {
+        if (EntitySleep.obs != null && Thread.currentThread() == EntitySleep.obsThread && EntitySleep.weatherRead(level)) {
+            unobservedAll++;
+            return;
+        }
+        unobservedRead();
+    }
+
+    /** the level's player list read: a mob being observed may sleep on it while it is empty (a player arriving wakes it) */
+    public static void playersRead(net.minecraft.server.level.ServerLevel level, java.util.List<?> players) {
+        if (EntitySleep.obs != null && Thread.currentThread() == EntitySleep.obsThread && EntitySleep.playersRead(players)) {
+            unobservedAll++;
+            return;
+        }
+        unobservedRead();
+    }
+
     /**
      * Before every skipped tick: the watched fields must still equal the snapshot taken when it fell asleep.
      * Anything changed from outside (a bell hit, a menu, another mod calling a setter) wakes it for this very tick.

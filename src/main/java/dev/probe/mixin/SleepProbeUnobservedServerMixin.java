@@ -34,7 +34,7 @@ public abstract class SleepProbeUnobservedServerMixin {
 
     @ModifyReturnValue(method = "players", at = @At("RETURN"))
     private List<ServerPlayer> probe$playerList(List<ServerPlayer> v) {
-        SleepEngine.unobservedRead();
+        SleepEngine.playersRead((ServerLevel) (Object) this, v);
         return v;
     }
 

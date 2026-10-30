@@ -26,7 +26,7 @@ public abstract class SleepProbeUnobservedMixin {
 
     @ModifyVariable(method = "isRainingAt", at = @At("HEAD"), argsOnly = true)
     private BlockPos probe$rainAt(BlockPos pos) {
-        SleepEngine.unobservedRead();
+        SleepEngine.weatherRead((Level) (Object) this);
         return pos;
     }
 
@@ -38,20 +38,20 @@ public abstract class SleepProbeUnobservedMixin {
 
     @ModifyVariable(method = "getRainLevel", at = @At("HEAD"), argsOnly = true)
     private float probe$rainLevel(float d) {
-        SleepEngine.unobservedRead();
+        SleepEngine.weatherRead((Level) (Object) this);
         return d;
     }
 
     @ModifyVariable(method = "getThunderLevel", at = @At("HEAD"), argsOnly = true)
     private float probe$thunderLevel(float d) {
-        SleepEngine.unobservedRead();
+        SleepEngine.weatherRead((Level) (Object) this);
         return d;
     }
 
     // no-argument getters: pass-through return values (MixinExtras, no CallbackInfo allocation)
     @ModifyReturnValue(method = {"isRaining", "isThundering"}, at = @At("RETURN"))
     private boolean probe$weather(boolean v) {
-        SleepEngine.unobservedRead();
+        SleepEngine.weatherRead((Level) (Object) this);
         return v;
     }
 

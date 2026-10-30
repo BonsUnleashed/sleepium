@@ -4,6 +4,8 @@
   "package": "dev.probe.mixin",
   "compatibilityLevel": "JAVA_21",
   "mixins": [
+    "SeedEntitiesMixin",
+    "SeedLevelMixin",
     "KnockMixin",
     "KnockEntityMixin",
     "KnockGoalsMixin",
