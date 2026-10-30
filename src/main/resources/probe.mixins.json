@@ -10,6 +10,7 @@
     "MoveTimeEntityMixin",
     "MoveTimeLivingMixin",
     "MoveTimeMobMixin",
+    "MoveShadowMixin",
     "BlockableEventLoopMixin",
     "ProcessorMailboxMixin",
     "ChunkStepHashMixin",

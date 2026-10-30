@@ -26,6 +26,7 @@ public final class ProbeMixinPlugin implements IMixinConfigPlugin {
         if (simple.startsWith("GlTrace")) return Boolean.getBoolean("probe.glTrace");
         if (simple.startsWith("MobQuiet")) return Boolean.getBoolean("probe.mobQuiet");
         if (simple.startsWith("BrainTime")) return Boolean.getBoolean("probe.brainTime");
+        if (simple.startsWith("MoveShadow")) return Boolean.getBoolean("probe.moveShadow");
         if (simple.startsWith("MoveTime")) return Boolean.getBoolean("probe.moveTime");
         if (simple.startsWith("Knock")) return System.getProperty("probe.knock") != null;
         if (simple.equals("ClientAutoMouseMixin")) return System.getProperty("probe.clientAuto") != null;
