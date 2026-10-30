@@ -101,6 +101,7 @@ final class SleepAnalysis {
     private boolean entityMode;
     /** diagnostics (-Dlab.sleep.allReasons): keep going after a refusal and collect every reason */
     private static final boolean ALL_REASONS = Boolean.getBoolean("lab.sleep.allReasons");
+    private static final boolean NULL_WHY = Boolean.getBoolean("lab.sleep.nullWhy");
     private final java.util.Map<String, Integer> reasons = new java.util.LinkedHashMap<>();
 
     private boolean ok() {
@@ -136,7 +137,9 @@ final class SleepAnalysis {
     private final Set<String> nullCandidates = new HashSet<>();
 
     private boolean nullField(Operand o) {
-        return entityMode && o != null && o.kind == Kind.FIELD && o.self && chain != null && chain.contains(o.owner) && nullFields.contains(o.name);
+        if (!entityMode || o == null || o.kind != Kind.FIELD || !o.self) return false;
+        if (!ctxPath.isEmpty()) return nullFields.contains(ctxPath + "." + o.name);
+        return chain != null && chain.contains(o.owner) && nullFields.contains(o.name);
     }
 
     /** Frames plus the instructions that can run under the null assumptions (all reachable ones without assumptions). */
@@ -338,7 +341,7 @@ final class SleepAnalysis {
     }
 
     /** Owned objects whose whole state the entity snapshot or the engine's runtime checks see. */
-    private static final Set<String> ENTITY_SAFE = Set.of("java/lang/Class", "net/minecraft/world/entity/ai/targeting/TargetingConditions","net/minecraft/network/syncher/SynchedEntityData", "net/minecraft/util/RandomSource",
+    private static final Set<String> ENTITY_SAFE = Set.of("java/lang/Class", "net/minecraft/network/syncher/EntityDataAccessor", "net/minecraft/world/entity/ai/targeting/TargetingConditions","net/minecraft/network/syncher/SynchedEntityData", "net/minecraft/util/RandomSource",
             "net/minecraft/world/level/levelgen/LegacyRandomSource", "net/minecraft/world/level/levelgen/SingleThreadedRandomSource",
             "net/minecraft/world/phys/Vec3", "net/minecraft/world/phys/AABB", "java/util/Optional", "java/util/stream/Stream",
             "net/minecraft/world/entity/EntityDimensions", "net/minecraft/core/Rotations", "net/minecraft/world/damagesource/DamageSources",
@@ -481,6 +484,7 @@ final class SleepAnalysis {
                 // receiver and every argument; registry objects (the RecipeType of a furnace) are shared constants, not state
                 int nargs = Type.getArgumentTypes(mi.desc).length + (op == Opcodes.INVOKESTATIC ? 0 : 1);
                 if (entityMode && ENTITY_SINKS.contains(mi.owner + "." + mi.name)) continue;
+                if (entityMode && op == Opcodes.INVOKESTATIC && emptyMethod(mi)) continue;
                 for (int k = 0; k < nargs; k++) {
                     Operand o = operand(fr[i], nargs - k, fr, m, 0);
                     if (nullField(o)) continue;   // null here: nothing to call or to change
@@ -491,12 +495,17 @@ final class SleepAnalysis {
                             Field af = field(beClass, o.name);   // an own array changed in place: snapshotted by content
                             if (af != null) { watch.putIfAbsent(o.name, af); continue; }
                         }
+                        if (entityMode && !ctxPath.isEmpty() && o.kind == Kind.FIELD && o.self && o.type != null && o.type.length() > 1 && !finalField(ctxObj, o.name)) {
+                            String key = ctxPath + "." + o.name;   // a context's own object, assumed null like the entity's
+                            if (nullCandidates.add(key) && NULL_WHY) System.out.println("[probe/sleep] null candidate " + key + " @" + simple(owner) + "." + m.name + " call " + simple(mi.owner) + "." + mi.name);
+                            continue;
+                        }
                         if (entityMode && !ctxPath.isEmpty()) {
                             reject = "calls " + simple(mi.owner) + "." + mi.name + " on " + ctxPath + "'s own " + o.name;
                             break;
                         }
                         if (entityMode && o.kind == Kind.FIELD && o.type != null && o.type.length() > 1) {
-                            nullCandidates.add(o.name);   // assume it null (checked at run time) and look again
+                            if (nullCandidates.add(o.name) && NULL_WHY) System.out.println("[probe/sleep] null candidate " + o.name + " @" + simple(owner) + "." + m.name + " ctx=" + ctxPath + " call " + simple(mi.owner) + "." + mi.name);
                             continue;
                         }
                         reject = "calls " + simple(mi.owner) + "." + mi.name + (k == 0 && op != Opcodes.INVOKESTATIC ? " on" : " with") + " owned state " + o.name;
@@ -872,12 +881,86 @@ final class SleepAnalysis {
     /** Field key by declaring class: javac names the receiver's static type as owner (ItemEntity.tickCount = Entity.tickCount). */
     // ---------------------------------------------------------------- contexts (mob sleep, notes/47)
 
+    /** a static method whose body only returns (the debug packet stubs) */
+    private boolean emptyMethod(MethodInsnNode mi) {
+        MethodNode t = method(mi.owner, mi.name, mi.desc);
+        if (t == null || (t.access & Opcodes.ACC_STATIC) == 0) return false;
+        for (AbstractInsnNode x : t.instructions) if (x.getOpcode() >= 0 && x.getOpcode() != Opcodes.RETURN) return false;
+        return true;
+    }
+
     /** an object of Minecraft's AI (controls, navigation, sensing, goal selectors, goals) or a subclass of one */
     private static boolean aiObject(Object o) {
         if (o == null || o instanceof net.minecraft.world.entity.Entity || o instanceof java.util.Collection<?> || o instanceof java.util.Map<?, ?>
                 || o.getClass().isHidden()) return false;   // a lambda: lambdaHost
         for (Class<?> c = o.getClass(); c != null && c != Object.class; c = c.getSuperclass())
             if (c.getName().startsWith("net.minecraft.world.entity.ai.") || c.getName().startsWith("net.minecraft.world.level.pathfinder.")) return true;
+        return false;
+    }
+
+    private final Map<String, Boolean> ctorOwnedCache = new HashMap<>();
+
+    /**
+     * A final field that every constructor of its class sets to a new object (walkAnimation = new WalkAnimationState(),
+     * combatTracker = new CombatTracker(this)): the object belongs to its holder alone, like the AI objects - followed as
+     * a context of its own. Not collections or maps (their content is the holder's state), not entities.
+     */
+    private boolean ctorOwned(Class<?> holder, String name, Object v) {
+        if (v == null || v instanceof net.minecraft.world.entity.Entity || v instanceof java.util.Collection<?> || v instanceof java.util.Map<?, ?>
+                || v.getClass().isHidden() || v.getClass().isArray() || v.getClass().isEnum()) return false;
+        Field fd = null;
+        for (Class<?> c = holder; c != null && c != Object.class && fd == null; c = c.getSuperclass())
+            try {
+                fd = c.getDeclaredField(name);
+            } catch (NoSuchFieldException e) {
+                // the superclass
+            }
+        if (fd == null || !java.lang.reflect.Modifier.isFinal(fd.getModifiers()) || java.lang.reflect.Modifier.isStatic(fd.getModifiers())) return false;
+        String decl = internal(fd.getDeclaringClass());
+        return ctorOwnedCache.computeIfAbsent(decl + "." + name, k -> {
+            ClassNode cn = node(decl);
+            if (cn == null) return false;
+            int sets = 0;
+            for (MethodNode m : cn.methods) {
+                if (!m.name.equals("<init>")) continue;
+                Frame<SourceValue>[] fr;
+                try {
+                    fr = new Analyzer<>(new SourceInterpreter()).analyze(decl, m);
+                } catch (AnalyzerException e) {
+                    return false;
+                }
+                AbstractInsnNode[] in = m.instructions.toArray();
+                boolean delegates = false;
+                int here = 0;
+                for (int i = 0; i < in.length; i++) {
+                    // this(...) instead of super(...): the other constructor sets it
+                    if (in[i] instanceof MethodInsnNode mi && mi.getOpcode() == Opcodes.INVOKESPECIAL && mi.name.equals("<init>") && mi.owner.equals(decl)
+                            && fr[i] != null && thisAt(fr[i], Type.getArgumentTypes(mi.desc).length + 1, m)) delegates = true;
+                    if (!(in[i] instanceof FieldInsnNode f) || f.getOpcode() != Opcodes.PUTFIELD || !f.name.equals(name) || !f.owner.equals(decl)) continue;
+                    if (fr[i] == null || !thisAt(fr[i], 2, m) || !fresh(fr[i], 1, fr, m, 0)) return false;
+                    here++;
+                }
+                if (!delegates && here == 0) return false;
+                sets += here;
+            }
+            return sets > 0;
+        });
+    }
+
+    /** the value fromTop is local 0 of a constructor (this) */
+    private static boolean thisAt(Frame<SourceValue> f, int fromTop, MethodNode m) {
+        if (f.getStackSize() < fromTop) return false;
+        SourceValue v = f.getStack(f.getStackSize() - fromTop);
+        return v.insns.size() == 1 && v.insns.iterator().next() instanceof VarInsnNode vi && vi.getOpcode() == Opcodes.ALOAD && vi.var == 0;
+    }
+
+    private static boolean finalField(Object o, String name) {
+        for (Class<?> c = o.getClass(); c != null && c != Object.class; c = c.getSuperclass())
+            try {
+                return java.lang.reflect.Modifier.isFinal(c.getDeclaredField(name).getModifiers());
+            } catch (NoSuchFieldException e) {
+                // the superclass
+            }
         return false;
     }
 
@@ -918,12 +1001,12 @@ final class SleepAnalysis {
         if (r.kind == Kind.FIELD && r.self) {
             Object v = fieldValue(ctxObj, r.name);
             if (v == sample) targets.add(new Object[] {"", sample});
-            else if (aiObject(v)) targets.add(new Object[] {(ctxPath.isEmpty() ? "" : ctxPath + ".") + r.name, v});
+            else if (aiObject(v) || ctorOwned(ctxObj.getClass(), r.name, v)) targets.add(new Object[] {(ctxPath.isEmpty() ? "" : ctxPath + ".") + r.name, v});
         } else if (r.kind == Kind.OWNCALL && ctxPath.isEmpty() && r.name != null && r.name.startsWith("result of get") && r.name.length() > 13) {
             String n = r.name.substring(13);
             String field = Character.toLowerCase(n.charAt(0)) + n.substring(1);
             Object v = fieldValue(sample, field);
-            if (aiObject(v)) targets.add(new Object[] {field, v});
+            if (aiObject(v) || ctorOwned(sample.getClass(), field, v)) targets.add(new Object[] {field, v});
         }
         if (targets.isEmpty() && r.kind != Kind.FIELD) {
             // an element of a collection field of the current object, of the call's class
@@ -938,8 +1021,19 @@ final class SleepAnalysis {
                     if (java.lang.reflect.Modifier.isStatic(f.getModifiers()) || !java.util.Collection.class.isAssignableFrom(f.getType())) continue;
                     Object col = fieldValue(ctxObj, f.getName());
                     if (!(col instanceof java.util.Collection<?> cc)) continue;
+                    Object[] els = null;
+                    for (int tries = 0; tries < 8 && els == null; tries++)
+                        try {
+                            els = cc.toArray();
+                        } catch (java.util.ConcurrentModificationException e) {
+                            // the server thread changed it: again
+                        }
+                    if (els == null) {
+                        if (pass1 && reject == null) reject = "collection " + f.getName() + " kept changing during the analysis";
+                        return true;
+                    }
                     int k = 0;
-                    for (Object el : cc) {
+                    for (Object el : els) {
                         if (want.isInstance(el) && aiObject(el)) targets.add(new Object[] {(ctxPath.isEmpty() ? "" : ctxPath + ".") + f.getName() + "[" + k + "]", el});
                         k++;
                     }
