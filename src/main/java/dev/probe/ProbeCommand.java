@@ -345,6 +345,18 @@ final class ProbeCommand {
                         + (Boolean.getBoolean("probe.hashEntitiesDeep") ? " deep=" + Long.toHexString(dev.probe.optsupport.sleep.EntitySleep.deepHash(e)) : ""));
             }
             java.util.Collections.sort(rows);
+            int minId = Integer.MAX_VALUE;
+            for (var e : level.getEntities((net.minecraft.world.entity.Entity) null, box, x -> !(x instanceof net.minecraft.world.entity.player.Player))) minId = Math.min(minId, e.getId());
+            System.out.println("[probe/hash] first entity id " + minId + " (mod 40: " + Math.floorMod(minId, 40) + ")");
+            // -Dprobe.hashRows=<file>: every entity's row, for a line diff between two runs
+            String rowsFile = System.getProperty("probe.hashRows");
+            if (rowsFile != null) {
+                try {
+                    java.nio.file.Files.write(java.nio.file.Path.of(rowsFile), rows);
+                } catch (java.io.IOException ex) {
+                    System.out.println("[probe/hash] rows not written: " + ex);
+                }
+            }
             if (Boolean.getBoolean("probe.hashDump")) {
                 var list = level.getEntities((net.minecraft.world.entity.Entity) null, box, x -> !(x instanceof net.minecraft.world.entity.player.Player));
                 list.sort(java.util.Comparator.comparingDouble((net.minecraft.world.entity.Entity x) -> x.getX()).thenComparingDouble(x -> x.getY()).thenComparingDouble(x -> x.getZ()));

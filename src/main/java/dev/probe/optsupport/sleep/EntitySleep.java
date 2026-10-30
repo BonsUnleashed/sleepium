@@ -48,6 +48,8 @@ public final class EntitySleep {
     private static final int MIN_X = Integer.getInteger("lab.entsleep.minX", Integer.MIN_VALUE);
     private static final int MAX_DIFFS = 8192;
     private static final boolean DEBUG = Boolean.getBoolean("lab.entsleep.debug");
+    /** -Dlab.entsleep.noSleepFor=A,B: these classes are observed but never put to sleep (diagnosis) */
+    private static final java.util.Set<String> NO_SLEEP_FOR = java.util.Set.of(System.getProperty("lab.entsleep.noSleepFor", "").split(","));
     private static int dbg, dbgP;
 
     enum St { OBSERVE, ASLEEP, NEVER }
@@ -370,6 +372,7 @@ public final class EntitySleep {
         EClass c = s.c;
         int L = c.period;
         s.k = -1;
+        if (NO_SLEEP_FOR.contains(e.getClass().getSimpleName())) { fail(s, "debug: never sleeps"); return; }
         for (int i : c.nulls) if (get(c.f[i], e) != null) { fail(s, "needs null " + c.f[i].getName()); return; }
         for (int i : c.zeros) if (((Number) get(c.f[i], e)).longValue() != 0) { fail(s, "needs zero " + c.f[i].getName()); return; }
         for (int i : c.entityRefs) if (get(c.f[i], e) != null) { fail(s, "holds entity " + c.f[i].getName()); return; }

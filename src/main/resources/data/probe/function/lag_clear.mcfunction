@@ -49,3 +49,5 @@ fill 1800 -60 100 1848 -48 148 minecraft:air
 fill 1800 -61 132 1848 -61 148 minecraft:grass_block
 kill @e[type=!minecraft:player,x=2000,y=-61,z=100,dx=32,dy=10,dz=32]
 fill 2000 -60 100 2032 -52 132 minecraft:air
+kill @e[type=!minecraft:player,x=2100,y=-61,z=100,dx=32,dy=8,dz=32]
+fill 2100 -60 100 2132 -54 132 minecraft:air

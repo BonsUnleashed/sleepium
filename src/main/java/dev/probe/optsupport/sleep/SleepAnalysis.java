@@ -999,10 +999,11 @@ final class SleepAnalysis {
      * moveMinecartOnRail): every store to it stores this, the slot holds nothing else (a parameter slot is never one).
      */
     /**
-     * -Dlab.sleep.alias=true: follow such locals. Off by default: with it minecarts become eligible, and lag_carts' deep
-     * entity hash then differs from entity sleep off (10-30; items exact with minecarts excluded) - not understood yet.
+     * Such locals are followed (-Dlab.sleep.noAlias=true: not). With them the six minecart kinds become eligible;
+     * lag_restcarts (all 128 carts and 64 items asleep) and lag_carts / lag_items keep entity sleep's deep hash equal to
+     * entity sleep off (10-30; compared at the same first entity id: item phases follow (tickCount + id) % 4).
      */
-    private static final boolean ALIAS = Boolean.getBoolean("lab.sleep.alias");
+    private static final boolean ALIAS = !Boolean.getBoolean("lab.sleep.noAlias");
 
     private boolean aliasOfThis(int var, Frame<SourceValue>[] frames, MethodNode m, int depth) {
         if (depth > 2) return false;
