@@ -86,6 +86,15 @@ final class SleepAnalysis {
     private final Map<String, Field> watch = new LinkedHashMap<>();
     private String reject;
     private Set<String> chain;      // the block entity's class chain (internal names), for provenance of values
+    /**
+     * Entity mode, mob sleep (notes/47): a sample instance gives the runtime classes of the entity's AI objects; the
+     * analysis follows calls into them in their own context (ctxPath from the entity, ctxObj the sample's object).
+     */
+    private Object sample;
+    private String ctxPath = "";
+    private Object ctxObj;
+    /** contexts entered (paths), for the verdict */
+    private final Set<String> contexts = new java.util.TreeSet<>();
     private Class<?> beCls;
 
     /** entity mode: the engine snapshots every field of the entity, so owned objects whose state it sees are allowed */
@@ -220,8 +229,15 @@ final class SleepAnalysis {
      * The plan's period is the lcm of all clock moduli (1 if none).
      */
     static Plan analyzeEntity(Class<?> entityClass) {
+        return analyzeEntity(entityClass, null);
+    }
+
+    /** with a sample instance: its AI objects (controls, navigation, goal selectors, goals) are followed (notes/47) */
+    static Plan analyzeEntity(Class<?> entityClass, Object sample) {
         SleepAnalysis a = new SleepAnalysis(entityClass.getClassLoader());
         a.entityMode = true;
+        a.sample = sample;
+        a.ctxObj = sample;
         try {
             return a.runEntity(entityClass);
         } catch (Exception | LinkageError e) {
@@ -286,6 +302,8 @@ final class SleepAnalysis {
             rounds(decl, root, ec, tickCount, chainSet, seen);
             ok();
         }
+        if (!contexts.isEmpty() && reasons.isEmpty() && reject == null)
+            reasons.put("AI objects followed (" + contexts.size() + " contexts), not in the runtime snapshot yet", 1);
         if (!reasons.isEmpty()) reject = reasons.size() + " reasons (null: " + nullFields + (zeroFields.isEmpty() ? "" : ", zero: " + zeroFields) + "): " + String.join(" | ", reasons.keySet());
         if (reject != null) return new Plan(false, reject, List.copyOf(clocks.values()), List.copyOf(conds));
         long period = 1;
@@ -320,7 +338,7 @@ final class SleepAnalysis {
     }
 
     /** Owned objects whose whole state the entity snapshot or the engine's runtime checks see. */
-    private static final Set<String> ENTITY_SAFE = Set.of("net/minecraft/network/syncher/SynchedEntityData", "net/minecraft/util/RandomSource",
+    private static final Set<String> ENTITY_SAFE = Set.of("java/lang/Class", "net/minecraft/world/entity/ai/targeting/TargetingConditions","net/minecraft/network/syncher/SynchedEntityData", "net/minecraft/util/RandomSource",
             "net/minecraft/world/level/levelgen/LegacyRandomSource", "net/minecraft/world/level/levelgen/SingleThreadedRandomSource",
             "net/minecraft/world/phys/Vec3", "net/minecraft/world/phys/AABB", "java/util/Optional", "java/util/stream/Stream",
             "net/minecraft/world/entity/EntityDimensions", "net/minecraft/core/Rotations", "net/minecraft/world/damagesource/DamageSources",
@@ -389,7 +407,7 @@ final class SleepAnalysis {
     }
 
     private void follow(String owner, MethodNode m, int depth, Set<String> seen, Set<String> beChain, Class<?> beClass, int self) throws AnalyzerException {
-        if (!ok() || !seen.add(owner + "." + m.name + m.desc + (entityMode ? "#" + self : ""))) return;
+        if (!ok() || !seen.add(owner + "." + m.name + m.desc + (entityMode ? "#" + self + "@" + ctxPath : ""))) return;
         int savedSelf = selfMask;
         selfMask = self;
         try {
@@ -445,6 +463,7 @@ final class SleepAnalysis {
                 for (int k = 1; k <= argc && reject == null; k++)
                     if (containsGameTime(operand(fr[i], k, fr, m, 0))) reject = "game time passed to " + simple(mi.owner) + "." + mi.name;
                 if (reject != null) break;
+                if (crossContext(fr, i, mi, m, depth, seen, true)) continue;
                 if (beChain.contains(mi.owner) && depth >= MAX_DEPTH) {
                     reject = "own call graph deeper than " + MAX_DEPTH + " (" + mi.name + ")";
                     break;
@@ -465,11 +484,16 @@ final class SleepAnalysis {
                 for (int k = 0; k < nargs; k++) {
                     Operand o = operand(fr[i], nargs - k, fr, m, 0);
                     if (nullField(o)) continue;   // null here: nothing to call or to change
+                    if (entityMode && o.kind == Kind.FIELD && "profiler".equals(o.name) && "java/util/function/Supplier".equals(o.type)) continue;   // GoalSelector's profiler supplier
                     if (isOwnField(o, beChain) && !safeOwned(o.type) && !registryType(o.type) && !pureReader(mi)
                             && !(entityMode && o.type != null && ENTITY_SAFE.contains(o.type))) {
                         if (entityMode && o.kind == Kind.FIELD && o.type != null && o.type.startsWith("[") && mi.owner.equals("java/util/Arrays")) {
                             Field af = field(beClass, o.name);   // an own array changed in place: snapshotted by content
                             if (af != null) { watch.putIfAbsent(o.name, af); continue; }
+                        }
+                        if (entityMode && !ctxPath.isEmpty()) {
+                            reject = "calls " + simple(mi.owner) + "." + mi.name + " on " + ctxPath + "'s own " + o.name;
+                            break;
                         }
                         if (entityMode && o.kind == Kind.FIELD && o.type != null && o.type.length() > 1) {
                             nullCandidates.add(o.name);   // assume it null (checked at run time) and look again
@@ -512,7 +536,7 @@ final class SleepAnalysis {
     }
 
     private void branches(String owner, MethodNode m, int depth, Set<String> seen, Set<String> beChain, Class<?> beClass, int self) throws AnalyzerException {
-        if (!ok() || m == null || !seen.add(owner + "." + m.name + m.desc + (entityMode ? "#" + self : ""))) return;
+        if (!ok() || m == null || !seen.add(owner + "." + m.name + m.desc + (entityMode ? "#" + self + "@" + ctxPath : ""))) return;
         int savedSelf = selfMask;
         selfMask = self;
         try {
@@ -556,6 +580,8 @@ final class SleepAnalysis {
                 boundConditions(fr, i, mb, m, beClass);
             } else if (in[i] instanceof MethodInsnNode mi0 && !(entityMode && CLOCK_SINKS.contains(mi0.owner + "." + mi0.name)) && clockArgument(fr, i, mi0, m)) {
                 reject = "clock passed to " + simple(mi0.owner) + "." + mi0.name;
+            } else if (in[i] instanceof MethodInsnNode mc && depth < MAX_DEPTH && crossContext(fr, i, mc, m, depth, seen, false)) {
+                continue;
             } else if (in[i] instanceof MethodInsnNode mi && depth < MAX_DEPTH && beChain.contains(mi.owner)) {
                 String decl = mi.getOpcode() == Opcodes.INVOKESTATIC || mi.getOpcode() == Opcodes.INVOKESPECIAL ? ownerOf(mi.owner, mi.name, mi.desc) : ownerOf(internal(beClass), mi.name, mi.desc);
                 MethodNode target = decl == null ? null : method(decl, mi.name, mi.desc);
@@ -619,7 +645,10 @@ final class SleepAnalysis {
     private static final Set<String> CLOCK_SINKS = Set.of("net/minecraft/nbt/CompoundTag.putInt", "net/minecraft/nbt/CompoundTag.putShort",
             "net/minecraft/nbt/CompoundTag.putLong", "net/minecraft/nbt/CompoundTag.putByte");
     private static final Set<String> ENTITY_SINKS = Set.of("java/util/Objects.requireNonNullElse", "com/google/common/base/MoreObjects.firstNonNull",
-            "net/minecraft/network/chat/Component.getString");
+            "net/minecraft/network/chat/Component.getString",
+            // the profiler (GoalSelector's Supplier<ProfilerFiller>): debug sections, no game state
+            "net/minecraft/util/profiling/ProfilerFiller.push", "net/minecraft/util/profiling/ProfilerFiller.pop",
+            "net/minecraft/util/profiling/ProfilerFiller.popPush", "net/minecraft/util/profiling/ProfilerFiller.incrementCounter");
 
     /** Pure bound functions: they only compare their arguments. */
     private static final Set<String> PURE_BOUNDS = Set.of("net/minecraft/util/Mth.clamp", "java/lang/Math.max", "java/lang/Math.min");
@@ -841,7 +870,135 @@ final class SleepAnalysis {
     }
 
     /** Field key by declaring class: javac names the receiver's static type as owner (ItemEntity.tickCount = Entity.tickCount). */
+    // ---------------------------------------------------------------- contexts (mob sleep, notes/47)
+
+    /** an object of Minecraft's AI (controls, navigation, sensing, goal selectors, goals) or a subclass of one */
+    private static boolean aiObject(Object o) {
+        if (o == null || o instanceof net.minecraft.world.entity.Entity || o instanceof java.util.Collection<?> || o instanceof java.util.Map<?, ?>
+                || o.getClass().isHidden()) return false;   // a lambda: lambdaHost
+        for (Class<?> c = o.getClass(); c != null && c != Object.class; c = c.getSuperclass())
+            if (c.getName().startsWith("net.minecraft.world.entity.ai.") || c.getName().startsWith("net.minecraft.world.level.pathfinder.")) return true;
+        return false;
+    }
+
+    private static Object fieldValue(Object o, String name) {
+        for (Class<?> c = o.getClass(); c != null && c != Object.class; c = c.getSuperclass()) {
+            try {
+                Field f = c.getDeclaredField(name);
+                if (java.lang.reflect.Modifier.isStatic(f.getModifiers())) return null;
+                f.setAccessible(true);
+                return f.get(o);
+            } catch (NoSuchFieldException e) {
+                // the superclass
+            } catch (ReflectiveOperationException | RuntimeException e) {
+                return null;
+            }
+        }
+        return null;
+    }
+
+    private static Set<String> chainOf(Class<?> c) {
+        Set<String> s = new HashSet<>();
+        for (Class<?> k = c; k != null && k != Object.class; k = k.getSuperclass()) s.add(internal(k));
+        return s;
+    }
+
+    /**
+     * A call whose receiver is another context: an AI object held in a field of the current one (or handed out by the
+     * entity's getter of one: getNavigation...), the entity itself from inside one (Goal.mob and the like), or an
+     * element of a collection of AI objects of the current one (GoalSelector's goals: every element followed). The
+     * callee is followed in that context. False if the call is not one of these.
+     */
+    private boolean crossContext(Frame<SourceValue>[] fr, int i, MethodInsnNode mi, MethodNode m, int depth, Set<String> seen, boolean pass1) throws AnalyzerException {
+        if (!entityMode || sample == null || ctxObj == null || mi.getOpcode() == Opcodes.INVOKESTATIC || mi.getOpcode() == Opcodes.INVOKESPECIAL) return false;
+        int argc = Type.getArgumentTypes(mi.desc).length;
+        if (onThis(fr[i], argc + 1, fr, m)) return false;   // the current object's own method
+        Operand r = operand(fr[i], argc + 1, fr, m, 0);
+        List<Object[]> targets = new ArrayList<>();   // {path, object}
+        if (r.kind == Kind.FIELD && r.self) {
+            Object v = fieldValue(ctxObj, r.name);
+            if (v == sample) targets.add(new Object[] {"", sample});
+            else if (aiObject(v)) targets.add(new Object[] {(ctxPath.isEmpty() ? "" : ctxPath + ".") + r.name, v});
+        } else if (r.kind == Kind.OWNCALL && ctxPath.isEmpty() && r.name != null && r.name.startsWith("result of get") && r.name.length() > 13) {
+            String n = r.name.substring(13);
+            String field = Character.toLowerCase(n.charAt(0)) + n.substring(1);
+            Object v = fieldValue(sample, field);
+            if (aiObject(v)) targets.add(new Object[] {field, v});
+        }
+        if (targets.isEmpty() && r.kind != Kind.FIELD) {
+            // an element of a collection field of the current object, of the call's class
+            Class<?> want;
+            try {
+                want = Class.forName(mi.owner.replace('/', '.'), false, loader);
+            } catch (ClassNotFoundException | LinkageError e) {
+                return false;
+            }
+            for (Class<?> c = ctxObj.getClass(); c != null && c != Object.class; c = c.getSuperclass())
+                for (Field f : c.getDeclaredFields()) {
+                    if (java.lang.reflect.Modifier.isStatic(f.getModifiers()) || !java.util.Collection.class.isAssignableFrom(f.getType())) continue;
+                    Object col = fieldValue(ctxObj, f.getName());
+                    if (!(col instanceof java.util.Collection<?> cc)) continue;
+                    int k = 0;
+                    for (Object el : cc) {
+                        if (want.isInstance(el) && aiObject(el)) targets.add(new Object[] {(ctxPath.isEmpty() ? "" : ctxPath + ".") + f.getName() + "[" + k + "]", el});
+                        k++;
+                    }
+                }
+        }
+        if (targets.isEmpty() && r.kind == Kind.FIELD && r.self) {
+            Object v = fieldValue(ctxObj, r.name);
+            if (v != null && v.getClass().isHidden() && v.getClass().getName().contains("$$Lambda")) return lambdaHost(v.getClass(), mi, depth, seen, pass1);
+        }
+        if (targets.isEmpty()) return false;
+        for (Object[] t : targets) {
+            Object obj = t[1];
+            Class<?> cls = obj.getClass();
+            String decl = ownerOf(internal(cls), mi.name, mi.desc);
+            MethodNode target = decl == null ? null : method(decl, mi.name, mi.desc);
+            if (target == null || (target.access & Opcodes.ACC_ABSTRACT) != 0) {
+                if (pass1 && reject == null) reject = "unresolved " + simple(internal(cls)) + "." + mi.name + " in " + t[0];
+                continue;
+            }
+            String savedPath = ctxPath;
+            Object savedObj = ctxObj;
+            ctxPath = (String) t[0];
+            ctxObj = obj;
+            if (!ctxPath.isEmpty()) contexts.add(ctxPath);
+            try {
+                if (pass1) follow(decl, target, depth + 1, seen, chainOf(cls), cls, 1);
+                else branches(decl, target, depth + 1, seen, chainOf(cls), cls, 1);
+            } finally {
+                ctxPath = savedPath;
+                ctxObj = savedObj;
+            }
+        }
+        return true;
+    }
+
+    /**
+     * A call on a lambda held in a field (PanicGoal's damage-type function): its implementation is one of the host
+     * class's synthetic lambda methods - all of them are followed (static ones as such, instance ones on an unknown
+     * receiver).
+     */
+    private boolean lambdaHost(Class<?> lambda, MethodInsnNode mi, int depth, Set<String> seen, boolean pass1) throws AnalyzerException {
+        String name = lambda.getName();
+        String host = name.substring(0, name.indexOf("$$Lambda")).replace('.', '/');
+        ClassNode cn = node(host);
+        if (cn == null) {
+            if (pass1 && reject == null) reject = "lambda host " + simple(host) + " not found for " + mi.name;
+            return true;
+        }
+        for (MethodNode t : cn.methods) {
+            if ((t.access & Opcodes.ACC_SYNTHETIC) == 0 || !t.name.startsWith("lambda$")) continue;
+            int self = (t.access & Opcodes.ACC_STATIC) != 0 ? 0 : 0;   // an instance lambda's receiver is not a context object
+            if (pass1) follow(host, t, depth + 1, seen, chainOf(Object.class), Object.class, self);
+            else branches(host, t, depth + 1, seen, chainOf(Object.class), Object.class, self);
+        }
+        return true;
+    }
+
     private String fkey(String owner, String name) {
+        if (entityMode && !ctxPath.isEmpty() && (chain == null || !chain.contains(owner))) return ctxPath + "|" + owner + "." + name;
         if (owner != null && chain != null && chain.contains(owner) && beCls != null) {
             Field f = field(beCls, name);
             if (f != null) return internal(f.getDeclaringClass()) + "." + name;

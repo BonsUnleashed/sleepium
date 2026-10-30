@@ -48,6 +48,8 @@ public final class EntitySleep {
     private static final int MIN_X = Integer.getInteger("lab.entsleep.minX", Integer.MIN_VALUE);
     private static final int MAX_DIFFS = 8192;
     private static final boolean DEBUG = Boolean.getBoolean("lab.entsleep.debug");
+    /** -Dlab.sleep.components=true: the analysis follows the entity's AI objects (mob sleep in progress, notes/47) */
+    static final boolean COMPONENTS = Boolean.getBoolean("lab.sleep.components");
     /** -Dlab.entsleep.noSleepFor=A,B: these classes are observed but never put to sleep (diagnosis) */
     private static final java.util.Set<String> NO_SLEEP_FOR = java.util.Set.of(System.getProperty("lab.entsleep.noSleepFor", "").split(","));
     private static int dbg, dbgP;
@@ -79,8 +81,13 @@ public final class EntitySleep {
         final int period;
 
         EClass(Class<?> c) {
+            this(c, null);
+        }
+
+        /** sample: an instance whose AI objects the analysis follows (-Dlab.sleep.components=true, notes/47) */
+        EClass(Class<?> c, Object sample) {
             long t0 = System.nanoTime();
-            plan = SleepAnalysis.analyzeEntity(c);
+            plan = SleepAnalysis.analyzeEntity(c, COMPONENTS ? sample : null);
             analysisMs = (System.nanoTime() - t0) / 1_000_000;
             List<Field> fl = new ArrayList<>();
             for (Class<?> k = c; k != null && k != Object.class; k = k.getSuperclass()) {
@@ -217,7 +224,7 @@ public final class EntitySleep {
         ES s = es(e);
         if (s == null) {
             EClass c = AsyncAnalysis.get(CLASSES, e.getClass(), k -> {
-                EClass x = new EClass(k);
+                EClass x = new EClass(k, e);
                 System.out.println("[probe/entsleep] " + k.getSimpleName() + " (" + x.analysisMs + " ms): " + (x.refuse == null ? "ELIGIBLE fields " + x.n + " (final "
                         + java.util.Arrays.stream(x.f).filter(q -> Modifier.isFinal(q.getModifiers())).count() + ", primitive "
                         + java.util.Arrays.stream(x.f).filter(q -> q.getType().isPrimitive()).count() + ") period " + x.period
