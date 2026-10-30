@@ -140,13 +140,20 @@ final class MobSleep {
         final Part[] parts;
         final int n;
         final int[] partOf;
+        /** one generated class over all the slots (receivers from the ES's context array); null: the per-part path */
+        final SnapCompiler.Snapper all;
+        final boolean[] prim, special;
 
-        Composite(Part[] parts) {
+        Composite(Part[] parts, List<Field> fields, boolean[] special) {
             this.parts = parts;
             Part last = parts[parts.length - 1];
             n = last.off + last.f.length;
             partOf = new int[n];
             for (int k = 0; k < parts.length; k++) for (int i = 0; i < parts[k].f.length; i++) partOf[parts[k].off + i] = k;
+            this.special = special;
+            prim = new boolean[n];
+            for (int i = 0; i < n; i++) prim[i] = fields.get(i).getType().isPrimitive();
+            all = SnapCompiler.compileComposite(fields, special, partOf);
         }
 
         private static Object[] objs(Object be) {
@@ -156,6 +163,10 @@ final class MobSleep {
         @Override
         public void snap(Object be, long[] out) {
             Object[] o = objs(be);
+            if (all != null) {
+                all.snap(o, out);
+                return;
+            }
             for (int k = 0; k < parts.length; k++) {
                 Part p = parts[k];
                 p.snap.snap(o[k], p.scratch);
@@ -166,6 +177,10 @@ final class MobSleep {
         @Override
         public void refs(Object be, Object[] out) {
             Object[] o = objs(be);
+            if (all != null) {
+                all.refs(o, out);
+                return;
+            }
             for (int k = 0; k < parts.length; k++) {
                 Part p = parts[k];
                 // primitive slots untouched: copy only the reference slots
@@ -182,6 +197,10 @@ final class MobSleep {
 
         @Override
         public void put(Object be, int i, long bits, Object ref) {
+            if (all != null) {
+                all.put(objs(be), i, bits, ref);
+                return;
+            }
             int k = partOf[i];
             Part p = parts[k];
             p.snap.put(objs(be)[k], i - p.off, bits, ref);
@@ -189,6 +208,7 @@ final class MobSleep {
 
         @Override
         public long bits(Object be, int i) {
+            if (all != null) return all.bits(objs(be), i);
             int k = partOf[i];
             Part p = parts[k];
             return p.snap.bits(objs(be)[k], i - p.off);
@@ -197,6 +217,7 @@ final class MobSleep {
         @Override
         public long hashPrims(Object be) {
             Object[] o = objs(be);
+            if (all != null) return all.hashPrims(o);
             long h = SnapCompiler.H0;
             for (int k = 0; k < parts.length; k++) h = mix(h, parts[k].snap.hashPrims(o[k]));
             return h;
@@ -204,6 +225,7 @@ final class MobSleep {
 
         /** the Java twin of hashPrims over a composite snapshot */
         long hashOf(long[] v) {
+            if (all != null) return SnapCompiler.hashPrims(v, prim, special);
             long h = SnapCompiler.H0;
             for (Part p : parts) {
                 System.arraycopy(v, p.off, p.scratch, 0, p.f.length);
@@ -215,6 +237,7 @@ final class MobSleep {
         @Override
         public boolean sameRefs(Object be, Object[] refs) {
             Object[] o = objs(be);
+            if (all != null) return all.sameRefs(o, refs);
             for (int k = 0; k < parts.length; k++) {
                 Part p = parts[k];
                 System.arraycopy(refs, p.refOff, p.refScratch, 0, p.refSlots.length);

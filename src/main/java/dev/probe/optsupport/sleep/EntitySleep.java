@@ -155,6 +155,9 @@ public final class EntitySleep {
                     partClass.add(o.getClass());
                     paths.add(path);
                     for (Field x : MobSleep.instanceFields(o.getClass())) {
+                        Class<?> t = x.getType();
+                        if (Modifier.isFinal(x.getModifiers()) && !t.isPrimitive() && !t.isArray() && !java.util.Collection.class.isAssignableFrom(t)
+                                && !java.util.Map.class.isAssignableFrom(t)) continue;   // the same object for life (a context has its own part)
                         fl.add(x);
                         sp.add(path);
                     }
@@ -231,7 +234,7 @@ public final class EntitySleep {
                     parts[k] = new MobSleep.Part(paths.get(k), partClass.get(k), fl.subList(a0, a1), a0, java.util.Arrays.copyOfRange(special, a0, a1), refOff);
                     refOff += parts[k].refSlots.length;
                 }
-                comp = new MobSleep.Composite(parts);
+                comp = new MobSleep.Composite(parts, fl, special);
                 snap = comp;
                 refSlots = new int[refOff];
                 for (MobSleep.Part pt : parts) for (int k = 0; k < pt.refSlots.length; k++) refSlots[pt.refOff + k] = pt.off + pt.refSlots[k];
@@ -316,6 +319,12 @@ public final class EntitySleep {
         int attrEpoch = Integer.MIN_VALUE, goalEpoch0, goalEpoch1;
         boolean readsWeather, readsPlayers;   // the window read them (observed while there is none)
         long[][] afterExp;            // per phase: the whole state a tick leaves (an inline tick is checked against it)
+        Object[] emptyObjs;           // asleep: the collections assumed empty
+        MoveMemo.AttrEpoch attrObj;
+        MobSleepHooks.GoalEpoch goal0, goal1;
+        double[][] dConst;            // per phase and draw: the other side's constant part (constant, final field, clock offset)
+        int[][] dClock;               // ... and its clock (index into EClass.clocks, -1 none)
+        long[] clockBase;             // per clock: its value when the window began
 
         ES(Entity e, EClass c) {
             this.e = e;
@@ -479,6 +488,9 @@ public final class EntitySleep {
         }
         if (c.comp != null && !cont) {
             s.readsWeather = s.readsPlayers = false;
+            s.attrObj = e instanceof net.minecraft.world.entity.LivingEntity le && le.getAttributes() instanceof MoveMemo.AttrEpoch ae ? ae : null;
+            s.goal0 = MobSleep.fieldValue(e, "goalSelector") instanceof MobSleepHooks.GoalEpoch g0 ? g0 : null;
+            s.goal1 = MobSleep.fieldValue(e, "targetSelector") instanceof MobSleepHooks.GoalEpoch g1 ? g1 : null;
             s.attrEpoch = attrEpoch(e);
             s.goalEpoch0 = goalEpoch(e, true);
             s.goalEpoch1 = goalEpoch(e, false);
@@ -742,13 +754,21 @@ public final class EntitySleep {
     }
 
     private static int attrEpoch(Entity e) {
-        return e instanceof net.minecraft.world.entity.LivingEntity le && le.getAttributes() instanceof MoveMemo.AttrEpoch a ? a.probe$attrEpoch() : 0;
+        ES s = es(e);
+        return s != null && s.attrObj != null ? s.attrObj.probe$attrEpoch() : 0;
     }
 
     private static int goalEpoch(Entity e, boolean goals) {
-        if (!(e instanceof net.minecraft.world.entity.Mob m)) return 0;
-        Object sel = MobSleep.fieldValue(m, goals ? "goalSelector" : "targetSelector");
-        return sel instanceof MobSleepHooks.GoalEpoch g ? g.probe$goalEpoch() : 0;
+        ES s = es(e);
+        MobSleepHooks.GoalEpoch g = s == null ? null : goals ? s.goal0 : s.goal1;
+        return g == null ? 0 : g.probe$goalEpoch();
+    }
+
+    /** the collections assumed empty, by the objects resolved when it fell asleep */
+    private static boolean stillEmpty(ES s) {
+        for (Object o : s.emptyObjs)
+            if (o instanceof java.util.Collection<?> col ? !col.isEmpty() : o instanceof java.util.Map<?, ?> m ? !m.isEmpty() : true) return false;
+        return true;
     }
 
     /**
@@ -795,6 +815,47 @@ public final class EntitySleep {
         s.random = (net.minecraft.util.RandomSource) get(c.randomField, s.e);
         s.seedRef = MobSleep.seedOf(s.random);
         if (s.seedRef == null) return "random of another kind";
+        List<Object> eo = new ArrayList<>();
+        for (String k : c.mob.empty()) {
+            int dot = k.lastIndexOf('.');
+            Object h = dot < 0 ? s.e : MobSleep.resolve(s.e, k.substring(0, dot));
+            Object v = h == null ? null : MobSleep.fieldValue(h, dot < 0 ? k : k.substring(dot + 1));
+            if (!(v instanceof java.util.Collection<?>) && !(v instanceof java.util.Map<?, ?>)) return "assumed-empty collection missing: " + k;
+            eo.add(v);
+        }
+        s.emptyObjs = eo.toArray();
+        s.clockBase = new long[c.clocks.length];
+        for (int j = 0; j < c.clocks.length; j++) s.clockBase[j] = narrow(c.f[c.clocks[j]].getType(), s.base[c.clocks[j]]);
+        s.dConst = new double[L][];
+        s.dClock = new int[L][];
+        for (int p = 0; p < L; p++) {
+            int m = s.dKind[p].length;
+            s.dConst[p] = new double[m];
+            s.dClock[p] = new int[m];
+            for (int j = 0; j < m; j++) {
+                SleepAnalysis.DrawCond d = c.mob.draws().get(s.dCond[p][j]);
+                s.dClock[p][j] = -1;
+                if (d.other() == SleepAnalysis.DrawCond.CONST) {
+                    s.dConst[p][j] = d.constant();
+                } else {
+                    int dot = d.path().lastIndexOf('.');
+                    String hp = dot < 0 ? "" : d.path().substring(0, dot);
+                    if (d.other() == SleepAnalysis.DrawCond.FINAL) {
+                        Object h = MobSleep.resolve(s.e, hp);
+                        Object fv = h == null ? null : get(d.field(), h);
+                        if (!(fv instanceof Number nb)) return "draw condition's field missing: " + d.text();
+                        s.dConst[p][j] = nb.doubleValue();
+                    } else {
+                        int slot = c.slot(hp, d.field());
+                        int jj = -1;
+                        for (int q = 0; q < c.clocks.length; q++) if (c.clocks[q] == slot) jj = q;
+                        if (jj < 0) return "draw condition's clock not found: " + d.text();
+                        s.dClock[p][j] = jj;
+                        s.dConst[p][j] = d.constant();
+                    }
+                }
+            }
+        }
         return null;
     }
 
@@ -837,12 +898,12 @@ public final class EntitySleep {
         EClass c = s.c;
         int[] dk = s.dKind[p];
         if (dk.length == 0) return null;
-        MobSleep.Lcg g = new MobSleep.Lcg(s.expSeed);
+        MobSleep.Lcg g = SCRATCH;
+        g.seed = s.expSeed;
         for (int j = 0; j < dk.length; j++) {
             SleepAnalysis.DrawCond d = c.mob.draws().get(s.dCond[p][j]);
             double v = MobSleep.asNumber(dk[j], g.draw(dk[j], s.dBound[p][j]));
-            double[] o = otherSide(s, d, el, 0);
-            if (o == null || MobSleep.taken(d, v, o[0]) != s.dOut[p][j] || MobSleep.taken(d, v, o[1]) != s.dOut[p][j]) {
+            if (MobSleep.taken(d, v, other(s, p, j, el, 0)) != s.dOut[p][j] || MobSleep.taken(d, v, other(s, p, j, el, 1)) != s.dOut[p][j]) {
                 drawCheckFails++;
                 return "draw outcome: " + d.text();
             }
@@ -855,6 +916,18 @@ public final class EntitySleep {
     /** The look-ahead horizon: past it the entity wakes to look again. */
     private static final int HORIZON = Integer.getInteger("lab.entsleep.drawHorizon", 4000);
 
+    /** the other side of draw j of phase p at window tick el: index 0 the clock at the tick's start, 1 after its change */
+    private static double other(ES s, int p, int j, long el, int which) {
+        int jj = s.dClock[p][j];
+        if (jj < 0) return s.dConst[p][j];
+        EClass c = s.c;
+        Class<?> t = c.f[c.clocks[jj]].getType();
+        long start = narrow(t, s.clockBase[jj] + s.rates[jj] * el);
+        return (which == 0 ? start : narrow(t, start + s.rates[jj])) + s.dConst[p][j];
+    }
+
+    private static final MobSleep.Lcg SCRATCH = new MobSleep.Lcg(0);
+
     /**
      * Ticks (in deadline() units) until a draw of the replayed ticks would take another branch than the observed one:
      * the draws simulated on a copy of the random's seed, the clocks advanced by their rates.
@@ -862,7 +935,8 @@ public final class EntitySleep {
     private static long lookAhead(ES s) {
         EClass c = s.c;
         int L = c.period;
-        MobSleep.Lcg g = new MobSleep.Lcg(s.seedRef.get());
+        MobSleep.Lcg g = SCRATCH;
+        g.seed = s.seedRef.get();
         long el0 = (long) s.e.tickCount + 1 - s.startTick;   // the first replayed tick, from the window's start
         for (long t = 0; t < HORIZON; t++) {
             long el = el0 + t;
@@ -871,8 +945,7 @@ public final class EntitySleep {
             for (int j = 0; j < dk.length; j++) {
                 SleepAnalysis.DrawCond d = c.mob.draws().get(s.dCond[p][j]);
                 double v = MobSleep.asNumber(dk[j], g.draw(dk[j], s.dBound[p][j]));
-                double[] o = otherSide(s, d, el, 0);
-                if (o == null || MobSleep.taken(d, v, o[0]) != s.dOut[p][j] || MobSleep.taken(d, v, o[1]) != s.dOut[p][j]) return t + 1;
+                if (MobSleep.taken(d, v, other(s, p, j, el, 0)) != s.dOut[p][j] || MobSleep.taken(d, v, other(s, p, j, el, 1)) != s.dOut[p][j]) return t + 1;
             }
         }
         return HORIZON;
@@ -996,7 +1069,7 @@ public final class EntitySleep {
             for (int j = 0; j < cl.length; j++) if (sn.bits(e, cl[j]) != s.expClock[j]) return verifyFail(s, "clock " + slotName(c, cl[j]));
         }
         if (c.comp != null) {
-            if (!MobSleep.stillEmpty(c.mob, e)) return verifyFail(s, "a collection assumed empty");
+            if (!stillEmpty(s)) return verifyFail(s, "a collection assumed empty");
             if (attrEpoch(e) != s.attrEpoch || goalEpoch(e, true) != s.goalEpoch0 || goalEpoch(e, false) != s.goalEpoch1) return verifyFail(s, "attributes or goals");
             if (s.seedRef.get() != s.expSeed) return verifyFail(s, "random drawn outside the tick");
             String dc = drawCheck(s, p, el);
@@ -1033,6 +1106,7 @@ public final class EntitySleep {
     }
 
     static long inlined, inlineFails;
+    private static Object[] REFS = new Object[64];
 
     /**
      * A tick that runs for real while asleep (tickCount % N == r of the plan: code the window did not see). Checked
@@ -1050,7 +1124,7 @@ public final class EntitySleep {
         int[] cl = c.clocks;
         if (sn.hashPrims(e) != s.hashB[p] || !sn.sameRefs(e, s.expR)) return inlineFail(s, "changed: " + firstDiff(s, p));
         for (int j = 0; j < cl.length; j++) if (sn.bits(e, cl[j]) != s.expClock[j]) return inlineFail(s, "changed: clock " + slotName(c, cl[j]));
-        if (!MobSleep.stillEmpty(c.mob, e) || attrEpoch(e) != s.attrEpoch || goalEpoch(e, true) != s.goalEpoch0 || goalEpoch(e, false) != s.goalEpoch1
+        if (!stillEmpty(s) || attrEpoch(e) != s.attrEpoch || goalEpoch(e, true) != s.goalEpoch0 || goalEpoch(e, false) != s.goalEpoch1
                 || s.seedRef.get() != s.expSeed || s.readsWeather && !noWeather(level) || s.readsPlayers && !noPlayers(level))
             return inlineFail(s, "changed before an inline tick");
         AABB bb0 = s.blockBox, eb0 = s.entityBox;
@@ -1069,10 +1143,14 @@ public final class EntitySleep {
             s.entityBox = eb0;
             return inlineFail(s, "inline tick read elsewhere");
         }
-        long[] now = SA.length >= c.n ? SA : (SA = new long[c.n * 2]);
-        sn.snap(e, now);
-        long[] exp = s.afterExp[p];
-        for (int i = 0; i < c.n; i++) if (!c.special[i] && now[i] != exp[i]) return inlineFail(s, "inline tick left " + slotName(c, i));
+        // the primitives it left: those the next tick expects (its before-state is this tick's after-state)
+        if (sn.hashPrims(e) != s.hashB[(p + 1) % L]) {
+            long[] now = SA.length >= c.n ? SA : (SA = new long[c.n * 2]);
+            sn.snap(e, now);
+            long[] exp = s.afterExp[p];
+            for (int i = 0; i < c.n; i++) if (!c.special[i] && c.prim[i] && now[i] != exp[i]) return inlineFail(s, "inline tick left " + slotName(c, i));
+            return inlineFail(s, "inline tick left a primitive");
+        }
         long[] rates = s.rates;
         for (int j = 0; j < cl.length; j++) {
             long x = narrow(c.f[cl[j]].getType(), s.expClock[j] + rates[j]);
@@ -1084,9 +1162,17 @@ public final class EntitySleep {
         for (int j = 0; j < dk.length; j++) g.draw(dk[j], db[j]);
         if (s.seedRef.get() != g.seed) return inlineFail(s, "inline tick drew otherwise");
         s.expSeed = g.seed;
-        Object[] refs = new Object[c.n];
+        // references: the same objects, or new ones equal by value to what the phase leaves (then adopted)
+        Object[] refs = REFS.length >= c.n ? REFS : (REFS = new Object[c.n * 2]);
         sn.refs(e, refs);
-        for (int k = 0; k < c.refSlots.length; k++) s.expR[k] = refs[c.refSlots[k]];
+        long[] exp = s.afterExp[p];
+        for (int k = 0; k < c.refSlots.length; k++) {
+            int i = c.refSlots[k];
+            Object o = refs[i];
+            if (o == s.expR[k]) continue;
+            if (EntityFp.fp(o) != exp[i]) return inlineFail(s, "inline tick left " + slotName(c, i));
+            s.expR[k] = o;
+        }
         return true;
     }
 

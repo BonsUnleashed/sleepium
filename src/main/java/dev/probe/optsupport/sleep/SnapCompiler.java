@@ -94,17 +94,36 @@ final class SnapCompiler {
 
     /** {@code skip}: slots same() ignores (checked another way, e.g. clocks). */
     static Snapper compile(List<Field> fields, boolean values, boolean[] skip) {
+        return compile(fields, values, skip, null);
+    }
+
+    /**
+     * {@code partOf} (mob sleep's composite state): the object passed is an Object[] and slot i is a field of element
+     * partOf[i] - one generated class over the entity and all its contexts. Null if the generation fails.
+     */
+    static Snapper compileComposite(List<Field> fields, boolean[] skip, int[] partOf) {
         try {
             List<java.lang.invoke.VarHandle> vhs = new ArrayList<>();
             for (Field f : fields) vhs.add(MethodHandles.privateLookupIn(f.getDeclaringClass(), MethodHandles.lookup()).unreflectVarHandle(f));
-            return generate(fields, vhs, values, skip);
+            return generate(fields, vhs, true, skip, partOf);
+        } catch (Throwable t) {
+            if (failure == null) failure = t.toString();
+            return null;
+        }
+    }
+
+    private static Snapper compile(List<Field> fields, boolean values, boolean[] skip, int[] partOf) {
+        try {
+            List<java.lang.invoke.VarHandle> vhs = new ArrayList<>();
+            for (Field f : fields) vhs.add(MethodHandles.privateLookupIn(f.getDeclaringClass(), MethodHandles.lookup()).unreflectVarHandle(f));
+            return generate(fields, vhs, values, skip, partOf);
         } catch (Throwable t) {
             if (failure == null) failure = t.toString();
             return reflective(fields, values, skip);
         }
     }
 
-    private static Snapper generate(List<Field> fields, List<java.lang.invoke.VarHandle> vhs, boolean values, boolean[] skip) throws Throwable {
+    private static Snapper generate(List<Field> fields, List<java.lang.invoke.VarHandle> vhs, boolean values, boolean[] skip, int[] partOf) throws Throwable {
         String name = "dev/probe/optsupport/sleep/ProbeSnap" + (counter++);
         String VH = "java/lang/invoke/VarHandle", VHD = "Ljava/lang/invoke/VarHandle;";
         // frames are needed for the branches in same(); every merged type here is Object, so no class loading
@@ -150,7 +169,7 @@ final class SnapCompiler {
             m.visitVarInsn(Opcodes.ALOAD, 2);
             pushInt(m, i);
             m.visitFieldInsn(Opcodes.GETSTATIC, name, "VH" + i, VHD);
-            m.visitVarInsn(Opcodes.ALOAD, 1);
+            loadRecv(m, partOf, i);
             if (publicOwner) m.visitTypeInsn(Opcodes.CHECKCAST, Type.getInternalName(owner));
             m.visitMethodInsn(Opcodes.INVOKEVIRTUAL, VH, "get", "(" + coord + ")" + valueDesc, false);
             if (t == long.class) {
@@ -179,7 +198,7 @@ final class SnapCompiler {
             if (f.getType().isPrimitive()) continue;
             r.visitVarInsn(Opcodes.ALOAD, 2);
             pushInt(r, i);
-            vhGet(r, name, i, f);
+            vhGet(r, name, i, f, partOf);
             r.visitInsn(Opcodes.AASTORE);
         }
         r.visitInsn(Opcodes.RETURN);
@@ -194,7 +213,7 @@ final class SnapCompiler {
             Class<?> t = f.getType();
             if (skip != null && skip[i]) continue;
             if (t.isPrimitive()) {
-                vhGet(q, name, i, f);
+                vhGet(q, name, i, f, partOf);
                 toBits(q, t);
                 q.visitVarInsn(Opcodes.ALOAD, 2);
                 pushInt(q, i);
@@ -202,7 +221,7 @@ final class SnapCompiler {
                 q.visitInsn(Opcodes.LCMP);
                 q.visitJumpInsn(Opcodes.IFNE, differ);
             } else {
-                vhGet(q, name, i, f);
+                vhGet(q, name, i, f, partOf);
                 q.visitVarInsn(Opcodes.ALOAD, 3);
                 pushInt(q, i);
                 q.visitInsn(Opcodes.AALOAD);
@@ -236,7 +255,7 @@ final class SnapCompiler {
                 continue;
             }
             w.visitFieldInsn(Opcodes.GETSTATIC, name, "VH" + i, "Ljava/lang/invoke/VarHandle;");
-            w.visitVarInsn(Opcodes.ALOAD, 1);
+            loadRecv(w, partOf, i);
             if (publicOwner) w.visitTypeInsn(Opcodes.CHECKCAST, Type.getInternalName(owner));
             String valueDesc;
             if (t.isPrimitive()) {
@@ -285,7 +304,7 @@ final class SnapCompiler {
                 g.visitJumpInsn(Opcodes.GOTO, none);
                 continue;
             }
-            vhGet(g, name, i, f);
+            vhGet(g, name, i, f, partOf);
             toBits(g, f.getType());
             g.visitInsn(Opcodes.LRETURN);
         }
@@ -303,7 +322,7 @@ final class SnapCompiler {
             Field f = fields.get(i);
             if (!f.getType().isPrimitive() || skip != null && skip[i]) continue;
             hp.visitVarInsn(Opcodes.LLOAD, 2);
-            vhGet(hp, name, i, f);
+            vhGet(hp, name, i, f, partOf);
             toBits(hp, f.getType());
             hp.visitInsn(Opcodes.LADD);
             hp.visitLdcInsn(HM);
@@ -324,7 +343,7 @@ final class SnapCompiler {
         org.objectweb.asm.Label rdiff = new org.objectweb.asm.Label();
         int[] rs = refSlots(fields, skip);
         for (int k = 0; k < rs.length; k++) {
-            vhGet(sr, name, rs[k], fields.get(rs[k]));
+            vhGet(sr, name, rs[k], fields.get(rs[k]), partOf);
             sr.visitVarInsn(Opcodes.ALOAD, 2);
             pushInt(sr, k);
             sr.visitInsn(Opcodes.AALOAD);
@@ -343,16 +362,25 @@ final class SnapCompiler {
     }
 
     /** Push the value of field i of the block entity in local 1 (via the static final VarHandle VHi). */
-    private static void vhGet(MethodVisitor m, String name, int i, Field f) {
+    private static void vhGet(MethodVisitor m, String name, int i, Field f, int[] partOf) {
         Class<?> t = f.getType();
         Class<?> owner = f.getDeclaringClass();
         boolean publicOwner = java.lang.reflect.Modifier.isPublic(owner.getModifiers()) && owner.getEnclosingClass() == null;
         String coord = publicOwner ? Type.getDescriptor(owner) : "Ljava/lang/Object;";
         String valueDesc = t.isPrimitive() ? Type.getDescriptor(t) : "Ljava/lang/Object;";
         m.visitFieldInsn(Opcodes.GETSTATIC, name, "VH" + i, "Ljava/lang/invoke/VarHandle;");
-        m.visitVarInsn(Opcodes.ALOAD, 1);
+        loadRecv(m, partOf, i);
         if (publicOwner) m.visitTypeInsn(Opcodes.CHECKCAST, Type.getInternalName(owner));
         m.visitMethodInsn(Opcodes.INVOKEVIRTUAL, "java/lang/invoke/VarHandle", "get", "(" + coord + ")" + valueDesc, false);
+    }
+
+    /** The object slot i belongs to: local 1, or element partOf[i] of the Object[] in local 1. */
+    private static void loadRecv(MethodVisitor m, int[] partOf, int i) {
+        m.visitVarInsn(Opcodes.ALOAD, 1);
+        if (partOf == null) return;
+        m.visitTypeInsn(Opcodes.CHECKCAST, "[Ljava/lang/Object;");
+        pushInt(m, partOf[i]);
+        m.visitInsn(Opcodes.AALOAD);
     }
 
     /** Primitive on the stack -> long bits, the encoding snap uses. */
