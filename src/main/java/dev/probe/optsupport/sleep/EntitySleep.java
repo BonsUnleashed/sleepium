@@ -89,6 +89,14 @@ public final class EntitySleep {
         int randomSlot = -1;
         Field randomField;
         int[] condSlot, condThreshold;   // per plan.conds(): the clock's slot and the threshold field's (-1)
+        long[][] inline;              // {N, r}: ticks with tickCount % N == r run for real while asleep (checked after)
+        int[] stillClocks = new int[0];   // clocks tested by a modulus: they must stand still
+
+        boolean special(int tickCount) {
+            if (inline == null) return false;
+            for (long[] m : inline) if (Math.floorMod(tickCount, m[0]) == m[1]) return true;
+            return false;
+        }
 
         /** the reference in slot i (the entity's field, or a context's) */
         Object ref(int i, ES s) {
@@ -227,6 +235,20 @@ public final class EntitySleep {
                 snap = comp;
                 refSlots = new int[refOff];
                 for (MobSleep.Part pt : parts) for (int k = 0; k < pt.refSlots.length; k++) refSlots[pt.refOff + k] = pt.off + pt.refSlots[k];
+                inline = mob.inlineTicks().isEmpty() ? null : mob.inlineTicks().toArray(new long[0][]);
+                List<Integer> st = new ArrayList<>();
+                for (String k : mob.stillClocks()) {
+                    int dot = k.lastIndexOf('.');
+                    String hp = dot < 0 ? "" : k.substring(0, dot), fn = dot < 0 ? k : k.substring(dot + 1);
+                    int found = -1;
+                    for (int i = 0; i < n; i++) if (slotPath[i].equals(hp) && f[i].getName().equals(fn)) found = i;
+                    if (found < 0) {
+                        refuse = "still clock not found: " + k;
+                        return;
+                    }
+                    st.add(found);
+                }
+                stillClocks = st.stream().mapToInt(Integer::intValue).toArray();
                 condSlot = new int[plan.conds().size()];
                 condThreshold = new int[plan.conds().size()];
                 for (int j = 0; j < condSlot.length; j++) {
@@ -293,6 +315,7 @@ public final class EntitySleep {
         long expSeed;
         int attrEpoch = Integer.MIN_VALUE, goalEpoch0, goalEpoch1;
         boolean readsWeather, readsPlayers;   // the window read them (observed while there is none)
+        long[][] afterExp;            // per phase: the whole state a tick leaves (an inline tick is checked against it)
 
         ES(Entity e, EClass c) {
             this.e = e;
@@ -325,8 +348,55 @@ public final class EntitySleep {
 
     // ------------------------------------------------------------------ the tick
 
+    /** -Dlab.entsleep.trace=<entity id>: one line per tick of that entity (mode, clocks, rotations, random seed) */
+    private static final int TRACE = Integer.getInteger("lab.entsleep.trace", -1);
+    private static String mode;
+
     /** Replaces the entity.tick() call in ServerLevel.tickNonPassenger. */
     public static void tick(Entity e) {
+        if (TRACE < 0 || e.getId() != TRACE) {
+            tick0(e);
+            return;
+        }
+        mode = "vanilla";
+        ES s0 = es(e);
+        String before = s0 == null ? "-" : s0.st.toString();
+        MobSleep.TICK.clear();
+        MobSleep.REC = MobSleep.fieldValue(e, "random");
+        try {
+            tick0(e);
+        } finally {
+            MobSleep.REC = null;
+        }
+        java.util.concurrent.atomic.AtomicLong sd = MobSleep.seedOf(MobSleep.fieldValue(e, "random"));
+        System.out.println("[probe/trace] t=" + e.tickCount + " " + before + " " + mode + " amb=" + MobSleep.fieldValue(e, "ambientSoundTime") + " head=" + e.getYHeadRot()
+                + " body=" + (e instanceof net.minecraft.world.entity.LivingEntity le ? le.yBodyRot : 0) + " seed=" + (sd == null ? "?" : Long.toHexString(sd.get()))
+                + " pos=" + e.position() + " dm=" + e.getDeltaMovement() + " run=" + traceGoals(e) + " draws=" + traceDraws());
+    }
+
+    private static String traceGoals(Entity e) {
+        Object sel = MobSleep.fieldValue(e, "goalSelector");
+        if (!(sel instanceof net.minecraft.world.entity.ai.goal.GoalSelector gs)) return "-";
+        StringBuilder sb = new StringBuilder();
+        for (var w : gs.getAvailableGoals()) if (w.isRunning()) sb.append(w.getGoal().getClass().getSimpleName()).append(' ');
+        Object locked = MobSleep.fieldValue(gs, "lockedFlags"), disabled = MobSleep.fieldValue(gs, "disabledFlags");
+        String lk = "";
+        if (locked instanceof java.util.Map<?, ?> lm) for (var en : lm.entrySet())
+            lk += en.getKey() + ">" + ((net.minecraft.world.entity.ai.goal.WrappedGoal) en.getValue()).getGoal().getClass().getSimpleName() + ((net.minecraft.world.entity.ai.goal.WrappedGoal) en.getValue()).isRunning() + "/";
+        return sb.toString().trim().replace(' ', ',') + " locked=" + lk + " disabled=" + disabled;
+    }
+
+    private static String traceDraws() {
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < MobSleep.TICK.size(); i += 2) {
+            String site = MobSleep.SITES.get(MobSleep.siteOf(MobSleep.TICK.getLong(i)));
+            sb.append(site.substring(site.lastIndexOf('/') + 1)).append(' ');
+        }
+        MobSleep.TICK.clear();
+        return sb.toString();
+    }
+
+    private static void tick0(Entity e) {
         if (DIAG != null && e.getClass().getSimpleName().equals(DIAG)) {
             diag(e);
             return;
@@ -358,9 +428,19 @@ public final class EntitySleep {
             else if (c.comp != null && (s.ctx = c.comp.resolveAll(e)) == null) s.st = St.NEVER;
             ((EntSleeperHolder) e).probe$setEs(s);
         }
+        if (s.st == St.ASLEEP && !s.woken && now < s.wakeAt && s.c.special(e.tickCount)) {
+            if (inlineTick(s, level)) {
+                inlined++;
+                mode = "inline";
+                return;
+            }
+            wake(s, s.wakeReason);   // the tick has run
+            return;
+        }
         if (s.st == St.ASLEEP) {
             if (!s.woken && now < s.wakeAt && replay(s)) {
                 replayed++;
+                mode = "replay";
                 return;
             }
             wake(s, s.woken ? s.wakeReason : now >= s.wakeAt ? "deadline" : "state differs");
@@ -369,6 +449,7 @@ public final class EntitySleep {
             e.tick();
             return;
         }
+        mode = "observe";
         observe(s, level);
     }
 
@@ -382,6 +463,14 @@ public final class EntitySleep {
         }
         long[] b = SB, a = SA;
         boolean cont = s.k >= 0 && e.tickCount == s.lastTick + 1;
+        if (c.inline != null && !cont) {
+            for (int t = 0; t <= c.period; t++)
+                if (c.special(e.tickCount + t)) {   // the window would hold a tick that runs for real while asleep: later
+                    s.k = -1;
+                    e.tick();
+                    return;
+                }
+        }
         if (c.comp != null && !cont && (s.ctx = c.comp.resolveAll(e)) == null) {   // goals replaced: not this plan's mob now
             s.k = -1;
             e.tick();
@@ -427,7 +516,7 @@ public final class EntitySleep {
             e.tick();
         } finally {
             obs = null;
-            MobSleep.REC = null;
+            MobSleep.REC = TRACE == e.getId() ? rec : null;
         }
         observedTicks++;
         if (c.comp != null && (attrEpoch(e) != s.attrEpoch || goalEpoch(e, true) != s.goalEpoch0 || goalEpoch(e, false) != s.goalEpoch1)) {
@@ -596,6 +685,9 @@ public final class EntitySleep {
             for (Object o : aRef[p]) if (o != null && !valueType(o.getClass())) { fail(s, "varying mutable " + o.getClass().getSimpleName()); return; }
         }
         if (s.entityExposed && !neighboursAsleep(s)) { fail(s, "neighbours awake"); return; }
+        for (int i : c.stillClocks) {
+            for (int j = 0; j < c.clocks.length; j++) if (c.clocks[j] == i && s.rates[j] != 0) { fail(s, "clock under a modulus moves: " + slotName(c, i)); return; }
+        }
         long d = Math.min(deadline(s), drawDeadline);
         if (d <= L + 1) { fail(s, drawDeadline <= L + 1 ? "draw flips too soon" : "deadline too close"); return; }
         // a varying reference must not be replaced outside the tick (its expected identity is what the replay wrote)
@@ -613,6 +705,16 @@ public final class EntitySleep {
         for (int p = 0; p < L; p++) {
             for (int j = 0; j < nv; j++) if (c.prim[v[j]]) cur[v[j]] = bV[p][j];
             s.hashB[p] = c.hashOf(cur);
+        }
+        if (c.inline != null) {
+            long[] now0 = new long[c.n];
+            c.snap.snap(e, now0);
+            s.afterExp = new long[L][];
+            for (int p = 0; p < L; p++) {
+                long[] x = now0.clone();
+                for (int j = 0; j < nv; j++) x[v[j]] = aV[p][j];
+                s.afterExp[p] = x;
+            }
         }
         s.expClock = new long[c.clocks.length];
         for (int j = 0; j < c.clocks.length; j++) s.expClock[j] = c.snap.bits(e, c.clocks[j]);
@@ -727,6 +829,29 @@ public final class EntitySleep {
         return new double[] {start + d.constant(), narrow(c.f[slot].getType(), start + r) + d.constant()};
     }
 
+    /**
+     * Before a replayed tick: the phase's draws on a copy of the seed must take the observed branches (the look-ahead
+     * said so; this keeps the replay honest whatever the look-ahead got wrong). Null if they do.
+     */
+    private static String drawCheck(ES s, int p, long el) {
+        EClass c = s.c;
+        int[] dk = s.dKind[p];
+        if (dk.length == 0) return null;
+        MobSleep.Lcg g = new MobSleep.Lcg(s.expSeed);
+        for (int j = 0; j < dk.length; j++) {
+            SleepAnalysis.DrawCond d = c.mob.draws().get(s.dCond[p][j]);
+            double v = MobSleep.asNumber(dk[j], g.draw(dk[j], s.dBound[p][j]));
+            double[] o = otherSide(s, d, el, 0);
+            if (o == null || MobSleep.taken(d, v, o[0]) != s.dOut[p][j] || MobSleep.taken(d, v, o[1]) != s.dOut[p][j]) {
+                drawCheckFails++;
+                return "draw outcome: " + d.text();
+            }
+        }
+        return null;
+    }
+
+    static long drawCheckFails;
+
     /** The look-ahead horizon: past it the entity wakes to look again. */
     private static final int HORIZON = Integer.getInteger("lab.entsleep.drawHorizon", 4000);
 
@@ -784,6 +909,16 @@ public final class EntitySleep {
             if (ci < 0) return 0;
             cv = c.comp != null ? narrow(c.f[ci].getType(), c.snap.bits(e, ci)) : longValue(c.f[ci], e);
             r = ci == c.tickCount ? 1 : rateOf(s, ci);
+            if (cond.band()) {   // a value of the clock varies inside (lo, hi): no sleep there, a deadline before entering
+                long lo = cond.thresholdConst(), hi = cond.bandHi();
+                if (r == 0) continue;   // a clock standing still: the value is constant wherever it stands
+                if (cv > lo && cv < hi) return 0;
+                long w0 = cv - r * (c.period + 1);   // the clock when the window began
+                if (Math.max(w0, cv) > lo && Math.min(w0, cv) < hi) return 0;   // the window passed through the band
+                if (r > 0 && cv <= lo && lo != Long.MAX_VALUE) best = Math.min(best, Math.max(0, (lo + 1 - cv) / r - 1));
+                if (r < 0 && cv >= hi && hi != Long.MIN_VALUE) best = Math.min(best, Math.max(0, (cv - (hi - 1)) / -r - 1));
+                continue;
+            }
             if (cond.age()) {   // the stamp's age: game time - stamp, one more each tick
                 if (r != 0) return 0;
                 cv = e.level().getGameTime() - cv;
@@ -796,12 +931,17 @@ public final class EntitySleep {
                 continue;
             }
             if (r == 0) continue;
+            if (TRACE == e.getId()) System.out.println("[probe/trace] cond " + cond.text() + " slot " + slotName(c, ci) + " cv=" + cv + " r=" + r + " best=" + best);
             long t = cond.thresholdConst();
             if (cond.thresholdField() != null) {
                 int ti = c.condThreshold != null ? c.condThreshold[cj] : index(c, cond.thresholdField());
                 if (ti < 0) return 0;
                 t += c.comp != null ? narrow(c.f[ti].getType(), c.snap.bits(e, ti)) : longValue(c.f[ti], e);
             }
+            // the window must not have straddled the threshold: a test evaluated in it (on some phase only - a goal's
+            // canContinueToUse every second tick) may have seen the other side than the clock is on now
+            long w0 = cv - r * (c.period + 1);
+            if (Math.min(w0, cv) <= t + 1 && Math.max(w0, cv) >= t - 1) return 0;
             long dist = r > 0 ? t - cv : cv - t;
             if (dist < -1) continue;   // passed and moving away
             best = Math.min(best, Math.max(0, dist / Math.abs(r) - 1));
@@ -859,6 +999,8 @@ public final class EntitySleep {
             if (!MobSleep.stillEmpty(c.mob, e)) return verifyFail(s, "a collection assumed empty");
             if (attrEpoch(e) != s.attrEpoch || goalEpoch(e, true) != s.goalEpoch0 || goalEpoch(e, false) != s.goalEpoch1) return verifyFail(s, "attributes or goals");
             if (s.seedRef.get() != s.expSeed) return verifyFail(s, "random drawn outside the tick");
+            String dc = drawCheck(s, p, el);
+            if (dc != null) return verifyFail(s, dc);
             if (s.readsWeather && !noWeather(e.level())) return verifyFail(s, "weather");
             if (s.readsPlayers && !noPlayers(e.level())) return verifyFail(s, "players");
         }
@@ -888,6 +1030,71 @@ public final class EntitySleep {
             s.expSeed = s.seedRef.get();
         }
         return true;
+    }
+
+    static long inlined, inlineFails;
+
+    /**
+     * A tick that runs for real while asleep (tickCount % N == r of the plan: code the window did not see). Checked
+     * like a replayed tick before; watched like an observed tick while it runs (no world write, no shared random, no
+     * unobserved read, no read outside the subscribed boxes); after it the whole state must be the phase's expected
+     * after-state, the clocks advanced by their rates and the random advanced by exactly the phase's draws. Then the
+     * replay goes on, with the objects the tick left as the expected references. False: woken (s.wakeReason).
+     */
+    private static boolean inlineTick(ES s, Level level) {
+        Entity e = s.e;
+        EClass c = s.c;
+        int L = c.period;
+        int p = (int) Math.floorMod((long) e.tickCount - s.startTick, (long) L);
+        SnapCompiler.Snapper sn = c.snap;
+        int[] cl = c.clocks;
+        if (sn.hashPrims(e) != s.hashB[p] || !sn.sameRefs(e, s.expR)) return inlineFail(s, "changed: " + firstDiff(s, p));
+        for (int j = 0; j < cl.length; j++) if (sn.bits(e, cl[j]) != s.expClock[j]) return inlineFail(s, "changed: clock " + slotName(c, cl[j]));
+        if (!MobSleep.stillEmpty(c.mob, e) || attrEpoch(e) != s.attrEpoch || goalEpoch(e, true) != s.goalEpoch0 || goalEpoch(e, false) != s.goalEpoch1
+                || s.seedRef.get() != s.expSeed || s.readsWeather && !noWeather(level) || s.readsPlayers && !noPlayers(level))
+            return inlineFail(s, "changed before an inline tick");
+        AABB bb0 = s.blockBox, eb0 = s.entityBox;
+        long w = BeTickStats.writes, sd = SleepEngine.seed(level), u = unobservedE;
+        obs = s;
+        obsThread = Thread.currentThread();
+        readHash = 17;
+        try {
+            e.tick();
+        } finally {
+            obs = null;
+        }
+        if (BeTickStats.writes != w || SleepEngine.seed(level) != sd || unobservedE != u || e.isRemoved()) return inlineFail(s, "inline tick busy");
+        if (!java.util.Objects.equals(bb0, s.blockBox) || !java.util.Objects.equals(eb0, s.entityBox)) {
+            s.blockBox = bb0;
+            s.entityBox = eb0;
+            return inlineFail(s, "inline tick read elsewhere");
+        }
+        long[] now = SA.length >= c.n ? SA : (SA = new long[c.n * 2]);
+        sn.snap(e, now);
+        long[] exp = s.afterExp[p];
+        for (int i = 0; i < c.n; i++) if (!c.special[i] && now[i] != exp[i]) return inlineFail(s, "inline tick left " + slotName(c, i));
+        long[] rates = s.rates;
+        for (int j = 0; j < cl.length; j++) {
+            long x = narrow(c.f[cl[j]].getType(), s.expClock[j] + rates[j]);
+            if (sn.bits(e, cl[j]) != x) return inlineFail(s, "inline tick moved clock " + slotName(c, cl[j]));
+            s.expClock[j] = x;
+        }
+        MobSleep.Lcg g = new MobSleep.Lcg(s.expSeed);
+        int[] dk = s.dKind[p], db = s.dBound[p];
+        for (int j = 0; j < dk.length; j++) g.draw(dk[j], db[j]);
+        if (s.seedRef.get() != g.seed) return inlineFail(s, "inline tick drew otherwise");
+        s.expSeed = g.seed;
+        Object[] refs = new Object[c.n];
+        sn.refs(e, refs);
+        for (int k = 0; k < c.refSlots.length; k++) s.expR[k] = refs[c.refSlots[k]];
+        return true;
+    }
+
+    private static boolean inlineFail(ES s, String why) {
+        inlineFails++;
+        s.wakeReason = why;
+        s.woken = true;
+        return false;
     }
 
     /** Which field broke the replay check (diagnostics, slow). */
@@ -1196,8 +1403,8 @@ public final class EntitySleep {
     public static String report() {
         Map<String, int[]> byType = new TreeMap<>();
         StringBuilder sb = new StringBuilder(String.format(Locale.ROOT,
-                "entity sleep: %s; observed ticks %d, sleeps entered %d, replayed ticks %d, verify fails %d, deadline wakes %d, deadlines pending %d%n",
-                ON ? "ON" : "OFF", observedTicks, entered, replayed, verifyFails, deadlineWakes, DEADLINES.size()));
+                "entity sleep: %s; observed ticks %d, sleeps entered %d, replayed ticks %d, inline ticks %d (failed %d), verify fails %d, deadline wakes %d, deadlines pending %d%n",
+                ON ? "ON" : "OFF", observedTicks, entered, replayed, inlined, inlineFails, verifyFails, deadlineWakes, DEADLINES.size()));
         sb.append("  wakes: ").append(WAKES).append(System.lineSeparator());
         sb.append("  refused: ").append(REFUSED).append(System.lineSeparator());
         return sb.toString();

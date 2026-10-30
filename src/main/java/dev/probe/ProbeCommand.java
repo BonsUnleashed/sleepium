@@ -372,7 +372,8 @@ final class ProbeCommand {
                 tag.remove("UUID");
                 rows.add(net.minecraft.core.registries.BuiltInRegistries.ENTITY_TYPE.getKey(e.getType()) + " " + Double.doubleToLongBits(e.getX()) + " "
                         + Double.doubleToLongBits(e.getY()) + " " + Double.doubleToLongBits(e.getZ()) + " " + e.getDeltaMovement() + " " + canonNbt(tag)
-                        + (Boolean.getBoolean("probe.hashEntitiesDeep") ? " deep=" + Long.toHexString(dev.probe.optsupport.sleep.EntitySleep.deepHash(e)) : ""));
+                        + (Boolean.getBoolean("probe.hashEntitiesDeep") ? " deep=" + Long.toHexString(dev.probe.optsupport.sleep.EntitySleep.deepHash(e)) : "")
+                        + (Boolean.getBoolean("probe.hashRowsDump") ? " dump=" + dev.probe.optsupport.sleep.EntitySleep.deepDump(e) : ""));
             }
             java.util.Collections.sort(rows);
             int minId = Integer.MAX_VALUE;

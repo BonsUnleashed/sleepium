@@ -47,17 +47,30 @@ final class SleepAnalysis {
      * clock ? const/field; or gameTime % mod ? const (clock null); or (clock + x) % mod ? y (clock set, mod > 0,
      * {@code clockMod}): a periodic condition on a clock, whose outcome can change every tick.
      */
-    record Cond(Field clock, Field thresholdField, long thresholdConst, long mod, String text, boolean clockMod, boolean peer, boolean age) {
+    record Cond(Field clock, Field thresholdField, long thresholdConst, long mod, String text, boolean clockMod, boolean peer, boolean age, boolean band,
+            long bandHi) {
         Cond(Field clock, Field thresholdField, long thresholdConst, long mod, String text) {
-            this(clock, thresholdField, thresholdConst, mod, text, false, false, false);
+            this(clock, thresholdField, thresholdConst, mod, text, false, false, false, false, 0);
         }
 
         Cond(Field clock, Field thresholdField, long thresholdConst, long mod, String text, boolean clockMod) {
-            this(clock, thresholdField, thresholdConst, mod, text, clockMod, false, false);
+            this(clock, thresholdField, thresholdConst, mod, text, clockMod, false, false, false, 0);
         }
 
         Cond(Field clock, Field thresholdField, long thresholdConst, long mod, String text, boolean clockMod, boolean peer) {
-            this(clock, thresholdField, thresholdConst, mod, text, clockMod, peer, false);
+            this(clock, thresholdField, thresholdConst, mod, text, clockMod, peer, false, false, 0);
+        }
+
+        Cond(Field clock, Field thresholdField, long thresholdConst, long mod, String text, boolean clockMod, boolean peer, boolean age) {
+            this(clock, thresholdField, thresholdConst, mod, text, clockMod, peer, age, false, 0);
+        }
+
+        /**
+         * A value computed from the clock varies while the clock is inside (lo, hi) and is constant outside: no sleep
+         * inside, a deadline before entering (clamp / min / max of an affine expression of the clock).
+         */
+        static Cond band(Field clock, long lo, long hi, String text) {
+            return new Cond(clock, null, lo, 0, text, false, false, false, true, hi);
         }
 
         /** entity mode: the clock compared with the same field of another instance (a neighbour read by the tick) */
@@ -106,7 +119,8 @@ final class SleepAnalysis {
      * "path.name" (a field, or a boolean method for {@code falseCalls}, "name#n" with an int argument).
      */
     record MobPlan(List<String> contexts, List<String> clockPaths, List<String> condPaths, Set<String> nulls, Set<String> zeros, Set<String> le0,
-            Set<String> ge0, Set<String> falseCalls, Set<String> empty, List<DrawCond> draws, Set<String> captured) {}
+            Set<String> ge0, Set<String> falseCalls, Set<String> empty, List<DrawCond> draws, Set<String> captured, List<long[]> inlineTicks,
+            List<String> stillClocks) {}
 
     record DrawCond(String site, String draw, int jumpOp, int cmpOp, boolean drawFirst, double constant, int other, String path, Field field, String text) {
         static final int CONST = 0, CLOCK = 1, FINAL = 2, UNKNOWN = 3;
@@ -204,6 +218,8 @@ final class SleepAnalysis {
     }
     /** flow(): one jump forced to one successor (the guards' reachability) */
     private int forceAt = -1, forceTo;
+
+    private String curHere = "";
 
     private String pathKey(String name) {
         return ctxPath.isEmpty() ? name : ctxPath + "." + name;
@@ -376,6 +392,7 @@ final class SleepAnalysis {
             condPaths.clear();
             watch.clear();
             moduli.clear();
+            modKinds.clear();
             reasons.clear();
             reasonGuards.clear();
             draws.clear();
@@ -488,7 +505,16 @@ final class SleepAnalysis {
 
     private Plan mobPlan(Class<?> ec) {
         long period = 1;
-        for (long n : moduli) {
+        List<long[]> inline = new ArrayList<>();
+        List<String> still = new ArrayList<>();
+        List<Long> pm = new ArrayList<>();
+        for (String k : modKinds) {
+            String[] t = k.split(" ");
+            if (t[0].equals("tick")) inline.add(new long[] {Long.parseLong(t[1]), Long.parseLong(t[2])});
+            else if (t[0].equals("clock")) still.add(t[1]);
+            else pm.add(Long.parseLong(t[1]));
+        }
+        for (long n : pm) {
             period = lcm(period, n);
             if (period > 1_000_000) return new Plan(false, "period too long", List.copyOf(clocks.values()), List.copyOf(conds));
         }
@@ -496,9 +522,11 @@ final class SleepAnalysis {
         for (String k : clocks.keySet()) clockPaths.add(k.contains("|") ? k.substring(0, k.indexOf('|')) : "");
         for (Field f : clocks.values()) if (f == null) return new Plan(false, "clock not accessible", List.of(), List.of());
         MobPlan mob = new MobPlan(List.copyOf(contexts), List.copyOf(clockPaths), List.copyOf(condPaths), Set.copyOf(nullFields), Set.copyOf(zeroFields),
-                Set.copyOf(le0Fields), Set.copyOf(ge0Fields), Set.copyOf(falseCalls), Set.copyOf(emptyFields), List.copyOf(draws), Set.copyOf(capturedContexts));
+                Set.copyOf(le0Fields), Set.copyOf(ge0Fields), Set.copyOf(falseCalls), Set.copyOf(emptyFields), List.copyOf(draws), Set.copyOf(capturedContexts),
+                List.copyOf(inline), List.copyOf(still));
         String text = "ok (mob): period " + period + ", contexts " + contexts.size() + ", null " + nullFields + ", zero " + zeroFields + ", <=0 " + le0Fields
-                + ", >=0 " + ge0Fields + ", false " + falseCalls + ", empty " + emptyFields + ", draws " + draws.size() + ", whole " + capturedContexts;
+                + ", >=0 " + ge0Fields + ", false " + falseCalls + ", empty " + emptyFields + ", draws " + draws.size() + ", whole " + capturedContexts
+                + ", inline ticks " + inline.stream().map(x -> x[0] + ":" + x[1]).toList() + ", still clocks " + still;
         return new Plan(true, text, List.copyOf(clocks.values()), List.copyOf(conds), List.copyOf(watch.values()), period, List.of(), List.of(), List.copyOf(draws), mob);
     }
 
@@ -764,6 +792,7 @@ final class SleepAnalysis {
         for (int i = 0; i < in.length && ok(here); i++) {
             if (fr[i] == null || !flow.live()[i]) continue;
             curGuards = lg == null || lg[i] == null ? base : lg[i];
+            curHere = (ctxPath.isEmpty() ? "" : ctxPath + ": ") + here;
             if (in[i] instanceof InvokeDynamicInsnNode indy) {
                 lambda(indy, fr, i, m, depth, seen, beChain, beClass, false);
             } else if (in[i] instanceof JumpInsnNode j && j.getOpcode() != Opcodes.GOTO && j.getOpcode() != Opcodes.JSR) {
@@ -797,7 +826,8 @@ final class SleepAnalysis {
             } else if (in[i] instanceof MethodInsnNode mb && mb.getOpcode() == Opcodes.INVOKESTATIC && PURE_BOUNDS.contains(mb.owner + "." + mb.name)
                     && clockArgument(fr, i, mb, m)) {
                 boundConditions(fr, i, mb, m, beClass);
-            } else if (in[i] instanceof MethodInsnNode mi0 && !(entityMode && CLOCK_SINKS.contains(mi0.owner + "." + mi0.name)) && clockArgument(fr, i, mi0, m)) {
+            } else if (in[i] instanceof MethodInsnNode mi0 && !(entityMode && CLOCK_SINKS.contains(mi0.owner + "." + mi0.name)) && clockArgument(fr, i, mi0, m)
+                    && !(collect && monotoneOfClock(fr, i, mi0, m))) {
                 reject = "clock passed to " + simple(mi0.owner) + "." + mi0.name;
             } else if (in[i] instanceof MethodInsnNode mc && depth < MAX_DEPTH && crossContext(fr, i, mc, m, depth, seen, false)) {
                 continue;
@@ -916,6 +946,7 @@ final class SleepAnalysis {
                 clockOp = e.a;
                 c = -e.b.value;
             } else {
+                if (affineBand(a, k, mi)) return;
                 reject = "clock expression passed to " + simple(mi.owner) + "." + mi.name;
                 return;
             }
@@ -944,6 +975,209 @@ final class SleepAnalysis {
         }
     }
 
+    /**
+     * clamp(f(clock), lo, hi) / max(f(clock), b) / min(f(clock), b) with f built from the clock, constants and arithmetic
+     * (BodyRotationControl: clamp((headStableTime - 10) / 10f, 0, 1)): f is evaluated exactly (Java's int / long /
+     * float / double arithmetic) and is monotone; the result varies only for clock values where f is strictly inside the
+     * bounds - that range becomes a band condition. False if the expression or the bounds are not of this form.
+     */
+    private boolean affineBand(Operand[] a, int k, MethodInsnNode mi) {
+        Operand e = a[k];
+        Operand clockOp = singleClock(e);
+        if (clockOp == null) return false;
+        double lo = Double.NEGATIVE_INFINITY, hi = Double.POSITIVE_INFINITY;
+        String n = mi.name;
+        for (int b = 0; b < a.length; b++) {
+            if (b == k) continue;
+            Double v = a[b].kind == Kind.CONST ? (double) a[b].value : a[b].kind == Kind.FCONST ? a[b].dvalue : null;
+            if (v == null) return false;
+            if (n.equals("clamp")) {
+                if (b == (k == 0 ? 1 : 0) || a.length == 3 && b == 1) lo = Math.max(lo, v);
+                else hi = Math.min(hi, v);
+            } else if (n.equals("max")) {
+                lo = v;
+            } else if (n.equals("min")) {
+                hi = v;
+            } else {
+                return false;
+            }
+        }
+        if (n.equals("clamp") && !(a.length == 3 && k == 0)) return false;
+        Double f0 = eval(e, clockOp, 0), f1 = eval(e, clockOp, 1);
+        if (f0 == null || f1 == null) return false;
+        Field clock = clocks.get(fkey(clockOp.owner, clockOp.name));
+        if (clock == null) return false;
+        if (f0.doubleValue() == f1.doubleValue()) return true;   // constant in the clock
+        boolean up = f1 > f0;
+        // the clock values where f is strictly inside (lo, hi): [first, last]
+        long first = up ? firstAbove(e, clockOp, lo, true) : firstAbove(e, clockOp, hi, false);
+        long last = up ? firstAbove(e, clockOp, hi, false) - 1 : firstAbove(e, clockOp, lo, true) - 1;
+        if (last < first) return true;   // never inside: constant
+        long bl = first == Long.MIN_VALUE ? Long.MIN_VALUE : first - 2, bh = last == Long.MAX_VALUE - 1 ? Long.MAX_VALUE : last + 2;   // a margin
+        addCond(Cond.band(clock, bl, bh, clockOp.name + " outside (" + bl + ", " + bh + ") (" + n + ")"));
+        return true;
+    }
+
+    /**
+     * A comparison of an expression of one clock (conversions, constants, arithmetic: (float) invulnerableTime > 10f)
+     * with a constant: its outcome changes where the monotone expression crosses the constant - a threshold condition.
+     */
+    private boolean affineThreshold(Operand e, Operand other) {
+        if (other == null || other.kind != Kind.CONST && other.kind != Kind.FCONST) return false;
+        Operand clockOp = singleClock(e);
+        if (clockOp == null || isClock(e) && other.kind == Kind.CONST) return false;   // the plain form is the existing path's
+        Double f0 = eval(e, clockOp, 0), f1 = eval(e, clockOp, 1);
+        if (f0 == null || f1 == null) return false;
+        Field clock = clocks.get(fkey(clockOp.owner, clockOp.name));
+        if (clock == null) return false;
+        if (f0.doubleValue() == f1.doubleValue()) return true;
+        double b = other.kind == Kind.CONST ? other.value : other.dvalue;
+        // outcomes can differ between f < b, f == b and f > b: no sleep from the first value at b to the first above it
+        long atOrAbove = firstAbove(e, clockOp, b, false), above = firstAbove(e, clockOp, b, true);
+        // never crossed within the clock range: the outcome never changes
+        if (atOrAbove == Long.MIN_VALUE && above == Long.MIN_VALUE || atOrAbove == Long.MAX_VALUE && above == Long.MAX_VALUE) return true;
+        long x = Math.min(atOrAbove, above), y = Math.max(atOrAbove, above);
+        long bl = x == Long.MIN_VALUE ? Long.MIN_VALUE : x - 2, bh = y == Long.MAX_VALUE ? Long.MAX_VALUE : y + 1;
+        addCond(Cond.band(clock, bl, bh, clockOp.name + " expression ? " + b + " outside (" + bl + ", " + bh + ")"));
+        return true;
+    }
+
+    /** strictly monotone functions of one argument (a changing value is seen by the periodicity check, nothing saturates) */
+    private static final Set<String> MONOTONE = Set.of("java/lang/Math.pow", "java/lang/Math.exp", "java/lang/Math.sqrt", "java/lang/Math.log",
+            "net/minecraft/util/Mth.sqrt");
+
+    /** a monotone function of an expression of one clock (Math.pow(0.997, tickCount - stamp)): its value is state the window sees */
+    private boolean monotoneOfClock(Frame<SourceValue>[] fr, int i, MethodInsnNode mi, MethodNode m) {
+        if (!MONOTONE.contains(mi.owner + "." + mi.name)) return false;
+        int argc = Type.getArgumentTypes(mi.desc).length;
+        for (int k = 1; k <= argc; k++) {
+            Operand o = operand(fr[i], k, fr, m, 0);
+            if (!containsClock(o)) {
+                if (o.kind != Kind.CONST && o.kind != Kind.FCONST && containsGameTime(o)) return false;
+                continue;
+            }
+            Operand c = singleClock(o, true);
+            if (c == null) return false;
+            evalFields = true;
+            Double f0, f1;
+            try {
+                f0 = eval(o, c, 0);
+                f1 = eval(o, c, 1);
+            } finally {
+                evalFields = false;
+            }
+            if (f0 == null || f1 == null || f0.doubleValue() == f1.doubleValue()) return false;
+        }
+        return true;
+    }
+
+    /** the one clock an expression reads (null: none, two, or another kind of leaf) */
+    private Operand singleClock(Operand e) {
+        return singleClock(e, false);
+    }
+
+    /** fields: other own fields may be leaves too (state, constant while asleep; evaluated as 0 - for a slope only) */
+    private Operand singleClock(Operand e, boolean fields) {
+        if (e == null) return null;
+        if (isClock(e)) return e;
+        if (e.kind == Kind.CONST || e.kind == Kind.FCONST) return null;
+        if (e.kind != Kind.ARITH || e.op == Opcodes.IREM || e.op == Opcodes.LREM) return null;   // a remainder is not monotone (moduli are their own path)
+        Operand x = e.a == null ? null : singleClock(e.a, fields), y = e.b == null ? null : singleClock(e.b, fields);
+        if (x != null && y != null) return null;
+        Operand c = x != null ? x : y;
+        if (c == null) return null;
+        if (e.a != null && x == null && !leafOk(e.a, fields) || e.b != null && y == null && !leafOk(e.b, fields)) return null;
+        return c;
+    }
+
+    private boolean evalFields;
+
+    private boolean leafOk(Operand o, boolean fields) {
+        if (fields && o.kind == Kind.FIELD && o.self && !isClock(o)) return true;
+        boolean saved = evalFields;
+        evalFields = fields;
+        try {
+            return o.kind == Kind.CONST || o.kind == Kind.FCONST || o.kind == Kind.ARITH && !containsClock(o) && eval(o, null, 0) != null;
+        } finally {
+            evalFields = saved;
+        }
+    }
+
+    /** the expression's value for a clock value, with Java's arithmetic per opcode (null: not evaluable) */
+    private Double eval(Operand e, Operand clockOp, long c) {
+        if (e == null) return null;
+        if (clockOp != null && e == clockOp || isClock(e) && clockOp != null && e.name.equals(clockOp.name)) return (double) c;
+        if (e.kind == Kind.CONST) return (double) e.value;
+        if (e.kind == Kind.FCONST) return e.dvalue;
+        if (evalFields && e.kind == Kind.FIELD && e.self && !isClock(e)) return 0.0;
+        if (e.kind != Kind.ARITH) return null;
+        Double x = eval(e.a, clockOp, c);
+        if (x == null) return null;
+        int op = e.op;
+        if (e.b == null) {
+            return switch (op) {
+                case Opcodes.I2F, Opcodes.L2F, Opcodes.D2F -> (double) (float) (double) x;
+                case Opcodes.I2D, Opcodes.L2D, Opcodes.F2D -> x;
+                case Opcodes.F2I, Opcodes.D2I -> (double) (int) (double) x;
+                case Opcodes.F2L, Opcodes.D2L -> (double) (long) (double) x;
+                case Opcodes.INEG -> (double) (-(int) (double) x);
+                case Opcodes.LNEG -> (double) (-(long) (double) x);
+                case Opcodes.FNEG -> (double) (-(float) (double) x);
+                case Opcodes.DNEG -> -x;
+                default -> null;
+            };
+        }
+        Double y = eval(e.b, clockOp, c);
+        if (y == null) return null;
+        int base = (op - Opcodes.IADD) % 4;   // 0 int, 1 long, 2 float, 3 double
+        int kind = (op - Opcodes.IADD) / 4;   // add, sub, mul, div, rem
+        if (op < Opcodes.IADD || op > Opcodes.LREM) return null;
+        switch (base) {
+            case 0: {
+                int p = (int) (double) x, q = (int) (double) y;
+                if ((kind == 3 || kind == 4) && q == 0) return null;
+                return (double) (kind == 0 ? p + q : kind == 1 ? p - q : kind == 2 ? p * q : kind == 3 ? p / q : p % q);
+            }
+            case 1: {
+                long p = (long) (double) x, q = (long) (double) y;
+                if ((kind == 3 || kind == 4) && q == 0) return null;
+                return (double) (kind == 0 ? p + q : kind == 1 ? p - q : kind == 2 ? p * q : kind == 3 ? p / q : p % q);
+            }
+            case 2: {
+                float p = (float) (double) x, q = (float) (double) y;
+                if (kind == 4) return null;
+                return (double) (kind == 0 ? p + q : kind == 1 ? p - q : kind == 2 ? p * q : p / q);
+            }
+            default: {
+                if (kind == 4) return null;
+                return kind == 0 ? x + y : kind == 1 ? x - y : kind == 2 ? x * y : x / y;
+            }
+        }
+    }
+
+    /**
+     * The smallest clock value whose f is above the bound (strictly if strict, else at or above it) for an increasing
+     * f; for a decreasing f the smallest value whose f is below it - by binary search over int clock values.
+     * Long.MIN_VALUE if every value qualifies, Long.MAX_VALUE if none does.
+     */
+    private long firstAbove(Operand e, Operand clockOp, double bound, boolean strict) {
+        if (Double.isInfinite(bound)) return (bound < 0) == strict ? Long.MIN_VALUE : Long.MAX_VALUE;
+        boolean up = eval(e, clockOp, 1) > eval(e, clockOp, 0);
+        long lo = -1_000_000_000L, hi = 1_000_000_000L;   // clock values; wider ranges overflow (c - 10 at Integer.MIN_VALUE)
+        java.util.function.LongPredicate q = c -> {
+            double v = eval(e, clockOp, c);
+            return up ? (strict ? v > bound : v >= bound) : (strict ? v < bound : v <= bound);
+        };
+        if (q.test(lo)) return Long.MIN_VALUE;
+        if (!q.test(hi)) return Long.MAX_VALUE;
+        while (hi - lo > 1) {
+            long mid = lo + (hi - lo) / 2;
+            if (q.test(mid)) hi = mid;
+            else lo = mid;
+        }
+        return hi;
+    }
+
     private boolean clockArgument(Frame<SourceValue>[] fr, int i, MethodInsnNode mi, MethodNode m) {
         int argc = Type.getArgumentTypes(mi.desc).length;
         for (int k = 1; k <= argc; k++) if (containsClock(operand(fr[i], k, fr, m, 0))) return true;
@@ -961,6 +1195,7 @@ final class SleepAnalysis {
             if ((x != null && x.kind == Kind.GAMETIME) || (y != null && y.kind == Kind.GAMETIME)) reject = "game time compared without modulo (" + desc(x) + " vs " + desc(y) + ")";
             else if (collect && ageCond(x, y, beClass)) return;
             else if (containsGameTime(x) || containsGameTime(y)) reject = "game time in an expression the analysis does not model";
+            else if (collect && (containsClock(x) || containsClock(y)) && affineThreshold(containsClock(x) ? x : y, containsClock(x) ? y : x)) return;
             else if (containsClock(x) || containsClock(y)) clockModulo(containsClock(x) ? x : y, containsClock(x) ? y : x);
             return;   // not a time condition: its inputs are covered by the read set / own state
         }
@@ -1071,6 +1306,12 @@ final class SleepAnalysis {
 
     /** Moduli of periodic clock conditions ((clock + x) % N ? y), for the entity engine's period. */
     final java.util.TreeSet<Long> moduli = new java.util.TreeSet<>();
+    /**
+     * Mob plans: each modulus with its kind - "tick N r" (the entity's own tickCount % N compared with the constant r:
+     * a known tick, run for real while asleep and checked), "clock path.field N" (another clock: it must stand still),
+     * "period N" (anything else: in the period).
+     */
+    final Set<String> modKinds = new java.util.TreeSet<>();
 
     /** (clock +- x) % N ? y with N constant(s) and x, y free of clocks: a periodic condition; anything else is refused. */
     private void clockModulo(Operand e, Operand other) {
@@ -1094,7 +1335,13 @@ final class SleepAnalysis {
         for (long n : ns) {
             if (n <= 0) { reject = "clock modulo " + n; return; }
             moduli.add(n);
-            addCond(new Cond(clock, null, 0, n, "(" + clockOp.name + " + ..) % " + n, true));
+            if (collect) {
+                boolean tick = clockOp.name.equals("tickCount") && ctxPath.isEmpty() && base == clockOp;
+                if (tick && other != null && other.kind == Kind.CONST && other.value >= 0 && other.value < n) modKinds.add("tick " + n + " " + other.value);
+                else if (!clockOp.name.equals("tickCount")) modKinds.add("clock " + pathKey(clockOp.name) + " " + n);
+                else modKinds.add("period " + n);
+            }
+            addCond(new Cond(clock, null, 0, n, "(" + clockOp.name + " + ..) % " + n + (collect ? " @" + curHere : ""), true));
         }
     }
 
@@ -2044,6 +2291,12 @@ final class SleepAnalysis {
                 g.value = o.b.value;
                 return g;
             }
+        } else if (collect && (op >= Opcodes.I2F && op <= Opcodes.D2F && op != Opcodes.I2L && op != Opcodes.L2I || op == Opcodes.FNEG || op == Opcodes.DNEG
+                || op == Opcodes.INEG || op == Opcodes.LNEG)) {
+            // a conversion between number types (or a negation): the value it carries, as a one-operand expression
+            o.kind = Kind.ARITH;
+            o.op = op;
+            o.a = operand(f, 1, frames, m, depth + 1);
         } else if (op == Opcodes.I2L || op == Opcodes.L2I || op == Opcodes.I2S || op == Opcodes.I2B || op == Opcodes.I2C) {
             return operand(f, 1, frames, m, depth + 1);
         }
