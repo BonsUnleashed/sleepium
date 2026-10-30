@@ -64,9 +64,10 @@ public final class EntitySleep {
         final Field[] f;
         final int n;
         SnapCompiler.Snapper snap;
+        long analysisMs;
         int tickCount = -1;
         int[] clocks = new int[0];
-        int[] nulls = new int[0];
+        int[] nulls = new int[0], zeros = new int[0];
         int[] entityRefs = new int[0];
         boolean[] special;    // tickCount and clocks: compared by rule, not with the base value
         boolean[] prim;
@@ -76,7 +77,9 @@ public final class EntitySleep {
         final int period;
 
         EClass(Class<?> c) {
+            long t0 = System.nanoTime();
             plan = SleepAnalysis.analyzeEntity(c);
+            analysisMs = (System.nanoTime() - t0) / 1_000_000;
             List<Field> fl = new ArrayList<>();
             for (Class<?> k = c; k != null && k != Object.class; k = k.getSuperclass()) {
                 for (Field x : k.getDeclaredFields()) {
@@ -100,7 +103,7 @@ public final class EntitySleep {
             forbidV = new boolean[n];
             prim = new boolean[n];
             for (int i = 0; i < n; i++) prim[i] = f[i].getType().isPrimitive();
-            List<Integer> cl = new ArrayList<>(), nu = new ArrayList<>(), er = new ArrayList<>();
+            List<Integer> cl = new ArrayList<>(), nu = new ArrayList<>(), er = new ArrayList<>(), ze = new ArrayList<>();
             for (int i = 0; i < n; i++) {
                 Field x = f[i];
                 if (x.getName().equals("tickCount") && x.getDeclaringClass() == Entity.class) {
@@ -117,6 +120,7 @@ public final class EntitySleep {
                     special[i] = true;
                 }
                 if (plan.nulls().contains(x)) nu.add(i);
+                if (plan.zeros().contains(x)) ze.add(i);
                 if (Entity.class.isAssignableFrom(x.getType())) er.add(i);
                 forbidV[i] = FORBID_V.contains(x.getName()) && x.getDeclaringClass() == Entity.class;
             }
@@ -130,6 +134,7 @@ public final class EntitySleep {
             if (SnapCompiler.failure != null) System.out.println("[probe/entsleep] snapshot fallback (reflection): " + SnapCompiler.failure);
             clocks = cl.stream().mapToInt(Integer::intValue).toArray();
             nulls = nu.stream().mapToInt(Integer::intValue).toArray();
+            zeros = ze.stream().mapToInt(Integer::intValue).toArray();
             entityRefs = er.stream().mapToInt(Integer::intValue).toArray();
         }
     }
@@ -211,7 +216,7 @@ public final class EntitySleep {
         if (s == null) {
             EClass c = AsyncAnalysis.get(CLASSES, e.getClass(), k -> {
                 EClass x = new EClass(k);
-                System.out.println("[probe/entsleep] " + k.getSimpleName() + ": " + (x.refuse == null ? "ELIGIBLE fields " + x.n + " (final "
+                System.out.println("[probe/entsleep] " + k.getSimpleName() + " (" + x.analysisMs + " ms): " + (x.refuse == null ? "ELIGIBLE fields " + x.n + " (final "
                         + java.util.Arrays.stream(x.f).filter(q -> Modifier.isFinal(q.getModifiers())).count() + ", primitive "
                         + java.util.Arrays.stream(x.f).filter(q -> q.getType().isPrimitive()).count() + ") period " + x.period
                         + " clocks=" + java.util.Arrays.stream(x.clocks).mapToObj(i -> x.f[i].getName()).toList()
@@ -366,6 +371,7 @@ public final class EntitySleep {
         int L = c.period;
         s.k = -1;
         for (int i : c.nulls) if (get(c.f[i], e) != null) { fail(s, "needs null " + c.f[i].getName()); return; }
+        for (int i : c.zeros) if (((Number) get(c.f[i], e)).longValue() != 0) { fail(s, "needs zero " + c.f[i].getName()); return; }
         for (int i : c.entityRefs) if (get(c.f[i], e) != null) { fail(s, "holds entity " + c.f[i].getName()); return; }
         if (e.isPassenger() || e.isVehicle()) { fail(s, "riding"); return; }
         // the fields that vary within the period
