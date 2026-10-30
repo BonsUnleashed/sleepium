@@ -169,7 +169,11 @@ public final class CompositeEventBus implements IEventBus {
     private static final boolean PHYSICAL_CLIENT = net.neoforged.fml.loading.FMLEnvironment.dist.isClient();
 
     /** Full post: first posts, listener changes, dispatch, fallbacks and statistics. */
+    /** posts that took the full path (somebody listens, or not known): MoveMemo's "no event with listeners" */
+    public static long fullPosts;
+
     private <T extends Event> T postFull(T event) {
+        fullPosts++;
         // ParallelRender: a mod renderer posting an event somebody listens to (GeckoLib's GeoRenderEvent) from a worker job:
         // the listener must not run there; the job goes to the render thread and the type stays there
         // (client only: ParallelRender is a client class; touching it on a dedicated server loads client classes)

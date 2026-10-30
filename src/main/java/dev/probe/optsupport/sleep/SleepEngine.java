@@ -141,7 +141,11 @@ public final class SleepEngine {
     }
 
     /** From SleepProbeUnobservedMixin: the observed tick read something a sleeping block entity could not be woken by. */
+    /** every unobserved read, observed tick or not (MoveMemo) */
+    public static long unobservedAll;
+
     public static void unobservedRead() {
+        unobservedAll++;
         if (EntitySleep.obs != null && Thread.currentThread() == EntitySleep.obsThread) EntitySleep.unobservedRead();
         if (obs != null && Thread.currentThread() == obsThread) unobserved++;
     }
