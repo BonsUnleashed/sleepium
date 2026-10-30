@@ -4,6 +4,12 @@
   "package": "dev.probe.mixin",
   "compatibilityLevel": "JAVA_21",
   "mixins": [
+    "KnockMixin",
+    "KnockEntityMixin",
+    "KnockGoalsMixin",
+    "MoveTimeEntityMixin",
+    "MoveTimeLivingMixin",
+    "MoveTimeMobMixin",
     "BlockableEventLoopMixin",
     "ProcessorMailboxMixin",
     "ChunkStepHashMixin",
