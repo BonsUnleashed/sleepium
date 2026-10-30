@@ -47,18 +47,27 @@ final class SleepAnalysis {
      * clock ? const/field; or gameTime % mod ? const (clock null); or (clock + x) % mod ? y (clock set, mod > 0,
      * {@code clockMod}): a periodic condition on a clock, whose outcome can change every tick.
      */
-    record Cond(Field clock, Field thresholdField, long thresholdConst, long mod, String text, boolean clockMod, boolean peer) {
+    record Cond(Field clock, Field thresholdField, long thresholdConst, long mod, String text, boolean clockMod, boolean peer, boolean age) {
         Cond(Field clock, Field thresholdField, long thresholdConst, long mod, String text) {
-            this(clock, thresholdField, thresholdConst, mod, text, false, false);
+            this(clock, thresholdField, thresholdConst, mod, text, false, false, false);
         }
 
         Cond(Field clock, Field thresholdField, long thresholdConst, long mod, String text, boolean clockMod) {
-            this(clock, thresholdField, thresholdConst, mod, text, clockMod, false);
+            this(clock, thresholdField, thresholdConst, mod, text, clockMod, false, false);
+        }
+
+        Cond(Field clock, Field thresholdField, long thresholdConst, long mod, String text, boolean clockMod, boolean peer) {
+            this(clock, thresholdField, thresholdConst, mod, text, clockMod, peer, false);
         }
 
         /** entity mode: the clock compared with the same field of another instance (a neighbour read by the tick) */
         static Cond peer(Field clock, String text) {
             return new Cond(clock, null, 0, 0, text, false, true);
+        }
+
+        /** gameTime - stamp compared with a constant: the age grows by 1 a tick, its outcome flips at most once */
+        static Cond age(Field stamp, long c, String text) {
+            return new Cond(stamp, null, c, 0, text, false, false, true);
         }
     }
 
@@ -109,11 +118,34 @@ final class SleepAnalysis {
     }
 
     private boolean ok(String here) {
-        if (ALL_REASONS && reject != null) {
-            reasons.merge(here == null ? reject : reject + " @" + here, 1, Integer::sum);
+        if ((ALL_REASONS || collect) && reject != null) {
+            String key = here == null ? reject : reject + " @" + here;
+            reasons.merge(key, 1, Integer::sum);
+            if (collect) {
+                Set<String> g = reasonGuards.get(key);
+                if (g == null) reasonGuards.put(key, new HashSet<>(curGuards));
+                else g.retainAll(curGuards);
+            }
             reject = null;
         }
         return reject == null;
+    }
+
+    /**
+     * Mob analysis (a sample given): every reason is collected with its guards - the assumptions that would make the
+     * code giving it unreachable: "zero:f" (an own int / boolean field is 0), "false:m" (an own boolean method returns
+     * false: isUsingItem, a goal's isRunning), "null:f" (an own object field is null). Paths name fields of contexts
+     * (navigation.path). "rv:..." guards are on a local's boolean call, resolved where that local is a call's receiver.
+     */
+    private boolean collect;
+    private final Map<String, Set<String>> reasonGuards = new HashMap<>();
+    private Set<String> chainGuards = Set.of(), curGuards = Set.of();
+    private final Set<String> falseCalls = new java.util.TreeSet<>(), forcedNulls = new java.util.TreeSet<>();
+    /** flow(): one jump forced to one successor (the guards' reachability) */
+    private int forceAt = -1, forceTo;
+
+    private String pathKey(String name) {
+        return ctxPath.isEmpty() ? name : ctxPath + "." + name;
     }
 
     /** entity mode: own object fields assumed null (see Plan.nulls); grown by candidates until a fixpoint */
@@ -126,7 +158,9 @@ final class SleepAnalysis {
     private final Set<String> zeroFields = new HashSet<>();
 
     private boolean zeroField(Operand o) {
-        return entityMode && o != null && o.kind == Kind.FIELD && o.self && chain != null && chain.contains(o.owner) && zeroFields.contains(o.name);
+        if (!entityMode || o == null || o.kind != Kind.FIELD || !o.self) return false;
+        if (!ctxPath.isEmpty()) return zeroFields.contains(ctxPath + "." + o.name);
+        return chain != null && chain.contains(o.owner) && zeroFields.contains(o.name);
     }
 
     /** a level's isClientSide (the field, or the method): false wherever an entity can sleep (server levels only) */
@@ -194,7 +228,14 @@ final class SleepAnalysis {
             int i = stack[--sp];
             int op = in[i].getOpcode();
             int only = -2;   // -2: all normal successors; -1: none; else the only one
-            if ((op == Opcodes.IFNULL || op == Opcodes.IFNONNULL) && nullField(operand(fr[i], 1, fr, m, 0))) {
+            String fc;
+            if (i == forceAt) {
+                only = forceTo;
+            } else if (!falseCalls.isEmpty() && (op == Opcodes.IFEQ || op == Opcodes.IFNE) && fr[i] != null
+                    && (fc = falseCall(fr, i, m)) != null && falseCalls.contains(fc.substring(6))) {
+                int target = m.instructions.indexOf(((JumpInsnNode) in[i]).label);
+                only = op == Opcodes.IFEQ ? target : i + 1;
+            } else if ((op == Opcodes.IFNULL || op == Opcodes.IFNONNULL) && nullField(operand(fr[i], 1, fr, m, 0))) {
                 int target = m.instructions.indexOf(((JumpInsnNode) in[i]).label);
                 only = op == Opcodes.IFNULL ? target : i + 1;
             } else if (entityMode && op >= Opcodes.IFEQ && op <= Opcodes.IFLE && fr[i] != null
@@ -241,6 +282,7 @@ final class SleepAnalysis {
         a.entityMode = true;
         a.sample = sample;
         a.ctxObj = sample;
+        a.collect = sample != null;
         try {
             return a.runEntity(entityClass);
         } catch (Exception | LinkageError e) {
@@ -251,6 +293,7 @@ final class SleepAnalysis {
     /** the analysis rounds (null fields to a fixpoint) under the current zero assumptions; the number of reasons */
     private int rounds(String decl, MethodNode root, Class<?> ec, Field tickCount, Set<String> chainSet, Set<String> seen) throws AnalyzerException {
         nullFields.clear();
+        nullFields.addAll(forcedNulls);
         for (int round = 0; ; round++) {
             clocks.clear();
             clocks.put(fkey("net/minecraft/world/entity/Entity", "tickCount"), tickCount);
@@ -258,6 +301,8 @@ final class SleepAnalysis {
             watch.clear();
             moduli.clear();
             reasons.clear();
+            reasonGuards.clear();
+            chainGuards = curGuards = Set.of();
             reject = null;
             nullCandidates.clear();
             seen.clear();
@@ -288,7 +333,9 @@ final class SleepAnalysis {
         ok();
         boolean clockReasons = false;
         for (String r : reasons.keySet()) clockReasons |= r.startsWith("clock ");
-        if (!reasons.isEmpty() && zeroFields.isEmpty() && clockReasons) {
+        if (sample != null && !reasons.isEmpty()) {
+            assumptionSearch(decl, root, ec, tickCount, chainSet, seen);
+        } else if (!reasons.isEmpty() && zeroFields.isEmpty() && clockReasons) {
             // try each clock compared with 0 as "0 while asleep": keep it when it removes reasons
             List<String> cands = new ArrayList<>();
             for (Cond c : conds)
@@ -307,7 +354,10 @@ final class SleepAnalysis {
         }
         if (!contexts.isEmpty() && reasons.isEmpty() && reject == null)
             reasons.put("AI objects followed (" + contexts.size() + " contexts), not in the runtime snapshot yet", 1);
-        if (!reasons.isEmpty()) reject = reasons.size() + " reasons (null: " + nullFields + (zeroFields.isEmpty() ? "" : ", zero: " + zeroFields) + "): " + String.join(" | ", reasons.keySet());
+        if (sample != null && reasons.isEmpty() && (!falseCalls.isEmpty() || !forcedNulls.isEmpty()))
+            reasons.put("assumptions not checked at run time yet", 1);
+        if (!reasons.isEmpty()) reject = reasons.size() + " reasons (null: " + nullFields + (zeroFields.isEmpty() ? "" : ", zero: " + zeroFields)
+                + (falseCalls.isEmpty() ? "" : ", false: " + falseCalls) + "): " + String.join(" | ", reasons.keySet());
         if (reject != null) return new Plan(false, reject, List.copyOf(clocks.values()), List.copyOf(conds));
         long period = 1;
         for (long n : moduli) {
@@ -413,10 +463,14 @@ final class SleepAnalysis {
         if (!ok() || !seen.add(owner + "." + m.name + m.desc + (entityMode ? "#" + self + "@" + ctxPath : ""))) return;
         int savedSelf = selfMask;
         selfMask = self;
+        Set<String> savedChain = chainGuards, savedCur = curGuards;
+        chainGuards = curGuards;
         try {
             follow0(owner, m, depth, seen, beChain, beClass);
         } finally {
             selfMask = savedSelf;
+            chainGuards = savedChain;
+            curGuards = savedCur;
         }
     }
 
@@ -429,8 +483,11 @@ final class SleepAnalysis {
         Frame<SourceValue>[] fr = flow.fr();
         String here = simple(owner) + "." + m.name;
         AbstractInsnNode[] in = m.instructions.toArray();
+        Set<String>[] lg = guards(owner, m, flow, chainGuards);
+        Set<String> base = chainGuards;
         for (int i = 0; i < in.length && ok(here); i++) {
             if (fr[i] == null || !flow.live()[i]) continue;
+            curGuards = lg == null || lg[i] == null ? base : lg[i];
             int op = in[i].getOpcode();
             if (in[i] instanceof InvokeDynamicInsnNode indy) {
                 lambda(indy, fr, i, m, depth, seen, beChain, beClass, true);
@@ -548,10 +605,14 @@ final class SleepAnalysis {
         if (!ok() || m == null || !seen.add(owner + "." + m.name + m.desc + (entityMode ? "#" + self + "@" + ctxPath : ""))) return;
         int savedSelf = selfMask;
         selfMask = self;
+        Set<String> savedChain = chainGuards, savedCur = curGuards;
+        chainGuards = curGuards;
         try {
             branches0(owner, m, depth, seen, beChain, beClass);
         } finally {
             selfMask = savedSelf;
+            chainGuards = savedChain;
+            curGuards = savedCur;
         }
     }
 
@@ -560,8 +621,11 @@ final class SleepAnalysis {
         Frame<SourceValue>[] fr = flow.fr();
         String here = simple(owner) + "." + m.name;
         AbstractInsnNode[] in = m.instructions.toArray();
+        Set<String>[] lg = guards(owner, m, flow, chainGuards);
+        Set<String> base = chainGuards;
         for (int i = 0; i < in.length && ok(here); i++) {
             if (fr[i] == null || !flow.live()[i]) continue;
+            curGuards = lg == null || lg[i] == null ? base : lg[i];
             if (in[i] instanceof InvokeDynamicInsnNode indy) {
                 lambda(indy, fr, i, m, depth, seen, beChain, beClass, false);
             } else if (in[i] instanceof JumpInsnNode j && j.getOpcode() != Opcodes.GOTO && j.getOpcode() != Opcodes.JSR) {
@@ -650,6 +714,19 @@ final class SleepAnalysis {
 
     private final Set<String> stamps = new HashSet<>();
 
+    /** (gameTime - stamp) ? C with stamp an own long field a tick only sets to the game time (or never writes) */
+    private boolean ageCond(Operand x, Operand y, Class<?> beClass) {
+        Operand e = x != null && x.kind == Kind.ARITH ? x : y, c = e == x ? y : x;
+        if (e == null || c == null || c.kind != Kind.CONST || e.kind != Kind.ARITH || e.op != Opcodes.LSUB || e.a == null || e.b == null) return false;
+        if (e.a.kind != Kind.GAMETIME || e.b.kind != Kind.FIELD || !e.b.self || !"J".equals(e.b.type) || !ctxPath.isEmpty() || !chain.contains(e.b.owner)) return false;
+        String k = fkey(e.b.owner, e.b.name);
+        if (clocks.containsKey(k) && !stamps.contains(e.b.name)) return false;   // a counter, not a stamp
+        Field f = field(beClass, e.b.name);
+        if (f == null) return false;
+        conds.add(Cond.age(f, c.value, "gameTime - " + e.b.name + " ? " + c.value));
+        return true;
+    }
+
     /** calls that only store or print a value (no comparison, no owned state changed) */
     private static final Set<String> CLOCK_SINKS = Set.of("net/minecraft/nbt/CompoundTag.putInt", "net/minecraft/nbt/CompoundTag.putShort",
             "net/minecraft/nbt/CompoundTag.putLong", "net/minecraft/nbt/CompoundTag.putByte");
@@ -727,6 +804,7 @@ final class SleepAnalysis {
         boolean xg = x != null && x.kind == Kind.GAMEMOD, yg = y != null && y.kind == Kind.GAMEMOD;
         if (!xc && !yc && !xg && !yg) {
             if ((x != null && x.kind == Kind.GAMETIME) || (y != null && y.kind == Kind.GAMETIME)) reject = "game time compared without modulo (" + desc(x) + " vs " + desc(y) + ")";
+            else if (collect && ageCond(x, y, beClass)) return;
             else if (containsGameTime(x) || containsGameTime(y)) reject = "game time in an expression the analysis does not model";
             else if (containsClock(x) || containsClock(y)) clockModulo(containsClock(x) ? x : y, containsClock(x) ? y : x);
             return;   // not a time condition: its inputs are covered by the read set / own state
@@ -889,6 +967,206 @@ final class SleepAnalysis {
         return true;
     }
 
+    /**
+     * Greedy: the guard removing the most reasons is assumed, kept when the whole analysis then gives fewer reasons and
+     * the sample (a live entity of the class) satisfies it now - an assumption an idle entity does not hold is useless.
+     */
+    private void assumptionSearch(String decl, MethodNode root, Class<?> ec, Field tickCount, Set<String> chainSet, Set<String> seen) throws AnalyzerException {
+        Set<String> tried = new HashSet<>();
+        int cur = reasons.size();
+        boolean dirty = false;
+        for (int step = 0; step < MAX_ASSUME_STEPS && cur > 0; step++) {
+            Map<String, Integer> cover = new java.util.TreeMap<>();
+            for (var e : reasonGuards.entrySet())
+                if (reasons.containsKey(e.getKey())) for (String g : e.getValue()) if (!g.startsWith("rv:") && !tried.contains(g)) cover.merge(g, 1, Integer::sum);
+            String best = null;
+            for (var e : cover.entrySet()) if (holds(e.getKey()) && (best == null || e.getValue() > cover.get(best))) best = e.getKey();
+            if (best == null) break;
+            tried.add(best);
+            assume(best, true);
+            int r = rounds(decl, root, ec, tickCount, chainSet, seen);
+            if (r < cur) {
+                cur = r;
+                dirty = false;
+                if (SEARCH_LOG) System.out.println("[probe/sleep] " + simple(internal(ec)) + " assume " + best + ": " + r + " reasons");
+            } else {
+                assume(best, false);
+                dirty = true;
+            }
+        }
+        if (dirty) rounds(decl, root, ec, tickCount, chainSet, seen);
+        ok();
+    }
+
+    private static final int MAX_ASSUME_STEPS = Integer.getInteger("lab.sleep.assumeSteps", 12);
+    private static final boolean SEARCH_LOG = Boolean.getBoolean("lab.sleep.searchLog");
+
+    private void assume(String g, boolean on) {
+        String k = g.substring(g.indexOf(':') + 1);
+        Set<String> set = g.startsWith("zero:") ? zeroFields : g.startsWith("false:") ? falseCalls : forcedNulls;
+        if (on) set.add(k);
+        else set.remove(k);
+    }
+
+    /** the assumption is true of the sample now (fields read, boolean getters called reflectively) */
+    private boolean holds(String g) {
+        String k = g.substring(g.indexOf(':') + 1);
+        int dot = k.lastIndexOf('.');
+        Object at = dot < 0 ? sample : resolve(k.substring(0, dot));
+        String name = dot < 0 ? k : k.substring(dot + 1);
+        if (at == null) return false;
+        try {
+            if (g.startsWith("false:")) {
+                int hash = name.indexOf('#');
+                String mn = hash < 0 ? name : name.substring(0, hash);
+                for (Class<?> c = at.getClass(); c != null && c != Object.class; c = c.getSuperclass())
+                    for (java.lang.reflect.Method mm : c.getDeclaredMethods())
+                        if (mm.getName().equals(mn) && mm.getReturnType() == boolean.class
+                                && (hash < 0 ? mm.getParameterCount() == 0 : mm.getParameterCount() == 1 && mm.getParameterTypes()[0] == int.class)) {
+                            mm.setAccessible(true);
+                            return !(Boolean) (hash < 0 ? mm.invoke(at) : mm.invoke(at, Integer.parseInt(name.substring(hash + 1))));
+                        }
+                return false;
+            }
+            for (Class<?> c = at.getClass(); c != null && c != Object.class; c = c.getSuperclass())
+                try {
+                    Field f = c.getDeclaredField(name);
+                    f.setAccessible(true);
+                    Object v = f.get(at);
+                    if (g.startsWith("null:")) return v == null;
+                    return v instanceof Boolean b ? !b : v instanceof Number n && n.longValue() == 0;
+                } catch (NoSuchFieldException e) {
+                    // the superclass
+                }
+        } catch (ReflectiveOperationException | RuntimeException e) {
+            return false;
+        }
+        return false;
+    }
+
+    /** the sample's object at a context path ("navigation.pathFinder", "goalSelector.availableGoals[3]") */
+    private Object resolve(String path) {
+        Object o = sample;
+        for (String part : path.split("\\.")) {
+            if (o == null) return null;
+            int br = part.indexOf('[');
+            o = fieldValue(o, br < 0 ? part : part.substring(0, br));
+            if (br >= 0) {
+                if (!(o instanceof java.util.Collection<?> c)) return null;
+                int k = Integer.parseInt(part.substring(br + 1, part.length() - 1));
+                Object[] els;
+                try {
+                    els = c.toArray();
+                } catch (java.util.ConcurrentModificationException e) {
+                    return null;
+                }
+                o = k < els.length ? els[k] : null;
+            }
+        }
+        return o;
+    }
+
+    /**
+     * A jump's operand is a boolean method's result: "false:<path>.<name>" when it is called on the current object (or
+     * on the entity through a back-pointer field), "rv:<local>:<name>" when on a local (a goal in GoalSelector's loop).
+     */
+    private String falseCall(Frame<SourceValue>[] fr, int b, MethodNode m) {
+        Frame<SourceValue> f0 = fr[b];
+        if (f0 == null || f0.getStackSize() < 1) return null;
+        SourceValue v = f0.getStack(f0.getStackSize() - 1);
+        if (v.insns.size() == 1 && v.insns.iterator().next() instanceof VarInsnNode load && load.getOpcode() == Opcodes.ILOAD) {
+            // a boolean kept in a local (updateFallFlying's flag): the value of its one store
+            SourceValue lv = f0.getLocal(load.var);
+            if (lv.insns.size() != 1 || !(lv.insns.iterator().next() instanceof VarInsnNode st) || st.getOpcode() != Opcodes.ISTORE) return null;
+            Frame<SourceValue> sf = fr[m.instructions.indexOf(st)];
+            if (sf == null || sf.getStackSize() < 1) return null;
+            v = sf.getStack(sf.getStackSize() - 1);
+        }
+        if (v.insns.size() != 1 || !(v.insns.iterator().next() instanceof MethodInsnNode mi) || !(mi.desc.equals("()Z") || mi.desc.equals("(I)Z"))
+                || mi.getOpcode() == Opcodes.INVOKESTATIC || mi.getOpcode() == Opcodes.INVOKESPECIAL) return null;
+        Frame<SourceValue> f = fr[m.instructions.indexOf(mi)];
+        if (f == null) return null;
+        int argc = mi.desc.equals("()Z") ? 0 : 1;
+        String name = mi.name;
+        if (argc == 1) {
+            Operand a = operand(f, 1, fr, m, 0);
+            if (a.kind != Kind.CONST) return null;
+            name += "#" + a.value;   // the flag's index
+        }
+        if (onThis(f, argc + 1, fr, m)) return "false:" + pathKey(name);
+        Operand r = operand(f, argc + 1, fr, m, 0);
+        if (r.kind == Kind.FIELD && r.self && ctxObj != null && sample != null && fieldValue(ctxObj, r.name) == sample) return "false:" + name;
+        String sig = rvSig(f.getStack(f.getStackSize() - 1 - argc), f, m);
+        return sig == null ? null : "rv:" + sig + ":" + name;
+    }
+
+    /** a value loaded from a local: the local and the stores its value comes from */
+    private static String rvSig(SourceValue v, Frame<SourceValue> f, MethodNode m) {
+        if (v.insns.size() != 1 || !(v.insns.iterator().next() instanceof VarInsnNode vi) || vi.getOpcode() != Opcodes.ALOAD || vi.var == 0) return null;
+        SourceValue lv = f.getLocal(vi.var);
+        StringBuilder sb = new StringBuilder().append(vi.var);
+        List<Integer> at = new ArrayList<>();
+        for (AbstractInsnNode x : lv.insns) at.add(m.instructions.indexOf(x));
+        java.util.Collections.sort(at);
+        return sb.append('@').append(at).toString();
+    }
+
+    /**
+     * Per instruction of a method, the guards making it unreachable (plus the call site's): for every undecided jump on
+     * an own int / boolean field (0), an own boolean call (false) or an own object field (null), the instructions only
+     * reachable through the other side.
+     */
+    @SuppressWarnings("unchecked")
+    private Set<String>[] guards(String owner, MethodNode m, Flow flow, Set<String> base) throws AnalyzerException {
+        if (!collect || sample == null) return null;
+        Frame<SourceValue>[] fr = flow.fr();
+        AbstractInsnNode[] in = m.instructions.toArray();
+        Set<String>[] out = null;
+        for (int b = 0; b < in.length; b++) {
+            if (fr[b] == null || !flow.live()[b] || !(in[b] instanceof JumpInsnNode j)) continue;
+            int op = j.getOpcode();
+            String key = null;
+            boolean taken = false;
+            if (op >= Opcodes.IFEQ && op <= Opcodes.IFLE) {
+                Operand o = operand(fr[b], 1, fr, m, 0);
+                if (o.kind == Kind.FIELD && o.self && o.type != null && o.type.length() == 1 && "IZBSC".contains(o.type) && !zeroField(o)
+                        && (!ctxPath.isEmpty() || chain != null && chain.contains(o.owner))) {
+                    key = "zero:" + pathKey(o.name);
+                    taken = op == Opcodes.IFEQ || op == Opcodes.IFGE || op == Opcodes.IFLE;
+                } else if (op == Opcodes.IFEQ || op == Opcodes.IFNE) {
+                    String fc = falseCall(fr, b, m);
+                    if (fc != null && !(fc.startsWith("false:") && falseCalls.contains(fc.substring(6)))) {
+                        key = fc;
+                        taken = op == Opcodes.IFEQ;
+                    }
+                }
+            } else if (op == Opcodes.IFNULL || op == Opcodes.IFNONNULL) {
+                Operand o = operand(fr[b], 1, fr, m, 0);
+                if (o.kind == Kind.FIELD && o.self && !nullField(o) && (!ctxPath.isEmpty() || chain != null && chain.contains(o.owner))) {
+                    key = "null:" + pathKey(o.name);
+                    taken = op == Opcodes.IFNULL;
+                }
+            }
+            if (key == null) continue;
+            int target = m.instructions.indexOf(j.label);
+            forceAt = b;
+            forceTo = taken ? target : b + 1;
+            boolean[] l2;
+            try {
+                l2 = flow(owner, m).live();
+            } finally {
+                forceAt = -1;
+            }
+            for (int i = 0; i < in.length; i++) {
+                if (!flow.live()[i] || l2[i]) continue;
+                if (out == null) out = new Set[in.length];
+                if (out[i] == null) out[i] = new HashSet<>(base);
+                out[i].add(key);
+            }
+        }
+        return out;
+    }
+
     /** an object of Minecraft's AI (controls, navigation, sensing, goal selectors, goals) or a subclass of one */
     private static boolean aiObject(Object o) {
         if (o == null || o instanceof net.minecraft.world.entity.Entity || o instanceof java.util.Collection<?> || o instanceof java.util.Map<?, ?>
@@ -1044,7 +1322,22 @@ final class SleepAnalysis {
             if (v != null && v.getClass().isHidden() && v.getClass().getName().contains("$$Lambda")) return lambdaHost(v.getClass(), mi, depth, seen, pass1);
         }
         if (targets.isEmpty()) return false;
+        Set<String> callG = curGuards;
+        List<String> recvGuards = new ArrayList<>();
+        String sig = fr[i] == null ? null : rvSig(fr[i].getStack(fr[i].getStackSize() - argc - 1), fr[i], m);
+        if (sig != null) for (String g : callG) if (g.startsWith("rv:" + sig + ":")) recvGuards.add(g.substring(("rv:" + sig + ":").length()));
         for (Object[] t : targets) {
+            Set<String> g2 = callG;
+            boolean dead = false;
+            if (!recvGuards.isEmpty()) {
+                g2 = new HashSet<>(callG);
+                for (String n : recvGuards) {
+                    String k = "false:" + (((String) t[0]).isEmpty() ? "" : t[0] + ".") + n;
+                    dead |= falseCalls.contains(k.substring(6));
+                    g2.add(k);
+                }
+            }
+            if (dead) continue;   // this element's call is behind its assumed-false check
             Object obj = t[1];
             Class<?> cls = obj.getClass();
             String decl = ownerOf(internal(cls), mi.name, mi.desc);
@@ -1058,12 +1351,14 @@ final class SleepAnalysis {
             ctxPath = (String) t[0];
             ctxObj = obj;
             if (!ctxPath.isEmpty()) contexts.add(ctxPath);
+            curGuards = g2;
             try {
                 if (pass1) follow(decl, target, depth + 1, seen, chainOf(cls), cls, 1);
                 else branches(decl, target, depth + 1, seen, chainOf(cls), cls, 1);
             } finally {
                 ctxPath = savedPath;
                 ctxObj = savedObj;
+                curGuards = callG;
             }
         }
         return true;

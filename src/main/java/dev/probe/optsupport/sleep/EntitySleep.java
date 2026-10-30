@@ -500,6 +500,11 @@ public final class EntitySleep {
             if (ci < 0) return 0;
             cv = longValue(c.f[ci], e);
             r = ci == c.tickCount ? 1 : rateOf(s, ci);
+            if (cond.age()) {   // the stamp's age: game time - stamp, one more each tick
+                if (r != 0) return 0;
+                cv = e.level().getGameTime() - cv;
+                r = 1;
+            }
             if (cond.peer()) {
                 if (!s.entityExposed) continue;   // no neighbour object reached the tick in the observed period
                 long dd = peerDeadline(s, ci, cv, r);
