@@ -93,6 +93,7 @@ public final class EntitySleep {
         int[] stillClocks = new int[0];   // clocks tested by a modulus: they must stand still
         MobSleep.Assumptions assume;  // the plan's assumptions compiled against the slots (made on first use)
         volatile long retryAt;        // refused for the sample's momentary state: analysed again from another one then (0 unset)
+        String[] retryNull;           // ... one that holds null in these paths (the objects that refused the first)
         int[] clockPart;              // composite with Unsafe: per clock, its part and field offset and kind (0 int, 1 long, 2 short, 3 byte)
         long[] clockOff;
         byte[] clockKind;
@@ -690,6 +691,27 @@ public final class EntitySleep {
 
     private static final Map<Class<?>, EClass> CLASSES = new java.util.concurrent.ConcurrentHashMap<>();   // filled by AsyncAnalysis
     private static final Map<Class<?>, Integer> RETRIED = new java.util.concurrent.ConcurrentHashMap<>();
+    private static final java.util.regex.Pattern HELD = java.util.regex.Pattern.compile("assumes ([^ ]+) null, the sample holds one"),
+            REASONS = java.util.regex.Pattern.compile("([0-9]+) reasons");
+
+    /**
+     * The paths whose objects alone refused a class ("assumes X null, the sample holds one" for every reason): another
+     * entity holding none of them is a sample worth analysing again. Null if any other reason refused it.
+     */
+    static String[] sampleNulls(String refuse) {
+        java.util.regex.Matcher r = REASONS.matcher(refuse);
+        if (!r.find()) return null;
+        int n = Integer.parseInt(r.group(1));
+        List<String> paths = new ArrayList<>();
+        java.util.regex.Matcher m = HELD.matcher(refuse);
+        while (m.find()) paths.add(m.group(1));
+        return n > 0 && paths.size() == n ? paths.toArray(new String[0]) : null;
+    }
+
+    private static boolean allNull(Entity e, String[] paths) {
+        for (String p : paths) if (MobSleep.resolve(e, p) != null) return false;
+        return true;
+    }
     private static final int ANALYSIS_RETRIES = Integer.getInteger("lab.entsleep.analysisRetries", 5);
 
     // ------------------------------------------------------------------ per entity
@@ -950,7 +972,7 @@ public final class EntitySleep {
             // result replaces the refusal for all of them
             EClass cur = CLASSES.get(e.getClass());
             if (cur != null && cur != s.c) s = null;
-            else if (cur == s.c && s.c.retryAt != Long.MAX_VALUE && now >= s.c.retryAt) {
+            else if (cur == s.c && s.c.retryAt != Long.MAX_VALUE && now >= s.c.retryAt && allNull(e, s.c.retryNull)) {
                 s.c.retryAt = Long.MAX_VALUE;
                 if (RETRIED.merge(e.getClass(), 1, Integer::sum) <= ANALYSIS_RETRIES) {
                     CLASSES.remove(e.getClass(), s.c);
@@ -972,8 +994,8 @@ public final class EntitySleep {
                 e.tick();
                 return;
             }
-            if (c.refuse != null && c.mob == null && c.retryAt == 0 && COMPONENTS && c.refuse.contains("the sample"))
-                c.retryAt = now + 100;   // the sample's state (walking, a path) refused it: another one later
+            if (c.refuse != null && c.mob == null && c.retryAt == 0 && COMPONENTS && (c.retryNull = sampleNulls(c.refuse)) != null)
+                c.retryAt = now + 20;   // refused for objects the sample held (a path while it walked): an entity without them later
             s = new ES(e, c);
             if (c.refuse != null || e.getBlockX() < MIN_X || dev.probe.api.Compat.entitySleepExcluded(e)) s.st = St.NEVER;
             else if (c.comp != null && (s.ctx = c.comp.resolveAll(e)) == null) s.st = St.NEVER;
