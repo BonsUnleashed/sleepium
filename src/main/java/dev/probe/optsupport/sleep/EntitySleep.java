@@ -154,8 +154,14 @@ public final class EntitySleep {
                     partStart.add(fl.size());
                     partClass.add(o.getClass());
                     paths.add(path);
+                    // an object with a modification counter the replay checks (the attribute map): its fields are not
+                    // state to snapshot
+                    boolean epochObject = o instanceof MoveMemo.AttrEpoch;
                     for (Field x : MobSleep.instanceFields(o.getClass())) {
                         Class<?> t = x.getType();
+                        if (epochObject) continue;
+                        // GoalSelector's goal set: only addGoal / removeGoal change it, and they change its counter
+                        if (o instanceof MobSleepHooks.GoalEpoch && x.getName().equals("availableGoals")) continue;
                         if (Modifier.isFinal(x.getModifiers()) && !t.isPrimitive() && !t.isArray() && !java.util.Collection.class.isAssignableFrom(t)
                                 && !java.util.Map.class.isAssignableFrom(t)) continue;   // the same object for life (a context has its own part)
                         fl.add(x);
@@ -320,6 +326,8 @@ public final class EntitySleep {
         boolean readsWeather, readsPlayers;   // the window read them (observed while there is none)
         long[][] afterExp;            // per phase: the whole state a tick leaves (an inline tick is checked against it)
         Object[] emptyObjs;           // asleep: the collections assumed empty
+        long clockWakeAt = Long.MAX_VALUE;   // the clock conditions' deadline (absolute game time)
+        boolean drawWake;             // wakeAt is a draw's: that tick runs for real and the sleep may go on
         MoveMemo.AttrEpoch attrObj;
         MobSleepHooks.GoalEpoch goal0, goal1;
         double[][] dConst;            // per phase and draw: the other side's constant part (constant, final field, clock offset)
@@ -436,6 +444,29 @@ public final class EntitySleep {
             if (c.refuse != null || e.getBlockX() < MIN_X || dev.probe.api.Compat.entitySleepExcluded(e)) s.st = St.NEVER;
             else if (c.comp != null && (s.ctx = c.comp.resolveAll(e)) == null) s.st = St.NEVER;
             ((EntSleeperHolder) e).probe$setEs(s);
+        }
+        if (s.st == St.ASLEEP && !s.woken && now >= s.wakeAt && s.drawWake) {
+            // a draw takes the other branch this tick: run it for real; when it left the state the phase expects
+            // (LookAtPlayerGoal's chance with no player around), look ahead again from the seed it left
+            if (inlineTick(s, level)) {
+                flipsPassed++;
+                mode = "flip";
+                long dd = lookAhead(s);
+                long wake = Math.min(s.clockWakeAt, dd == Long.MAX_VALUE ? Long.MAX_VALUE : now + dd);
+                s.drawWake = wake != s.clockWakeAt;
+                s.wakeAt = wake;
+                if (wake <= now + 1) {
+                    wake(s, "deadline after a flip");
+                    return;
+                }
+                if (wake != Long.MAX_VALUE) {
+                    DEADLINES.add(wake, s.id);
+                    SCHEDULED.put(s.id, s);
+                }
+                return;
+            }
+            wake(s, "flip changed: " + s.wakeReason);
+            return;
         }
         if (s.st == St.ASLEEP && !s.woken && now < s.wakeAt && s.c.special(e.tickCount)) {
             if (inlineTick(s, level)) {
@@ -616,7 +647,8 @@ public final class EntitySleep {
     private static void fail(ES s, String why) {
         if (++s.failStreak >= 4) {
             // back off: busy entities are observed less and less often
-            int wait = Math.min(400, 20 << Math.min(4, s.failStreak - 4));
+            // a mob's failures are mostly transient (its head turning after a look-around): it is soon idle again
+            int wait = s.c.comp != null ? MOB_BACKOFF : Math.min(400, 20 << Math.min(4, s.failStreak - 4));
             s.observeFrom = s.e.tickCount + wait;
         }
         refuse(why);
@@ -700,8 +732,11 @@ public final class EntitySleep {
         for (int i : c.stillClocks) {
             for (int j = 0; j < c.clocks.length; j++) if (c.clocks[j] == i && s.rates[j] != 0) { fail(s, "clock under a modulus moves: " + slotName(c, i)); return; }
         }
-        long d = Math.min(deadline(s), drawDeadline);
+        long dClock = deadline(s);
+        long d = Math.min(dClock, drawDeadline);
         if (d <= L + 1) { fail(s, drawDeadline <= L + 1 ? "draw flips too soon" : "deadline too close"); return; }
+        s.clockWakeAt = dClock == Long.MAX_VALUE ? Long.MAX_VALUE : level.getGameTime() + dClock;
+        s.drawWake = c.comp != null && drawDeadline < dClock;
         // a varying reference must not be replaced outside the tick (its expected identity is what the replay wrote)
         for (int j = 0; j < nv; j++) {
             if (c.f[v[j]].getType().isPrimitive()) continue;
@@ -1105,7 +1140,8 @@ public final class EntitySleep {
         return true;
     }
 
-    static long inlined, inlineFails;
+    static long inlined, inlineFails, flipsPassed, preSkipped;
+    private static final int MOB_BACKOFF = Integer.getInteger("lab.entsleep.mobBackoff", 20);
     private static Object[] REFS = new Object[64];
 
     /**
@@ -1249,7 +1285,7 @@ public final class EntitySleep {
             if (s == null) continue;
             if (s.st != St.ASLEEP || s.e.isRemoved()) {
                 SCHEDULED.remove(id);
-            } else if (s.wakeAt <= now) {
+            } else if (s.wakeAt <= now && !s.drawWake) {
                 SCHEDULED.remove(id);
                 deadlineWakes++;
                 request(s, "deadline");
@@ -1489,8 +1525,8 @@ public final class EntitySleep {
     public static String report() {
         Map<String, int[]> byType = new TreeMap<>();
         StringBuilder sb = new StringBuilder(String.format(Locale.ROOT,
-                "entity sleep: %s; observed ticks %d, sleeps entered %d, replayed ticks %d, inline ticks %d (failed %d), verify fails %d, deadline wakes %d, deadlines pending %d%n",
-                ON ? "ON" : "OFF", observedTicks, entered, replayed, inlined, inlineFails, verifyFails, deadlineWakes, DEADLINES.size()));
+                "entity sleep: %s; observed ticks %d, sleeps entered %d, replayed ticks %d, inline ticks %d (failed %d), flips passed %d, windows not started %d, verify fails %d, deadline wakes %d, deadlines pending %d%n",
+                ON ? "ON" : "OFF", observedTicks, entered, replayed, inlined, inlineFails, flipsPassed, preSkipped, verifyFails, deadlineWakes, DEADLINES.size()));
         sb.append("  wakes: ").append(WAKES).append(System.lineSeparator());
         sb.append("  refused: ").append(REFUSED).append(System.lineSeparator());
         return sb.toString();
