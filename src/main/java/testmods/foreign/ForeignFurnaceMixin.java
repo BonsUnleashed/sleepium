@@ -10,8 +10,8 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
- * Stand-in for another mod's mixin (package outside dev.probe on purpose): a no-op inject into the furnace tick.
- * Only applied with -Dprobe.foreignTest=true. The sleep engine must then refuse furnaces ("mixin-changed").
+ * Stand-in for another mod's mixin (package outside dev.sleep on purpose): a no-op inject into the furnace tick.
+ * Only applied with -Dsleep.foreignTest=true. The sleep engine must then refuse furnaces ("mixin-changed").
  */
 @Mixin(AbstractFurnaceBlockEntity.class)
 public abstract class ForeignFurnaceMixin {

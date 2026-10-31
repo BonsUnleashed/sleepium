@@ -16,6 +16,12 @@ base {
     archivesName = mod_id
 }
 
+// the test scenes (data/sleep/function: lag_*, client_*): loaded by the dev runs and the tools, not in the jar
+sourceSets {
+    scenes
+}
+tasks.named('classes') { dependsOn 'processScenesResources' }
+
 // Minecraft 1.21.1 runs on Java 21
 java.toolchain.languageVersion = JavaLanguageVersion.of(21)
 
@@ -63,6 +69,7 @@ neoForge {
     mods {
         "${mod_id}" {
             sourceSet(sourceSets.main)
+            sourceSet(sourceSets.scenes)
         }
     }
 }
@@ -135,3 +142,6 @@ def checkEngine = tasks.register('checkEngineIndependent') {
     }
 }
 tasks.named('compileJava') { dependsOn checkEngine }
+
+// the dedicated server reads its console from this build's standard input: tools/*.sh drive it with commands
+tasks.named('runServer') { standardInput = System.in }
