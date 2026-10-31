@@ -140,7 +140,7 @@ final class SleepAnalysis {
 
     private void addCond(Cond c) {
         conds.add(c);
-        condPaths.add(ctxPath);
+        condPaths.add(condCtx != null ? condCtx : ctxPath);
     }
     /** fields the followed code writes, plus owned containers whose contents it may change in place */
     private final Map<String, Field> watch = new LinkedHashMap<>();
@@ -224,6 +224,30 @@ final class SleepAnalysis {
     private String pathKey(String name) {
         return ctxPath.isEmpty() ? name : ctxPath + "." + name;
     }
+
+    /** the clock key of a field operand, in its own context (the entity's when read through a goal's mob field) */
+    private String keyOf(Operand o) {
+        if (o.ctx == null) return fkey(o.owner, o.name);
+        Field f = sample == null ? null : field(sample.getClass(), o.name);
+        return f != null ? internal(f.getDeclaringClass()) + "." + o.name : o.owner + "." + o.name;
+    }
+
+    /** the path of a field operand's slot ("" context: the entity's own field) */
+    private String pathOf(Operand o) {
+        if (o.ctx == null) return pathKey(o.name);
+        return o.ctx.isEmpty() ? o.name : o.ctx + "." + o.name;
+    }
+
+    /** the context of the first field operand in an expression read on another context, null if none */
+    private static String ctxOf(Operand o) {
+        if (o == null) return null;
+        if (o.kind == Kind.FIELD && o.ctx != null) return o.ctx;
+        String a = ctxOf(o.a);
+        return a != null ? a : ctxOf(o.b);
+    }
+
+    /** the context path a condition being added belongs to (null: the current one) */
+    private String condCtx;
 
     /** entity mode: own object fields assumed null (see Plan.nulls); grown by candidates until a fixpoint */
     private final Set<String> nullFields = new HashSet<>();
@@ -950,7 +974,7 @@ final class SleepAnalysis {
                 reject = "clock expression passed to " + simple(mi.owner) + "." + mi.name;
                 return;
             }
-            Field clock = clocks.get(fkey(clockOp.owner, clockOp.name));
+            Field clock = clocks.get(keyOf(clockOp));
             if (clock == null) { reject = "clock not accessible: " + clockOp.name; return; }
             for (int b = 0; b < argc; b++) {
                 if (b == k) continue;
@@ -1005,7 +1029,7 @@ final class SleepAnalysis {
         if (n.equals("clamp") && !(a.length == 3 && k == 0)) return false;
         Double f0 = eval(e, clockOp, 0), f1 = eval(e, clockOp, 1);
         if (f0 == null || f1 == null) return false;
-        Field clock = clocks.get(fkey(clockOp.owner, clockOp.name));
+        Field clock = clocks.get(keyOf(clockOp));
         if (clock == null) return false;
         if (f0.doubleValue() == f1.doubleValue()) return true;   // constant in the clock
         boolean up = f1 > f0;
@@ -1028,7 +1052,7 @@ final class SleepAnalysis {
         if (clockOp == null || isClock(e) && other.kind == Kind.CONST) return false;   // the plain form is the existing path's
         Double f0 = eval(e, clockOp, 0), f1 = eval(e, clockOp, 1);
         if (f0 == null || f1 == null) return false;
-        Field clock = clocks.get(fkey(clockOp.owner, clockOp.name));
+        Field clock = clocks.get(keyOf(clockOp));
         if (clock == null) return false;
         if (f0.doubleValue() == f1.doubleValue()) return true;
         double b = other.kind == Kind.CONST ? other.value : other.dvalue;
@@ -1189,6 +1213,16 @@ final class SleepAnalysis {
     }
 
     private void condition(Operand x, Operand y, Set<String> beChain, Class<?> beClass) {
+        String cx = ctxOf(x), cy = ctxOf(y);
+        condCtx = cx != null ? cx : cy;
+        try {
+            condition0(x, y, beChain, beClass);
+        } finally {
+            condCtx = null;
+        }
+    }
+
+    private void condition0(Operand x, Operand y, Set<String> beChain, Class<?> beClass) {
         boolean xc = isClock(x), yc = isClock(y);
         boolean xg = x != null && x.kind == Kind.GAMEMOD, yg = y != null && y.kind == Kind.GAMEMOD;
         if (!xc && !yc && !xg && !yg) {
@@ -1206,7 +1240,7 @@ final class SleepAnalysis {
             return;
         }
         Operand c = xc ? x : y, t = xc ? y : x;
-        Field clock = clocks.get(fkey(c.owner, c.name));
+        Field clock = clocks.get(keyOf(c));
         if (t == null) { reject = "clock compared with unknown"; return; }
         switch (t.kind) {
             case CONST -> {
@@ -1331,7 +1365,7 @@ final class SleepAnalysis {
                 clockOp = isClock(base.a) ? base.a : base.b;
             else { reject = "clock in an expression the analysis does not model"; return; }
         }
-        Field clock = clocks.get(fkey(clockOp.owner, clockOp.name));
+        Field clock = clocks.get(keyOf(clockOp));
         if (clock == null) { reject = "clock not accessible: " + clockOp.name; return; }
         for (long n : ns) {
             if (n <= 0) { reject = "clock modulo " + n; return; }
@@ -1675,6 +1709,30 @@ final class SleepAnalysis {
         return r != null && r == sampleRandom;
     }
 
+    /** mob analysis, in a context other than the entity: whether the value fromTop is the entity itself (on the sample) */
+    private boolean onEntity(Frame<SourceValue> f, int fromTop, Frame<SourceValue>[] frames, MethodNode m) {
+        if (!entityMode || sample == null || ctxPath.isEmpty() || f == null || f.getStackSize() < fromTop) return false;
+        return sampleValue(f.getStack(f.getStackSize() - fromTop), frames, m, 0) == sample;
+    }
+
+    /** a no-argument getter of a primitive field called on the entity from another context: that field, in its context */
+    private boolean entityRead(MethodInsnNode mi, Frame<SourceValue> f, Frame<SourceValue>[] frames, MethodNode m, Operand o) {
+        if (mi.getOpcode() == Opcodes.INVOKESTATIC || Type.getArgumentTypes(mi.desc).length != 0) return false;
+        Type rt = Type.getReturnType(mi.desc);
+        if (rt.getSort() < Type.BOOLEAN || rt.getSort() > Type.DOUBLE || !onEntity(f, 1, frames, m)) return false;
+        String decl = ownerOf(internal(sample.getClass()), mi.name, mi.desc);
+        MethodNode t = decl == null ? null : method(decl, mi.name, mi.desc);
+        FieldInsnNode got = t == null ? null : getterField(t);
+        if (got == null) return false;
+        o.kind = Kind.FIELD;
+        o.owner = got.owner;
+        o.name = got.name;
+        o.self = true;
+        o.ctx = "";
+        o.type = rt.getDescriptor();
+        return true;
+    }
+
     /** what a value is on the sample, for this, its fields and plain getters (null: not known) */
     private Object sampleValue(SourceValue v, Frame<SourceValue>[] frames, MethodNode m, int depth) {
         if (depth > 4 || v.insns.size() != 1) return null;
@@ -1711,7 +1769,7 @@ final class SleepAnalysis {
         int other = DrawCond.CONST;
         if (o.kind == Kind.CONST) c = o.value;
         else if (o.kind == Kind.FCONST) c = o.dvalue;
-        else if (o.kind == Kind.FIELD && o.self && o.type != null && o.type.length() == 1 && ctxObj != null && finalField(ctxObj, o.name)) {
+        else if (o.kind == Kind.FIELD && o.self && o.ctx == null && o.type != null && o.type.length() == 1 && ctxObj != null && finalField(ctxObj, o.name)) {
             // a final primitive of the current object (a goal's probability): read at run time
             other = DrawCond.FINAL;
             clockPath = pathKey(o.name);
@@ -1719,12 +1777,12 @@ final class SleepAnalysis {
             if (clock == null) { reject = "field not accessible: " + clockPath; return; }
         } else if (isClock(o)) {
             other = DrawCond.CLOCK;
-            clock = clocks.get(fkey(o.owner, o.name));
-            clockPath = pathKey(o.name);
+            clock = clocks.get(keyOf(o));
+            clockPath = pathOf(o);
         } else if (o.kind == Kind.ARITH && (o.op == Opcodes.IADD || o.op == Opcodes.ISUB) && isClock(o.a) && o.b != null && o.b.kind == Kind.CONST) {
             other = DrawCond.CLOCK;
-            clock = clocks.get(fkey(o.a.owner, o.a.name));
-            clockPath = pathKey(o.a.name);
+            clock = clocks.get(keyOf(o.a));
+            clockPath = pathOf(o.a);
             c = o.op == Opcodes.IADD ? o.b.value : -o.b.value;
         } else {
             other = DrawCond.UNKNOWN;   // not predictable: a period that draws here never sleeps
@@ -2033,7 +2091,7 @@ final class SleepAnalysis {
     }
 
     private boolean isClock(Operand o) {
-        return o != null && o.kind == Kind.FIELD && (!entityMode || o.self) && clocks.containsKey(fkey(o.owner, o.name));
+        return o != null && o.kind == Kind.FIELD && (!entityMode || o.self) && clocks.containsKey(keyOf(o));
     }
 
     /** entity mode: the same field as a clock, read on another instance */
@@ -2083,6 +2141,7 @@ final class SleepAnalysis {
         double dvalue;   // FCONST
         MethodInsnNode draw;   // DRAW: the call
         boolean self;    // FIELD / OWNCALL: read on this object (not on another instance of the class)
+        String ctx;      // FIELD: read on another context's object (its path: "" the entity), null for this one
         int op;
         Operand a, b;
 
@@ -2228,6 +2287,10 @@ final class SleepAnalysis {
             o.name = fi.name;
             o.self = onThis(f, 1, frames, m);
             o.type = Type.getType(fi.desc).getSort() == Type.OBJECT ? Type.getType(fi.desc).getInternalName() : fi.desc;
+            if (!o.self && onEntity(f, 1, frames, m) && o.type.length() == 1) {   // the entity's primitive field, from another context
+                o.self = true;
+                o.ctx = "";
+            }
         } else if (op >= Opcodes.ICONST_M1 && op <= Opcodes.ICONST_5) {
             o = Operand.constant(op - Opcodes.ICONST_0);
         } else if (op == Opcodes.LCONST_0 || op == Opcodes.LCONST_1) {
@@ -2268,6 +2331,9 @@ final class SleepAnalysis {
                     o.name = "result of " + mi.name;
                 }
                 o.type = rt.getSort() == Type.OBJECT ? rt.getInternalName() : rt.getDescriptor();
+            } else if (entityRead(mi, f, frames, m, o)) {
+                // the entity's own field through a getter, read from another context (RandomStrollGoal:
+                // mob.getNoActionTime() >= 100): a clock there is a condition on the entity's clock
             } else {
                 o.kind = Kind.CALL;
                 o.name = mi.owner + "." + mi.name;
