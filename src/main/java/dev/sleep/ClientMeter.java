@@ -20,7 +20,7 @@ import net.neoforged.neoforge.client.event.RenderFrameEvent;
 /**
  * Client-side frame probe. Loaded only on the physical client (see SleepMod).
  *
- * <p>{@code /probeclient run <seconds> <label>} records, per frame, on the render thread:
+ * <p>{@code /sleepclient run <seconds> <label>} records, per frame, on the render thread:
  * <ul>
  *   <li>frame   – RenderFrameEvent.Pre -> next Pre (full frame incl. client tick, swap, vsync wait)</li>
  *   <li>render  – Pre -> Post (GameRenderer.render: CPU-side world + GUI submission)</li>
@@ -53,11 +53,11 @@ final class ClientMeter {
             if (stopAtNanos > 0 && tickStart != 0 && nt < ticks.length) ticks[nt++] = System.nanoTime() - tickStart;
         });
         bus.addListener(RegisterClientCommandsEvent.class, e -> e.getDispatcher().register(
-                Commands.literal("probeclient").then(Commands.literal("run")
+                Commands.literal("sleepclient").then(Commands.literal("run")
                         .then(Commands.argument("seconds", IntegerArgumentType.integer(5, 3600))
                                 .then(Commands.argument("label", StringArgumentType.word()).executes(ctx -> {
                                     start(IntegerArgumentType.getInteger(ctx, "seconds"), StringArgumentType.getString(ctx, "label"));
-                                    ctx.getSource().sendSuccess(() -> Component.literal("probeclient: recording '" + label + "'"), false);
+                                    ctx.getSource().sendSuccess(() -> Component.literal("sleepclient: recording '" + label + "'"), false);
                                     return 1;
                                 }))))));
     }
@@ -195,7 +195,7 @@ final class ClientMeter {
         SleepMod.LOGGER.info("\n{}", sb);
         if (mc.player != null) {
             mc.player.displayClientMessage(Component.literal(String.format(Locale.ROOT,
-                    "probeclient '%s': %.0f fps, frame p50 %.2f / p99 %.2f ms, %.0f KiB/frame, CPU %.2f cores / %.3f ms per frame, client tick mean %.3f / p99 %.3f ms -> %s",
+                    "sleepclient '%s': %.0f fps, frame p50 %.2f / p99 %.2f ms, %.0f KiB/frame, CPU %.2f cores / %.3f ms per frame, client tick mean %.3f / p99 %.3f ms -> %s",
                     label, n / secs, f.p50() / 1e6, f.p99() / 1e6, a.mean() / 1024, cpuSecs / secs, cpuSecs * 1e3 / Math.max(1, n), t.mean() / 1e6, t.p99() / 1e6, file.getFileName())), false);
         }
     }

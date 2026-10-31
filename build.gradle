@@ -145,3 +145,9 @@ tasks.named('compileJava') { dependsOn checkEngine }
 
 // the dedicated server reads its console from this build's standard input: tools/*.sh drive it with commands
 tasks.named('runServer') { standardInput = System.in }
+
+// extra JVM arguments for the runs, from the tools: -PrunJvmArgs="-Dlab.opt.defaults=true -Dsleep.seedEntities=true"
+if (project.hasProperty('runJvmArgs')) {
+    def extra = project.property('runJvmArgs').toString().trim()
+    if (!extra.isEmpty()) neoForge.runs.configureEach { jvmArguments.addAll(extra.split(/\s+/) as List) }
+}
