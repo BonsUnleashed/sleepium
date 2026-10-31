@@ -35,11 +35,15 @@ final class MobSleep {
 
     // ------------------------------------------------------------------ paths
 
-    private static final Map<Class<?>, Map<String, Field>> FIELDS = new HashMap<>();
+    /** per class and name (the analysis resolves on its own thread too) */
+    private static final Map<Class<?>, Map<String, java.util.Optional<Field>>> FIELDS = new java.util.concurrent.ConcurrentHashMap<>();
 
     static Field field(Class<?> c, String name) {
-        Map<String, Field> m = FIELDS.computeIfAbsent(c, k -> new HashMap<>());
-        if (m.containsKey(name)) return m.get(name);
+        return FIELDS.computeIfAbsent(c, k -> new java.util.concurrent.ConcurrentHashMap<>())
+                .computeIfAbsent(name, x -> java.util.Optional.ofNullable(findField(c, x))).orElse(null);
+    }
+
+    private static Field findField(Class<?> c, String name) {
         Field r = null;
         for (Class<?> k = c; k != null && k != Object.class && r == null; k = k.getSuperclass())
             try {
@@ -51,7 +55,6 @@ final class MobSleep {
             } catch (NoSuchFieldException | RuntimeException e) {
                 // the superclass
             }
-        m.put(name, r);
         return r;
     }
 
@@ -67,26 +70,62 @@ final class MobSleep {
     /** the object at a path from the entity ("" the entity, "goalSelector.availableGoals[3].goal") */
     static Object resolve(Object root, String path) {
         if (path.isEmpty()) return root;
-        Object o = root;
-        for (String part : path.split("\\.")) {
-            if (o == null) return null;
-            int br = part.indexOf('[');
-            o = fieldValue(o, br < 0 ? part : part.substring(0, br));
-            if (br >= 0) {
-                if (!(o instanceof java.util.Collection<?> c)) return null;
-                int k = Integer.parseInt(part.substring(br + 1, part.length() - 1));
-                int i = 0;
-                Object el = null;
-                for (Object x : c) {
-                    if (i++ == k) {
-                        el = x;
-                        break;
-                    }
-                }
-                o = el;
+        return PATHS.computeIfAbsent(path, Path::new).get(root);
+    }
+
+    private static final Map<String, Path> PATHS = new java.util.concurrent.ConcurrentHashMap<>();
+
+    /**
+     * A path compiled once: its steps, each a field name and an optional collection index, with the field found for the
+     * last class seen at that step (an immutable pair, swapped whole: the analysis resolves paths on its own thread).
+     */
+    private static final class Path {
+        private record Hop(Class<?> cls, Field f) {}
+
+        final String[] names;
+        final int[] index;
+        final Hop[] hops;
+
+        Path(String path) {
+            String[] parts = path.split("\\.");
+            names = new String[parts.length];
+            index = new int[parts.length];
+            hops = new Hop[parts.length];
+            for (int i = 0; i < parts.length; i++) {
+                int br = parts[i].indexOf('[');
+                names[i] = br < 0 ? parts[i] : parts[i].substring(0, br);
+                index[i] = br < 0 ? -1 : Integer.parseInt(parts[i].substring(br + 1, parts[i].length() - 1));
             }
         }
-        return o;
+
+        Object get(Object root) {
+            Object o = root;
+            for (int i = 0; i < names.length; i++) {
+                if (o == null) return null;
+                Hop h = hops[i];
+                Class<?> c = o.getClass();
+                if (h == null || h.cls != c) hops[i] = h = new Hop(c, field(c, names[i]));
+                try {
+                    o = h.f == null ? null : h.f.get(o);
+                } catch (IllegalAccessException e) {
+                    return null;
+                }
+                int k = index[i];
+                if (k >= 0) {
+                    if (!(o instanceof java.util.Collection<?> col)) return null;
+                    Object el = null;
+                    int j = 0;
+                    for (Object x : col) {
+                        if (j++ == k) {
+                            el = x;
+                            break;
+                        }
+                    }
+                    o = el;
+                }
+            }
+            return o;
+        }
     }
 
     // ------------------------------------------------------------------ the composite state
@@ -143,6 +182,7 @@ final class MobSleep {
         /** one generated class over all the slots (receivers from the ES's context array); null: the per-part path */
         final SnapCompiler.Snapper all;
         final boolean[] prim, special;
+        final int[] refAll;   // every reference slot
 
         Composite(Part[] parts, List<Field> fields, boolean[] special) {
             this.parts = parts;
@@ -154,6 +194,10 @@ final class MobSleep {
             prim = new boolean[n];
             for (int i = 0; i < n; i++) prim[i] = fields.get(i).getType().isPrimitive();
             all = SnapCompiler.compileComposite(fields, special, partOf);
+            int nr = 0;
+            for (int i = 0; i < n; i++) if (!prim[i]) nr++;
+            refAll = new int[nr];
+            for (int i = 0, k = 0; i < n; i++) if (!prim[i]) refAll[k++] = i;
         }
 
         private static Object[] objs(Object be) {
@@ -193,6 +237,75 @@ final class MobSleep {
         @Override
         public boolean same(Object be, long[] prims, Object[] refs) {
             throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public void both(Object be, long[] out, Object[] refs) {
+            Object[] o = objs(be);
+            if (all != null) {
+                all.both(o, out, refs);
+                return;
+            }
+            snap(be, out);
+            refs(be, refs);
+        }
+
+        @Override
+        public void prims(Object be, long[] out) {
+            Object[] o = objs(be);
+            if (all != null) {
+                all.prims(o, out);
+                return;
+            }
+            snap(be, out);
+        }
+
+        /**
+         * snap() for an observed tick: the same values, but a reference slot's fingerprint is taken from the previous
+         * snapshot ({@code prevOut}, its objects {@code prevRefs}) when the slot holds the same object and that
+         * object's fingerprint is its identity or an immutable value - only replaced objects and containers (whose
+         * content can change in place) are fingerprinted again; with {@code sameContent} containers too (the state
+         * before a tick, taken as the previous tick's after-state: a container changed in between shows in this tick's
+         * after-state). {@code content[i]}: whether the object in slot i is a container, kept per slot so an unchanged
+         * object is not touched at all (the cost of a snapshot is its cache misses: ~120 objects). {@code refsOut}:
+         * this snapshot's objects.
+         */
+        void snapObserved(Object be, long[] out, Object[] refsOut, Object[] prevRefs, long[] prevOut, boolean[] content, boolean sameContent) {
+            if (all == null) {
+                snap(be, out);
+                refs(be, refsOut);
+                return;
+            }
+            long t0 = EntitySleep.TIMING ? System.nanoTime() : 0;
+            Object[] o = objs(be);
+            all.both(o, out, refsOut);
+            long t1 = EntitySleep.TIMING ? System.nanoTime() : 0;
+            long t2 = t1;
+            int again = 0;
+            for (int i : refAll) {
+                Object r = refsOut[i];
+                if (prevRefs != null && r == prevRefs[i] && (sameContent || !content[i])) {
+                    out[i] = prevOut[i];
+                } else {
+                    content[i] = EntityFp.content(r);
+                    out[i] = EntityFp.observedFp(r);
+                    again++;
+                }
+            }
+            if (EntitySleep.TIMING) {
+                long[] t = EntitySleep.ST;
+                long w0 = System.nanoTime();
+                all.both(o, out, refsOut);   // again, the data now in the cache
+                long w1 = System.nanoTime();
+                long w2 = w1;
+                t[5] += w1 - w0;
+                t[6] += w2 - w1;
+                t[0] += t1 - t0;
+                t[1] += t2 - t1;
+                t[2] += System.nanoTime() - t2;
+                t[3]++;
+                t[4] += again;
+            }
         }
 
         @Override
@@ -266,7 +379,95 @@ final class MobSleep {
 
     private static final Map<String, Method> METHODS = new HashMap<>();
 
+    /** per assumption key: the method found for the last holder class (and its int argument, -1 none) */
+    private record Called(Class<?> cls, Method m, int arg) {}
+
+    private static final Map<String, Called> LAST_CALL = new HashMap<>();
+
     /** null when every assumption of the plan holds on the entity now, else the first that does not */
+    /** the plan's assumptions, each with its kind and, where the key is a slot of the composite, that slot (-1: by reflection) */
+    record Assumptions(String[] keys, byte[] kinds, int[] slots, Class<?>[] types) {}
+
+    static final byte A_NULL = 0, A_ZERO = 1, A_LE0 = 2, A_GE0 = 3, A_EMPTY = 4, A_FALSE = 5;
+
+    static Assumptions compileAssumptions(SleepAnalysis.MobPlan mp, Field[] f, String[] slotPath) {
+        List<String> keys = new ArrayList<>();
+        List<Byte> kinds = new ArrayList<>();
+        for (String k : mp.nulls()) { keys.add(k); kinds.add(A_NULL); }
+        for (String k : mp.zeros()) { keys.add(k); kinds.add(A_ZERO); }
+        for (String k : mp.le0()) { keys.add(k); kinds.add(A_LE0); }
+        for (String k : mp.ge0()) { keys.add(k); kinds.add(A_GE0); }
+        for (String k : mp.empty()) { keys.add(k); kinds.add(A_EMPTY); }
+        for (String k : mp.falseCalls()) { keys.add(k); kinds.add(A_FALSE); }
+        int m = keys.size();
+        byte[] kd = new byte[m];
+        int[] slots = new int[m];
+        Class<?>[] types = new Class<?>[m];
+        for (int j = 0; j < m; j++) {
+            kd[j] = kinds.get(j);
+            slots[j] = -1;
+            if (kd[j] == A_FALSE) continue;
+            String key = keys.get(j);
+            int dot = key.lastIndexOf('.');
+            String hp = dot < 0 ? "" : key.substring(0, dot), fn = dot < 0 ? key : key.substring(dot + 1);
+            int found = -1, count = 0;
+            for (int i = 0; i < f.length; i++) {
+                if (f[i].getName().equals(fn) && slotPath[i].equals(hp)) {
+                    found = i;
+                    count++;
+                }
+            }
+            if (count == 1) {   // a shadowed name (two fields, one name) stays on the reflective path
+                slots[j] = found;
+                types[j] = f[found].getType();
+            }
+        }
+        return new Assumptions(keys.toArray(new String[0]), kd, slots, types);
+    }
+
+    /**
+     * assumptionsFail on a snapshot of the composite just taken ({@code v} primitives in the snapshot encoding,
+     * {@code r} the objects): keys that are slots read from it, the rest (deeper paths, method calls) by reflection.
+     */
+    static String assumptionsFail(Assumptions a, Entity e, long[] v, Object[] r) {
+        for (int j = 0; j < a.keys.length; j++) {
+            int i = a.slots[j];
+            byte kind = a.kinds[j];
+            String key = a.keys[j];
+            boolean bad;
+            if (kind == A_FALSE) {
+                bad = call(e, key);
+            } else if (i < 0) {
+                bad = switch (kind) {
+                    case A_NULL -> value(e, key, true) != null;
+                    case A_ZERO -> number(e, key) != 0;
+                    case A_LE0 -> number(e, key) > 0;
+                    case A_GE0 -> number(e, key) < 0;
+                    default -> !empty(value(e, key, false));
+                };
+            } else if (kind == A_NULL || kind == A_EMPTY) {
+                Object o = a.types[j].isPrimitive() ? Boolean.TRUE : r[i];
+                bad = kind == A_NULL ? o != null : !empty(o);
+            } else {
+                Object o = r[i];
+                long x = a.types[j].isPrimitive() ? numberOf(a.types[j], v[i])
+                        : o instanceof Boolean bo ? (bo ? 1 : 0) : o instanceof Number nb ? nb.longValue() : o instanceof Character ch ? ch : Long.MIN_VALUE;
+                bad = kind == A_ZERO ? x != 0 : kind == A_LE0 ? x > 0 : x < 0;
+            }
+            if (bad) return (kind == A_NULL ? "needs null " : kind == A_ZERO ? "needs zero " : kind == A_LE0 ? "needs <= 0 " : kind == A_GE0 ? "needs >= 0 "
+                    : kind == A_EMPTY ? "needs empty " : "needs false ") + key;
+        }
+        return null;
+    }
+
+    /** number() of a primitive slot from its snapshot encoding */
+    private static long numberOf(Class<?> t, long bits) {
+        if (t == float.class) return (long) Float.intBitsToFloat((int) bits);
+        if (t == double.class) return (long) Double.longBitsToDouble(bits);
+        if (t.isPrimitive()) return bits;   // int, long, short, byte, char, boolean (0 / 1)
+        return Long.MIN_VALUE;
+    }
+
     static String assumptionsFail(SleepAnalysis.MobPlan mp, Entity e) {
         for (String k : mp.nulls()) if (value(e, k, true) != null) return "needs null " + k;
         for (String k : mp.zeros()) if (number(e, k) != 0) return "needs zero " + k;
@@ -288,9 +489,7 @@ final class MobSleep {
     }
 
     private static Object value(Entity e, String key, boolean nullIfMissing) {
-        int dot = key.lastIndexOf('.');
-        Object holder = dot < 0 ? e : resolve(e, key.substring(0, dot));
-        return holder == null ? null : fieldValue(holder, dot < 0 ? key : key.substring(dot + 1));
+        return resolve(e, key);   // the key is a path whose last step is the field
     }
 
     private static long number(Entity e, String key) {
@@ -304,6 +503,15 @@ final class MobSleep {
         Object holder = dot < 0 ? e : resolve(e, key.substring(0, dot));
         String name = dot < 0 ? key : key.substring(dot + 1);
         if (holder == null) return true;
+        Called last = LAST_CALL.get(key);
+        if (last != null && last.cls == holder.getClass()) {
+            if (last.m == null) return true;
+            try {
+                return (Boolean) (last.arg < 0 ? last.m.invoke(holder) : last.m.invoke(holder, last.arg));
+            } catch (ReflectiveOperationException | RuntimeException ex) {
+                return true;
+            }
+        }
         int hash = name.indexOf('#');
         String mn = hash < 0 ? name : name.substring(0, hash);
         String ck = holder.getClass().getName() + "." + name;
@@ -319,6 +527,7 @@ final class MobSleep {
                     }
             METHODS.put(ck, m);
         }
+        LAST_CALL.put(key, new Called(holder.getClass(), m, hash < 0 ? -1 : Integer.parseInt(name.substring(hash + 1))));
         if (m == null) return true;
         try {
             return (Boolean) (hash < 0 ? m.invoke(holder) : m.invoke(holder, Integer.parseInt(name.substring(hash + 1))));
@@ -337,22 +546,77 @@ final class MobSleep {
     static final LongArrayList TICK = new LongArrayList();
     private static final Map<String, Integer> SITE_IDS = new HashMap<>();
     static final List<String> SITES = new ArrayList<>();
-    private static final StackWalker WALKER = StackWalker.getInstance();
-    private static final Set<String> RANDOM_CLASSES = Set.of("net.minecraft.world.level.levelgen.LegacyRandomSource",
-            "net.minecraft.world.level.levelgen.BitRandomSource", "net.minecraft.util.RandomSource");
+    private static final StackWalker WALKER = StackWalker.getInstance(java.util.Set.of(StackWalker.Option.RETAIN_CLASS_REFERENCE), 6);
 
-    /** MobSleepRandomMixin: a draw of the random being recorded */
-    static void draw(int kind, int bound, long valueBits) {
-        String site = WALKER.walk(fs -> fs.filter(f -> !RANDOM_CLASSES.contains(f.getClassName()) && !f.getClassName().equals(MobSleep.class.getName()) && !f.getClassName().equals(MobSleepHooks.class.getName()))
-                .findFirst().map(f -> f.getClassName().replace('.', '/') + "." + f.getMethodName() + f.getDescriptor() + "@" + f.getLineNumber()).orElse("?"));
+    /** a draw's call site as the walker gives it cheaply: method name and bytecode index (names are interned) */
+    private record SiteKey(Class<?> owner, String method, int bci) {}
+
+    private static final Map<SiteKey, Integer> SITE_CACHE = new HashMap<>();
+    /** per class: the method names it declares more than once (a site there needs the descriptor) */
+    private static final Map<Class<?>, Set<String>> OVERLOADED = new HashMap<>();
+
+    /** the first frame outside the random and these hooks: the draw's call site */
+    private static StackWalker.StackFrame caller(java.util.stream.Stream<StackWalker.StackFrame> fs) {
+        for (java.util.Iterator<StackWalker.StackFrame> it = fs.iterator(); it.hasNext(); ) {
+            StackWalker.StackFrame f = it.next();
+            Class<?> c = f.getDeclaringClass();
+            if (c != MobSleep.class && c != MobSleepHooks.class && !net.minecraft.util.RandomSource.class.isAssignableFrom(c)) return f;
+        }
+        return null;
+    }
+
+    private static int siteId(String site) {
         Integer id = SITE_IDS.get(site);
         if (id == null) {
             id = SITES.size();
             SITES.add(site);
             SITE_IDS.put(site, id);
         }
+        return id;
+    }
+
+    /**
+     * MobSleepRandomMixin: a draw of the random being recorded. Its site (owner.method+desc@line, the analysis' key)
+     * is resolved once per (class, method name, bytecode index) - line numbers and descriptors are the walker's
+     * expensive part (~28 us a draw on the N100); a name declared twice in its class always takes the full path.
+     */
+    static void draw(int kind, int bound, long valueBits) {
+        long t0 = EntitySleep.TIMING ? System.nanoTime() : 0;
+        StackWalker.StackFrame f = WALKER.walk(MobSleep::caller);
+        long t1 = EntitySleep.TIMING ? System.nanoTime() : 0;
+        int id;
+        if (f == null) {
+            id = siteId("?");
+        } else {
+            Class<?> owner = f.getDeclaringClass();
+            String name = f.getMethodName();
+            if (EntitySleep.TIMING) {
+                EntitySleep.OT[5] += t1 - t0;
+                EntitySleep.OT[6] += System.nanoTime() - t1;
+            }
+            Set<String> over = OVERLOADED.computeIfAbsent(owner, MobSleep::overloadedNames);
+            SiteKey key = over.contains(name) ? null : new SiteKey(owner, name, f.getByteCodeIndex());
+            Integer cached = key == null ? null : SITE_CACHE.get(key);
+            if (cached != null) {
+                id = cached;
+            } else {
+                id = siteId(f.getClassName().replace('.', '/') + "." + name + f.getDescriptor() + "@" + f.getLineNumber());
+                if (key != null) SITE_CACHE.put(key, id);
+            }
+        }
         TICK.add(((long) id << 40) | ((long) kind << 32) | (bound & 0xFFFFFFFFL));
         TICK.add(valueBits);
+        if (EntitySleep.TIMING) {
+            EntitySleep.OT[3] += System.nanoTime() - t0;
+            EntitySleep.OT[4]++;
+        }
+    }
+
+    private static Set<String> overloadedNames(Class<?> c) {
+        Set<String> seen = new java.util.HashSet<>(), twice = new java.util.HashSet<>();
+        for (java.lang.reflect.Method m : c.getDeclaredMethods()) if (!seen.add(m.getName())) twice.add(m.getName());
+        for (java.lang.reflect.Constructor<?> k : c.getDeclaredConstructors()) if (!seen.add("<init>")) twice.add("<init>");
+        return twice;
     }
 
     static int siteOf(long key) {

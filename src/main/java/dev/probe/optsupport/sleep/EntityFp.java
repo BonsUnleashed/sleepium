@@ -40,6 +40,49 @@ public final class EntityFp {
 
     private EntityFp() {}
 
+    /** EntSleepDataMixin: synched data's count of changes (values replaced, dirty flags cleared) and whether a value can change in place */
+    public interface DataEpoch {
+        int probe$dataEpoch();
+
+        boolean probe$mutableValues();
+    }
+
+    /** a synched data value that cannot change while it stays the same object */
+    public static boolean immutableValue(Object v) {
+        if (v == null || v instanceof Boolean || v instanceof Byte || v instanceof Short || v instanceof Integer || v instanceof Long || v instanceof Float
+                || v instanceof Double || v instanceof Character || v instanceof String || v instanceof Enum<?> || v instanceof java.util.UUID
+                || v instanceof net.minecraft.world.level.block.state.BlockState || v instanceof net.minecraft.core.Holder<?>
+                || v instanceof net.minecraft.core.Rotations || v instanceof net.minecraft.world.entity.npc.VillagerData) return true;
+        if (v instanceof BlockPos p) return !(p instanceof BlockPos.MutableBlockPos);
+        if (v instanceof java.util.Optional<?> o) return o.isEmpty() || immutableValue(o.get());
+        if (v instanceof java.util.OptionalInt) return true;
+        if (immutableCollection(v)) {
+            for (Object x : (Iterable<?>) v) if (!immutableValue(x) && !(x instanceof net.minecraft.core.particles.ParticleOptions)) return false;
+            return true;
+        }
+        return false;
+    }
+
+    /** a collection or map that cannot change at all: Guava's immutable ones, the JDK's List.of / Set.of / Map.of and empty ones */
+    static boolean immutableCollection(Object r) {
+        if (r instanceof com.google.common.collect.ImmutableCollection<?> || r instanceof com.google.common.collect.ImmutableMap<?, ?>) return true;
+        Class<?> c = r.getClass();
+        return c.getName().startsWith("java.util.ImmutableCollections$") || c == EMPTY_LIST || c == EMPTY_SET || c == EMPTY_MAP;
+    }
+
+    private static final Class<?> EMPTY_LIST = java.util.Collections.emptyList().getClass(), EMPTY_SET = java.util.Collections.emptySet().getClass(),
+            EMPTY_MAP = java.util.Collections.emptyMap().getClass();
+
+    /**
+     * fp for a mob's observed snapshots: synched data whose values cannot change in place by its identity and change
+     * count (its items are not touched: a snapshot's cost is its cache misses); everything else as fp.
+     */
+    static long observedFp(Object r) {
+        if (r instanceof SynchedEntityData && r instanceof DataEpoch d && !d.probe$mutableValues())
+            return mix(System.identityHashCode(r) * 31L + 13, d.probe$dataEpoch());
+        return fp(r);
+    }
+
     static boolean available() {
         return ITEMS != null && DIRTY != null && ITEM_DIRTY != null && LEGACY_SEED != null && SINGLE_SEED != null;
     }
@@ -54,6 +97,19 @@ public final class EntityFp {
         if (r instanceof net.minecraft.world.level.levelgen.SingleThreadedRandomSource) return (long) SINGLE_SEED.get(r) * 31 + 11;
         if (r instanceof Boolean || r instanceof Number || r instanceof String || r instanceof Enum<?>) return r.hashCode() * 31L + 3;
         return dev.probe.FieldDiff.fingerprint(r);
+    }
+
+    /**
+     * Whether fp(r) depends on state inside r that can change while r stays the same object (synched data, a random's
+     * seed, containers, arrays, item stacks); otherwise fp(r) is fixed for the object (its identity or an immutable value).
+     */
+    static boolean content(Object r) {
+        if (r instanceof java.util.Collection<?> || r instanceof java.util.Map<?, ?>) return !immutableCollection(r);
+        return r instanceof SynchedEntityData || r instanceof net.minecraft.util.RandomSource || r instanceof java.util.Map<?, ?>
+                || r instanceof java.util.Collection<?> || r instanceof ItemStack || r instanceof BlockPos.MutableBlockPos
+                || r instanceof Number && !(r instanceof Integer || r instanceof Long || r instanceof Double || r instanceof Float
+                        || r instanceof Short || r instanceof Byte)
+                || r != null && r.getClass().isArray();
     }
 
     private static long synched(SynchedEntityData d) {
