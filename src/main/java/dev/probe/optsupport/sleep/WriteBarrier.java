@@ -44,6 +44,10 @@ public final class WriteBarrier {
     public static final String FIELD = "probe$w";
     private static final Map<String, Integer> ROOT_OF = new HashMap<>();
     public static int sites, classes, draws;
+    /** -Dlab.wb.drawSites=false: no draw site numbers (MobSleep.draw walks the stack) */
+    static final boolean DRAW_SITES = !"false".equals(System.getProperty("lab.wb.drawSites"));
+    /** -Dlab.wb.writes=false: no write barrier calls (the draw sites only; mob sleep then cannot use the barrier) */
+    static final boolean WRITES = !"false".equals(System.getProperty("lab.wb.writes"));
     static final String RANDOM = "net/minecraft/util/RandomSource";
     private static final Map<String, Boolean> IS_RANDOM = new HashMap<>();
 
@@ -125,7 +129,7 @@ public final class WriteBarrier {
             }
         int n = 0;
         for (MethodNode m : cn.methods) {
-            if (m.name.equals("<init>") || m.name.equals("<clinit>") || m.instructions == null) continue;
+            if (!WRITES || m.name.equals("<init>") || m.name.equals("<clinit>") || m.instructions == null) continue;
             int here = 0;
             for (AbstractInsnNode in = m.instructions.getFirst(); in != null; in = in.getNext()) {
                 if (in.getOpcode() != Opcodes.PUTFIELD) continue;
@@ -157,7 +161,7 @@ public final class WriteBarrier {
         }
         sites += n;
         classes++;
-        drawSites(cn);
+        if (DRAW_SITES) drawSites(cn);
         if (WBIds.VERBOSE) System.out.println("[probe/wb] " + cn.name + ": " + n + " write sites");
     }
 }
