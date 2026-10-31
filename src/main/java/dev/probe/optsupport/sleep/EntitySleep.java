@@ -302,6 +302,8 @@ public final class EntitySleep {
         AABB blockBox, entityBox;     // union of the window's reads
         boolean entityExposed;        // the tick got entity objects (getEntities): neighbour rule
         int failStreak;
+        int fixedRun;                 // -Dlab.entsleep.fixedStat: the current run of fixed-point ticks
+        long[] fixedRates;
         int observeFrom;              // tickCount before which it is not observed (back-off)
         // asleep
         int[] v;
@@ -368,9 +370,53 @@ public final class EntitySleep {
     /** -Dlab.entsleep.trace=<entity id>: one line per tick of that entity (mode, clocks, rotations, random seed) */
     private static final int TRACE = Integer.getInteger("lab.entsleep.trace", -1);
     private static String mode;
+    /** -Dlab.entsleep.timing: ticks and nanoseconds per entity class and mode (never / observe / replay / inline / flip), and the vanilla tick inside an observed one */
+    private static final boolean TIMING = Boolean.getBoolean("lab.entsleep.timing");
+    private static final Map<String, long[]> TIMES = new TreeMap<>();
+    private static long innerNs, innerN;
+    /**
+     * -Dlab.entsleep.fixedStat: no sleep, every mob tick observed; counts the ticks at a fixed point (only clocks
+     * changed, at last tick's rates, and the entity's random) and the lengths of their runs
+     */
+    private static final boolean FIXED_STAT = Boolean.getBoolean("lab.entsleep.fixedStat");
+    private static final long[] FIXED_RUNS = new long[8];   // run lengths 1, 2-3, 4-7, ... 128+, in ticks
+    private static long fixedTicks, fixedAll;
+    private static final Map<String, Long> FIXED_BREAKERS = new TreeMap<>();
+
+    private static void fixedStat(ES s, long[] b, long[] a, boolean quiet) {
+        EClass c = s.c;
+        fixedAll++;
+        String breaker = quiet ? null : "busy";
+        for (int i = 0; i < c.n && breaker == null; i++) if (!c.special[i] && a[i] != b[i]) breaker = slotName(c, i);
+        long[] r = s.fixedRates;
+        if (r == null || r.length != c.clocks.length) r = s.fixedRates = new long[c.clocks.length];
+        for (int j = 0; j < c.clocks.length; j++) {
+            long d = a[c.clocks[j]] - b[c.clocks[j]];
+            if (breaker == null && d != r[j]) breaker = "rate " + slotName(c, c.clocks[j]);
+            r[j] = d;
+        }
+        if (breaker == null) {
+            fixedTicks++;
+            s.fixedRun++;
+            return;
+        }
+        FIXED_BREAKERS.merge(breaker, 1L, Long::sum);
+        if (s.fixedRun > 0) FIXED_RUNS[Math.min(7, 63 - Long.numberOfLeadingZeros(s.fixedRun))] += s.fixedRun;
+        s.fixedRun = 0;
+    }
 
     /** Replaces the entity.tick() call in ServerLevel.tickNonPassenger. */
     public static void tick(Entity e) {
+        if (TIMING) {
+            mode = "never";
+            long t0 = System.nanoTime();
+            tick0(e);
+            long dt = System.nanoTime() - t0;
+            long[] b = TIMES.computeIfAbsent(e.getClass().getSimpleName() + " " + mode, k -> new long[2]);
+            b[0]++;
+            b[1] += dt;
+            return;
+        }
         if (TRACE < 0 || e.getId() != TRACE) {
             tick0(e);
             return;
@@ -503,7 +549,7 @@ public final class EntitySleep {
         }
         long[] b = SB, a = SA;
         boolean cont = s.k >= 0 && e.tickCount == s.lastTick + 1;
-        if (c.inline != null && !cont) {
+        if (c.inline != null && !cont && !FIXED_STAT) {
             for (int t = 0; t <= c.period; t++)
                 if (c.special(e.tickCount + t)) {   // the window would hold a tick that runs for real while asleep: later
                     s.k = -1;
@@ -555,11 +601,16 @@ public final class EntitySleep {
             MobSleep.TICK.clear();
             MobSleep.REC = rec;
         }
+        long ti = TIMING ? System.nanoTime() : 0;
         try {
             e.tick();
         } finally {
             obs = null;
             MobSleep.REC = TRACE == e.getId() ? rec : null;
+        }
+        if (TIMING) {
+            innerNs += System.nanoTime() - ti;
+            innerN++;
         }
         observedTicks++;
         if (c.comp != null && (attrEpoch(e) != s.attrEpoch || goalEpoch(e, true) != s.goalEpoch0 || goalEpoch(e, false) != s.goalEpoch1)) {
@@ -569,6 +620,11 @@ public final class EntitySleep {
         }
         c.snap.snap(e, a);
         boolean quiet = BeTickStats.writes == w0 && SleepEngine.seed(level) == seed0 && unobservedE == u0 && !e.isRemoved();
+        if (FIXED_STAT && c.comp != null) {
+            fixedStat(s, b, a, quiet);
+            s.k = -1;
+            return;
+        }
         if (!quiet) {
             s.k = -1;
             fail(s, c.comp == null ? "busy" : e.isRemoved() ? "busy: removed" : BeTickStats.writes != w0 ? "busy: world writes"
@@ -1529,6 +1585,17 @@ public final class EntitySleep {
                 ON ? "ON" : "OFF", observedTicks, entered, replayed, inlined, inlineFails, flipsPassed, preSkipped, verifyFails, deadlineWakes, DEADLINES.size()));
         sb.append("  wakes: ").append(WAKES).append(System.lineSeparator());
         sb.append("  refused: ").append(REFUSED).append(System.lineSeparator());
+        if (FIXED_STAT) {
+            sb.append(String.format(Locale.ROOT, "  fixed point: %d of %d observed mob ticks (%.1f %%); ticks in runs of 1 / 2-3 / 4-7 / 8-15 / 16-31 / 32-63 / 64-127 / 128+: %s%n",
+                    fixedTicks, fixedAll, 100.0 * fixedTicks / Math.max(1, fixedAll), java.util.Arrays.toString(FIXED_RUNS)));
+            List<Map.Entry<String, Long>> top = new ArrayList<>(FIXED_BREAKERS.entrySet());
+            top.sort((x, y) -> Long.compare(y.getValue(), x.getValue()));
+            sb.append("  fixed point broken by: ").append(top.subList(0, Math.min(20, top.size()))).append(System.lineSeparator());
+        }
+        if (TIMING) {
+            TIMES.forEach((k, v) -> sb.append(String.format(Locale.ROOT, "  time %-28s ticks %8d  total %8.1f ms  per tick %7.2f us%n", k, v[0], v[1] / 1e6, v[1] / 1e3 / Math.max(1, v[0]))));
+            sb.append(String.format(Locale.ROOT, "  time vanilla tick inside observed ticks %8d  total %8.1f ms  per tick %7.2f us%n", innerN, innerNs / 1e6, innerNs / 1e3 / Math.max(1, innerN)));
+        }
         return sb.toString();
     }
 
