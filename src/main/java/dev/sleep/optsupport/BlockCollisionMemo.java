@@ -1,0 +1,165 @@
+package dev.sleep.optsupport;
+
+import net.minecraft.util.Mth;
+import net.minecraft.world.level.BlockGetter;
+import net.minecraft.world.level.CollisionGetter;
+import net.minecraft.world.level.chunk.LevelChunk;
+import net.minecraft.world.level.chunk.LevelChunkSection;
+import net.minecraft.world.phys.AABB;
+
+/**
+ * Per-entity memo of the block part of noCollision / noBlockCollision (BlockCollisionMemoMixin): the query box, and the
+ * chunk sections covering the scanned block range with their modification counters when the answer was computed.
+ * Valid only while every state in that range had a provably static collision shape (ShapePurity).
+ */
+public final class BlockCollisionMemo {
+    public static final int MAX_SECTIONS = 8;
+    /** -Dlab.opt.collisionMemoCheck=true: recompute vanilla on every hit and count differences */
+    public static final boolean CHECK = Boolean.getBoolean("lab.opt.collisionMemoCheck");
+    /** -Dlab.memo.basicOnly=true: only the noCollision slot (A/B of the collide / supporting-block slots) */
+    public static final boolean MOVE_SLOTS = !Boolean.getBoolean("lab.memo.basicOnly");
+
+    public double minX, minY, minZ, maxX, maxY, maxZ;
+    public final Object[] sections = new Object[MAX_SECTIONS];
+    public final int[] mods = new int[MAX_SECTIONS];
+    public int n;
+    public boolean valid, free;
+    /** extra key (movement or position) and the stored answer of the collide / supporting-block slots */
+    public double k0, k1, k2, r0, r1, r2;
+    public Object result;
+    public boolean same;
+
+    public static long hits, misses, unmemoizable, collideHits, collideMisses, supportHits, supportMisses;
+
+    public boolean sameKey(double a, double b, double c) {
+        return a == k0 && b == k1 && c == k2;
+    }
+
+    public void setKey(double a, double b, double c) {
+        k0 = a;
+        k1 = b;
+        k2 = c;
+    }
+
+    /**
+     * Record the sections covering the block range BlockCollisions scans for {@code bb} (its constructor's formula);
+     * false if a chunk is missing or any state in the range lacks a provably static collision shape.
+     */
+    public static boolean record(CollisionGetter level, BlockCollisionMemo m, AABB bb) {
+        int x0 = Mth.floor(bb.minX - 1.0E-7) - 1, x1 = Mth.floor(bb.maxX + 1.0E-7) + 1;
+        int y0 = Mth.floor(bb.minY - 1.0E-7) - 1, y1 = Mth.floor(bb.maxY + 1.0E-7) + 1;
+        int z0 = Mth.floor(bb.minZ - 1.0E-7) - 1, z1 = Mth.floor(bb.maxZ + 1.0E-7) + 1;
+        int k = 0;
+        for (int cx = x0 >> 4; cx <= x1 >> 4; cx++) {
+            for (int cz = z0 >> 4; cz <= z1 >> 4; cz++) {
+                BlockGetter g = level.getChunkForCollisions(cx, cz);
+                if (!(g instanceof LevelChunk chunk) || chunk.getLevel().isDebug()) return false;
+                for (int sy = y0 >> 4; sy <= y1 >> 4; sy++) {
+                    int idx = chunk.getSectionIndexFromSectionY(sy);
+                    if (idx < 0 || idx >= chunk.getSections().length) continue;   // outside the world: always air
+                    if (k == MAX_SECTIONS) return false;
+                    LevelChunkSection s = chunk.getSection(idx);
+                    if (!s.hasOnlyAir()) {
+                        int ax = Math.max(x0, cx << 4), bx = Math.min(x1, (cx << 4) + 15);
+                        int ay = Math.max(y0, sy << 4), by = Math.min(y1, (sy << 4) + 15);
+                        int az = Math.max(z0, cz << 4), bz = Math.min(z1, (cz << 4) + 15);
+                        for (int x = ax; x <= bx; x++)
+                            for (int y = ay; y <= by; y++)
+                                for (int z = az; z <= bz; z++)
+                                    if (!((StaticShape) s.getBlockState(x & 15, y & 15, z & 15)).probe$staticShape()) return false;
+                    }
+                    m.sections[k] = s;
+                    m.mods[k] = ((Counted) s).probe$mod();
+                    k++;
+                }
+            }
+        }
+        m.n = k;
+        return true;
+    }
+
+    /** -Dlab.memo.eager=true: record on every miss (before: moving entities paid the scan every tick for no hit) */
+    public static final boolean EAGER = Boolean.getBoolean("lab.memo.eager");
+    public static long deferred;
+
+    /**
+     * Record only for a box already seen on the previous miss: an entity moving every tick (falling blocks, bouncing
+     * mobs) gets a new box every time and never pays the recording scan; a resting one is memoized one query later.
+     */
+    public static boolean worthRecording(BlockCollisionMemo m, AABB bb) {
+        if (EAGER || m.sameBox(bb)) return true;
+        m.setBox(bb);
+        deferred++;
+        return false;
+    }
+
+    /** The same sections (identity) with the same modification counters, chunks still loaded. */
+    public static boolean unchanged(CollisionGetter level, BlockCollisionMemo m, AABB bb) {
+        int x0 = Mth.floor(bb.minX - 1.0E-7) - 1, x1 = Mth.floor(bb.maxX + 1.0E-7) + 1;
+        int y0 = Mth.floor(bb.minY - 1.0E-7) - 1, y1 = Mth.floor(bb.maxY + 1.0E-7) + 1;
+        int z0 = Mth.floor(bb.minZ - 1.0E-7) - 1, z1 = Mth.floor(bb.maxZ + 1.0E-7) + 1;
+        int k = 0;
+        for (int cx = x0 >> 4; cx <= x1 >> 4; cx++) {
+            for (int cz = z0 >> 4; cz <= z1 >> 4; cz++) {
+                BlockGetter g = level.getChunkForCollisions(cx, cz);
+                if (!(g instanceof LevelChunk chunk)) return false;
+                for (int sy = y0 >> 4; sy <= y1 >> 4; sy++) {
+                    int idx = chunk.getSectionIndexFromSectionY(sy);
+                    if (idx < 0 || idx >= chunk.getSections().length) continue;
+                    if (k == m.n) return false;
+                    LevelChunkSection s = chunk.getSection(idx);
+                    if (m.sections[k] != s || m.mods[k] != ((Counted) s).probe$mod()) return false;
+                    k++;
+                }
+            }
+        }
+        return k == m.n;
+    }
+
+    /**
+     * Memo use is allowed on the thread that owns the level's logic (OwnerThread): the server thread, or the client
+     * main thread for client levels (client entities and sections are separate objects from the server's; one writer
+     * and reader per entity). Chunk-compile workers never call it.
+     */
+    public static boolean usable(net.minecraft.world.level.Level level) {
+        return OwnerThread.owns(level);
+    }
+
+    public boolean sameBox(AABB b) {
+        return b.minX == minX && b.minY == minY && b.minZ == minZ && b.maxX == maxX && b.maxY == maxY && b.maxZ == maxZ;
+    }
+
+    public void setBox(AABB b) {
+        minX = b.minX;
+        minY = b.minY;
+        minZ = b.minZ;
+        maxX = b.maxX;
+        maxY = b.maxY;
+        maxZ = b.maxZ;
+    }
+
+    /** Implemented on Entity: one slot per memoized query. */
+    public interface Holder {
+        BlockCollisionMemo probe$collisionMemo();
+
+        void probe$setCollisionMemo(BlockCollisionMemo m);
+
+        BlockCollisionMemo probe$collideMemo();
+
+        void probe$setCollideMemo(BlockCollisionMemo m);
+
+        BlockCollisionMemo probe$supportMemo();
+
+        void probe$setSupportMemo(BlockCollisionMemo m);
+    }
+
+    /** Implemented on LevelChunkSection: bumped on every block-state write. */
+    public interface Counted {
+        int probe$mod();
+    }
+
+    /** Implemented on BlockState (ShapeCacheMixin): collision shape proven to depend on the state alone. */
+    public interface StaticShape {
+        boolean probe$staticShape();
+    }
+}

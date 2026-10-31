@@ -7,7 +7,8 @@ modId="${mod_id}"
 version="${mod_version}"
 displayName="${mod_name}"
 description='''
-Measurement probe: counts NeoForge events per type, times server ticks, benchmarks event dispatch.
+The sleep engine: server and client optimisations that keep the game's results exact - sleeping block entities and
+mobs, a ring event bus, parallel world generation, chunk I/O, rendering - with measurement tools.
 '''
 
 [[dependencies.${mod_id}]]
@@ -31,7 +32,7 @@ config="${mod_id}.mixins.json"
 config="${mod_id}-opt.mixins.json"
 
 [[mixins]]
-config="foreign-test.mixins.json"
+config="sleep-foreign-test.mixins.json"
 
 [[mixins]]
-config="probe-geo.mixins.json"
+config="sleep-geo.mixins.json"

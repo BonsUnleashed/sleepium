@@ -8,3 +8,5 @@ plugins {
     id 'org.gradle.toolchains.foojay-resolver-convention' version '1.0.0'
 }
 
+// the sleep engine: a NeoForge mod (mod id "sleep") on its own; games and mods build on it from source (includeBuild)
+rootProject.name = 'sleep'

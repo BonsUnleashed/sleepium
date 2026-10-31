@@ -1,0 +1,20 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "dev.sleep.geomixin",
+  "plugin": "dev.sleep.geomixin.GeoMixinPlugin",
+  "compatibilityLevel": "JAVA_21",
+  "client": [
+    "GeoModelWorkerMixin",
+    "MolangActorMixin",
+    "MolangVariableMixin",
+    "KeyframeJournalMixin",
+    "GeoTextureDimsMixin",
+    "GeoCubesMixin",
+    "MolangJitMixin",
+    "AnimStreamMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

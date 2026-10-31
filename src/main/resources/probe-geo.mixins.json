@@ -1,9 +1,0 @@
-{
-  "required": true,
-  "minVersion": "0.8",
-  "package": "dev.probe.geomixin",
-  "plugin": "dev.probe.geomixin.GeoMixinPlugin",
-  "compatibilityLevel": "JAVA_21",
-  "client": ["GeoModelWorkerMixin", "MolangActorMixin", "MolangVariableMixin", "KeyframeJournalMixin", "GeoTextureDimsMixin", "GeoCubesMixin", "GeoAnimControllerMixin", "GeoAnimProcessorMixin", "GeoMarkersMixin", "GeoBlendMixin", "GeoAnimManagerAccessor", "MolangJitMixin", "KeyframeInternMixin", "AnimStreamMixin"],
-  "injectors": { "defaultRequire": 1 }
-}
