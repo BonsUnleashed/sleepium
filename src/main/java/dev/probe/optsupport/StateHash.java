@@ -33,6 +33,7 @@ final class StateHash {
                     continue;
                 }
                 for (Field f : k.getDeclaredFields()) {
+                    if (f.getName().equals("probe$w")) continue;   // the write barrier's watcher (WriteBarrier), not state
                     if (Modifier.isStatic(f.getModifiers()) || SKIP.contains(f.getName())) continue;
                     try {
                         hs.add(l.unreflectVarHandle(f));

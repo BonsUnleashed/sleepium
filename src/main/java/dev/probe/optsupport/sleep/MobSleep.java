@@ -164,6 +164,7 @@ final class MobSleep {
         List<Field> out = new ArrayList<>();
         for (Class<?> k = c; k != null && k != Object.class; k = k.getSuperclass())
             for (Field f : k.getDeclaredFields()) {
+                if (f.getName().equals("probe$w")) continue;   // the write barrier's watcher (WriteBarrier), not state
                 if (Modifier.isStatic(f.getModifiers())) continue;
                 f.setAccessible(true);
                 out.add(f);
@@ -544,8 +545,7 @@ final class MobSleep {
     static Object REC;
     /** the draws of the tick being observed: (site id << 40 | kind << 32 | bound), value bits */
     static final LongArrayList TICK = new LongArrayList();
-    private static final Map<String, Integer> SITE_IDS = new HashMap<>();
-    static final List<String> SITES = new ArrayList<>();
+    static final List<String> SITES = DrawSiteIds.SITES;
     private static final StackWalker WALKER = StackWalker.getInstance(java.util.Set.of(StackWalker.Option.RETAIN_CLASS_REFERENCE), 6);
 
     /** a draw's call site as the walker gives it cheaply: method name and bytecode index (names are interned) */
@@ -566,22 +566,32 @@ final class MobSleep {
     }
 
     private static int siteId(String site) {
-        Integer id = SITE_IDS.get(site);
-        if (id == null) {
-            id = SITES.size();
-            SITES.add(site);
-            SITE_IDS.put(site, id);
-        }
-        return id;
+        return DrawSiteIds.id(site);
     }
+
+    static long sitesGiven, sitesWalked;
 
     /**
      * MobSleepRandomMixin: a draw of the random being recorded. Its site (owner.method+desc@line, the analysis' key)
      * is resolved once per (class, method name, bytecode index) - line numbers and descriptors are the walker's
      * expensive part (~28 us a draw on the N100); a name declared twice in its class always takes the full path.
+     * A call site the write barrier's transform numbered (MobSleepHooks.site, set for the call's duration) needs no
+     * walk at all.
      */
     static void draw(int kind, int bound, long valueBits) {
         long t0 = EntitySleep.TIMING ? System.nanoTime() : 0;
+        int given = MobSleepHooks.site;
+        if (given >= 0) {
+            sitesGiven++;
+            TICK.add(((long) given << 40) | ((long) kind << 32) | (bound & 0xFFFFFFFFL));
+            TICK.add(valueBits);
+            if (EntitySleep.TIMING) {
+                EntitySleep.OT[3] += System.nanoTime() - t0;
+                EntitySleep.OT[4]++;
+            }
+            return;
+        }
+        sitesWalked++;
         StackWalker.StackFrame f = WALKER.walk(MobSleep::caller);
         long t1 = EntitySleep.TIMING ? System.nanoTime() : 0;
         int id;

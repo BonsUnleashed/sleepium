@@ -73,6 +73,7 @@ public final class MoveMemo {
             List<Field> fl = new ArrayList<>();
             for (Class<?> k = c; k != null && k != Object.class; k = k.getSuperclass())
                 for (Field x : k.getDeclaredFields()) {
+                    if (x.getName().equals("probe$w")) continue;   // the write barrier's watcher (WriteBarrier), not state
                     if (Modifier.isStatic(x.getModifiers())) continue;
                     try {
                         x.setAccessible(true);

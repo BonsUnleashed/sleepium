@@ -2,6 +2,9 @@ package dev.probe.optsupport.sleep;
 
 /** Public entry points of the mob sleep mixins (MobSleepRandomMixin, MobSleepGoalsMixin). */
 public final class MobSleepHooks {
+    /** the draw call site in progress (DrawSiteIds), set around the call by the write barrier's transform; -1 none */
+    public static int site = -1;
+
     private MobSleepHooks() {}
 
     public static boolean recording(Object random) {

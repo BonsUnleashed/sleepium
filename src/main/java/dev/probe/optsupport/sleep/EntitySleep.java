@@ -95,6 +95,45 @@ public final class EntitySleep {
         int[] clockPart;              // composite with Unsafe: per clock, its part and field offset and kind (0 int, 1 long, 2 short, 3 byte)
         long[] clockOff;
         byte[] clockKind;
+        // the write barrier (BARRIER): every part's class has a watcher field, so writes into the parts mark their slots
+        boolean barrier;
+        long[] slotOff;               // per slot: its field's offset in its part (Unsafe)
+        int[][] slotById;             // per part: barrier field id -> slot (-1 none, -2 not looked up yet)
+        int[] clockOf;                // per slot: its index in clocks (-1 not a clock)
+
+        /** the slot a write into part k's field (barrier id) lands in, -1 if none */
+        int slotOfId(int k, int id) {
+            int[] t = slotById[k];
+            if (t == null || id >= t.length) {
+                int m = Math.max(WBIds.count, id + 1) + 64;
+                int[] x = new int[m];
+                java.util.Arrays.fill(x, -2);
+                if (t != null) System.arraycopy(t, 0, x, 0, t.length);
+                slotById[k] = t = x;
+            }
+            int i = t[id];
+            if (i == -2) t[id] = i = lookupSlot(k, id);
+            return i;
+        }
+
+        private int lookupSlot(int k, int id) {
+            MobSleep.Part pt = comp.parts[k];
+            String name = WBIds.name[id];
+            Class<?> owner;
+            try {
+                owner = Class.forName(WBIds.owner[id].replace('/', '.'), false, EntitySleep.class.getClassLoader());
+            } catch (ClassNotFoundException ex) {
+                return -1;
+            }
+            // the field the site names: declared in its owner class or the nearest superclass declaring that name
+            int best = -1;
+            for (int i = pt.off; i < pt.off + pt.f.length; i++) {
+                Field x = f[i];
+                if (!x.getName().equals(name) || !x.getDeclaringClass().isAssignableFrom(owner)) continue;
+                if (best < 0 || f[best].getDeclaringClass().isAssignableFrom(x.getDeclaringClass())) best = i;
+            }
+            return best;
+        }
 
         boolean special(int tickCount) {
             if (inline == null) return false;
@@ -136,6 +175,7 @@ public final class EntitySleep {
             List<Field> fl = new ArrayList<>();
             for (Class<?> k = c; k != null && k != Object.class; k = k.getSuperclass()) {
                 for (Field x : k.getDeclaredFields()) {
+                    if (x.getName().equals("probe$w")) continue;   // the write barrier's watcher (WriteBarrier), not state
                     if (Modifier.isStatic(x.getModifiers())) continue;
                     try {
                         x.setAccessible(true);
@@ -302,7 +342,215 @@ public final class EntitySleep {
             nulls = nu.stream().mapToInt(Integer::intValue).toArray();
             zeros = ze.stream().mapToInt(Integer::intValue).toArray();
             entityRefs = er.stream().mapToInt(Integer::intValue).toArray();
+            if (BARRIER && comp != null && comp.all != null && SnapCompiler.U != null) {
+                barrier = true;
+                for (MobSleep.Part pt : comp.parts) if (WB.rootIndex(pt.cls) < 0) {
+                    barrier = false;
+                    System.out.println("[probe/entsleep] " + c.getSimpleName() + ": no write barrier, part " + pt.path + " (" + pt.cls.getSimpleName() + ") has no watcher");
+                }
+                if (barrier) {
+                    slotOff = new long[n];
+                    for (int i = 0; i < n; i++) slotOff[i] = SnapCompiler.U.objectFieldOffset(f[i]);
+                    slotById = new int[comp.parts.length][];
+                    clockOf = new int[n];
+                    java.util.Arrays.fill(clockOf, -1);
+                    for (int j = 0; j < clocks.length; j++) clockOf[clocks[j]] = j;
+                }
+            }
         }
+    }
+
+    /**
+     * The write barrier (-Dlab.opt.WriteBarrier=true: WriteBarrier, WB). A mob's parts carry a PartWatch: every write
+     * into them (the mob's own code, the level's, another entity's) marks its slot dirty, in two masks. The replay checks
+     * only the slots in {@code vdirty} (none written: nothing to check - the furnace model), observation keeps a mirror
+     * of the state and re-reads only the slots in {@code mdirty} (and containers, whose content changes without a write
+     * into a part) instead of snapshotting all of them. -Dlab.entsleep.barrier=false: the snapshots as before.
+     */
+    static final boolean BARRIER = Boolean.getBoolean("lab.opt.WriteBarrier") && !"false".equals(System.getProperty("lab.entsleep.barrier"));
+
+    /** a mob part's watcher (WB): writes into the part mark their slots dirty */
+    static final class PartWatch {
+        final ES s;
+        final int k;
+
+        PartWatch(ES s, int k) {
+            this.s = s;
+            this.k = k;
+        }
+    }
+
+    /**
+     * The watcher of a part several entities share (the type's AttributeSupplier): a write goes to every one of them.
+     * Entries of removed entities are dropped when one is added.
+     */
+    static final class SharedWatch {
+        PartWatch[] w = new PartWatch[4];
+        int n;
+
+        void add(PartWatch pw) {
+            for (int i = 0; i < n; i++) if (w[i] == pw) return;
+            int k = 0;
+            for (int i = 0; i < n; i++) if (!w[i].s.e.isRemoved() && w[i].s.barrierOn) w[k++] = w[i];
+            for (int i = k; i < n; i++) w[i] = null;
+            n = k;
+            if (n == w.length) w = java.util.Arrays.copyOf(w, n * 2);
+            w[n++] = pw;
+        }
+
+        void remove(PartWatch pw) {
+            for (int i = 0; i < n; i++)
+                if (w[i] == pw) {
+                    w[i] = w[--n];
+                    w[n] = null;
+                    return;
+                }
+        }
+    }
+
+    static long barrierHits, barrierChecked, barrierSyncs, barrierFull, barrierReread, barrierShared;
+
+    static void onWrite(SharedWatch sw, int id) {
+        for (int i = 0; i < sw.n; i++) onWrite(sw.w[i], id);
+    }
+
+    static void onWrite(PartWatch pw, int id) {
+        ES s = pw.s;
+        int i = s.c.slotOfId(pw.k, id);
+        barrierHits++;
+        if (i < 0) return;
+        long bit = 1L << i;
+        s.vdirty[i >>> 6] |= bit;
+        s.mdirty[i >>> 6] |= bit;
+    }
+
+    /** puts the ES's watchers on its parts (s.ctx); a part already watched by another entity: no barrier for this one */
+    private static void watchParts(ES s) {
+        Object[] o = s.ctx;
+        int n = s.c.n;
+        if (s.watches == null) {
+            s.watches = new PartWatch[o.length];
+            for (int k = 0; k < o.length; k++) s.watches[k] = new PartWatch(s, k);
+            s.vdirty = new long[(n + 63) >>> 6];
+            s.mdirty = new long[(n + 63) >>> 6];
+            s.M = new long[n];
+            s.MR = new Object[n];
+        }
+        boolean same = s.watched != null && s.watched.length == o.length;
+        for (int k = 0; same && k < o.length; k++) same = s.watched[k] == o[k];
+        if (same) return;
+        if (s.watched != null)
+            for (Object x : s.watched) {
+                Object w = WB.watcherOf(x);
+                if (w instanceof PartWatch pw && pw.s == s) WB.watch(x, null);
+                else if (w instanceof SharedWatch sw) for (PartWatch pw : s.watches) sw.remove(pw);
+            }
+        for (int k = 0; k < o.length; k++) {
+            Object w = WB.watcherOf(o[k]);
+            PartWatch mine = s.watches[k];
+            if (w == null || w == mine || w instanceof PartWatch pw && (pw.s == s || pw.s.e.isRemoved() || !pw.s.barrierOn)) {
+                WB.watch(o[k], mine);
+            } else if (w instanceof SharedWatch sw) {
+                sw.add(mine);
+            } else if (w instanceof PartWatch other) {   // shared with another entity: both hear its writes
+                SharedWatch sw = new SharedWatch();
+                sw.add(other);
+                sw.add(mine);
+                WB.watch(o[k], sw);
+                barrierShared++;
+            } else {   // watched by something else (the measurement mode): snapshots
+                s.barrierOn = false;
+                return;
+            }
+        }
+        s.watched = o.clone();
+        s.mValid = false;
+    }
+
+    /**
+     * Brings the mirror (s.M fingerprints, s.MR objects) up to date: the slots written since the last sync, and with
+     * {@code containers} the containers (their content changes without a write into a part; the probe compares only
+     * primitives, a window's state before a tick is the last one's after-state). True if a primitive other than the
+     * clocks changed (or the mirror was rebuilt).
+     */
+    private static boolean sync(ES s, boolean containers) {
+        EClass c = s.c;
+        barrierSyncs++;
+        if (!s.mValid) {
+            if (s.content == null || s.content.length != c.n) s.content = new boolean[c.n];
+            c.comp.snapObserved(s.e, s.M, s.MR, null, null, s.content, false);
+            java.util.Arrays.fill(s.mdirty, 0);
+            s.mValid = true;
+            barrierFull++;
+            return true;
+        }
+        Object[] o = s.ctx;
+        boolean changed = false;
+        long[] d = s.mdirty, m = s.M;
+        Object[] mr = s.MR;
+        boolean[] prim = c.prim, special = c.special, content = s.content;
+        for (int w = 0; w < d.length; w++) {
+            long bits = d[w];
+            if (bits == 0) continue;
+            d[w] = 0;
+            while (bits != 0) {
+                int i = (w << 6) + Long.numberOfTrailingZeros(bits);
+                bits &= bits - 1;
+                barrierReread++;
+                if (prim[i]) {
+                    long x = c.snap.bits(s.e, i);
+                    if (x != m[i]) {
+                        if (!special[i]) changed = true;
+                        m[i] = x;
+                    }
+                } else {
+                    Object r = SnapCompiler.U.getObject(o[c.comp.partOf[i]], c.slotOff[i]);
+                    if (r != mr[i]) {
+                        mr[i] = r;
+                        content[i] = EntityFp.content(r);
+                        m[i] = EntityFp.observedFp(r);
+                    }
+                }
+            }
+        }
+        if (containers) for (int i : c.comp.refAll) if (content[i]) m[i] = EntityFp.observedFp(mr[i]);
+        return changed;
+    }
+
+    /** asleep: the slots written since the last replay, against what the phase expects; null if all as expected */
+    private static String dirtyCheck(ES s, int p) {
+        EClass c = s.c;
+        long[] d = s.vdirty;
+        Object[] o = s.ctx;
+        for (int w = 0; w < d.length; w++) {
+            long bits = d[w];
+            if (bits == 0) continue;
+            d[w] = 0;
+            while (bits != 0) {
+                int i = (w << 6) + Long.numberOfTrailingZeros(bits);
+                bits &= bits - 1;
+                barrierChecked++;
+                if (i == c.tickCount || i == c.randomSlot) continue;   // the level's count; the seed is checked apart
+                int j = c.clockOf[i];
+                if (j >= 0) {
+                    if (clockBits(s, j) != s.expClock[j]) return "clock " + slotName(c, i);
+                    continue;
+                }
+                if (c.prim[i]) {
+                    int vj = java.util.Arrays.binarySearch(s.v, i);
+                    long exp = vj >= 0 ? s.bV[p][vj] : s.expPrim[i];
+                    if (c.snap.bits(s.e, i) != exp) return slotName(c, i);
+                } else {
+                    int k = c.refOrd[i];
+                    if (k >= 0 && SnapCompiler.U.getObject(o[c.comp.partOf[i]], c.slotOff[i]) != s.expR[k]) return slotName(c, i);
+                }
+            }
+        }
+        return null;
+    }
+
+    private static void markDirty(long[] d, int i) {
+        d[i >>> 6] |= 1L << i;
     }
 
     private static final Map<Class<?>, EClass> CLASSES = new java.util.concurrent.ConcurrentHashMap<>();   // filled by AsyncAnalysis
@@ -364,6 +612,15 @@ public final class EntitySleep {
         double[][] dConst;            // per phase and draw: the other side's constant part (constant, final field, clock offset)
         int[][] dClock;               // ... and its clock (index into EClass.clocks, -1 none)
         long[] clockBase;             // per clock: its value when the window began
+        // write barrier
+        boolean barrierOn;            // its parts are watched (EClass.barrier, not shared with another entity)
+        PartWatch[] watches;
+        Object[] watched;             // the objects the watchers are on
+        long[] vdirty, mdirty;        // slots written since the replay's last check / since the mirror's last sync
+        long[] M;                     // the mirror: fingerprints as snapObserved gives them
+        Object[] MR;                  // ... and the objects
+        boolean mValid;
+        long[] expPrim;               // asleep: the state the sleep began with (a slot outside v keeps its value)
 
         ES(Entity e, EClass c) {
             this.e = e;
@@ -561,6 +818,10 @@ public final class EntitySleep {
             s = new ES(e, c);
             if (c.refuse != null || e.getBlockX() < MIN_X || dev.probe.api.Compat.entitySleepExcluded(e)) s.st = St.NEVER;
             else if (c.comp != null && (s.ctx = c.comp.resolveAll(e)) == null) s.st = St.NEVER;
+            if (s.st != St.NEVER && c.barrier) {
+                s.barrierOn = true;
+                watchParts(s);
+            }
             ((EntSleeperHolder) e).probe$setEs(s);
         }
         if (s.st == St.ASLEEP && !s.woken && now >= s.wakeAt && s.drawWake) {
@@ -568,6 +829,7 @@ public final class EntitySleep {
             // (LookAtPlayerGoal's chance with no player around), look ahead again from the seed it left
             if (inlineTick(s, level)) {
                 flipsPassed++;
+                if (s.barrierOn) java.util.Arrays.fill(s.vdirty, 0);
                 mode = "flip";
                 long dd = lookAhead(s);
                 long wake = Math.min(s.clockWakeAt, dd == Long.MAX_VALUE ? Long.MAX_VALUE : now + dd);
@@ -594,6 +856,7 @@ public final class EntitySleep {
             if (!s.inlinePassed(mask)) {
                 if (inlineTick(s, level)) {
                     inlined++;
+                    if (s.barrierOn) java.util.Arrays.fill(s.vdirty, 0);   // the tick's writes were checked whole
                     s.addInlinePassed(mask);
                     mode = "inline";
                     return;
@@ -633,13 +896,20 @@ public final class EntitySleep {
             }
             long[] c0 = PROBE_CLOCKS.length >= nc ? PROBE_CLOCKS : (PROBE_CLOCKS = new long[nc * 2]);
             for (int j = 0; j < nc; j++) c0[j] = clockBits(s, j);
-            c.comp.both(e, PB, PRB);
-            e.tick();
-            boolean same = !e.isRemoved();
-            if (same) {
-                c.comp.both(e, PA, PRB);
-                boolean[] prim = c.prim, special = c.special;
-                for (int i = 0; i < n && same; i++) same = !prim[i] || special[i] || PA[i] == PB[i];
+            boolean same;
+            if (s.barrierOn) {   // the mirror: only the slots the tick wrote are read again
+                sync(s, false);
+                e.tick();
+                same = !e.isRemoved() && !sync(s, false);
+            } else {
+                c.comp.both(e, PB, PRB);
+                e.tick();
+                same = !e.isRemoved();
+                if (same) {
+                    c.comp.both(e, PA, PRB);
+                    boolean[] prim = c.prim, special = c.special;
+                    for (int i = 0; i < n && same; i++) same = !prim[i] || special[i] || PA[i] == PB[i];
+                }
             }
             if (same) {
                 // the clocks' rates from this tick: a window only when the clock conditions leave a sleep worth it
@@ -692,6 +962,7 @@ public final class EntitySleep {
             fail(s, "contexts changed");
             return;
         }
+        if (s.barrierOn && !cont) watchParts(s);
         if (c.comp != null && !cont) {
             s.readsWeather = s.readsPlayers = false;
             s.attrObj = e instanceof net.minecraft.world.entity.LivingEntity le && le.getAttributes() instanceof MoveMemo.AttrEpoch ae ? ae : null;
@@ -708,7 +979,11 @@ public final class EntitySleep {
         if (TIMING && (OT[2] & 63) == 0) fpTimes(s);
         long o0 = TIMING ? System.nanoTime() : 0;
         if (c.comp != null && (s.content == null || s.content.length != n)) s.content = new boolean[n];
-        if (c.comp != null) c.comp.snapObserved(e, b, RB, s.prevRefs, s.prevA, s.content, cont);
+        if (s.barrierOn) {
+            sync(s, !cont);
+            System.arraycopy(s.M, 0, b, 0, n);
+            System.arraycopy(s.MR, 0, RB, 0, n);
+        } else if (c.comp != null) c.comp.snapObserved(e, b, RB, s.prevRefs, s.prevA, s.content, cont);
         else c.snap.snap(e, b);
         if (TIMING) OT[0] += System.nanoTime() - o0;
         obs = s;
@@ -731,7 +1006,8 @@ public final class EntitySleep {
                 s.diffRefs = new ArrayList<>();
                 s.readHashAt = new long[L + 1];
             }
-            c.snap.refs(e, s.baseRefs);   // the objects of the state before tick 0
+            if (s.barrierOn) System.arraycopy(RB, 0, s.baseRefs, 0, n);
+            else c.snap.refs(e, s.baseRefs);   // the objects of the state before tick 0
         }
         Object rec = null;
         if (c.comp != null) {
@@ -757,7 +1033,11 @@ public final class EntitySleep {
             return;
         }
         long o1 = TIMING ? System.nanoTime() : 0;
-        if (c.comp != null) c.comp.snapObserved(e, a, RA, RB, b, s.content, false);
+        if (s.barrierOn) {
+            sync(s, true);
+            System.arraycopy(s.M, 0, a, 0, n);
+            System.arraycopy(s.MR, 0, RA, 0, n);
+        } else if (c.comp != null) c.comp.snapObserved(e, a, RA, RB, b, s.content, false);
         else c.snap.snap(e, a);
         if (TIMING) {
             OT[1] += System.nanoTime() - o1;
@@ -987,6 +1267,10 @@ public final class EntitySleep {
         for (int p = 0; p < L; p++) {
             for (int j = 0; j < nv; j++) if (c.prim[v[j]]) cur[v[j]] = bV[p][j];
             s.hashB[p] = c.hashOf(cur);
+        }
+        if (s.barrierOn) {
+            s.expPrim = cur;   // slots outside v: the after-state observe took
+            java.util.Arrays.fill(s.vdirty, 0);
         }
         if (c.inline != null) {
             long[] now0 = new long[c.n];
@@ -1376,7 +1660,12 @@ public final class EntitySleep {
         SnapCompiler.Snapper sn = c.snap;
         int[] cl = c.clocks;
         long q0 = TIMING ? System.nanoTime() : 0;
-        if (VERIFY) {
+        if (VERIFY && s.barrierOn) {
+            // the write barrier: only the slots written since the last replay (the level's old position and tick count
+            // every tick; anything else wakes); the replay's own writes go around it
+            String bad = dirtyCheck(s, p);
+            if (bad != null) return verifyFail(s, bad);
+        } else if (VERIFY) {
             // every field: primitives by a hash of their values, references by identity (the objects left by the last
             // replay); synched data changes arrive through its set() hook. Clocks separately.
             if (sn.hashPrims(e) != s.hashB[p]) return verifyFail(s, firstDiff(s, p));
@@ -1557,6 +1846,10 @@ public final class EntitySleep {
     }
 
     private static void wake(ES s, String reason) {
+        if (s.barrierOn) {
+            if (s.v != null) for (int i : s.v) markDirty(s.mdirty, i);
+            for (int i : s.c.clocks) markDirty(s.mdirty, i);
+        }
         s.st = St.OBSERVE;
         s.k = -1;
         s.woken = false;
@@ -1834,6 +2127,9 @@ public final class EntitySleep {
                 ON ? "ON" : "OFF", observedTicks, entered, replayed, inlined, inlineFails, inlineReplayed, flipsPassed, preSkipped, verifyFails, deadlineWakes, DEADLINES.size()));
         sb.append("  wakes: ").append(WAKES).append(System.lineSeparator());
         sb.append("  refused: ").append(REFUSED).append(System.lineSeparator());
+        if (BARRIER)
+            sb.append(String.format(Locale.ROOT, "  write barrier: %d writes into watched parts, %d dirty slots checked asleep, %d mirror syncs (%d full), %d slots read again, %d shared parts; draw sites numbered %d, walked %d%n",
+                    barrierHits, barrierChecked, barrierSyncs, barrierFull, barrierReread, barrierShared, MobSleep.sitesGiven, MobSleep.sitesWalked));
         if (FIXED_STAT) {
             sb.append(String.format(Locale.ROOT, "  fixed point: %d of %d observed mob ticks (%.1f %%); ticks in runs of 1 / 2-3 / 4-7 / 8-15 / 16-31 / 32-63 / 64-127 / 128+: %s%n",
                     fixedTicks, fixedAll, 100.0 * fixedTicks / Math.max(1, fixedAll), java.util.Arrays.toString(FIXED_RUNS)));
@@ -1971,6 +2267,7 @@ public final class EntitySleep {
         List<Field> out = new ArrayList<>();
         for (Class<?> k = c; k != null && k != Object.class; k = k.getSuperclass()) {
             for (Field f : k.getDeclaredFields()) {
+                if (f.getName().equals("probe$w")) continue;   // the write barrier's watcher (WriteBarrier), not state
                 if (Modifier.isStatic(f.getModifiers())) continue;
                 try {
                     f.setAccessible(true);

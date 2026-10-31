@@ -106,6 +106,7 @@
     "SectionModCountMixin",
     "EntityCollisionMemoMixin",
     "EventSiteMixin",
+    "WriteBarrierMixin",
     "NeighborQueueMixin",
     "SignalPathMixin",
     "SignalProofStateMixin",

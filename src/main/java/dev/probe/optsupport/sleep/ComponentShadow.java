@@ -36,6 +36,7 @@ public final class ComponentShadow {
             List<Field> l = new ArrayList<>();
             for (Class<?> x = k; x != null && x != Object.class; x = x.getSuperclass())
                 for (Field f : x.getDeclaredFields()) {
+                    if (f.getName().equals("probe$w")) continue;   // the write barrier's watcher (WriteBarrier), not state
                     if (Modifier.isStatic(f.getModifiers())) continue;
                     try {
                         f.setAccessible(true);
