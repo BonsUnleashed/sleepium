@@ -10,14 +10,14 @@ import org.spongepowered.asm.mixin.Unique;
 /** Per-state cache of NeighborReact (computed on first use). */
 @Mixin(BlockBehaviour.BlockStateBase.class)
 public abstract class NeighborReactStateMixin implements ReactsHolder {
-    @Unique private byte probe$reacts = -1;
+    @Unique private byte sleep$reacts = -1;
 
     @Override
-    public boolean probe$reacts() {
-        byte r = probe$reacts;
+    public boolean sleep$reacts() {
+        byte r = sleep$reacts;
         if (r < 0) {
             r = (byte) (NeighborReact.reactsSlow((BlockState) (Object) this) ? 1 : 0);
-            probe$reacts = r;
+            sleep$reacts = r;
         }
         return r == 1;
     }

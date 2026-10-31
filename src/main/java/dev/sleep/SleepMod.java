@@ -9,13 +9,13 @@ import org.slf4j.Logger;
 
 /**
  * The sleep engine (mod id {@code sleep}): optimisations, the sleep engines, the event bus, networking, the public
- * API (dev.sleep.api), measurements. Its measuring commands are under {@code /probe}:
+ * API (dev.sleep.api), measurements. Its measuring commands are under {@code /sleep}:
  * <ul>
- *   <li>{@code /probe start}  – reset tick stats, start counting every event type posted on the game bus</li>
- *   <li>{@code /probe status} – short summary in chat</li>
- *   <li>{@code /probe stop}   – stop counting, detach counting listeners, write report to {@code <gamedir>/probe/}</li>
- *   <li>{@code /probe bench [n]} – microbenchmark of {@code IEventBus.post} inside the live game</li>
- *   <li>{@code /probe world}  – entity / block entity / chunk counts per level</li>
+ *   <li>{@code /sleep start}  – reset tick stats, start counting every event type posted on the game bus</li>
+ *   <li>{@code /sleep status} – short summary in chat</li>
+ *   <li>{@code /sleep stop}   – stop counting, detach counting listeners, write report to {@code <gamedir>/probe/}</li>
+ *   <li>{@code /sleep bench [n]} – microbenchmark of {@code IEventBus.post} inside the live game</li>
+ *   <li>{@code /sleep world}  – entity / block entity / chunk counts per level</li>
  * </ul>
  */
 @Mod(SleepMod.MOD_ID)
@@ -26,10 +26,10 @@ public final class SleepMod {
     public SleepMod(IEventBus modBus) {
         IEventBus gameBus = NeoForge.EVENT_BUS;
         // Which layer/loader owns the bus? Mixin can only transform classes of the GAME layer (TransformingClassLoader).
-        LOGGER.info("probe: bus class {} module {} loader {}; game class loader {}", gameBus.getClass().getName(),
+        LOGGER.info("sleep: bus class {} module {} loader {}; game class loader {}", gameBus.getClass().getName(),
                 gameBus.getClass().getModule(), gameBus.getClass().getClassLoader(),
                 net.minecraft.server.MinecraftServer.class.getClassLoader());
-        if (Boolean.getBoolean("lab.opt.HeapReturn")) LOGGER.info("probe: {}", dev.sleep.optsupport.HeapReturn.apply());   // memory back to the OS after bursts
+        if (Boolean.getBoolean("lab.opt.HeapReturn")) LOGGER.info("sleep: {}", dev.sleep.optsupport.HeapReturn.apply());   // memory back to the OS after bursts
         // classes the game loads only while played, learned and preloaded in the background (lab.opt.ClassPreload)
         gameBus.addListener(net.neoforged.neoforge.event.server.ServerAboutToStartEvent.class, e -> dev.sleep.optsupport.ClassPreload.preload());
         gameBus.addListener(net.neoforged.neoforge.event.server.ServerStartedEvent.class, e -> dev.sleep.optsupport.ClassPreload.started());
@@ -37,7 +37,7 @@ public final class SleepMod {
         TickTimer.INSTANCE.register(gameBus);
         EventCounter.INSTANCE.attach(gameBus);
         EventBench.registerListeners(gameBus);
-        gameBus.addListener(ProbeCommand::register);
+        gameBus.addListener(SleepCommand::register);
         gameBus.addListener(net.neoforged.neoforge.event.tick.ServerTickEvent.Pre.class, e -> NetBench.onTickStart());
         modBus.addListener(net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent.class, dev.sleep.net.BulkPayloads::register);
         gameBus.addListener(net.neoforged.neoforge.event.tick.ServerTickEvent.Post.class, e -> dev.sleep.net.Bulk.pump(e.getServer()));
@@ -51,7 +51,7 @@ public final class SleepMod {
         });
         gameBus.addListener(net.neoforged.neoforge.event.level.ChunkEvent.Load.class, GenBench::onChunkLoad);
         if (FMLEnvironment.dist.isClient()) {
-            ClientProbe.register(gameBus);   // class is only loaded on the physical client
+            ClientMeter.register(gameBus);   // class is only loaded on the physical client
         }
     }
 }

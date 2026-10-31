@@ -17,14 +17,14 @@ public abstract class TextureMipsLoadMixin {
     @Shadow @Final protected ResourceLocation location;
 
     @Inject(method = "doLoad", at = @At("HEAD"))
-    private void probe$bleed(NativeImage image, boolean blur, boolean clamp, CallbackInfo ci) {
+    private void sleep$bleed(NativeImage image, boolean blur, boolean clamp, CallbackInfo ci) {
         if (TextureMips.wants(location)) TextureMips.bleed(image);
     }
 
     @Inject(method = "doLoad", at = @At("RETURN"))
-    private void probe$mips(NativeImage image, boolean blur, boolean clamp, CallbackInfo ci) {
+    private void sleep$mips(NativeImage image, boolean blur, boolean clamp, CallbackInfo ci) {
         if (!TextureMips.wants(location)) return;
         TextureMips.build(((SimpleTexture) (Object) this).getId());
-        ((TextureMips.Flag) this).probe$setMips(true);
+        ((TextureMips.Flag) this).sleep$setMips(true);
     }
 }

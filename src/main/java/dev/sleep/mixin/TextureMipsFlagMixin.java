@@ -10,20 +10,20 @@ import org.spongepowered.asm.mixin.injection.ModifyVariable;
 /** TextureMips: a marked texture keeps its mip filter whatever filter a render type asks for when it binds it */
 @Mixin(AbstractTexture.class)
 public abstract class TextureMipsFlagMixin implements TextureMips.Flag {
-    @Unique private boolean probe$mips;
+    @Unique private boolean sleep$mips;
 
     @Override
-    public boolean probe$mips() {
-        return probe$mips;
+    public boolean sleep$mips() {
+        return sleep$mips;
     }
 
     @Override
-    public void probe$setMips(boolean on) {
-        probe$mips = on;
+    public void sleep$setMips(boolean on) {
+        sleep$mips = on;
     }
 
     @ModifyVariable(method = "setFilter", at = @At("HEAD"), argsOnly = true, ordinal = 1)
-    private boolean probe$mipFilter(boolean mipmap) {
-        return mipmap || probe$mips;
+    private boolean sleep$mipFilter(boolean mipmap) {
+        return mipmap || sleep$mips;
     }
 }

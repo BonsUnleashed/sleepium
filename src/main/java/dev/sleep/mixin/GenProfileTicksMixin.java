@@ -12,7 +12,7 @@ import org.spongepowered.asm.mixin.Mixin;
 @Mixin(LevelTicks.class)
 public abstract class GenProfileTicksMixin<T> {
     @WrapMethod(method = "tick")
-    private void probe$tick(long gameTime, int maxAllowedTicks, BiConsumer<BlockPos, T> ticker, Operation<Void> original) {
+    private void sleep$tick(long gameTime, int maxAllowedTicks, BiConsumer<BlockPos, T> ticker, Operation<Void> original) {
         if (!GenProfile.active()) {
             original.call(gameTime, maxAllowedTicks, ticker);
             return;

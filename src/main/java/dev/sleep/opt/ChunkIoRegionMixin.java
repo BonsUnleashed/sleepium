@@ -37,7 +37,7 @@ public abstract class ChunkIoRegionMixin implements ChunkIo.Region {
     @Shadow @Final protected RegionBitmap usedSectors;
     @Shadow @Final RegionFileVersion version;
     @Shadow @Final RegionStorageInfo info;
-    @Unique private boolean probe$sync;
+    @Unique private boolean sleep$sync;
 
     @Shadow
     private void writeHeader() throws IOException {
@@ -84,33 +84,33 @@ public abstract class ChunkIoRegionMixin implements ChunkIo.Region {
 
     @Redirect(method = "<init>(Lnet/minecraft/world/level/chunk/storage/RegionStorageInfo;Ljava/nio/file/Path;Ljava/nio/file/Path;Lnet/minecraft/world/level/chunk/storage/RegionFileVersion;Z)V",
             at = @At(value = "INVOKE", target = "Ljava/nio/channels/FileChannel;open(Ljava/nio/file/Path;[Ljava/nio/file/OpenOption;)Ljava/nio/channels/FileChannel;"))
-    private FileChannel probe$open(Path path, OpenOption[] options) throws IOException {
+    private FileChannel sleep$open(Path path, OpenOption[] options) throws IOException {
         int n = 0;
         OpenOption[] kept = new OpenOption[options.length];
         for (OpenOption o : options) {
-            if (o == StandardOpenOption.DSYNC) probe$sync = true;
+            if (o == StandardOpenOption.DSYNC) sleep$sync = true;
             else kept[n++] = o;
         }
         return FileChannel.open(path, java.util.Arrays.copyOf(kept, n));
     }
 
     @Inject(method = "writeHeader", at = @At("HEAD"))
-    private void probe$syncData(CallbackInfo ci) throws IOException {
-        if (probe$sync) file.force(true);
+    private void sleep$syncData(CallbackInfo ci) throws IOException {
+        if (sleep$sync) file.force(true);
     }
 
     @Inject(method = "writeHeader", at = @At("TAIL"))
-    private void probe$syncHeader(CallbackInfo ci) throws IOException {
-        if (probe$sync) file.force(true);
+    private void sleep$syncHeader(CallbackInfo ci) throws IOException {
+        if (sleep$sync) file.force(true);
     }
 
     @Override
-    public int probe$versionId() {
+    public int sleep$versionId() {
         return version.getId();
     }
 
     @Override
-    public synchronized void probe$writeBatch(ChunkPos[] pos, byte[][] data, int n) throws IOException {
+    public synchronized void sleep$writeBatch(ChunkPos[] pos, byte[][] data, int n) throws IOException {
         int[] index = new int[n], packed = new int[n], old = new int[n];
         Path[] external = new Path[n];
         int m = 0;

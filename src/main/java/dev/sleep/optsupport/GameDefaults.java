@@ -28,7 +28,7 @@ public final class GameDefaults {
         if (!prod && !"true".equals(opt)) return;
         try (var in = GameDefaults.class.getResourceAsStream("/sleep/defaults.txt")) {
             if (in == null) {
-                System.out.println("[probe/opt] defaults: sleep/defaults.txt missing from the jar");
+                System.out.println("[sleep/opt] defaults: sleep/defaults.txt missing from the jar");
                 return;
             }
             int set = 0, kept = 0;
@@ -43,9 +43,9 @@ public final class GameDefaults {
                 System.setProperty(key, value);
                 set++;
             }
-            System.out.println("[probe/opt] defaults (" + (prod ? "production" : "lab.opt.defaults") + "): " + set + " flags on, " + kept + " given");
+            System.out.println("[sleep/opt] defaults (" + (prod ? "production" : "lab.opt.defaults") + "): " + set + " flags on, " + kept + " given");
         } catch (java.io.IOException e) {
-            System.out.println("[probe/opt] defaults: " + e);
+            System.out.println("[sleep/opt] defaults: " + e);
         }
     }
 }

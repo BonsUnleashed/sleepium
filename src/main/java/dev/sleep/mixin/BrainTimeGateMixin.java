@@ -10,26 +10,26 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
-/** Measurement only (-Dprobe.brainTime=true): BrainTime around a gate behaviour's (its children's time subtracted) tryStart / tickOrStop. */
+/** Measurement only (-Dsleep.brainTime=true): BrainTime around a gate behaviour's (its children's time subtracted) tryStart / tickOrStop. */
 @Mixin(GateBehavior.class)
 public abstract class BrainTimeGateMixin {
     @Inject(method = "tryStart", at = @At("HEAD"))
-    private void probe$startIn(ServerLevel level, LivingEntity owner, long time, CallbackInfoReturnable<Boolean> cir) {
+    private void sleep$startIn(ServerLevel level, LivingEntity owner, long time, CallbackInfoReturnable<Boolean> cir) {
         BrainTime.enter(this, "gate ");
     }
 
     @Inject(method = "tryStart", at = @At("RETURN"))
-    private void probe$startOut(ServerLevel level, LivingEntity owner, long time, CallbackInfoReturnable<Boolean> cir) {
+    private void sleep$startOut(ServerLevel level, LivingEntity owner, long time, CallbackInfoReturnable<Boolean> cir) {
         BrainTime.exit();
     }
 
     @Inject(method = "tickOrStop", at = @At("HEAD"))
-    private void probe$tickIn(ServerLevel level, LivingEntity owner, long time, CallbackInfo ci) {
+    private void sleep$tickIn(ServerLevel level, LivingEntity owner, long time, CallbackInfo ci) {
         BrainTime.enter(this, "gate ");
     }
 
     @Inject(method = "tickOrStop", at = @At("RETURN"))
-    private void probe$tickOut(ServerLevel level, LivingEntity owner, long time, CallbackInfo ci) {
+    private void sleep$tickOut(ServerLevel level, LivingEntity owner, long time, CallbackInfo ci) {
         BrainTime.exit();
     }
 }

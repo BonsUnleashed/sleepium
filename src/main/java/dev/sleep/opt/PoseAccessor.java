@@ -11,19 +11,19 @@ import org.spongepowered.asm.mixin.gen.Invoker;
 @Mixin(PoseStack.Pose.class)
 public interface PoseAccessor {
     @Accessor("pose")
-    Matrix4f probe$pose();
+    Matrix4f sleep$pose();
 
     @Accessor("normal")
-    Matrix3f probe$normal();
+    Matrix3f sleep$normal();
 
     @Accessor("trustedNormals")
-    boolean probe$trusted();
+    boolean sleep$trusted();
 
     @Accessor("trustedNormals")
-    void probe$setTrusted(boolean v);
+    void sleep$setTrusted(boolean v);
 
     @Invoker("<init>")
-    static PoseStack.Pose probe$copyOf(PoseStack.Pose other) {
+    static PoseStack.Pose sleep$copyOf(PoseStack.Pose other) {
         throw new AssertionError();
     }
 }

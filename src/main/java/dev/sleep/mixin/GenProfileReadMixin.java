@@ -16,7 +16,7 @@ import org.spongepowered.asm.mixin.Mixin;
 @Mixin(ChunkSerializer.class)
 public abstract class GenProfileReadMixin {
     @WrapMethod(method = "read")
-    private static ProtoChunk probe$read(ServerLevel level, PoiManager poi, RegionStorageInfo info, ChunkPos pos, CompoundTag tag,
+    private static ProtoChunk sleep$read(ServerLevel level, PoiManager poi, RegionStorageInfo info, ChunkPos pos, CompoundTag tag,
                                          Operation<ProtoChunk> original) {
         if (!GenProfile.active()) return original.call(level, poi, info, pos, tag);
         long t = System.nanoTime(), m = GenProfile.allocated();

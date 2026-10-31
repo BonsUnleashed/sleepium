@@ -15,7 +15,7 @@ public abstract class TextureIdWorkerMixin {
     @Shadow protected int id;
 
     @WrapWithCondition(method = "getId", at = @At(value = "INVOKE", target = "Lcom/mojang/blaze3d/systems/RenderSystem;assertOnRenderThreadOrInit()V"))
-    private boolean probe$assertOutsideJobs() {
+    private boolean sleep$assertOutsideJobs() {
         if (!dev.sleep.optsupport.ParallelRender.inJob()) return true;
         if (this.id == -1) throw dev.sleep.optsupport.ParallelRender.REFUSE_NOT_READY;
         return false;

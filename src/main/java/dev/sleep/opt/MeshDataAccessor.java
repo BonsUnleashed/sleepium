@@ -9,5 +9,5 @@ import org.spongepowered.asm.mixin.gen.Accessor;
 @Mixin(MeshData.class)
 public interface MeshDataAccessor {
     @Accessor("indexBuffer")
-    void probe$setIndexBuffer(ByteBufferBuilder.Result r);
+    void sleep$setIndexBuffer(ByteBufferBuilder.Result r);
 }

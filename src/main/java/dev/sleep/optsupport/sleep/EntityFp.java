@@ -29,7 +29,7 @@ public final class EntityFp {
             Class<?> sr = net.minecraft.world.level.levelgen.SingleThreadedRandomSource.class;
             single = MethodHandles.privateLookupIn(sr, MethodHandles.lookup()).findVarHandle(sr, "seed", long.class);
         } catch (ReflectiveOperationException | RuntimeException e) {
-            System.out.println("[probe/entsleep] fingerprint handles unavailable: " + e);
+            System.out.println("[sleep/entsleep] fingerprint handles unavailable: " + e);
         }
         ITEMS = items;
         DIRTY = dirty;
@@ -42,9 +42,9 @@ public final class EntityFp {
 
     /** EntSleepDataMixin: synched data's count of changes (values replaced, dirty flags cleared) and whether a value can change in place */
     public interface DataEpoch {
-        int probe$dataEpoch();
+        int sleep$dataEpoch();
 
-        boolean probe$mutableValues();
+        boolean sleep$mutableValues();
     }
 
     /** a synched data value that cannot change while it stays the same object */
@@ -78,8 +78,8 @@ public final class EntityFp {
      * count (its items are not touched: a snapshot's cost is its cache misses); everything else as fp.
      */
     static long observedFp(Object r) {
-        if (r instanceof SynchedEntityData && r instanceof DataEpoch d && !d.probe$mutableValues())
-            return mix(System.identityHashCode(r) * 31L + 13, d.probe$dataEpoch());
+        if (r instanceof SynchedEntityData && r instanceof DataEpoch d && !d.sleep$mutableValues())
+            return mix(System.identityHashCode(r) * 31L + 13, d.sleep$dataEpoch());
         return fp(r);
     }
 

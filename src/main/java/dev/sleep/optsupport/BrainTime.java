@@ -12,13 +12,13 @@ import net.minecraft.world.entity.ai.behavior.Behavior;
 import net.minecraft.world.entity.ai.behavior.BehaviorControl;
 
 /**
- * Measurement only (-Dprobe.brainTime=true, BrainTime*Mixin): direct timings inside Brain.tick - each behaviour's
+ * Measurement only (-Dsleep.brainTime=true, BrainTime*Mixin): direct timings inside Brain.tick - each behaviour's
  * tryStart / tickOrStop and each sensor's tick, as self time (a gate's children are subtracted from the gate), per
  * label: a Behavior subclass by its name, a BehaviorBuilder one-shot by the class its lambdas come from. Printed with
  * the brain total every 600 game ticks, then reset. Server thread only.
  */
 public final class BrainTime {
-    public static final boolean ON = Boolean.getBoolean("probe.brainTime");
+    public static final boolean ON = Boolean.getBoolean("sleep.brainTime");
     private static final Pattern LAMBDA = Pattern.compile("([A-Za-z0-9_]+)(?:\\$[A-Za-z0-9_]+)*\\$\\$Lambda");
     private static final IdentityHashMap<Object, String> LABELS = new IdentityHashMap<>();
     private static final Map<String, long[]> TIMES = new HashMap<>();   // label -> {self ns, calls}
@@ -75,7 +75,7 @@ public final class BrainTime {
         l.sort((a, b) -> Long.compare(b.getValue()[0], a.getValue()[0]));
         long sum = 0;
         for (var e : l) sum += e.getValue()[0];
-        StringBuilder sb = new StringBuilder(String.format(Locale.ROOT, "[probe/braintime] brain ticks %d, %.1f us each; timed parts %.1f us each (self time, top 25):",
+        StringBuilder sb = new StringBuilder(String.format(Locale.ROOT, "[sleep/braintime] brain ticks %d, %.1f us each; timed parts %.1f us each (self time, top 25):",
                 brainCalls, brainCalls == 0 ? 0 : brainNs / 1e3 / brainCalls, brainCalls == 0 ? 0 : sum / 1e3 / brainCalls));
         for (int i = 0; i < Math.min(25, l.size()); i++) {
             long[] t = l.get(i).getValue();

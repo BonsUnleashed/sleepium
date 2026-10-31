@@ -12,7 +12,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(MinecraftServer.class)
 public abstract class NetReactorTickMixin {
     @Inject(method = "tickServer", at = @At("RETURN"))
-    private void probe$flush(BooleanSupplier hasTimeLeft, CallbackInfo ci) {
+    private void sleep$flush(BooleanSupplier hasTimeLeft, CallbackInfo ci) {
         NetReactor.onServerTick();
     }
 }

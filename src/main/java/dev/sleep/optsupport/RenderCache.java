@@ -253,7 +253,7 @@ public final class RenderCache {
     /** Vertices started in the real source: a renderer that draws there past its recorder shows up as a change. */
     private static long realVertices() {
         long n = 0;
-        for (BufferBuilder b : ((dev.sleep.opt.BufferSourceAccessor) real).probe$started().values()) n += ((BufferBuilderAccessor) b).probe$vertices();
+        for (BufferBuilder b : ((dev.sleep.opt.BufferSourceAccessor) real).sleep$started().values()) n += ((BufferBuilderAccessor) b).sleep$vertices();
         return n;
     }
 
@@ -381,7 +381,7 @@ public final class RenderCache {
                 cs[2]++;
                 if (cs[5] == 0 && cs[2] >= LEARN_ANIMATED && cs[2] * 8 >= cs[1] * 7) {
                     cs[5] = 1;
-                    System.out.println("[probe/opt] render cache: " + rendererClass.getSimpleName() + " animated in " + cs[2] + " of "
+                    System.out.println("[sleep/opt] render cache: " + rendererClass.getSimpleName() + " animated in " + cs[2] + " of "
                             + cs[1] + " recordings: drawn the vanilla way from now on, no more probes");
                 }
                 d.draw(pose, buffers, pt);
@@ -475,15 +475,15 @@ public final class RenderCache {
                 continue;
             }
             VertexFormat f = t.format();
-            if (vc instanceof BufferBuilder bb && ((BufferBuilderAccessor) bb).probe$format() == f && ((BufferBuilderAccessor) bb).probe$mode() == t.mode()
-                    && ((BufferBuilderAccessor) (Object) bb).probe$elementsToFill() == 0) {
+            if (vc instanceof BufferBuilder bb && ((BufferBuilderAccessor) bb).sleep$format() == f && ((BufferBuilderAccessor) bb).sleep$mode() == t.mode()
+                    && ((BufferBuilderAccessor) (Object) bb).sleep$elementsToFill() == 0) {
                 BufferBuilderAccessor a = (BufferBuilderAccessor) bb;
                 int vs = f.getVertexSize();
-                long dst = a.probe$buffer().reserve(n * vs);
+                long dst = a.sleep$buffer().reserve(n * vs);
                 MemoryUtil.memCopy(src, dst, (long) n * vs);
                 if (!asIs) transform(dst, n, f, normalIdentity);
-                a.probe$setVertices(a.probe$vertices() + n);
-                a.probe$setVertexPointer(dst + (long) (n - 1) * vs);
+                a.sleep$setVertices(a.sleep$vertices() + n);
+                a.sleep$setVertexPointer(dst + (long) (n - 1) * vs);
             } else {
                 generic(vc, src, n, f);
             }

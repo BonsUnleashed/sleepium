@@ -40,13 +40,13 @@ public abstract class WorldgenShareRegionMixin {
     /** per step: for each distance, whether a chunk that far cannot reach FULL while this step runs */
     @Unique private static final Map<ChunkStep, boolean[]> PROBE$SAFE = new ConcurrentHashMap<>();
     /** 0 unknown, 1 memo on (for the safe distances), 2 memo off */
-    @Unique private byte probe$state;
-    @Unique private boolean[] probe$safeAt;
-    @Unique private ChunkAccess[] probe$memo;
-    @Unique private int probe$r, probe$cx, probe$cz;
+    @Unique private byte sleep$state;
+    @Unique private boolean[] sleep$safeAt;
+    @Unique private ChunkAccess[] sleep$memo;
+    @Unique private int sleep$r, sleep$cx, sleep$cz;
 
     @Unique
-    private static boolean[] probe$safe(ChunkStep step) {
+    private static boolean[] sleep$safe(ChunkStep step) {
         ChunkDependencies full = ChunkPyramid.GENERATION_PYRAMID.getStepTo(ChunkStatus.FULL).accumulatedDependencies();
         int r = step.directDependencies().size() - 1;
         boolean[] safe = new boolean[r + 1];
@@ -56,7 +56,7 @@ public abstract class WorldgenShareRegionMixin {
             safe[d] = d < full.size() && !full.get(d).isBefore(step.targetStatus());
             if (safe[d] && upTo == d - 1) upTo = d;
         }
-        System.out.println("[probe/opt] worldgen region memo for step " + step.targetStatus().getName() + " (radius " + r + "): "
+        System.out.println("[sleep/opt] worldgen region memo for step " + step.targetStatus().getName() + " (radius " + r + "): "
                 + (upTo < 0 ? "off" : "distances 0.." + upTo));
         return safe;
     }
@@ -73,22 +73,22 @@ public abstract class WorldgenShareRegionMixin {
         if (chunkstatus != null) {
             int idx = -1;
             if (chunkStatus.isOrBefore(chunkstatus)) {
-                if (probe$state == 0) {
-                    probe$safeAt = PROBE$SAFE.computeIfAbsent(this.generatingStep, WorldgenShareRegionMixin::probe$safe);
+                if (sleep$state == 0) {
+                    sleep$safeAt = PROBE$SAFE.computeIfAbsent(this.generatingStep, WorldgenShareRegionMixin::sleep$safe);
                     boolean on = false;
-                    for (boolean b : probe$safeAt) on |= b;
-                    probe$state = (byte) (on ? 1 : 2);
+                    for (boolean b : sleep$safeAt) on |= b;
+                    sleep$state = (byte) (on ? 1 : 2);
                     if (on) {
-                        probe$r = this.generatingStep.directDependencies().size() - 1;
-                        probe$cx = this.center.getPos().x;
-                        probe$cz = this.center.getPos().z;
-                        int w = 2 * probe$r + 1;
-                        probe$memo = new ChunkAccess[w * w];
+                        sleep$r = this.generatingStep.directDependencies().size() - 1;
+                        sleep$cx = this.center.getPos().x;
+                        sleep$cz = this.center.getPos().z;
+                        int w = 2 * sleep$r + 1;
+                        sleep$memo = new ChunkAccess[w * w];
                     }
                 }
-                if (probe$state == 1 && probe$safeAt[i]) {
-                    idx = (x - probe$cx + probe$r) * (2 * probe$r + 1) + (z - probe$cz + probe$r);
-                    ChunkAccess m = probe$memo[idx];
+                if (sleep$state == 1 && sleep$safeAt[i]) {
+                    idx = (x - sleep$cx + sleep$r) * (2 * sleep$r + 1) + (z - sleep$cz + sleep$r);
+                    ChunkAccess m = sleep$memo[idx];
                     if (m != null) return m;
                 }
             }
@@ -96,7 +96,7 @@ public abstract class WorldgenShareRegionMixin {
             if (chunkStatus.isOrBefore(chunkstatus)) {
                 ChunkAccess chunkaccess = generationchunkholder.getChunkIfPresentUnchecked(chunkstatus);
                 if (chunkaccess != null) {
-                    if (idx >= 0) probe$memo[idx] = chunkaccess;
+                    if (idx >= 0) sleep$memo[idx] = chunkaccess;
                     return chunkaccess;
                 }
             }

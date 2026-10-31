@@ -59,7 +59,7 @@ public final class GeoParts {
             } catch (ReflectiveOperationException | RuntimeException e) {
                 out = null;
             }
-            System.out.println("[probe/opt] GeckoLib bones from VRAM: " + c.getName() + (out == null ? " kept on the CPU path (own renderCube / createVerticesOfQuad)"
+            System.out.println("[sleep/opt] GeckoLib bones from VRAM: " + c.getName() + (out == null ? " kept on the CPU path (own renderCube / createVerticesOfQuad)"
                     : out == NO_FIELD ? " eligible" : " eligible for bones without a texture override"));
             return out;
         }
@@ -102,7 +102,7 @@ public final class GeoParts {
         int n, flags;
 
         @Override
-        public void probe$flags(int fl) {
+        public void sleep$flags(int fl) {
             flags = fl;
         }
 
@@ -184,7 +184,7 @@ public final class GeoParts {
             var size = cube.size();
             int flags = (size.y == 0 || size.z == 0 ? 1 : 0) | (size.x == 0 || size.z == 0 ? 2 : 0) | (size.x == 0 || size.y == 0 ? 4 : 0);
             if (flags != 0 && flagged == null) return false;
-            if (flagged != null) flagged.probe$flags(flags);
+            if (flagged != null) flagged.sleep$flags(flags);
             PoseStack ps = new PoseStack();
             software.bernie.geckolib.util.RenderUtil.translateToPivotPoint(ps, cube);
             software.bernie.geckolib.util.RenderUtil.rotateMatrixAroundCube(ps, cube);
@@ -201,7 +201,7 @@ public final class GeoParts {
                 }
             }
         }
-        if (flagged != null) flagged.probe$flags(0);
+        if (flagged != null) flagged.sleep$flags(0);
         return true;
     }
 }

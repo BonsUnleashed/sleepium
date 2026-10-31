@@ -18,23 +18,23 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
  */
 @Mixin({BaseContainerBlockEntity.class, RandomizableContainerBlockEntity.class, HopperBlockEntity.class, AbstractFurnaceBlockEntity.class})
 public abstract class SleepProbeContainerMixin {
-    private void probe$wake() {
+    private void sleep$wake() {
         BlockEntity be = (BlockEntity) (Object) this;
         SleepEngine.onPos(be.getLevel(), be.getBlockPos(), "container");
     }
 
     @Inject(method = "setItem", at = @At("HEAD"), require = 0)
-    private void probe$setItem(int slot, net.minecraft.world.item.ItemStack stack, CallbackInfo ci) {
-        probe$wake();
+    private void sleep$setItem(int slot, net.minecraft.world.item.ItemStack stack, CallbackInfo ci) {
+        sleep$wake();
     }
 
     @Inject(method = "removeItem", at = @At("HEAD"), require = 0)
-    private void probe$removeItem(int slot, int count, CallbackInfoReturnable<net.minecraft.world.item.ItemStack> cir) {
-        probe$wake();
+    private void sleep$removeItem(int slot, int count, CallbackInfoReturnable<net.minecraft.world.item.ItemStack> cir) {
+        sleep$wake();
     }
 
     @Inject(method = "removeItemNoUpdate", at = @At("HEAD"), require = 0)
-    private void probe$removeItemNoUpdate(int slot, CallbackInfoReturnable<net.minecraft.world.item.ItemStack> cir) {
-        probe$wake();
+    private void sleep$removeItemNoUpdate(int slot, CallbackInfoReturnable<net.minecraft.world.item.ItemStack> cir) {
+        sleep$wake();
     }
 }

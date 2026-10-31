@@ -29,50 +29,50 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 public abstract class LightLayerCacheMixin {
     @Shadow private boolean cacheEnabled;
     @Unique private static final boolean VERIFY = Boolean.getBoolean("lab.lightcache.verify");
-    @Unique private final long[] probe$keys = new long[256];
-    @Unique private final DataLayer[] probe$vals = new DataLayer[256];
-    @Unique private final boolean[] probe$used = new boolean[256];
+    @Unique private final long[] sleep$keys = new long[256];
+    @Unique private final DataLayer[] sleep$vals = new DataLayer[256];
+    @Unique private final boolean[] sleep$used = new boolean[256];
 
     @Unique
-    private static int probe$slot(long key) {
+    private static int sleep$slot(long key) {
         return (int) HashCommon.mix(key) & 255;
     }
 
     @Redirect(method = "getLayer", at = @At(value = "INVOKE", target = "Lit/unimi/dsi/fastutil/longs/Long2ObjectOpenHashMap;get(J)Ljava/lang/Object;"))
-    private Object probe$get(Long2ObjectOpenHashMap<DataLayer> map, long key) {
+    private Object sleep$get(Long2ObjectOpenHashMap<DataLayer> map, long key) {
         if (!cacheEnabled) return map.get(key);
-        int i = probe$slot(key);
-        if (probe$used[i] && probe$keys[i] == key) {
-            DataLayer v = probe$vals[i];
+        int i = sleep$slot(key);
+        if (sleep$used[i] && sleep$keys[i] == key) {
+            DataLayer v = sleep$vals[i];
             if (VERIFY && map.get(key) != v && OptCounters.MEMO_MISMATCHES.incrementAndGet() <= 5)
-                System.out.println("[probe/opt] light layer cache MISMATCH at " + key);
+                System.out.println("[sleep/opt] light layer cache MISMATCH at " + key);
             return v;
         }
         DataLayer v = map.get(key);
-        probe$keys[i] = key;
-        probe$vals[i] = v;
-        probe$used[i] = true;
+        sleep$keys[i] = key;
+        sleep$vals[i] = v;
+        sleep$used[i] = true;
         return v;
     }
 
     @Unique
-    private void probe$written(long key, DataLayer now) {
-        int i = probe$slot(key);
-        if (probe$used[i] && probe$keys[i] == key) probe$vals[i] = now;
+    private void sleep$written(long key, DataLayer now) {
+        int i = sleep$slot(key);
+        if (sleep$used[i] && sleep$keys[i] == key) sleep$vals[i] = now;
     }
 
     @Inject(method = "setLayer", at = @At("RETURN"))
-    private void probe$set(long key, DataLayer array, CallbackInfo ci) {
-        probe$written(key, array);
+    private void sleep$set(long key, DataLayer array, CallbackInfo ci) {
+        sleep$written(key, array);
     }
 
     @Inject(method = "removeLayer", at = @At("RETURN"))
-    private void probe$remove(long key, CallbackInfoReturnable<DataLayer> cir) {
-        probe$written(key, null);
+    private void sleep$remove(long key, CallbackInfoReturnable<DataLayer> cir) {
+        sleep$written(key, null);
     }
 
     @Inject(method = "copyDataLayer", at = @At("RETURN"))
-    private void probe$copy(long key, CallbackInfoReturnable<DataLayer> cir) {
-        probe$written(key, cir.getReturnValue());
+    private void sleep$copy(long key, CallbackInfoReturnable<DataLayer> cir) {
+        sleep$written(key, cir.getReturnValue());
     }
 }

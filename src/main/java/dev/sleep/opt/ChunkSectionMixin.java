@@ -17,52 +17,52 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(SectionRenderDispatcher.RenderSection.class)
 public abstract class ChunkSectionMixin implements ChunkMultiDraw.ChunkEntries {
     @Shadow @Final private Map<RenderType, VertexBuffer> buffers;
-    @org.spongepowered.asm.mixin.Unique private final Object[] probe$md = new Object[16];
-    @org.spongepowered.asm.mixin.Unique private int probe$visIdx = -1, probe$visBuild = -1, probe$dirtyBuild = -1;
+    @org.spongepowered.asm.mixin.Unique private final Object[] sleep$md = new Object[16];
+    @org.spongepowered.asm.mixin.Unique private int sleep$visIdx = -1, sleep$visBuild = -1, sleep$dirtyBuild = -1;
 
     @Override
-    public Object[] probe$md() {
-        return probe$md;
+    public Object[] sleep$md() {
+        return sleep$md;
     }
 
     @Override
-    public int probe$visIdx(int b) {
-        return probe$visBuild == b ? probe$visIdx : -1;
+    public int sleep$visIdx(int b) {
+        return sleep$visBuild == b ? sleep$visIdx : -1;
     }
 
     @Override
-    public void probe$setVis(int idx, int b) {
-        probe$visIdx = idx;
-        probe$visBuild = b;
+    public void sleep$setVis(int idx, int b) {
+        sleep$visIdx = idx;
+        sleep$visBuild = b;
     }
 
     @Override
-    public int probe$dirtyBuild() {
-        return probe$dirtyBuild;
+    public int sleep$dirtyBuild() {
+        return sleep$dirtyBuild;
     }
 
     @Override
-    public void probe$setDirtyBuild(int b) {
-        probe$dirtyBuild = b;
+    public void sleep$setDirtyBuild(int b) {
+        sleep$dirtyBuild = b;
     }
 
     @Inject(method = "setDirty", at = @At("HEAD"))
-    private void probe$dirty(boolean playerChanged, CallbackInfo ci) {
+    private void sleep$dirty(boolean playerChanged, CallbackInfo ci) {
         dev.sleep.optsupport.SectionLists.dirtied((SectionRenderDispatcher.RenderSection) (Object) this);
     }
 
     @Inject(method = "<init>", at = @At("RETURN"))
-    private void probe$tag(CallbackInfo ci) {
-        for (var e : buffers.entrySet()) ((ChunkBufferTag) e.getValue()).probe$tag((SectionRenderDispatcher.RenderSection) (Object) this, e.getKey());
+    private void sleep$tag(CallbackInfo ci) {
+        for (var e : buffers.entrySet()) ((ChunkBufferTag) e.getValue()).sleep$tag((SectionRenderDispatcher.RenderSection) (Object) this, e.getKey());
     }
 
     @Inject(method = "setCompiled", at = @At("HEAD"))
-    private void probe$compiled(SectionRenderDispatcher.CompiledSection compiled, CallbackInfo ci) {
+    private void sleep$compiled(SectionRenderDispatcher.CompiledSection compiled, CallbackInfo ci) {
         ChunkMultiDraw.compiled((SectionRenderDispatcher.RenderSection) (Object) this, compiled);
     }
 
     @Inject(method = "reset", at = @At("HEAD"))
-    private void probe$reset(CallbackInfo ci) {
+    private void sleep$reset(CallbackInfo ci) {
         dev.sleep.optsupport.SectionLists.changed();
         dev.sleep.optsupport.SectionLists.dirtied((SectionRenderDispatcher.RenderSection) (Object) this);   // reset sets dirty
         ChunkMultiDraw.release((SectionRenderDispatcher.RenderSection) (Object) this);

@@ -40,24 +40,24 @@ public abstract class WorldgenShareBiomeMixin implements BiomeConfine {
         throw new AssertionError();
     }
 
-    @Unique private boolean probe$confined;
-    @Unique private int probe$l = Integer.MIN_VALUE, probe$i1, probe$j1;
+    @Unique private boolean sleep$confined;
+    @Unique private int sleep$l = Integer.MIN_VALUE, sleep$i1, sleep$j1;
     /** per corner (bit order as vanilla's loop index): x, y, z offsets */
-    @Unique private double[] probe$fid;
+    @Unique private double[] sleep$fid;
 
     @Override
-    public void probe$confine() {
-        probe$confined = true;
+    public void sleep$confine() {
+        sleep$confined = true;
     }
 
     @Inject(method = "withDifferentSource", at = @At("RETURN"))
-    private void probe$inherit(BiomeManager.NoiseBiomeSource newSource, CallbackInfoReturnable<BiomeManager> cir) {
-        if (probe$confined) ((BiomeConfine) cir.getReturnValue()).probe$confine();
+    private void sleep$inherit(BiomeManager.NoiseBiomeSource newSource, CallbackInfoReturnable<BiomeManager> cir) {
+        if (sleep$confined) ((BiomeConfine) cir.getReturnValue()).sleep$confine();
     }
 
     @Unique
-    private void probe$fill(int l, int i1, int j1) {
-        if (probe$fid == null) probe$fid = new double[24];
+    private void sleep$fill(int l, int i1, int j1) {
+        if (sleep$fid == null) sleep$fid = new double[24];
         long seed = this.biomeZoomSeed;
         for (int l1 = 0; l1 < 8; l1++) {
             int x = (l1 & 4) == 0 ? l : l + 1;
@@ -69,15 +69,15 @@ public abstract class WorldgenShareBiomeMixin implements BiomeConfine {
             s = LinearCongruentialGenerator.next(s, (long) x);
             s = LinearCongruentialGenerator.next(s, (long) y);
             s = LinearCongruentialGenerator.next(s, (long) z);
-            probe$fid[l1 * 3] = getFiddle(s);
+            sleep$fid[l1 * 3] = getFiddle(s);
             s = LinearCongruentialGenerator.next(s, seed);
-            probe$fid[l1 * 3 + 1] = getFiddle(s);
+            sleep$fid[l1 * 3 + 1] = getFiddle(s);
             s = LinearCongruentialGenerator.next(s, seed);
-            probe$fid[l1 * 3 + 2] = getFiddle(s);
+            sleep$fid[l1 * 3 + 2] = getFiddle(s);
         }
-        probe$l = l;
-        probe$i1 = i1;
-        probe$j1 = j1;
+        sleep$l = l;
+        sleep$i1 = i1;
+        sleep$j1 = j1;
     }
 
     /**
@@ -97,8 +97,8 @@ public abstract class WorldgenShareBiomeMixin implements BiomeConfine {
         double d2 = (double) (k & 3) / 4.0;
         int k1 = 0;
         double d3 = Double.POSITIVE_INFINITY;
-        boolean memo = probe$confined;
-        if (memo && (l != probe$l || i1 != probe$i1 || j1 != probe$j1)) probe$fill(l, i1, j1);
+        boolean memo = sleep$confined;
+        if (memo && (l != sleep$l || i1 != sleep$i1 || j1 != sleep$j1)) sleep$fill(l, i1, j1);
 
         for (int l1 = 0; l1 < 8; l1++) {
             boolean flag = (l1 & 4) == 0;
@@ -109,7 +109,7 @@ public abstract class WorldgenShareBiomeMixin implements BiomeConfine {
             double d6 = flag2 ? d2 : d2 - 1.0;
             double d7;
             if (memo) {
-                double[] f = probe$fid;
+                double[] f = sleep$fid;
                 // getFiddledDistance: square(zNoise + d2) + square(yNoise + d1) + square(xNoise + d0)
                 d7 = Mth.square(d6 + f[l1 * 3 + 2]) + Mth.square(d5 + f[l1 * 3 + 1]) + Mth.square(d4 + f[l1 * 3]);
             } else {

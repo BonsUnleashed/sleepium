@@ -17,19 +17,19 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(ServerLevel.class)
 public abstract class EventSourcesMixin {
     @Inject(method = "blockEvent", at = @At("HEAD"))
-    private void probe$blockEvent(BlockPos pos, Block block, int id, int param, CallbackInfo ci) {
+    private void sleep$blockEvent(BlockPos pos, Block block, int id, int param, CallbackInfo ci) {
         EventSources.blockEvents++;
         dev.sleep.BeTickStats.writes++;
     }
 
     @Inject(method = "gameEvent(Lnet/minecraft/core/Holder;Lnet/minecraft/world/phys/Vec3;Lnet/minecraft/world/level/gameevent/GameEvent$Context;)V", at = @At("HEAD"))
-    private void probe$gameEvent(Holder<GameEvent> event, Vec3 pos, GameEvent.Context ctx, CallbackInfo ci) {
+    private void sleep$gameEvent(Holder<GameEvent> event, Vec3 pos, GameEvent.Context ctx, CallbackInfo ci) {
         EventSources.gameEvents++;
         dev.sleep.BeTickStats.writes++;
     }
 
     @Inject(method = "tickNonPassenger", at = @At("HEAD"))
-    private void probe$entityTick(Entity entity, CallbackInfo ci) {
+    private void sleep$entityTick(Entity entity, CallbackInfo ci) {
         EventSources.entityTicks++;
     }
 }

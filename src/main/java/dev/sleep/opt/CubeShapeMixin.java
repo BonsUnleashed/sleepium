@@ -16,7 +16,7 @@ import org.spongepowered.asm.mixin.injection.Redirect;
 @Mixin(BlockCollisions.class)
 public abstract class CubeShapeMixin {
     @Redirect(method = "computeNext", at = @At(value = "INVOKE", target = "Lnet/minecraft/world/phys/shapes/VoxelShape;move(DDD)Lnet/minecraft/world/phys/shapes/VoxelShape;"))
-    private VoxelShape probe$move(VoxelShape shape, double x, double y, double z) {
+    private VoxelShape sleep$move(VoxelShape shape, double x, double y, double z) {
         return shape == Shapes.block() ? new CubeAt(x, y, z) : shape.move(x, y, z);
     }
 }

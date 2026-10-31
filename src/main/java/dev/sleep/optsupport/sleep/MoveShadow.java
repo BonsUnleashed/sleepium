@@ -13,16 +13,16 @@ import java.util.TreeMap;
 import net.minecraft.world.entity.Entity;
 
 /**
- * Measurement only (-Dprobe.moveShadow=true, MoveShadowMixin): could Entity.move be skipped for a mob whose inputs did
+ * Measurement only (-Dsleep.moveShadow=true, MoveShadowMixin): could Entity.move be skipped for a mob whose inputs did
  * not change? Per call: every instance field before and after (SnapCompiler, by value). Fields that differ between one
  * call's "before" and the next are counted (what changes between moves). With a key = every field but the excluded
- * ones (-Dprobe.moveShadow.exclude=tickCount,random,...), a call whose key equals the last call's is a hit: the last
+ * ones (-Dsleep.moveShadow.exclude=tickCount,random,...), a call whose key equals the last call's is a hit: the last
  * call's "after" (non-excluded fields) predicts this one's, and the real move checks it - a wrong prediction is
  * reported with its fields. Nothing is skipped. Server thread, non-player living entities.
  */
 public final class MoveShadow {
-    public static final boolean ON = Boolean.getBoolean("probe.moveShadow");
-    private static final Set<String> EXCLUDE = Set.of(System.getProperty("probe.moveShadow.exclude", "tickCount").split(","));
+    public static final boolean ON = Boolean.getBoolean("sleep.moveShadow");
+    private static final Set<String> EXCLUDE = Set.of(System.getProperty("sleep.moveShadow.exclude", "tickCount").split(","));
 
     private static final class K {
         final Field[] f;
@@ -36,7 +36,7 @@ public final class MoveShadow {
             List<Field> fl = new ArrayList<>();
             for (Class<?> k = c; k != null && k != Object.class; k = k.getSuperclass())
                 for (Field x : k.getDeclaredFields()) {
-                    if (x.getName().equals("probe$w")) continue;   // the write barrier's watcher (WriteBarrier), not state
+                    if (x.getName().equals("sleep$w")) continue;   // the write barrier's watcher (WriteBarrier), not state
                     if (Modifier.isStatic(x.getModifiers())) continue;
                     try {
                         x.setAccessible(true);
@@ -131,7 +131,7 @@ public final class MoveShadow {
     }
 
     private static void print() {
-        StringBuilder sb = new StringBuilder("[probe/moveshadow] exclude " + EXCLUDE + "; per class: calls, key hits %, right, WRONG, move time on hits % of all move time");
+        StringBuilder sb = new StringBuilder("[sleep/moveshadow] exclude " + EXCLUDE + "; per class: calls, key hits %, right, WRONG, move time on hits % of all move time");
         for (var en : KINDS.entrySet()) {
             K k = en.getValue();
             if (k.calls == 0) continue;

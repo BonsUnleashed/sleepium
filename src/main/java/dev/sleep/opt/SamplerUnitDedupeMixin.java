@@ -16,7 +16,7 @@ import org.spongepowered.asm.mixin.injection.Redirect;
  */
 @Mixin(ShaderInstance.class)
 public abstract class SamplerUnitDedupeMixin {
-    @Unique private final Int2IntOpenHashMap probe$units = newMap();
+    @Unique private final Int2IntOpenHashMap sleep$units = newMap();
 
     @Unique
     private static Int2IntOpenHashMap newMap() {
@@ -26,13 +26,13 @@ public abstract class SamplerUnitDedupeMixin {
     }
 
     @Redirect(method = "apply", at = @At(value = "INVOKE", target = "Lcom/mojang/blaze3d/shaders/Uniform;uploadInteger(II)V"))
-    private void probe$unit(int location, int value) {
-        if (location != -1 && probe$units.get(location) == value) {
+    private void sleep$unit(int location, int value) {
+        if (location != -1 && sleep$units.get(location) == value) {
             ClientCounters.uniformsSkipped++;
             return;
         }
         Uniform.uploadInteger(location, value);
-        probe$units.put(location, value);
+        sleep$units.put(location, value);
         ClientCounters.uniformsSent++;
     }
 }

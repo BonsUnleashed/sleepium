@@ -46,9 +46,9 @@ public abstract class ChunkIoWorkerMixin {
     @Shadow @Final private Map<ChunkPos, Object> pendingWrites;
 
     /** encodes started on the pool whose result has not reached the mailbox yet */
-    @Unique private final AtomicInteger probe$inFlight = new AtomicInteger();
-    @Unique private final Map<Long, CompletableFuture<Void>> probe$encodes = new ConcurrentHashMap<>();
-    @Unique private final Map<Long, Map<String, String>> probe$verify = ChunkIo.VERIFY ? new ConcurrentHashMap<>() : null;
+    @Unique private final AtomicInteger sleep$inFlight = new AtomicInteger();
+    @Unique private final Map<Long, CompletableFuture<Void>> sleep$encodes = new ConcurrentHashMap<>();
+    @Unique private final Map<Long, Map<String, String>> sleep$verify = ChunkIo.VERIFY ? new ConcurrentHashMap<>() : null;
 
     @Shadow
     private void tellStorePending() {
@@ -62,19 +62,19 @@ public abstract class ChunkIoWorkerMixin {
 
     /** counted before vanilla queues the store: its task may run, and post the writer, before store() returns */
     @Inject(method = "store", at = @At("HEAD"))
-    private void probe$count(ChunkPos pos, CompoundTag tag, CallbackInfoReturnable<CompletableFuture<Void>> cir) {
-        if (tag != null) probe$inFlight.incrementAndGet();
+    private void sleep$count(ChunkPos pos, CompoundTag tag, CallbackInfoReturnable<CompletableFuture<Void>> cir) {
+        if (tag != null) sleep$inFlight.incrementAndGet();
     }
 
     /** after vanilla queued the store (FOREGROUND, FIFO): the encode's result is queued behind it, never before */
     @Inject(method = "store", at = @At("RETURN"))
-    private void probe$encode(ChunkPos pos, CompoundTag tag, CallbackInfoReturnable<CompletableFuture<Void>> cir) {
+    private void sleep$encode(ChunkPos pos, CompoundTag tag, CallbackInfoReturnable<CompletableFuture<Void>> cir) {
         ChunkIo.watch(this.storage.info().type() + " store " + pos + (tag == null ? " (clear)" : ""), cir.getReturnValue());
         if (tag == null) {
-            if (probe$verify != null) probe$verify.remove(pos.toLong());
+            if (sleep$verify != null) sleep$verify.remove(pos.toLong());
             return;
         }
-        if (probe$verify != null) probe$verify.put(pos.toLong(), ChunkIo.canonical(tag));
+        if (sleep$verify != null) sleep$verify.put(pos.toLong(), ChunkIo.canonical(tag));
         long key = pos.toLong();
         CompletableFuture<Void> f = CompletableFuture.runAsync(() -> {
             byte[] bytes = null;
@@ -85,10 +85,10 @@ public abstract class ChunkIoWorkerMixin {
                 LOGGER.warn("ChunkIo: encoding chunk {} on the pool failed, the IOWorker encodes it", pos, t);
             }
             byte[] done = bytes;
-            mailbox.tell(new StrictQueue.IntRunnable(0, () -> probe$encoded(pos, tag, done)));
+            mailbox.tell(new StrictQueue.IntRunnable(0, () -> sleep$encoded(pos, tag, done)));
         }, dev.sleep.api.Pools.background());
-        probe$encodes.put(key, f);
-        f.whenComplete((v, t) -> probe$encodes.remove(key, f));
+        sleep$encodes.put(key, f);
+        f.whenComplete((v, t) -> sleep$encodes.remove(key, f));
     }
 
     /**
@@ -98,12 +98,12 @@ public abstract class ChunkIoWorkerMixin {
      * tag - a newer store whose encode is on the pool.
      */
     @Unique
-    private void probe$encoded(ChunkPos pos, CompoundTag tag, byte[] bytes) {
-        probe$inFlight.decrementAndGet();
+    private void sleep$encoded(ChunkPos pos, CompoundTag tag, byte[] bytes) {
+        sleep$inFlight.decrementAndGet();
         Object o = pendingWrites.get(pos);
-        if (o instanceof ChunkIo.Entry e && e.probe$data() == tag && bytes != null) {
-            e.probe$setBytes(bytes);
-            e.probe$setData(ChunkIo.DROPPED);
+        if (o instanceof ChunkIo.Entry e && e.sleep$data() == tag && bytes != null) {
+            e.sleep$setBytes(bytes);
+            e.sleep$setData(ChunkIo.DROPPED);
         } else {
             ChunkIo.stale.incrementAndGet();
         }
@@ -121,8 +121,8 @@ public abstract class ChunkIoWorkerMixin {
             try {
                 if (o instanceof ChunkIo.Entry e) {
                     ChunkIo.pendingReads.incrementAndGet();
-                    CompoundTag data = e.probe$data();
-                    if (data == ChunkIo.DROPPED) return Either.left(Optional.of(ChunkIo.decode(e.probe$bytes())));
+                    CompoundTag data = e.sleep$data();
+                    if (data == ChunkIo.DROPPED) return Either.left(Optional.of(ChunkIo.decode(e.sleep$bytes())));
                     return Either.left(Optional.ofNullable(data == null ? null : data.copy()));
                 }
                 return Either.left(Optional.ofNullable(this.storage.read(chunkPos)));
@@ -143,8 +143,8 @@ public abstract class ChunkIoWorkerMixin {
             try {
                 Object o = this.pendingWrites.get(chunkPos);
                 if (o instanceof ChunkIo.Entry e) {
-                    CompoundTag data = e.probe$data();
-                    if (data == ChunkIo.DROPPED) ChunkIo.scan(e.probe$bytes(), visitor);
+                    CompoundTag data = e.sleep$data();
+                    if (data == ChunkIo.DROPPED) ChunkIo.scan(e.sleep$bytes(), visitor);
                     else if (data != null) data.acceptAsRoot(visitor);
                 } else {
                     this.storage.scanChunk(chunkPos, visitor);
@@ -169,14 +169,14 @@ public abstract class ChunkIoWorkerMixin {
         for (Iterator<Map.Entry<ChunkPos, Object>> it = this.pendingWrites.entrySet().iterator(); it.hasNext() && pos.size() < ChunkIo.BATCH; ) {
             Map.Entry<ChunkPos, Object> me = it.next();
             ChunkIo.Entry e = (ChunkIo.Entry) me.getValue();
-            CompoundTag data = e.probe$data();
+            CompoundTag data = e.sleep$data();
             if (data != null && data != ChunkIo.DROPPED) continue;   // its encode is on the pool
             it.remove();
             pos.add(me.getKey());
             entries.add(e);
         }
         if (pos.isEmpty()) {
-            if (probe$inFlight.get() > 0) return;   // each encode's result posts the writer again
+            if (sleep$inFlight.get() > 0) return;   // each encode's result posts the writer again
             // nothing on the pool and nothing ready (an encode failed): the oldest entry encoded here, as vanilla does
             Iterator<Map.Entry<ChunkPos, Object>> it = this.pendingWrites.entrySet().iterator();
             Map.Entry<ChunkPos, Object> me = it.next();
@@ -184,12 +184,12 @@ public abstract class ChunkIoWorkerMixin {
             pos.add(me.getKey());
             entries.add((ChunkIo.Entry) me.getValue());
         }
-        probe$write(pos, entries);
+        sleep$write(pos, entries);
         this.tellStorePending();
     }
 
     @Unique
-    private void probe$write(List<ChunkPos> pos, List<ChunkIo.Entry> entries) {
+    private void sleep$write(List<ChunkPos> pos, List<ChunkIo.Entry> entries) {
         long t0 = dev.sleep.IoScout.ON ? System.nanoTime() : 0;
         int n = pos.size();
         // region by region, in the queue's order of their first chunk
@@ -202,20 +202,20 @@ public abstract class ChunkIoWorkerMixin {
             ChunkIo.Entry[] done = new ChunkIo.Entry[group.size()];
             int k = 0;
             try {
-                RegionFile region = ((ChunkIo.Storage) (Object) this.storage).probe$region(pos.get(group.get(0)));
-                int version = ((ChunkIo.Region) region).probe$versionId();
+                RegionFile region = ((ChunkIo.Storage) (Object) this.storage).sleep$region(pos.get(group.get(0)));
+                int version = ((ChunkIo.Region) region).sleep$versionId();
                 for (int i : group) {
                     ChunkIo.Entry e = entries.get(i);
-                    CompoundTag tag = e.probe$data();
-                    byte[] bytes = tag == ChunkIo.DROPPED ? e.probe$bytes() : null;
+                    CompoundTag tag = e.sleep$data();
+                    byte[] bytes = tag == ChunkIo.DROPPED ? e.sleep$bytes() : null;
                     if (tag == null) {   // a store of null: the chunk is cleared, as vanilla does
                         try {
                             region.clear(pos.get(i));
                             ChunkIo.cleared.incrementAndGet();
-                            e.probe$result().complete(null);
+                            e.sleep$result().complete(null);
                         } catch (Exception exception) {
                             LOGGER.error("Failed to store chunk {}", pos.get(i), exception);
-                            e.probe$result().completeExceptionally(exception);
+                            e.sleep$result().completeExceptionally(exception);
                         }
                         continue;
                     }
@@ -226,22 +226,22 @@ public abstract class ChunkIoWorkerMixin {
                         }
                     } catch (Exception exception) {
                         LOGGER.error("Failed to store chunk {}", pos.get(i), exception);
-                        e.probe$result().completeExceptionally(exception);
+                        e.sleep$result().completeExceptionally(exception);
                         continue;
                     }
                     p[k] = pos.get(i);
                     data[k] = bytes;
                     done[k++] = e;
                 }
-                if (k > 0) ((ChunkIo.Region) region).probe$writeBatch(p, data, k);
+                if (k > 0) ((ChunkIo.Region) region).sleep$writeBatch(p, data, k);
                 ChunkIo.noteBatch(k);
-                for (int i = 0; i < k; i++) done[i].probe$result().complete(null);
+                for (int i = 0; i < k; i++) done[i].sleep$result().complete(null);
             } catch (Exception exception) {
                 for (int i : group) {
                     ChunkIo.Entry e = entries.get(i);
-                    if (e.probe$result().isDone()) continue;
+                    if (e.sleep$result().isDone()) continue;
                     LOGGER.error("Failed to store chunk {}", pos.get(i), exception);
-                    e.probe$result().completeExceptionally(exception);
+                    e.sleep$result().completeExceptionally(exception);
                 }
             }
         }
@@ -250,8 +250,8 @@ public abstract class ChunkIoWorkerMixin {
 
     /** every encode's result in the mailbox before vanilla queues the SHUTDOWN task (the writer runs ahead of it) */
     @Inject(method = "close", at = @At("HEAD"))
-    private void probe$drainEncodes(CallbackInfo ci) {
-        for (CompletableFuture<Void> f : probe$encodes.values()) {
+    private void sleep$drainEncodes(CallbackInfo ci) {
+        for (CompletableFuture<Void> f : sleep$encodes.values()) {
             try {
                 f.join();
             } catch (Exception ignored) {
@@ -262,11 +262,11 @@ public abstract class ChunkIoWorkerMixin {
 
     /** -Dlab.chunkio.verify: every stored position read back through vanilla's storage and compared */
     @Inject(method = "close", at = @At(value = "INVOKE", target = "Lnet/minecraft/world/level/chunk/storage/RegionFileStorage;close()V"))
-    private void probe$verifyAndReport(CallbackInfo ci) {
+    private void sleep$verifyAndReport(CallbackInfo ci) {
         String type = this.storage.info().type();
-        if (probe$verify != null) {
+        if (sleep$verify != null) {
             int ok = 0, bad = 0, missing = 0;
-            for (Map.Entry<Long, Map<String, String>> v : probe$verify.entrySet()) {
+            for (Map.Entry<Long, Map<String, String>> v : sleep$verify.entrySet()) {
                 try {
                     CompoundTag back = this.storage.read(new ChunkPos(v.getKey()));
                     Map<String, String> got = back == null ? null : ChunkIo.canonical(back);
@@ -278,8 +278,8 @@ public abstract class ChunkIoWorkerMixin {
                     LOGGER.error("ChunkIo verify: chunk {} unreadable", new ChunkPos(v.getKey()), e);
                 }
             }
-            System.out.println("[probe/opt] chunk io verify (" + type + "): " + ok + " equal, " + bad + " differ, " + missing + " missing of " + probe$verify.size());
+            System.out.println("[sleep/opt] chunk io verify (" + type + "): " + ok + " equal, " + bad + " differ, " + missing + " missing of " + sleep$verify.size());
         }
-        System.out.println("[probe/opt] " + ChunkIo.report() + " (all IOWorkers so far)");
+        System.out.println("[sleep/opt] " + ChunkIo.report() + " (all IOWorkers so far)");
     }
 }

@@ -17,13 +17,13 @@ public abstract class ShaderLightCompileMixin {
     private static final String COMPILE = "compile(Lnet/minecraft/core/SectionPos;Lnet/minecraft/client/renderer/chunk/RenderChunkRegion;Lcom/mojang/blaze3d/vertex/VertexSorting;Lnet/minecraft/client/renderer/SectionBufferBuilderPack;Ljava/util/List;)Lnet/minecraft/client/renderer/chunk/SectionCompiler$Results;";
 
     @Inject(method = COMPILE, at = @At("HEAD"))
-    private void probe$begin(SectionPos section, net.minecraft.client.renderer.chunk.RenderChunkRegion region, com.mojang.blaze3d.vertex.VertexSorting sorting,
+    private void sleep$begin(SectionPos section, net.minecraft.client.renderer.chunk.RenderChunkRegion region, com.mojang.blaze3d.vertex.VertexSorting sorting,
                              net.minecraft.client.renderer.SectionBufferBuilderPack pack, java.util.List<?> extra, CallbackInfoReturnable<?> cir) {
         LightVolumes.beginCompile(section);
     }
 
     @Inject(method = COMPILE, at = @At("RETURN"))
-    private void probe$end(CallbackInfoReturnable<?> cir) {
+    private void sleep$end(CallbackInfoReturnable<?> cir) {
         LightVolumes.endCompile();
     }
 
@@ -35,17 +35,17 @@ public abstract class ShaderLightCompileMixin {
 
     /** every layer the section uses: one not drawn from our arenas makes the section incomplete (it keeps baked light) */
     @Redirect(method = COMPILE, at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/chunk/SectionCompiler;getOrBeginLayer(Ljava/util/Map;Lnet/minecraft/client/renderer/SectionBufferBuilderPack;Lnet/minecraft/client/renderer/RenderType;)Lcom/mojang/blaze3d/vertex/BufferBuilder;"))
-    private BufferBuilder probe$layer(SectionCompiler self, java.util.Map<net.minecraft.client.renderer.RenderType, BufferBuilder> map,
+    private BufferBuilder sleep$layer(SectionCompiler self, java.util.Map<net.minecraft.client.renderer.RenderType, BufferBuilder> map,
                                       net.minecraft.client.renderer.SectionBufferBuilderPack pack, net.minecraft.client.renderer.RenderType type) {
         LightVolumes.layerUsed(type);
         return getOrBeginLayer(map, pack, type);
     }
 
     @Redirect(method = COMPILE, at = @At(value = "INVOKE", target = "Lcom/mojang/blaze3d/vertex/BufferBuilder;build()Lcom/mojang/blaze3d/vertex/MeshData;"))
-    private MeshData probe$build(BufferBuilder bb) {
+    private MeshData sleep$build(BufferBuilder bb) {
         boolean recipes = LightVolumes.beforeBuild(bb);
         MeshData md = bb.build();
-        if (recipes && md != null) ((LightVolumes.RecipeMesh) md).probe$setRecipeInfo(LightVolumes.currentInfo());
+        if (recipes && md != null) ((LightVolumes.RecipeMesh) md).sleep$setRecipeInfo(LightVolumes.currentInfo());
         return md;
     }
 }

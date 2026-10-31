@@ -32,36 +32,36 @@ public final class CellProof {
 
     /** Implemented by the Beardifier mixin: no piece or junction contributes anything inside the box. */
     public interface ZeroOver {
-        boolean probe$zeroOver(int x0, int y0, int z0, int x1, int y1, int z1);
+        boolean sleep$zeroOver(int x0, int y0, int z0, int x1, int y1, int z1);
     }
 
     /** Implemented by the aquifer mixin: computeSubstance(block, substance ≤ 0) returns exactly Blocks.AIR for every block. */
     public interface AirBox {
-        boolean probe$boxAir(int x0, int y0, int z0, int x1, int y1, int z1);
+        boolean sleep$boxAir(int x0, int y0, int z0, int x1, int y1, int z1);
     }
 
     /** Implemented by the NoiseChunk mixin. */
     public interface Host {
         @org.jetbrains.annotations.Nullable
-        CellProof probe$proof();
+        CellProof sleep$proof();
 
         /**
-         * After probe$proof: every block of a cell whose density is > 0 gets the default block — the ore filler (if
+         * After sleep$proof: every block of a cell whose density is > 0 gets the default block — the ore filler (if
          * any) provably returns null there. False if the filler list is not vanilla's.
          */
-        boolean probe$solidIsDefault(Cell c);
+        boolean sleep$solidIsDefault(Cell c);
     }
 
     /** Implemented by the aquifer mixin: leave the state computeSubstance(substance > 0) would have left. */
     public interface Solid {
-        void probe$solid();
+        void sleep$solid();
     }
 
     /** Implemented by the NoiseInterpolator accessor. */
     public interface Corners {
-        double[][] probe$slice0();
+        double[][] sleep$slice0();
 
-        double[][] probe$slice1();
+        double[][] sleep$slice1();
     }
 
     private abstract static class Node {
@@ -88,7 +88,7 @@ public final class CellProof {
 
         @Override
         void eval(Cell c) {
-            double[][] s0 = corners.probe$slice0(), s1 = corners.probe$slice1();
+            double[][] s0 = corners.sleep$slice0(), s1 = corners.sleep$slice1();
             int y = c.yIndex, z = c.zIndex;
             double a = s0[z][y], b = s0[z + 1][y], d = s1[z][y], e = s1[z + 1][y];
             double f = s0[z][y + 1], g = s0[z + 1][y + 1], h = s1[z][y + 1], k = s1[z + 1][y + 1];
@@ -293,7 +293,7 @@ public final class CellProof {
 
         @Override
         void eval(Cell c) {
-            if (b.probe$zeroOver(c.x0, c.y0, c.z0, c.x1, c.y1, c.z1)) {
+            if (b.sleep$zeroOver(c.x0, c.y0, c.z0, c.x1, c.y1, c.z1)) {
                 lo = hi = 0.0;
             } else {
                 lo = Double.NEGATIVE_INFINITY;

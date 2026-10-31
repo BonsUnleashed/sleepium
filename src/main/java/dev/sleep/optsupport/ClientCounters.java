@@ -23,7 +23,7 @@ public final class ClientCounters {
 
     /** Implemented by ClientChunkCache (AmbientChunksMixin). */
     public interface AmbientChunks {
-        boolean probe$anyAmbient();
+        boolean sleep$anyAmbient();
     }
 
     private ClientCounters() {}
@@ -43,6 +43,6 @@ public final class ClientCounters {
                 + (Boolean.getBoolean("lab.opt.ChunkTickMemoMixin") ? "; chunk tick memo: hits " + ChunkTickMemo.hits + ", misses " + ChunkTickMemo.misses + ", epoch " + ChunkTickMemo.epoch : "")
                 + (Boolean.getBoolean("lab.opt.ClientLightAsyncMixin") ? "; " + ClientLightAsync.report() + "; " + FrameReactor.report() : "")
                 + (Boolean.getBoolean("lab.opt.UniformDedupeMixin") ? "; uniform uploads sent " + uniformsSent + ", skipped (same value) " + uniformsSkipped : "")
-                + (Boolean.getBoolean("lab.opt.ClientBiomeMemoMixin") && net.minecraft.client.Minecraft.getInstance().level instanceof BiomeMemo bm ? "; " + bm.probe$biomeReport() : "");
+                + (Boolean.getBoolean("lab.opt.ClientBiomeMemoMixin") && net.minecraft.client.Minecraft.getInstance().level instanceof BiomeMemo bm ? "; " + bm.sleep$biomeReport() : "");
     }
 }

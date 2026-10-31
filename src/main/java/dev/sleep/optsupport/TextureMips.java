@@ -34,9 +34,9 @@ public final class TextureMips {
 
     /** a texture's own mark (AbstractTexture, by a mixin): drawn with its mip levels */
     public interface Flag {
-        boolean probe$mips();
+        boolean sleep$mips();
 
-        void probe$setMips(boolean on);
+        void sleep$setMips(boolean on);
     }
 
     /**

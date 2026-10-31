@@ -11,7 +11,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(LevelRenderer.class)
 public abstract class PartFrameMixin {
     @Inject(method = "renderLevel", at = @At("TAIL"))
-    private void probe$end(CallbackInfo ci) {
+    private void sleep$end(CallbackInfo ci) {
         PartBatch.endFrame();
     }
 }

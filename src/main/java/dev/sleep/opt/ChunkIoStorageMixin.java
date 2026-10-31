@@ -17,7 +17,7 @@ public abstract class ChunkIoStorageMixin implements ChunkIo.Storage {
     }
 
     @Override
-    public RegionFile probe$region(ChunkPos pos) throws IOException {
+    public RegionFile sleep$region(ChunkPos pos) throws IOException {
         return getRegionFile(pos);
     }
 }

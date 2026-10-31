@@ -4,7 +4,7 @@ import org.lwjgl.opengl.GL15C;
 import org.lwjgl.opengl.GL33C;
 
 /**
- * -Dprobe.drawStats (client): GPU time of a frame from two timestamp queries (start and end of GameRenderer.render).
+ * -Dsleep.drawStats (client): GPU time of a frame from two timestamp queries (start and end of GameRenderer.render).
  * A ring of 64 frames; every 32 frames the half written 32..63 frames ago is read (long finished), so reading results
  * costs one driver round trip per 32 frames and does not change what is measured.
  */

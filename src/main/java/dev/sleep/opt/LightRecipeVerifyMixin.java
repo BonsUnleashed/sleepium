@@ -19,7 +19,7 @@ public abstract class LightRecipeVerifyMixin {
     @Shadow @Final int[] lightmap;
 
     @Inject(method = "calculate", at = @At("RETURN"))
-    private void probe$verify(BlockAndTintGetter level, BlockState state, BlockPos pos, Direction dir, float[] shape, BitSet flags, boolean shade, CallbackInfo ci) {
+    private void sleep$verify(BlockAndTintGetter level, BlockState state, BlockPos pos, Direction dir, float[] shape, BitSet flags, boolean shade, CallbackInfo ci) {
         LightRecipe.verify(level, pos, dir, flags, lightmap);
     }
 }

@@ -18,12 +18,12 @@ public abstract class ClientChunkCacheBiomeMixin {
     @Shadow @Final ClientLevel level;
 
     @Inject(method = {"drop", "replaceBiomes", "updateViewCenter", "updateViewRadius"}, at = @At("TAIL"))
-    private void probe$changed(CallbackInfo ci) {
-        ((BiomeMemo) this.level).probe$biomesChanged();
+    private void sleep$changed(CallbackInfo ci) {
+        ((BiomeMemo) this.level).sleep$biomesChanged();
     }
 
     @Inject(method = "replaceWithPacketData", at = @At("RETURN"))
-    private void probe$loaded(CallbackInfoReturnable<LevelChunk> cir) {
-        ((BiomeMemo) this.level).probe$biomesChanged();
+    private void sleep$loaded(CallbackInfoReturnable<LevelChunk> cir) {
+        ((BiomeMemo) this.level).sleep$biomesChanged();
     }
 }

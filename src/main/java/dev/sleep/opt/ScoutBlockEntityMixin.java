@@ -15,13 +15,13 @@ public abstract class ScoutBlockEntityMixin {
     @Shadow @Final private BlockEntity blockEntity;
 
     @Inject(method = "tick", at = @At("HEAD"))
-    private void probe$start(CallbackInfo ci) {
+    private void sleep$start(CallbackInfo ci) {
         var p = blockEntity.getBlockPos();
         ParallelTickScout.begin(ParallelTickScout.BLOCK_ENTITY, p.getX(), p.getY(), p.getZ());
     }
 
     @Inject(method = "tick", at = @At("RETURN"))
-    private void probe$end(CallbackInfo ci) {
+    private void sleep$end(CallbackInfo ci) {
         ParallelTickScout.end();
     }
 }

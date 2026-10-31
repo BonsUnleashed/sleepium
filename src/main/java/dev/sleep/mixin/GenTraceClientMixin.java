@@ -14,12 +14,12 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(ClientPacketListener.class)
 public abstract class GenTraceClientMixin {
     @Inject(method = "handleLevelChunkWithLight", at = @At("TAIL"))
-    private void probe$chunk(ClientboundLevelChunkWithLightPacket packet, CallbackInfo ci) {
+    private void sleep$chunk(ClientboundLevelChunkWithLightPacket packet, CallbackInfo ci) {
         if (Minecraft.getInstance().isSameThread()) GenTrace.clientChunks.increment();
     }
 
     @Inject(method = "handleLightUpdatePacket", at = @At("TAIL"))
-    private void probe$light(ClientboundLightUpdatePacket packet, CallbackInfo ci) {
+    private void sleep$light(ClientboundLightUpdatePacket packet, CallbackInfo ci) {
         if (Minecraft.getInstance().isSameThread()) GenTrace.clientLights.increment();
     }
 }

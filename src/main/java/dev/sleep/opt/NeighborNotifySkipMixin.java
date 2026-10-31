@@ -20,22 +20,22 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
  */
 @Mixin(ServerLevel.class)
 public abstract class NeighborNotifySkipMixin {
-    private static boolean probe$noListeners() {
+    private static boolean sleep$noListeners() {
         return NeoForge.EVENT_BUS instanceof CompositeEventBus bus && !bus.hasListeners(BlockEvent.NeighborNotifyEvent.class);
     }
 
     @Inject(method = "updateNeighborsAt", at = @At("HEAD"), cancellable = true)
-    private void probe$skip(BlockPos pos, Block block, CallbackInfo ci) {
-        if (probe$noListeners()) {
-            ((LevelNeighborUpdaterAccessor) this).probe$neighborUpdater().updateNeighborsAtExceptFromFacing(pos, block, null);
+    private void sleep$skip(BlockPos pos, Block block, CallbackInfo ci) {
+        if (sleep$noListeners()) {
+            ((LevelNeighborUpdaterAccessor) this).sleep$neighborUpdater().updateNeighborsAtExceptFromFacing(pos, block, null);
             ci.cancel();
         }
     }
 
     @Inject(method = "updateNeighborsAtExceptFromFacing", at = @At("HEAD"), cancellable = true)
-    private void probe$skipExcept(BlockPos pos, Block block, Direction skipSide, CallbackInfo ci) {
-        if (probe$noListeners()) {
-            ((LevelNeighborUpdaterAccessor) this).probe$neighborUpdater().updateNeighborsAtExceptFromFacing(pos, block, skipSide);
+    private void sleep$skipExcept(BlockPos pos, Block block, Direction skipSide, CallbackInfo ci) {
+        if (sleep$noListeners()) {
+            ((LevelNeighborUpdaterAccessor) this).sleep$neighborUpdater().updateNeighborsAtExceptFromFacing(pos, block, skipSide);
             ci.cancel();
         }
     }

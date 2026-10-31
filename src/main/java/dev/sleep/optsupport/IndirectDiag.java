@@ -12,13 +12,13 @@ import org.lwjgl.opengl.GL40C;
 import org.lwjgl.opengl.GL43C;
 
 /**
- * Measurement only (-Dprobe.glTrace=true): an indirect multi-draw that raised a GL error is tried again with one thing
+ * Measurement only (-Dsleep.glTrace=true): an indirect multi-draw that raised a GL error is tried again with one thing
  * changed at a time (each vertex array off, the storage buffers unbound, one command, the single-draw form), and the
  * commands, the element buffer and each array's buffer are reported, so a driver that only says "Generic error"
  * (Intel) still tells which input it refuses. The first 2 failing draws per call site; state is restored after.
  */
 public final class IndirectDiag {
-    public static final boolean ON = Boolean.getBoolean("probe.glTrace");
+    public static final boolean ON = Boolean.getBoolean("sleep.glTrace");
     private static final Map<String, int[]> SEEN = new HashMap<>();
 
     private IndirectDiag() {}
@@ -29,7 +29,7 @@ public final class IndirectDiag {
         if (e == 0) return;
         int[] seen = SEEN.computeIfAbsent(site, k -> new int[1]);
         if (++seen[0] > 2) return;
-        StringBuilder sb = new StringBuilder("[probe/indirect] ").append(site).append(": error 0x").append(Integer.toHexString(e))
+        StringBuilder sb = new StringBuilder("[sleep/indirect] ").append(site).append(": error 0x").append(Integer.toHexString(e))
                 .append(" type 0x").append(Integer.toHexString(type)).append(" offset ").append(offset).append(" n ").append(n).append(" stride ").append(stride);
         int ind = GL11C.glGetInteger(GL40C.GL_DRAW_INDIRECT_BUFFER_BINDING);
         int indSize = ind == 0 ? 0 : GL15C.glGetBufferParameteri(GL40C.GL_DRAW_INDIRECT_BUFFER, GL15C.GL_BUFFER_SIZE);

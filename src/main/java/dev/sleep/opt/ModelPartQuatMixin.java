@@ -15,10 +15,10 @@ import org.spongepowered.asm.mixin.injection.Redirect;
  */
 @Mixin(ModelPart.class)
 public abstract class ModelPartQuatMixin {
-    @Unique private final Quaternionf probe$q = new Quaternionf();
+    @Unique private final Quaternionf sleep$q = new Quaternionf();
 
     @Redirect(method = "translateAndRotate", at = @At(value = "NEW", target = "()Lorg/joml/Quaternionf;"))
-    private Quaternionf probe$quat() {
-        return probe$q;
+    private Quaternionf sleep$quat() {
+        return sleep$q;
     }
 }

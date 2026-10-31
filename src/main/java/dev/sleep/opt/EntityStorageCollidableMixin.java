@@ -22,7 +22,7 @@ public abstract class EntityStorageCollidableMixin implements CollidableCount.St
     @Shadow @Final private LongSortedSet sectionIds;
 
     @Override
-    public boolean probe$anyCollidable(AABB bb) {
+    public boolean sleep$anyCollidable(AABB bb) {
         int x0 = SectionPos.posToSectionCoord(bb.minX - 2.0);
         int y0 = SectionPos.posToSectionCoord(bb.minY - 4.0);
         int z0 = SectionPos.posToSectionCoord(bb.minZ - 2.0);
@@ -35,7 +35,7 @@ public abstract class EntityStorageCollidableMixin implements CollidableCount.St
             for (int x = x0; x <= x1; x++)
                 for (int z = z0; z <= z1; z++)
                     for (int y = y0; y <= y1; y++)
-                        if (probe$counts(sections.get(SectionPos.asLong(x, y, z)))) return true;
+                        if (sleep$counts(sections.get(SectionPos.asLong(x, y, z)))) return true;
             return false;
         }
         for (int x = x0; x <= x1; x++) {   // vanilla walk: huge box over a sparse map
@@ -43,13 +43,13 @@ public abstract class EntityStorageCollidableMixin implements CollidableCount.St
             while (it.hasNext()) {
                 long k = it.nextLong();
                 int y = SectionPos.y(k), z = SectionPos.z(k);
-                if (y >= y0 && y <= y1 && z >= z0 && z <= z1 && probe$counts(sections.get(k))) return true;
+                if (y >= y0 && y <= y1 && z >= z0 && z <= z1 && sleep$counts(sections.get(k))) return true;
             }
         }
         return false;
     }
 
-    private static boolean probe$counts(EntitySection<?> s) {
-        return s != null && ((CollidableCount) s).probe$collidable() > 0 && !s.isEmpty() && s.getStatus().isAccessible();
+    private static boolean sleep$counts(EntitySection<?> s) {
+        return s != null && ((CollidableCount) s).sleep$collidable() > 0 && !s.isEmpty() && s.getStatus().isAccessible();
     }
 }

@@ -48,8 +48,8 @@ public final class GeoMixinPlugin implements IMixinConfigPlugin {
     public boolean shouldApplyMixin(String targetClassName, String mixinClassName) {
         boolean on = (mixinClassName.endsWith(".GeoMarkersMixin") || mixinClassName.endsWith(".GeoBlendMixin") ? true : mixinClassName.endsWith(".GeoCubesMixin") ? PARTS : mixinClassName.contains(".GeoAnim") ? ANIM
                 : mixinClassName.endsWith(".MolangJitMixin") ? JIT : mixinClassName.endsWith(".KeyframeInternMixin") ? INTERN : mixinClassName.endsWith(".AnimStreamMixin") ? STREAM : ON) && geckoLib();
-        if (on && mixinClassName.endsWith(".GeoModelWorkerMixin")) System.setProperty("probe.adapter.geckolib", "true");   // ParallelRender may take GeckoLib renderers
-        if (on) System.out.println("[probe/opt] applying " + mixinClassName.substring(mixinClassName.lastIndexOf('.') + 1) + " -> " + targetClassName);
+        if (on && mixinClassName.endsWith(".GeoModelWorkerMixin")) System.setProperty("sleep.adapter.geckolib", "true");   // ParallelRender may take GeckoLib renderers
+        if (on) System.out.println("[sleep/opt] applying " + mixinClassName.substring(mixinClassName.lastIndexOf('.') + 1) + " -> " + targetClassName);
         return on;
     }
 

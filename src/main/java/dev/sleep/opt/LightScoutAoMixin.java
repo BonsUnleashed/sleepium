@@ -15,7 +15,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(targets = "net.minecraft.client.renderer.block.ModelBlockRenderer$AmbientOcclusionFace")
 public abstract class LightScoutAoMixin {
     @Inject(method = "calculate", at = @At("HEAD"))
-    private void probe$face(BlockAndTintGetter level, BlockState state, BlockPos pos, Direction dir, float[] shape, BitSet flags, boolean shade, CallbackInfo ci) {
+    private void sleep$face(BlockAndTintGetter level, BlockState state, BlockPos pos, Direction dir, float[] shape, BitSet flags, boolean shade, CallbackInfo ci) {
         LightScout.aoFace(flags.get(1));
     }
 }

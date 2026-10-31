@@ -7,16 +7,16 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-/** Measurement only (-Dprobe.knock=...): goal selectors switched off (Knock). */
+/** Measurement only (-Dsleep.knock=...): goal selectors switched off (Knock). */
 @Mixin(GoalSelector.class)
 public abstract class KnockGoalsMixin {
     @Inject(method = "tick", at = @At("HEAD"), cancellable = true)
-    private void probe$tick(CallbackInfo ci) {
+    private void sleep$tick(CallbackInfo ci) {
         if (Knock.GOALS) ci.cancel();
     }
 
     @Inject(method = "tickRunningGoals", at = @At("HEAD"), cancellable = true)
-    private void probe$running(boolean all, CallbackInfo ci) {
+    private void sleep$running(boolean all, CallbackInfo ci) {
         if (Knock.GOALS) ci.cancel();
     }
 }

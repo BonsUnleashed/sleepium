@@ -13,21 +13,21 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
- * Measurement only (-Dprobe.glTrace=true): which Java call made a GL error. After vanilla's debug callback is set up,
+ * Measurement only (-Dsleep.glTrace=true): which Java call made a GL error. After vanilla's debug callback is set up,
  * the debug output is made synchronous and our own callback takes its place: an error message is reported with the
  * Java stack of the GL call that raised it (the callback runs inside that call), the first 3 times per distinct
  * stack, every other error counted. Drivers that name no function in the message (Intel: "in (null)") are why.
  */
 @Mixin(GlDebug.class)
 public abstract class GlTraceMixin {
-    @Unique private static GLDebugMessageCallback probe$callback;
+    @Unique private static GLDebugMessageCallback sleep$callback;
     @Unique private static final Map<String, int[]> PROBE$SEEN = new HashMap<>();
 
     @Inject(method = "enableDebugCallback", at = @At("TAIL"))
-    private static void probe$trace(int verbosity, boolean synchronous, CallbackInfo ci) {
+    private static void sleep$trace(int verbosity, boolean synchronous, CallbackInfo ci) {
         GL11.glEnable(KHRDebug.GL_DEBUG_OUTPUT);
         GL11.glEnable(KHRDebug.GL_DEBUG_OUTPUT_SYNCHRONOUS);
-        probe$callback = GLDebugMessageCallback.create((source, type, id, severity, length, message, user) -> {
+        sleep$callback = GLDebugMessageCallback.create((source, type, id, severity, length, message, user) -> {
             if (type != KHRDebug.GL_DEBUG_TYPE_ERROR) return;
             StringBuilder sb = new StringBuilder();
             int n = 0;
@@ -44,14 +44,14 @@ public abstract class GlTraceMixin {
                 seen[0]++;
             }
             if (seen[0] <= 3 || Integer.bitCount(seen[0]) == 1)
-                System.out.println("[probe/gltrace] #" + seen[0] + " on " + Thread.currentThread().getName() + ": id " + id + " "
-                        + GLDebugMessageCallback.getMessage(length, message) + key + (seen[0] == 1 ? probe$state() : ""));
+                System.out.println("[sleep/gltrace] #" + seen[0] + " on " + Thread.currentThread().getName() + ": id " + id + " "
+                        + GLDebugMessageCallback.getMessage(length, message) + key + (seen[0] == 1 ? sleep$state() : ""));
         });
-        KHRDebug.glDebugMessageCallback(probe$callback, 0L);
-        System.out.println("[probe/gltrace] synchronous GL debug output with Java stacks");
+        KHRDebug.glDebugMessageCallback(sleep$callback, 0L);
+        System.out.println("[sleep/gltrace] synchronous GL debug output with Java stacks");
     }
 
-    @Unique private static boolean probe$inState;
+    @Unique private static boolean sleep$inState;
 
     /**
      * The draw state at the first error of a stack: the program's validation log (the driver's reason a draw is
@@ -59,9 +59,9 @@ public abstract class GlTraceMixin {
      * measurement, and not re-entered when they raise errors themselves.
      */
     @Unique
-    private static String probe$state() {
-        if (probe$inState || !com.mojang.blaze3d.systems.RenderSystem.isOnRenderThread()) return "";   // a worker's context: no LWJGL capabilities there
-        probe$inState = true;
+    private static String sleep$state() {
+        if (sleep$inState || !com.mojang.blaze3d.systems.RenderSystem.isOnRenderThread()) return "";   // a worker's context: no LWJGL capabilities there
+        sleep$inState = true;
         try {
             int prog = GL11.glGetInteger(org.lwjgl.opengl.GL20C.GL_CURRENT_PROGRAM);
             String log = "";
@@ -89,7 +89,7 @@ public abstract class GlTraceMixin {
         } catch (Throwable t) {
             return System.lineSeparator() + "   state: " + t;
         } finally {
-            probe$inState = false;
+            sleep$inState = false;
         }
     }
 }

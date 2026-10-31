@@ -77,7 +77,7 @@ public final class LightVolumes {
     }
 
     private static boolean blockBuilder(VertexConsumer vc) {
-        return vc instanceof BufferBuilder bb && ((BufferBuilderAccessor) bb).probe$format() == DefaultVertexFormat.BLOCK;
+        return vc instanceof BufferBuilder bb && ((BufferBuilderAccessor) bb).sleep$format() == DefaultVertexFormat.BLOCK;
     }
 
     /** After ModelBlockRenderer.putQuadData: the quad's four vertices are the builder's last four. */
@@ -92,9 +92,9 @@ public final class LightVolumes {
         if (!c.on || !blockBuilder(consumer)) return;
         BufferBuilder bb = (BufferBuilder) consumer;
         BufferBuilderAccessor a = (BufferBuilderAccessor) bb;
-        int n = a.probe$vertices();
+        int n = a.sleep$vertices();
         if (n < 4) return;
-        long last = a.probe$vertexPointer();
+        long last = a.sleep$vertexPointer();
         boolean have;
         if (ao) {
             have = LightRecipe.integerPath(quad.getDirection(), shapeFlags);
@@ -158,9 +158,9 @@ public final class LightVolumes {
         Compile c = STATE.get();
         if (!c.on || !blockBuilder(consumer)) return;
         BufferBuilderAccessor a = (BufferBuilderAccessor) consumer;
-        int n = a.probe$vertices();
+        int n = a.sleep$vertices();
         if (n < 1) return;
-        long v = a.probe$vertexPointer();
+        long v = a.sleep$vertexPointer();
         int value = SENTINEL;
         if (c.fluidRec != SENTINEL && LightRecipe.emulate(level, fluidPos, c.fluidRec) == MemoryUtil.memGetInt(v + UV2)) value = c.fluidRec;
         else rejected.incrementAndGet();
@@ -229,9 +229,9 @@ public final class LightVolumes {
         Compile c = STATE.get();
         if (!c.on || !blockBuilder(bb)) return false;
         BufferBuilderAccessor a = (BufferBuilderAccessor) bb;
-        int n = a.probe$vertices();
+        int n = a.sleep$vertices();
         if (n == 0) return false;
-        long first = a.probe$vertexPointer() - (long) (n - 1) * STRIDE;
+        long first = a.sleep$vertexPointer() - (long) (n - 1) * STRIDE;
         BitSet w = c.written.get(bb);
         for (int i = 0; i < n; i++) {
             if (w != null && w.get(i)) continue;
@@ -256,13 +256,13 @@ public final class LightVolumes {
 
     /** Implemented on MeshData: built with recipes (its compile's info), or not (null). */
     public interface RecipeMesh {
-        CompileInfo probe$recipeInfo();
+        CompileInfo sleep$recipeInfo();
 
-        void probe$setRecipeInfo(CompileInfo info);
+        void sleep$setRecipeInfo(CompileInfo info);
     }
 
     public static boolean hasRecipes(MeshData mesh) {
-        return mesh instanceof RecipeMesh r && r.probe$recipeInfo() != null;
+        return mesh instanceof RecipeMesh r && r.sleep$recipeInfo() != null;
     }
 
     // ------------------------------------------------------------------ step 3: light volumes (render thread)
@@ -340,7 +340,7 @@ public final class LightVolumes {
     /** ChunkUploadMixin, after ChunkMultiDraw.store: a layer mesh of the section reached the GPU (ours: in an arena). */
     public static void uploaded(net.minecraft.client.renderer.chunk.SectionRenderDispatcher.RenderSection section, net.minecraft.client.renderer.RenderType layer,
                                 MeshData mesh, boolean ours) {
-        CompileInfo info = mesh instanceof RecipeMesh r ? r.probe$recipeInfo() : null;
+        CompileInfo info = mesh instanceof RecipeMesh r ? r.sleep$recipeInfo() : null;
         long k = key(section);
         if (!FIRST_SEEN.containsKey(k)) FIRST_SEEN.put(k, System.nanoTime());
         Sec sec = SECS.get(k);
@@ -371,7 +371,7 @@ public final class LightVolumes {
 
     /** the section's arena entries with recipes point at its volume */
     private static void assign(net.minecraft.client.renderer.chunk.SectionRenderDispatcher.RenderSection section, int vol) {
-        Object[] md = ((ChunkMultiDraw.ChunkEntries) section).probe$md();
+        Object[] md = ((ChunkMultiDraw.ChunkEntries) section).sleep$md();
         for (Object o : md) if (o instanceof ChunkMultiDraw.Entry e) e.vol = e.recipes ? vol : -1;
         SectionLists.changed();
     }

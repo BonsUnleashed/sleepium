@@ -16,7 +16,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 @Mixin(ChunkMap.class)
 public abstract class GenTraceStepMixin {
     @Inject(method = "applyStep", at = @At("RETURN"))
-    private void probe$step(GenerationChunkHolder chunk, ChunkStep step, StaticCache2D<GenerationChunkHolder> cache,
+    private void sleep$step(GenerationChunkHolder chunk, ChunkStep step, StaticCache2D<GenerationChunkHolder> cache,
                             CallbackInfoReturnable<CompletableFuture<ChunkAccess>> cir) {
         CompletableFuture<ChunkAccess> f = cir.getReturnValue();
         if (f == null) return;

@@ -61,7 +61,7 @@ public final class ChunkMultiDraw {
         if (c == null) {
             GLCapabilities caps = GL.getCapabilities();
             capable = c = caps.OpenGL46 || caps.GL_ARB_shader_draw_parameters;
-            System.out.println("[probe/opt] chunk multidraw: " + (c ? "available" : "not available (needs GL 4.6 or ARB_shader_draw_parameters)"));
+            System.out.println("[sleep/opt] chunk multidraw: " + (c ? "available" : "not available (needs GL 4.6 or ARB_shader_draw_parameters)"));
         }
         return c;
     }
@@ -371,7 +371,7 @@ public final class ChunkMultiDraw {
         e.vertices = verts;
         e.indexCount = verts / 4 * 6;
         e.arena = a;
-        ((ChunkEntries) section).probe$md()[slot(a)] = e;
+        ((ChunkEntries) section).sleep$md()[slot(a)] = e;
         SectionLists.changed();
     }
 
@@ -485,7 +485,7 @@ public final class ChunkMultiDraw {
     private static void release(SectionRenderDispatcher.RenderSection section, RenderType layer) {
         int li = LAYERS.indexOf(layer);
         if (li < 0) return;
-        Object[] md = ((ChunkEntries) section).probe$md();
+        Object[] md = ((ChunkEntries) section).sleep$md();
         for (int k = 2 * li; k < 2 * li + 2; k++) {
             Entry e = (Entry) md[k];
             if (e != null) {
@@ -503,17 +503,17 @@ public final class ChunkMultiDraw {
 
     /** RenderSection (ChunkSectionMixin): its arena entries by slot, so drawing needs no lookup. */
     public interface ChunkEntries {
-        Object[] probe$md();
+        Object[] sleep$md();
 
         /** SectionLists: the section's index in the visible list of build b (-1: not visible in it). */
-        int probe$visIdx(int b);
+        int sleep$visIdx(int b);
 
-        void probe$setVis(int idx, int b);
+        void sleep$setVis(int idx, int b);
 
         /** SectionLists: the build whose dirty list holds the section (no duplicates). */
-        int probe$dirtyBuild();
+        int sleep$dirtyBuild();
 
-        void probe$setDirtyBuild(int b);
+        void sleep$setDirtyBuild(int b);
     }
 
     // ------------------------------------------------------------------ drawing
@@ -562,7 +562,7 @@ public final class ChunkMultiDraw {
         }
         for (SectionRenderDispatcher.RenderSection s : visible) {
             // the section's own entry slots: no emptiness test (an empty layer has no entry), no map lookups
-            Object[] md = ((ChunkEntries) s).probe$md();
+            Object[] md = ((ChunkEntries) s).sleep$md();
             Entry e = (Entry) md[fs], pe = (Entry) md[fs + 1];
             if (e == null && pe == null && (replaces || s.getCompiled().isEmpty(layer))) {
                 if (replaces) sectionsSkipped++;
@@ -728,7 +728,7 @@ public final class ChunkMultiDraw {
         if (i == null) {
             var caps = GL.getCapabilities();
             indirect = i = (caps.OpenGL43 || caps.GL_ARB_multi_draw_indirect) && !Boolean.getBoolean("lab.chunkmd.noIndirect");
-            System.out.println("[probe/opt] chunk multidraw: indirect " + i);
+            System.out.println("[sleep/opt] chunk multidraw: indirect " + i);
         }
         return i;
     }
@@ -820,7 +820,7 @@ public final class ChunkMultiDraw {
         if (s == null) {
             var caps = GL.getCapabilities();
             ssbo = s = (caps.OpenGL43 || caps.GL_ARB_shader_storage_buffer_object) && !Boolean.getBoolean("lab.chunkmd.noSsbo");
-            System.out.println("[probe/opt] chunk multidraw: offsets in a storage buffer " + s);
+            System.out.println("[sleep/opt] chunk multidraw: offsets in a storage buffer " + s);
         }
         return s;
     }

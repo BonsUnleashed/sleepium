@@ -7,19 +7,22 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Where a test's pictures go (10-20, the user: run/probe had grown to 50 000 files, 22 GB, all in one folder - the
- * recorder's frames and the tests' shots of every run since September): probe/KIND/LABEL/, one folder a run's label.
+ * Where the engine's measurements go: the game directory's ROOT folder ({@code -Dsleep.outDir}, "sleep" by default),
+ * and a test's pictures in ROOT/KIND/LABEL/, one folder a run's label (50 000 shots in one folder had grown to 22 GB).
  * The first write of a label in a session empties its folder - a label run again replaces its pictures, it does not
- * add to them. The names inside are the old ones (frame-LABEL-i.png, rec-NAME-n-ms.png): tools/probe_out.py finds both.
+ * add to them.
  */
-public final class ProbeOut {
+public final class SleepOut {
+    /** the folder under the game directory the engine writes its reports, hashes and pictures to */
+    public static final String ROOT = System.getProperty("sleep.outDir", "sleep");
+
     private static final Set<String> FRESH = ConcurrentHashMap.newKeySet();
 
-    private ProbeOut() {}
+    private SleepOut() {}
 
-    /** game/probe/kind/label, made (and emptied the first time this session) */
+    /** game/ROOT/kind/label, made (and emptied the first time this session) */
     public static Path dir(Path game, String kind, String label) throws IOException {
-        Path d = game.resolve("probe").resolve(kind).resolve(safe(label));
+        Path d = game.resolve(ROOT).resolve(kind).resolve(safe(label));
         if (FRESH.add(kind + "/" + label) && Files.isDirectory(d)) {
             try (var s = Files.list(d)) {
                 for (Path f : (Iterable<Path>) s::iterator) if (Files.isRegularFile(f)) Files.deleteIfExists(f);

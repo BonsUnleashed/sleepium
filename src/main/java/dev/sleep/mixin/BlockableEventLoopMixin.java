@@ -19,13 +19,13 @@ public abstract class BlockableEventLoopMixin {
     public abstract boolean isSameThread();
 
     @Unique
-    private TaskStats.Loop probe$stats;
+    private TaskStats.Loop sleep$stats;
 
     @Inject(method = "tell", at = @At("HEAD"))
-    private void probe$onTell(Runnable task, CallbackInfo ci) {
-        TaskStats.Loop s = probe$stats;
+    private void sleep$onTell(Runnable task, CallbackInfo ci) {
+        TaskStats.Loop s = sleep$stats;
         if (s == null) {
-            s = probe$stats = TaskStats.loop(name());
+            s = sleep$stats = TaskStats.loop(name());
         }
         (isSameThread() ? s.tellsFromOwner : s.tellsFromOther).increment();
     }

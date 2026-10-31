@@ -13,7 +13,7 @@ import org.spongepowered.asm.mixin.Mixin;
 @Mixin(ChunkStatusTasks.class)
 public abstract class GenProfileFullMixin {
     @WrapMethod(method = "lambda$full$2")
-    private static ChunkAccess probe$full(ChunkAccess chunk, WorldGenContext ctx, GenerationChunkHolder holder, Operation<ChunkAccess> original) {
+    private static ChunkAccess sleep$full(ChunkAccess chunk, WorldGenContext ctx, GenerationChunkHolder holder, Operation<ChunkAccess> original) {
         if (!GenProfile.active()) return original.call(chunk, ctx, holder);
         long t = System.nanoTime(), m = GenProfile.allocated();
         try {

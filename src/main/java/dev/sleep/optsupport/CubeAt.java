@@ -21,7 +21,7 @@ import net.minecraft.world.phys.shapes.VoxelShape;
  * {@code -Dlab.opt.cubeCheck=true} compares every collide with a real moved shape, bit for bit.
  */
 public final class CubeAt extends VoxelShape {
-    private static final DiscreteVoxelShape FULL = ((ShapeAccess) Shapes.block()).probe$shape();
+    private static final DiscreteVoxelShape FULL = ((ShapeAccess) Shapes.block()).sleep$shape();
     private static final boolean CHECK = Boolean.getBoolean("lab.opt.cubeCheck");
 
     private final double ox, oy, oz;
@@ -29,7 +29,7 @@ public final class CubeAt extends VoxelShape {
 
     /** Accessor of VoxelShape.shape (VoxelShapeAccessor mixin). */
     public interface ShapeAccess {
-        DiscreteVoxelShape probe$shape();
+        DiscreteVoxelShape sleep$shape();
     }
 
     public CubeAt(double x, double y, double z) {
@@ -82,7 +82,7 @@ public final class CubeAt extends VoxelShape {
             double v = Shapes.block().move(ox, oy, oz).collide(movementAxis.inverse().cycle(Direction.Axis.X), collisionBox, desiredOffset);
             OptCounters.CUBE_CHECKED.incrementAndGet();
             if (Double.doubleToRawLongBits(v) != Double.doubleToRawLongBits(r) && OptCounters.CUBE_MISMATCHES.incrementAndGet() <= 5)
-                System.out.println("[probe/opt] cube collide MISMATCH at " + ox + "," + oy + "," + oz + ": " + r + " vs vanilla " + v);
+                System.out.println("[sleep/opt] cube collide MISMATCH at " + ox + "," + oy + "," + oz + ": " + r + " vs vanilla " + v);
         }
         OptCounters.cubeCollides++;
         return r;

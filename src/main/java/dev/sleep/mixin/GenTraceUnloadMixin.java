@@ -18,7 +18,7 @@ public abstract class GenTraceUnloadMixin {
 
     @WrapOperation(method = "lambda$scheduleUnload$12", at = @At(value = "INVOKE",
             target = "Lnet/minecraft/server/level/ChunkMap;save(Lnet/minecraft/world/level/chunk/ChunkAccess;)Z"))
-    private boolean probe$save(ChunkMap self, ChunkAccess chunk, Operation<Boolean> original) {
+    private boolean sleep$save(ChunkMap self, ChunkAccess chunk, Operation<Boolean> original) {
         level.getProfiler().push("unload_save");
         try {
             return original.call(self, chunk);
@@ -29,7 +29,7 @@ public abstract class GenTraceUnloadMixin {
 
     @WrapOperation(method = "lambda$scheduleUnload$12", at = @At(value = "INVOKE",
             target = "Lnet/minecraft/server/level/ServerLevel;unload(Lnet/minecraft/world/level/chunk/LevelChunk;)V"))
-    private void probe$unload(ServerLevel self, LevelChunk chunk, Operation<Void> original) {
+    private void sleep$unload(ServerLevel self, LevelChunk chunk, Operation<Void> original) {
         level.getProfiler().push("unload_level");
         try {
             original.call(self, chunk);

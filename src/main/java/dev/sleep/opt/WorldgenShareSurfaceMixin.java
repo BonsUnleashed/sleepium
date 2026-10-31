@@ -30,14 +30,14 @@ public abstract class WorldgenShareSurfaceMixin {
         throw new AssertionError();
     }
 
-    @Unique private SurfaceColumns probe$columns;
+    @Unique private SurfaceColumns sleep$columns;
 
     @Inject(method = "<init>", at = @At("RETURN"))
-    private void probe$table(int cellCountXZ, RandomState random, int firstNoiseX, int firstNoiseZ, NoiseSettings noiseSettings,
+    private void sleep$table(int cellCountXZ, RandomState random, int firstNoiseX, int firstNoiseZ, NoiseSettings noiseSettings,
                              DensityFunctions.BeardifierOrMarker beardifier, NoiseGeneratorSettings noiseGeneratorSettings,
                              Aquifer.FluidPicker fluidPicker, Blender blendifier, CallbackInfo ci) {
         if (blendifier == Blender.empty())
-            probe$columns = SurfaceColumns.forState(random, noiseSettings.minY(), noiseSettings.height(), noiseSettings.getCellHeight());
+            sleep$columns = SurfaceColumns.forState(random, noiseSettings.minY(), noiseSettings.height(), noiseSettings.getCellHeight());
     }
 
     /**
@@ -48,7 +48,7 @@ public abstract class WorldgenShareSurfaceMixin {
     public int preliminarySurfaceLevel(int x, int z) {
         int i = QuartPos.toBlock(QuartPos.fromBlock(x));
         int j = QuartPos.toBlock(QuartPos.fromBlock(z));
-        SurfaceColumns t = probe$columns;
+        SurfaceColumns t = sleep$columns;
         if (t != null) {
             int v = t.get(i, j);
             if (v != SurfaceColumns.MISS) return v;

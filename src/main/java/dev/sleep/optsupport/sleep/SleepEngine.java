@@ -197,7 +197,7 @@ public final class SleepEngine {
     private SleepEngine() {}
 
     private static Sleeper sleeper(BlockEntity be) {
-        return (Sleeper) ((SleeperHolder) be).probe$sleeper();
+        return (Sleeper) ((SleeperHolder) be).sleep$sleeper();
     }
 
     private static SleeperHolder h(Sleeper s) {
@@ -214,7 +214,7 @@ public final class SleepEngine {
         long now = level.getGameTime();
         if (!s.woken && now < s.wakeAt && verifyAsleep(be)) {
             skipped++;
-            h(s).probe$setSkipped(h(s).probe$skipped() + 1);
+            h(s).sleep$setSkipped(h(s).sleep$skipped() + 1);
             return true;
         }
         wake(s, now, s.woken ? s.wakeReason : "deadline");
@@ -226,7 +226,7 @@ public final class SleepEngine {
         unsubscribe(s);
         s.state = State.AWAKE;
         s.woken = false;
-        h(s).probe$setWakeAt(Long.MIN_VALUE);
+        h(s).sleep$setWakeAt(Long.MIN_VALUE);
         java.util.Arrays.fill(s.refs, null);   // do not keep replaced objects alive
         // the snapshot taken now is the "before" of this tick: one verifying tick may put it back to sleep
         s.info.snapper.snap(s.be, s.prev);
@@ -242,8 +242,8 @@ public final class SleepEngine {
 
     /** Apply the pending time to the clock fields (rate x skipped ticks); the block entity may keep sleeping. */
     private static void advance(Sleeper s) {
-        long k = h(s).probe$skipped();
-        h(s).probe$setSkipped(0);
+        long k = h(s).sleep$skipped();
+        h(s).sleep$setSkipped(0);
         if (k <= 0) return;
         List<Field> clocks = s.info.plan.clocks();
         for (int c = 0; c < clocks.size(); c++) {
@@ -268,8 +268,8 @@ public final class SleepEngine {
         if (s == null) {
             // short-lived block entities (moving pistons: thousands, a few ticks each) never get a Sleeper
             SleeperHolder h = (SleeperHolder) be;
-            int age = h.probe$age() + 1;
-            h.probe$setAge(age);
+            int age = h.sleep$age() + 1;
+            h.sleep$setAge(age);
             if (age < MIN_AGE) return;
             s = create(be);
             if (s == null) return;   // analysed in the background: vanilla's tick meanwhile
@@ -301,7 +301,7 @@ public final class SleepEngine {
             if (p.eligible() && excluded)
                 p = new SleepAnalysis.Plan(false, "excluded through dev.sleep.api.Compat", p.clocks(), p.conds());
             ClassInfo ci = new ClassInfo(p);
-            System.out.println("[probe/sleep] " + name + ": " + (p.eligible() ? "ELIGIBLE " : "no: ") + p.reason()
+            System.out.println("[sleep/sleep] " + name + ": " + (p.eligible() ? "ELIGIBLE " : "no: ") + p.reason()
                     + "  clocks=" + p.clocks().stream().map(f -> f == null ? "?" : f.getName()).toList()
                     + " conds=" + p.conds().stream().map(SleepAnalysis.Cond::text).toList()
                     + (p.eligible() ? " watch=" + p.watch().stream().map(Field::getName).toList() + (SnapCompiler.failure != null ? " SNAP FALLBACK: " + SnapCompiler.failure : " (compiled snapshot)") : ""));
@@ -311,7 +311,7 @@ public final class SleepEngine {
         Sleeper s = new Sleeper(be, info);
         int x = be.getBlockPos().getX();
         if (!info.plan.eligible() || x < MIN_X || x >= MAX_X) s.state = State.NEVER;
-        ((SleeperHolder) be).probe$setSleeper(s);
+        ((SleeperHolder) be).sleep$setSleeper(s);
         ALL.add(s);
         if ((ALL.size() & 4095) == 0) ALL.removeIf(o -> o.be.isRemoved() && o.state != State.ASLEEP);   // bounded bookkeeping
         return s;
@@ -402,14 +402,14 @@ public final class SleepEngine {
             return;
         }
         s.failStreak = 0;
-        h(s).probe$setSkipped(0);
+        h(s).sleep$setSkipped(0);
         s.wakeAt = sleep == Long.MAX_VALUE ? Long.MAX_VALUE : now + sleep;
         // the deadline lives in the time queue; the fast skip only checks the woken flag (wakeAt MIN_VALUE)
         if (s.wakeAt != Long.MAX_VALUE) {
             DEADLINES.add(s.wakeAt, s.id);
             SCHEDULED.put(s.id, s);
         }
-        h(s).probe$setWakeAt(Long.MAX_VALUE);
+        h(s).sleep$setWakeAt(Long.MAX_VALUE);
         s.sleepReadHash = s.prevReadHash;
         s.state = State.ASLEEP;
         s.woken = false;
@@ -456,7 +456,7 @@ public final class SleepEngine {
     /** A save (or any exact read): bring the lazily advanced clocks up to date; the block entity keeps sleeping. */
     public static void materialize(BlockEntity be) {
         Sleeper s = sleeper(be);
-        if (s != null && s.state == State.ASLEEP && h(s).probe$skipped() > 0) {
+        if (s != null && s.state == State.ASLEEP && h(s).sleep$skipped() > 0) {
             advance(s);
             s.info.snapper.snap(s.be, s.prev);   // the clocks moved on: this is the new reference for verifyAsleep
             materialized++;
@@ -468,7 +468,7 @@ public final class SleepEngine {
         Sleeper s = sleeper(be);
         if (s == null) return;
         if (s.state == State.ASLEEP) {
-            h(s).probe$setSkipped(0);
+            h(s).sleep$setSkipped(0);
             request(s, "load");
         }
         s.stable = 0;
@@ -560,7 +560,7 @@ public final class SleepEngine {
         if (s.state == State.ASLEEP && !s.woken) {
             s.woken = true;
             s.wakeReason = reason;
-            h(s).probe$setWakeAt(Long.MIN_VALUE);   // the fast skip lets it through; skip() then wakes it
+            h(s).sleep$setWakeAt(Long.MIN_VALUE);   // the fast skip lets it through; skip() then wakes it
         }
     }
 
@@ -610,7 +610,7 @@ public final class SleepEngine {
                 f.setAccessible(true);
                 seedField = f;
             } catch (ReflectiveOperationException | RuntimeException e) {
-                System.out.println("[probe/sleep] level.random seed not readable (" + level.random.getClass().getName() + "): " + e);
+                System.out.println("[sleep/sleep] level.random seed not readable (" + level.random.getClass().getName() + "): " + e);
             }
         }
         if (seedField == null) return 0;

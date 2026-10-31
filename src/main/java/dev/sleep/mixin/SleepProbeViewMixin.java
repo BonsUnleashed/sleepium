@@ -16,7 +16,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 @Mixin(BaseContainerBlockEntity.class)
 public abstract class SleepProbeViewMixin {
     @Inject(method = "stillValid", at = @At("HEAD"))
-    private void probe$viewed(Player player, CallbackInfoReturnable<Boolean> cir) {
+    private void sleep$viewed(Player player, CallbackInfoReturnable<Boolean> cir) {
         SleepEngine.viewed((BlockEntity) (Object) this);
     }
 }

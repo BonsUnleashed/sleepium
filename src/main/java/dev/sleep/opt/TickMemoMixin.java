@@ -18,22 +18,22 @@ import org.spongepowered.asm.mixin.injection.Redirect;
  */
 @Mixin(Level.class)
 public abstract class TickMemoMixin {
-    @Unique private long probe$memoGameTime = Long.MIN_VALUE, probe$memoChunk;
-    @Unique private boolean probe$memoValue;
+    @Unique private long sleep$memoGameTime = Long.MIN_VALUE, sleep$memoChunk;
+    @Unique private boolean sleep$memoValue;
 
     @Shadow public abstract long getGameTime();
 
     @Shadow public abstract boolean shouldTickBlocksAt(long chunkPos);
 
     @Redirect(method = "tickBlockEntities", at = @At(value = "INVOKE", target = "Lnet/minecraft/world/level/Level;shouldTickBlocksAt(Lnet/minecraft/core/BlockPos;)Z"))
-    private boolean probe$memoShouldTick(Level self, BlockPos pos) {
+    private boolean sleep$memoShouldTick(Level self, BlockPos pos) {
         long chunk = ChunkPos.asLong(pos);
         long now = getGameTime();
-        if (probe$memoGameTime == now && probe$memoChunk == chunk) return probe$memoValue;
+        if (sleep$memoGameTime == now && sleep$memoChunk == chunk) return sleep$memoValue;
         boolean v = shouldTickBlocksAt(chunk);
-        probe$memoGameTime = now;
-        probe$memoChunk = chunk;
-        probe$memoValue = v;
+        sleep$memoGameTime = now;
+        sleep$memoChunk = chunk;
+        sleep$memoValue = v;
         return v;
     }
 }

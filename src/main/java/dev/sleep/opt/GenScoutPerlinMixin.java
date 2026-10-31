@@ -11,7 +11,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 @Mixin(ImprovedNoise.class)
 public abstract class GenScoutPerlinMixin {
     @Inject(method = "noise(DDDDD)D", at = @At("HEAD"))
-    private void probe$count(double x, double y, double z, double yScale, double yMax, CallbackInfoReturnable<Double> cir) {
+    private void sleep$count(double x, double y, double z, double yScale, double yMax, CallbackInfoReturnable<Double> cir) {
         GenScout.perlin();
     }
 }

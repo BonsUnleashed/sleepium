@@ -19,35 +19,35 @@ import org.spongepowered.asm.mixin.Unique;
  */
 @Mixin(ClientLevel.class)
 public abstract class ClientBiomeMemoMixin implements LevelReader, dev.sleep.optsupport.BiomeMemo {
-    @Unique private final Long2ObjectOpenHashMap<Holder<Biome>> probe$biomes = new Long2ObjectOpenHashMap<>();
-    @Unique private static long probe$hits, probe$misses, probe$clears;
+    @Unique private final Long2ObjectOpenHashMap<Holder<Biome>> sleep$biomes = new Long2ObjectOpenHashMap<>();
+    @Unique private static long sleep$hits, sleep$misses, sleep$clears;
 
     @Override
     public Holder<Biome> getNoiseBiome(int x, int y, int z) {
         if (!RenderSystem.isOnRenderThread()) return LevelReader.super.getNoiseBiome(x, y, z);
         long k = BlockPos.asLong(x, y, z);
-        Holder<Biome> h = probe$biomes.get(k);
+        Holder<Biome> h = sleep$biomes.get(k);
         if (h != null) {
-            probe$hits++;
+            sleep$hits++;
             return h;
         }
         h = LevelReader.super.getNoiseBiome(x, y, z);
-        if (probe$biomes.size() >= 65536) probe$biomes.clear();
-        probe$biomes.put(k, h);
-        probe$misses++;
+        if (sleep$biomes.size() >= 65536) sleep$biomes.clear();
+        sleep$biomes.put(k, h);
+        sleep$misses++;
         return h;
     }
 
     @Override
-    public void probe$biomesChanged() {
-        if (!probe$biomes.isEmpty()) {
-            probe$biomes.clear();
-            probe$clears++;
+    public void sleep$biomesChanged() {
+        if (!sleep$biomes.isEmpty()) {
+            sleep$biomes.clear();
+            sleep$clears++;
         }
     }
 
     @Override
-    public String probe$biomeReport() {
-        return "biome memo: hits " + probe$hits + ", misses " + probe$misses + ", clears " + probe$clears;
+    public String sleep$biomeReport() {
+        return "biome memo: hits " + sleep$hits + ", misses " + sleep$misses + ", clears " + sleep$clears;
     }
 }

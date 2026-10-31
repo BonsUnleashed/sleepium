@@ -92,9 +92,9 @@ public final class GenReactor {
                     } catch (InterruptedException e) {
                         return;
                     }
-                    org.slf4j.LoggerFactory.getLogger("probe").info("[probe/reactor-debug] {} | {}", debug(), FullRing.debug());
+                    org.slf4j.LoggerFactory.getLogger("sleep").info("[sleep/reactor-debug] {} | {}", debug(), FullRing.debug());
                 }
-            }, "probe-reactor-debug");
+            }, "sleep-reactor-debug");
             t.setDaemon(true);
             t.start();
         }

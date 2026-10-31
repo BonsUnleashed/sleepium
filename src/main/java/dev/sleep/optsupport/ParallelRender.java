@@ -168,7 +168,7 @@ public final class ParallelRender {
         } finally {
             buildingSets = false;
         }
-        System.out.printf("[probe/opt] parallel render: %d renderer sets built in %.1f ms%n", THREADS, (System.nanoTime() - t0) / 1e6);
+        System.out.printf("[sleep/opt] parallel render: %d renderer sets built in %.1f ms%n", THREADS, (System.nanoTime() - t0) / 1e6);
     }
 
     // ------------------------------------------------------------------ the frame queue
@@ -206,12 +206,12 @@ public final class ParallelRender {
                 refused++;
                 var type = entity == null ? null : entity.getType();   // (a job may have no entity: the handler must not die - 10-05, a worker thread lost)
                 if (r.permanent && type != null && WORKER_REFUSED.add(type))
-                    System.out.println("[probe/opt] parallel render: " + type + " kept on the render thread: " + r.getMessage());
+                    System.out.println("[sleep/opt] parallel render: " + type + " kept on the render thread: " + r.getMessage());
             } catch (Throwable t) {
                 ok = false;
                 var type = entity == null ? null : entity.getType();
                 if (failed++ < 5) {
-                    System.out.println("[probe/opt] parallel render: " + type + " failed on a worker: " + t);
+                    System.out.println("[sleep/opt] parallel render: " + type + " failed on a worker: " + t);
                     if (STACK) for (StackTraceElement el : java.util.Arrays.copyOf(t.getStackTrace(), Math.min(14, t.getStackTrace().length))) System.out.println("    at " + el);
                 }
                 if (type != null) learnFailure(type, t);
@@ -280,7 +280,7 @@ public final class ParallelRender {
         if (PIN_WORKERS.length == 0) return;
         int i = NEXT_PIN.getAndIncrement() % PIN_WORKERS.length;
         boolean ok = dev.lab.runtime.OsThreads.pinCurrent(PIN_WORKERS[i]);
-        System.out.println("[probe/opt] parallel render: " + Thread.currentThread().getName() + " pinned to mask " + Long.toHexString(PIN_WORKERS[i]) + " " + ok);
+        System.out.println("[sleep/opt] parallel render: " + Thread.currentThread().getName() + " pinned to mask " + Long.toHexString(PIN_WORKERS[i]) + " " + ok);
     }
 
     /** LevelRenderer's entity loop, per entity (in place of renderEntity). */
@@ -288,7 +288,7 @@ public final class ParallelRender {
         if (size == 0) {
             if (RENDER_PIN != 0 && !renderPinned) {
                 renderPinned = true;
-                System.out.println("[probe/opt] parallel render: render thread pinned to mask " + Long.toHexString(RENDER_PIN) + " " + dev.lab.runtime.OsThreads.pinCurrent(RENDER_PIN));
+                System.out.println("[sleep/opt] parallel render: render thread pinned to mask " + Long.toHexString(RENDER_PIN) + " " + dev.lab.runtime.OsThreads.pinCurrent(RENDER_PIN));
             }
             ensureSets();
             listened = EventSites.renderListened();   // once per frame
@@ -315,9 +315,9 @@ public final class ParallelRender {
     }
 
     /**
-     * (-Dprobe.parallel.stack=true: a worker's failure printed with where it happened)
+     * (-Dsleep.parallel.stack=true: a worker's failure printed with where it happened)
      */
-    private static final boolean STACK = Boolean.getBoolean("probe.parallel.stack");
+    private static final boolean STACK = Boolean.getBoolean("sleep.parallel.stack");
 
     /**
      * Entity types whose renderer failed on a worker FAIL_LIMIT times: rendered on the render thread from then on
@@ -332,7 +332,7 @@ public final class ParallelRender {
     private static void learnFailure(net.minecraft.world.entity.EntityType<?> type, Throwable t) {
         if (FAILS.computeIfAbsent(type, k -> new java.util.concurrent.atomic.AtomicInteger()).incrementAndGet() == FAIL_LIMIT) {
             WORKER_REFUSED.add(type);
-            System.out.println("[probe/opt] parallel render: " + type + " kept on the render thread after " + FAIL_LIMIT + " failures (" + t + ")");
+            System.out.println("[sleep/opt] parallel render: " + type + " kept on the render thread after " + FAIL_LIMIT + " failures (" + t + ")");
         }
     }
 
@@ -342,7 +342,7 @@ public final class ParallelRender {
      * the cached BakedGeoModel, Molang actor and variables (probe-geo mixins, -Dlab.opt.GeoParallelMixin=true).
      * Without this, a GeckoLib job that no longer fails on a worker races on those globals.
      */
-    private static final String[][] SHARED_STATE_LIBS = {{"software.bernie.geckolib.renderer.GeoRenderer", "probe.adapter.geckolib"}};
+    private static final String[][] SHARED_STATE_LIBS = {{"software.bernie.geckolib.renderer.GeoRenderer", "sleep.adapter.geckolib"}};
 
     private static final ClassValue<Boolean> LIB_UNSAFE = new ClassValue<>() {
         @Override
@@ -406,7 +406,7 @@ public final class ParallelRender {
                     continue;
                 }
             }
-            inv.probe$renderEntity(j.entity, j.camX, j.camY, j.camZ, j.pt, j.pose, j.buffers);
+            inv.sleep$renderEntity(j.entity, j.camX, j.camY, j.camZ, j.pt, j.pose, j.buffers);
             sequential++;
             j.entity = null;
         }
@@ -419,11 +419,11 @@ public final class ParallelRender {
     /** The same entity rendered on the render thread with the vanilla renderers, compared byte for byte. */
     private static void verify(LevelRendererInvoker inv, Job j) {
         VERIFY_REC.reset();
-        inv.probe$renderEntity(j.entity, j.camX, j.camY, j.camZ, j.pt, new PoseStack(), VERIFY_REC);
+        inv.sleep$renderEntity(j.entity, j.camX, j.camY, j.camZ, j.pt, new PoseStack(), VERIFY_REC);
         VERIFY_REC.finish(VERIFY_OUT);
         verified++;
         if (!VERIFY_OUT.sameAs(j.out)) {
-            if (mismatches++ < 5) System.out.println("[probe/opt] parallel render: mismatch for " + j.entity.getType() + ": " + describe(VERIFY_OUT, j.out));
+            if (mismatches++ < 5) System.out.println("[sleep/opt] parallel render: mismatch for " + j.entity.getType() + ": " + describe(VERIFY_OUT, j.out));
         }
     }
 
@@ -468,12 +468,12 @@ public final class ParallelRender {
         r.render(e, yaw, pt, pose, rec, light);
         pose.translate(-off.x(), -off.y(), -off.z());
         EntityRenderDispatcher d = Minecraft.getInstance().getEntityRenderDispatcher();
-        if (d.options.entityShadows().get() && ((EntityRenderDispatcherInvoker) d).probe$shouldRenderShadow() && !e.isInvisible()) {
-            float f = ((dev.sleep.opt.EntityRendererAccessor) r).probe$shadowRadius(e);
+        if (d.options.entityShadows().get() && ((EntityRenderDispatcherInvoker) d).sleep$shouldRenderShadow() && !e.isInvisible()) {
+            float f = ((dev.sleep.opt.EntityRendererAccessor) r).sleep$shadowRadius(e);
             if (f > 0.0F) {
                 double d1 = d.distanceToSqr(e.getX(), e.getY(), e.getZ());
-                float f1 = (float) ((1.0 - d1 / 256.0) * (double) ((dev.sleep.opt.EntityRendererAccessor) r).probe$shadowStrength());
-                if (f1 > 0.0F) EntityRenderDispatcherInvoker.probe$renderShadow(pose, rec, e, f1, pt, e.level(), Math.min(f, 32.0F));
+                float f1 = (float) ((1.0 - d1 / 256.0) * (double) ((dev.sleep.opt.EntityRendererAccessor) r).sleep$shadowStrength());
+                if (f1 > 0.0F) EntityRenderDispatcherInvoker.sleep$renderShadow(pose, rec, e, f1, pt, e.level(), Math.min(f, 32.0F));
             }
         }
         pose.popPose();

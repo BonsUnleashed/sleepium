@@ -54,7 +54,7 @@ public final class GeoParallel {
             SNAP_BONE = sb;
             SNAP_FIELDS = snap.toArray(Field[]::new);
         } catch (ReflectiveOperationException e) {
-            throw new IllegalStateException("probe: GeckoLib's GeoBone / BoneSnapshot are not what GeoParallel expects", e);
+            throw new IllegalStateException("sleep: GeckoLib's GeoBone / BoneSnapshot are not what GeoParallel expects", e);
         }
     }
 

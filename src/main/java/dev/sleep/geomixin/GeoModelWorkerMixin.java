@@ -24,27 +24,27 @@ import software.bernie.geckolib.model.GeoModel;
  */
 @Mixin(value = GeoModel.class, remap = false)
 public abstract class GeoModelWorkerMixin {
-    @Unique private boolean probe$worker;
-    @Unique private java.util.IdentityHashMap<BakedGeoModel, BakedGeoModel> probe$copies;
+    @Unique private boolean sleep$worker;
+    @Unique private java.util.IdentityHashMap<BakedGeoModel, BakedGeoModel> sleep$copies;
 
     @Inject(method = "<init>", at = @At("TAIL"))
-    private void probe$mark(CallbackInfo ci) {
-        probe$worker = ParallelRender.buildingSets;
+    private void sleep$mark(CallbackInfo ci) {
+        sleep$worker = ParallelRender.buildingSets;
     }
 
     @ModifyExpressionValue(method = "getBakedModel", at = @At(value = "INVOKE", target = "Ljava/util/Map;get(Ljava/lang/Object;)Ljava/lang/Object;"))
-    private Object probe$workerCopy(Object model) {
-        if (!probe$worker) {
+    private Object sleep$workerCopy(Object model) {
+        if (!sleep$worker) {
             if (model != null && ParallelRender.inJob()) throw ParallelRender.REFUSE_SHARED;
             return model;
         }
         if (model == null) return null;
-        if (probe$copies == null) probe$copies = new java.util.IdentityHashMap<>();
-        BakedGeoModel copy = probe$copies.get(model);
+        if (sleep$copies == null) sleep$copies = new java.util.IdentityHashMap<>();
+        BakedGeoModel copy = sleep$copies.get(model);
         if (copy == null) {   // first use of this model (or a resource reload baked it again)
-            if (probe$copies.size() >= 512) probe$copies.clear();
+            if (sleep$copies.size() >= 512) sleep$copies.clear();
             copy = GeoParallel.copy((BakedGeoModel) model);
-            probe$copies.put((BakedGeoModel) model, copy);
+            sleep$copies.put((BakedGeoModel) model, copy);
         }
         return copy;
     }

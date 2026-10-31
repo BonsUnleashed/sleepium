@@ -2,7 +2,7 @@ package dev.sleep.optsupport;
 
 /** ClientBiomeMemoMixin: the client level's noise-biome memo. */
 public interface BiomeMemo {
-    void probe$biomesChanged();
+    void sleep$biomesChanged();
 
-    String probe$biomeReport();
+    String sleep$biomeReport();
 }

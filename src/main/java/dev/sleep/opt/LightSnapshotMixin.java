@@ -14,25 +14,25 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 /** LightSnapshot: a light storage map remembers the keys it wrote since its last full copy (its only writes). */
 @Mixin(DataLayerStorageMap.class)
 public abstract class LightSnapshotMixin implements LightSnapshot.Tracked {
-    @Unique private final LightSnapshot.Track probe$track = new LightSnapshot.Track();
+    @Unique private final LightSnapshot.Track sleep$track = new LightSnapshot.Track();
 
     @Inject(method = "setLayer", at = @At("HEAD"))
-    private void probe$set(long key, DataLayer array, CallbackInfo ci) {
-        probe$track.written(key);
+    private void sleep$set(long key, DataLayer array, CallbackInfo ci) {
+        sleep$track.written(key);
     }
 
     @Inject(method = "removeLayer", at = @At("HEAD"))
-    private void probe$remove(long key, CallbackInfoReturnable<DataLayer> cir) {
-        probe$track.written(key);
+    private void sleep$remove(long key, CallbackInfoReturnable<DataLayer> cir) {
+        sleep$track.written(key);
     }
 
     @Inject(method = "copyDataLayer", at = @At("HEAD"))
-    private void probe$copy(long key, CallbackInfoReturnable<DataLayer> cir) {
-        probe$track.written(key);
+    private void sleep$copy(long key, CallbackInfoReturnable<DataLayer> cir) {
+        sleep$track.written(key);
     }
 
     @Override
-    public Long2ObjectOpenHashMap<DataLayer> probe$snapshot(Long2ObjectOpenHashMap<DataLayer> live) {
-        return probe$track.snapshot(live);
+    public Long2ObjectOpenHashMap<DataLayer> sleep$snapshot(Long2ObjectOpenHashMap<DataLayer> live) {
+        return sleep$track.snapshot(live);
     }
 }

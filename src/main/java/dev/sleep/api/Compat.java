@@ -17,8 +17,8 @@ import net.minecraft.world.level.block.entity.BlockEntityType;
  * class and kept.
  *
  * <p>Players can do the same without code, as JVM properties with comma-separated ids:
- * {@code -Dprobe.compat.noParallelRender=}, {@code noRenderCache}, {@code noSleep} (block entity types),
- * {@code noEntitySleep} (entity types), e.g. {@code -Dprobe.compat.noRenderCache=create:shaft,mymod:clock}.
+ * {@code -Dsleep.compat.noParallelRender=}, {@code noRenderCache}, {@code noSleep} (block entity types),
+ * {@code noEntitySleep} (entity types), e.g. {@code -Dsleep.compat.noRenderCache=create:shaft,mymod:clock}.
  */
 public final class Compat {
     private static final Set<Object> NO_PARALLEL_RENDER = ConcurrentHashMap.newKeySet(), NO_RENDER_CACHE = ConcurrentHashMap.newKeySet(),
@@ -107,7 +107,7 @@ public final class Compat {
     }
 
     private static java.util.List<String> prop(String name) {
-        String v = System.getProperty("probe.compat." + name, "").trim();
+        String v = System.getProperty("sleep.compat." + name, "").trim();
         if (v.isEmpty()) return java.util.List.of();
         return java.util.Arrays.stream(v.split(",")).map(String::trim).filter(s -> !s.isEmpty()).toList();
     }

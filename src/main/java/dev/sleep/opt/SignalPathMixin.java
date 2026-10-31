@@ -27,26 +27,26 @@ public abstract class SignalPathMixin {
 
     @Unique private static final Direction[] DIRS = SignalGetter.DIRECTIONS;
     @Unique private static final Direction[] TO_ORDER = {Direction.DOWN, Direction.UP, Direction.NORTH, Direction.SOUTH, Direction.WEST, Direction.EAST};
-    @Unique private BlockPos.MutableBlockPos[] probe$scratch = new BlockPos.MutableBlockPos[8];
-    @Unique private int probe$depth;
+    @Unique private BlockPos.MutableBlockPos[] sleep$scratch = new BlockPos.MutableBlockPos[8];
+    @Unique private int sleep$depth;
     @Unique private static final boolean CHECK = Boolean.getBoolean("lab.opt.signalCheck");
 
     @Unique
-    private void probe$check(String what, int fast, int vanilla) {
+    private void sleep$check(String what, int fast, int vanilla) {
         dev.sleep.optsupport.OptCounters.SIGNAL_CHECKED.incrementAndGet();
         if (fast != vanilla && dev.sleep.optsupport.OptCounters.SIGNAL_MISMATCHES.incrementAndGet() <= 5)
-            System.out.println("[probe/opt] signal path MISMATCH " + what + ": fast " + fast + " vanilla " + vanilla);
+            System.out.println("[sleep/opt] signal path MISMATCH " + what + ": fast " + fast + " vanilla " + vanilla);
     }
 
     /** vanilla getBestNeighborSignal, for the shadow check */
     @Unique
-    private int probe$vanillaBest(BlockPos pos) {
+    private int sleep$vanillaBest(BlockPos pos) {
         int i = 0;
         for (Direction d : DIRS) {
             BlockPos p = pos.relative(d);
             BlockState st = this.getBlockState(p);
             int j = st.getSignal((Level) (Object) this, p, d);
-            if (st.shouldCheckWeakPower((Level) (Object) this, p, d)) j = Math.max(j, probe$vanillaDirectTo(p));
+            if (st.shouldCheckWeakPower((Level) (Object) this, p, d)) j = Math.max(j, sleep$vanillaDirectTo(p));
             if (j >= 15) return 15;
             if (j > i) i = j;
         }
@@ -54,17 +54,17 @@ public abstract class SignalPathMixin {
     }
 
     @Unique
-    private boolean probe$fast() {
+    private boolean sleep$fast() {
         if (!SignalProof.WRAPPERS_UNTOUCHED || this.isClientSide()) return false;
         var server = net.neoforged.neoforge.server.ServerLifecycleHooks.getCurrentServer();
         return server != null && Thread.currentThread() == server.getRunningThread();
     }
 
     @Unique
-    private BlockPos.MutableBlockPos probe$push() {
-        int d = probe$depth++;
-        BlockPos.MutableBlockPos[] a = probe$scratch;
-        if (d == a.length) probe$scratch = a = java.util.Arrays.copyOf(a, d * 2);
+    private BlockPos.MutableBlockPos sleep$push() {
+        int d = sleep$depth++;
+        BlockPos.MutableBlockPos[] a = sleep$scratch;
+        if (d == a.length) sleep$scratch = a = java.util.Arrays.copyOf(a, d * 2);
         BlockPos.MutableBlockPos s = a[d];
         if (s == null) a[d] = s = new BlockPos.MutableBlockPos();
         return s;
@@ -72,23 +72,23 @@ public abstract class SignalPathMixin {
 
     /** vanilla getSignal(pos.relative(d), d) for the neighbour at (x, y, z) */
     @Unique
-    private int probe$signalAt(int x, int y, int z, Direction d) {
-        BlockPos.MutableBlockPos s = probe$push();
+    private int sleep$signalAt(int x, int y, int z, Direction d) {
+        BlockPos.MutableBlockPos s = sleep$push();
         try {
             s.set(x, y, z);
             BlockState st = this.getBlockState(s);
             BlockPos p = SignalProof.signalOk(st) ? s : s.immutable();
             int i = st.getSignal((Level) (Object) this, p, d);
-            return st.shouldCheckWeakPower((Level) (Object) this, p, d) ? Math.max(i, probe$directTo(x, y, z)) : i;
+            return st.shouldCheckWeakPower((Level) (Object) this, p, d) ? Math.max(i, sleep$directTo(x, y, z)) : i;
         } finally {
-            probe$depth--;
+            sleep$depth--;
         }
     }
 
     /** vanilla getDirectSignalTo(pos): below, above, north, south, west, east, stop at 15 */
     @Unique
-    private int probe$directTo(int x, int y, int z) {
-        BlockPos.MutableBlockPos s = probe$push();
+    private int sleep$directTo(int x, int y, int z) {
+        BlockPos.MutableBlockPos s = sleep$push();
         try {
             int i = 0;
             for (Direction d : TO_ORDER) {
@@ -99,7 +99,7 @@ public abstract class SignalPathMixin {
             }
             return i;
         } finally {
-            probe$depth--;
+            sleep$depth--;
         }
     }
 
@@ -109,44 +109,44 @@ public abstract class SignalPathMixin {
         BlockState st = this.getBlockState(pos);
         int i = st.getSignal((Level) (Object) this, pos, direction);
         if (!st.shouldCheckWeakPower((Level) (Object) this, pos, direction)) return i;
-        return Math.max(i, probe$fast() ? probe$directTo(pos.getX(), pos.getY(), pos.getZ()) : probe$vanillaDirectTo(pos));
+        return Math.max(i, sleep$fast() ? sleep$directTo(pos.getX(), pos.getY(), pos.getZ()) : sleep$vanillaDirectTo(pos));
     }
 
     public int getDirectSignalTo(BlockPos pos) {
-        if (!probe$fast()) return probe$vanillaDirectTo(pos);
-        int r = probe$directTo(pos.getX(), pos.getY(), pos.getZ());
-        if (CHECK) probe$check("directTo", r, probe$vanillaDirectTo(pos));
+        if (!sleep$fast()) return sleep$vanillaDirectTo(pos);
+        int r = sleep$directTo(pos.getX(), pos.getY(), pos.getZ());
+        if (CHECK) sleep$check("directTo", r, sleep$vanillaDirectTo(pos));
         return r;
     }
 
     public boolean hasNeighborSignal(BlockPos pos) {
-        if (!probe$fast()) {
+        if (!sleep$fast()) {
             SignalGetter g = (SignalGetter) (Object) this;
             return g.getSignal(pos.below(), Direction.DOWN) > 0 || g.getSignal(pos.above(), Direction.UP) > 0
                     || g.getSignal(pos.north(), Direction.NORTH) > 0 || g.getSignal(pos.south(), Direction.SOUTH) > 0
                     || g.getSignal(pos.west(), Direction.WEST) > 0 || g.getSignal(pos.east(), Direction.EAST) > 0;
         }
         int x = pos.getX(), y = pos.getY(), z = pos.getZ();
-        for (Direction d : TO_ORDER) if (probe$signalAt(x + d.getStepX(), y + d.getStepY(), z + d.getStepZ(), d) > 0) return true;
+        for (Direction d : TO_ORDER) if (sleep$signalAt(x + d.getStepX(), y + d.getStepY(), z + d.getStepZ(), d) > 0) return true;
         return false;
     }
 
     public int getBestNeighborSignal(BlockPos pos) {
-        boolean fast = probe$fast();
+        boolean fast = sleep$fast();
         if (fast && CHECK) {
-            int v = probe$vanillaBest(pos);
-            int r = probe$best(pos, true);
-            probe$check("best", r, v);
+            int v = sleep$vanillaBest(pos);
+            int r = sleep$best(pos, true);
+            sleep$check("best", r, v);
             return r;
         }
-        return probe$best(pos, fast);
+        return sleep$best(pos, fast);
     }
 
     @Unique
-    private int probe$best(BlockPos pos, boolean fast) {
+    private int sleep$best(BlockPos pos, boolean fast) {
         int i = 0;
         for (Direction d : DIRS) {
-            int j = fast ? probe$signalAt(pos.getX() + d.getStepX(), pos.getY() + d.getStepY(), pos.getZ() + d.getStepZ(), d)
+            int j = fast ? sleep$signalAt(pos.getX() + d.getStepX(), pos.getY() + d.getStepY(), pos.getZ() + d.getStepZ(), d)
                     : ((SignalGetter) (Object) this).getSignal(pos.relative(d), d);
             if (j >= 15) return 15;
             if (j > i) i = j;
@@ -155,7 +155,7 @@ public abstract class SignalPathMixin {
     }
 
     @Unique
-    private int probe$vanillaDirectTo(BlockPos pos) {
+    private int sleep$vanillaDirectTo(BlockPos pos) {
         SignalGetter g = (SignalGetter) (Object) this;
         int i = 0;
         for (Direction d : TO_ORDER) {

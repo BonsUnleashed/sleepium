@@ -19,7 +19,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(ModelBlockRenderer.class)
 public abstract class LightScoutFlatMixin {
     @Inject(method = "renderModelFaceFlat", at = @At("HEAD"))
-    private void probe$flat(BlockAndTintGetter level, BlockState state, BlockPos pos, int light, int overlay, boolean repack, PoseStack pose,
+    private void sleep$flat(BlockAndTintGetter level, BlockState state, BlockPos pos, int light, int overlay, boolean repack, PoseStack pose,
                             VertexConsumer consumer, List<BakedQuad> quads, BitSet flags, CallbackInfo ci) {
         for (int i = 0; i < quads.size(); i++) LightScout.flatFace();
     }

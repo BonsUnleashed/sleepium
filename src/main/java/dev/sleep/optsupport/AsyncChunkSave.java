@@ -56,9 +56,9 @@ public final class AsyncChunkSave {
     private static final ConcurrentHashMap<Long, CompletableFuture<Void>> STORED = new ConcurrentHashMap<>();
 
     public interface StorageAccess {
-        Object probe$legacyHandler();
+        Object sleep$legacyHandler();
 
-        CompletableFuture<java.util.Optional<CompoundTag>> probe$loadDirect(ChunkPos pos);
+        CompletableFuture<java.util.Optional<CompoundTag>> sleep$loadDirect(ChunkPos pos);
     }
 
     public static boolean shouldDefer(ChunkStorage storage, ChunkAccess chunk) {
@@ -67,7 +67,7 @@ public final class AsyncChunkSave {
         // periodic saves skip plain ProtoChunks), and the palettes are copied right here, on the saving thread, as for
         // a LevelChunk
         if (!(chunk instanceof LevelChunk) && !(chunk instanceof net.minecraft.world.level.chunk.ProtoChunk)) return false;
-        if (((StorageAccess) storage).probe$legacyHandler() != null) return false;
+        if (((StorageAccess) storage).sleep$legacyHandler() != null) return false;
         return NeoForge.EVENT_BUS instanceof CompositeEventBus cb && !cb.mayHaveListeners(ChunkDataEvent.Save.class);
     }
 
@@ -129,7 +129,7 @@ public final class AsyncChunkSave {
             if (VERIFY) {
                 verified.incrementAndGet();
                 if (!bytes(placeholder).equals(bytes((Tag) j[3])) && mismatches.incrementAndGet() <= 5)
-                    System.out.println("[probe/opt] async chunk save MISMATCH: " + placeholder + " vs " + j[3]);
+                    System.out.println("[sleep/opt] async chunk save MISMATCH: " + placeholder + " vs " + j[3]);
             }
         }
     }
@@ -150,9 +150,9 @@ public final class AsyncChunkSave {
     public static CompletableFuture<java.util.Optional<CompoundTag>> read(ChunkStorage storage, ChunkPos pos) {
         CompletableFuture<Void> p = STORED.get(pos.toLong());
         StorageAccess s = (StorageAccess) storage;
-        if (p == null) return s.probe$loadDirect(pos);
+        if (p == null) return s.sleep$loadDirect(pos);
         waitedReads.incrementAndGet();
-        return p.exceptionally(t -> null).thenCompose(v -> s.probe$loadDirect(pos));
+        return p.exceptionally(t -> null).thenCompose(v -> s.sleep$loadDirect(pos));
     }
 
     /** flushWorker / close: every deferred save handed to the IOWorker first. */

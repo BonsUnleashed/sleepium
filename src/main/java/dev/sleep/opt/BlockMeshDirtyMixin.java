@@ -14,22 +14,22 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(LevelRenderer.class)
 public abstract class BlockMeshDirtyMixin {
     @Inject(method = "setSectionDirty(IIIZ)V", at = @At("HEAD"))
-    private void probe$marked(int x, int y, int z, boolean mainThread, CallbackInfo ci) {
+    private void sleep$marked(int x, int y, int z, boolean mainThread, CallbackInfo ci) {
         BlockMeshMemo.marked(x, y, z);
     }
 
     @Inject(method = "allChanged", at = @At("HEAD"))
-    private void probe$allChanged(CallbackInfo ci) {
+    private void sleep$allChanged(CallbackInfo ci) {
         BlockMeshMemo.clearAll();
     }
 
     @Inject(method = "setLevel", at = @At("HEAD"))
-    private void probe$level(CallbackInfo ci) {
+    private void sleep$level(CallbackInfo ci) {
         BlockMeshMemo.clearAll();
     }
 
     @Inject(method = "renderLevel", at = @At("HEAD"))
-    private void probe$frame(CallbackInfo ci) {
+    private void sleep$frame(CallbackInfo ci) {
         BlockMeshMemo.frame++;
     }
 }

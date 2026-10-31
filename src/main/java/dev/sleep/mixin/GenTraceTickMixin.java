@@ -12,17 +12,17 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 /** Measurement only (-Dlab.pgen.trace=true): each server tick's wall time (tickServer). */
 @Mixin(MinecraftServer.class)
 public abstract class GenTraceTickMixin {
-    @Unique private long probe$t0;
+    @Unique private long sleep$t0;
 
     @Inject(method = "tickServer", at = @At("HEAD"))
-    private void probe$start(BooleanSupplier hasTimeLeft, CallbackInfo ci) {
-        probe$t0 = System.nanoTime();
+    private void sleep$start(BooleanSupplier hasTimeLeft, CallbackInfo ci) {
+        sleep$t0 = System.nanoTime();
         dev.sleep.optsupport.TickSampler.tickStart(Thread.currentThread());
     }
 
     @Inject(method = "tickServer", at = @At("RETURN"))
-    private void probe$end(BooleanSupplier hasTimeLeft, CallbackInfo ci) {
-        GenTrace.tick(System.nanoTime() - probe$t0);
+    private void sleep$end(BooleanSupplier hasTimeLeft, CallbackInfo ci) {
+        GenTrace.tick(System.nanoTime() - sleep$t0);
         dev.sleep.optsupport.TickSampler.tickEnd();
     }
 }

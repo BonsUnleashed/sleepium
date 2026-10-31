@@ -20,22 +20,22 @@ public abstract class SectionListsMixin {
     private static final String FIELD = "Lnet/minecraft/client/renderer/LevelRenderer;visibleSections:Lit/unimi/dsi/fastutil/objects/ObjectArrayList;";
 
     @Redirect(method = "renderLevel", at = @At(value = "FIELD", target = FIELD, opcode = Opcodes.GETFIELD))
-    private ObjectArrayList<SectionRenderDispatcher.RenderSection> probe$blockEntities(LevelRenderer self) {
-        return SectionLists.blockEntities(((LevelRendererVisibleAccessor) self).probe$visible());
+    private ObjectArrayList<SectionRenderDispatcher.RenderSection> sleep$blockEntities(LevelRenderer self) {
+        return SectionLists.blockEntities(((LevelRendererVisibleAccessor) self).sleep$visible());
     }
 
     @Redirect(method = "renderSectionLayer", at = @At(value = "FIELD", target = FIELD, opcode = Opcodes.GETFIELD))
-    private ObjectArrayList<SectionRenderDispatcher.RenderSection> probe$layer(LevelRenderer self) {
-        return SectionLists.forLayer(((LevelRendererVisibleAccessor) self).probe$visible());
+    private ObjectArrayList<SectionRenderDispatcher.RenderSection> sleep$layer(LevelRenderer self) {
+        return SectionLists.forLayer(((LevelRendererVisibleAccessor) self).sleep$visible());
     }
 
     @Redirect(method = "compileSections", at = @At(value = "FIELD", target = FIELD, opcode = Opcodes.GETFIELD))
-    private ObjectArrayList<SectionRenderDispatcher.RenderSection> probe$dirty(LevelRenderer self) {
-        return SectionLists.dirtyVisible(((LevelRendererVisibleAccessor) self).probe$visible());
+    private ObjectArrayList<SectionRenderDispatcher.RenderSection> sleep$dirty(LevelRenderer self) {
+        return SectionLists.dirtyVisible(((LevelRendererVisibleAccessor) self).sleep$visible());
     }
 
     @Inject(method = "addRecentlyCompiledSection", at = @At("HEAD"))
-    private void probe$compiled(SectionRenderDispatcher.RenderSection section, CallbackInfo ci) {
+    private void sleep$compiled(SectionRenderDispatcher.RenderSection section, CallbackInfo ci) {
         SectionLists.changed();
     }
 }

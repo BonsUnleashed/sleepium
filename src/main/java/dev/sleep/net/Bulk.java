@@ -144,7 +144,7 @@ public final class Bulk {
                 s.current = blobs;
                 s.manifest = m = new Manifest(set, s.version, CHUNK, list);
             }
-            org.slf4j.LoggerFactory.getLogger("probe").info("[probe/net] bulk {} v{}: {} entries, {} KB raw, {} KB packed, built in {} ms",
+            org.slf4j.LoggerFactory.getLogger("sleep").info("[sleep/net] bulk {} v{}: {} entries, {} KB raw, {} KB packed, built in {} ms",
                     set, m.version(), list.size(), raw / 1024, packed / 1024, (System.nanoTime() - t0) / 1_000_000);
             MinecraftServer server = net.neoforged.neoforge.server.ServerLifecycleHooks.getCurrentServer();
             if (server != null) server.execute(() -> {

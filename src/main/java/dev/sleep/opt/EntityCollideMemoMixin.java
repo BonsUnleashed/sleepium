@@ -44,7 +44,7 @@ public abstract class EntityCollideMemoMixin {
             return collideWithShapes(vec, collisionBox, collectColliders(entity, level, potentialHits, bb));
         }
         BlockCollisionMemo.Holder holder = (BlockCollisionMemo.Holder) entity;
-        BlockCollisionMemo m = holder.probe$collideMemo();
+        BlockCollisionMemo m = holder.sleep$collideMemo();
         if (m != null && m.valid && m.sameBox(collisionBox) && m.sameKey(vec.x, vec.y, vec.z) && BlockCollisionMemo.unchanged(level, m, bb)) {
             BlockCollisionMemo.collideHits++;
             Vec3 r = m.same ? vec : new Vec3(m.r0, m.r1, m.r2);
@@ -54,13 +54,13 @@ public abstract class EntityCollideMemoMixin {
                 boolean ok = (v == vec) == m.same && Double.doubleToRawLongBits(v.x) == Double.doubleToRawLongBits(r.x)
                         && Double.doubleToRawLongBits(v.y) == Double.doubleToRawLongBits(r.y) && Double.doubleToRawLongBits(v.z) == Double.doubleToRawLongBits(r.z);
                 if (!ok && OptCounters.MEMO_MISMATCHES.incrementAndGet() <= 5)
-                    System.out.println("[probe/opt] collide memo MISMATCH for " + entity + ": memo " + r + " vanilla " + v);
+                    System.out.println("[sleep/opt] collide memo MISMATCH for " + entity + ": memo " + r + " vanilla " + v);
             }
             return r;
         }
         BlockCollisionMemo.collideMisses++;
         Vec3 r = collideWithShapes(vec, collisionBox, collectColliders(entity, level, potentialHits, bb));
-        if (m == null) holder.probe$setCollideMemo(m = new BlockCollisionMemo());
+        if (m == null) holder.sleep$setCollideMemo(m = new BlockCollisionMemo());
         m.valid = BlockCollisionMemo.worthRecording(m, collisionBox) && BlockCollisionMemo.record(level, m, bb);
         if (m.valid) {
             m.setBox(collisionBox);

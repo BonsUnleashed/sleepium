@@ -11,7 +11,7 @@ import software.bernie.geckolib.loading.math.MathValue;
 @Mixin(value = MathParser.class, remap = false)
 public abstract class MolangJitMixin {
     @ModifyReturnValue(method = "compileMolang", at = @At("RETURN"))
-    private static MathValue probe$jit(MathValue parsed) {
+    private static MathValue sleep$jit(MathValue parsed) {
         return MolangJit.compile(parsed);
     }
 }

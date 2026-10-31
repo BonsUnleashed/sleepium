@@ -97,6 +97,6 @@ public final class NoAllocChecks {
         double x = pos.getX(), y = pos.getY(), z = pos.getZ();
         boxFast++;
         // new AABB(pos) = (x, y, z, x + 1, y + 1, z + 1): finite, so isVisible is the cube test
-        return ((dev.sleep.opt.FrustumInvoker) frustum).probe$cubeInFrustum(x, y, z, x + 1.0, y + 1.0, z + 1.0);
+        return ((dev.sleep.opt.FrustumInvoker) frustum).sleep$cubeInFrustum(x, y, z, x + 1.0, y + 1.0, z + 1.0);
     }
 }

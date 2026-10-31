@@ -19,24 +19,24 @@ public abstract class ProcessorMailboxMixin {
     public abstract String name();
 
     @Unique
-    private TaskStats.Mailbox probe$stats;
+    private TaskStats.Mailbox sleep$stats;
 
     @Unique
-    private TaskStats.Mailbox probe$stats() {
-        TaskStats.Mailbox s = probe$stats;
+    private TaskStats.Mailbox sleep$stats() {
+        TaskStats.Mailbox s = sleep$stats;
         if (s == null) {
-            s = probe$stats = TaskStats.mailbox(name());
+            s = sleep$stats = TaskStats.mailbox(name());
         }
         return s;
     }
 
     @Inject(method = "tell", at = @At("HEAD"))
-    private void probe$onTell(Object task, CallbackInfo ci) {
-        probe$stats().tasks.increment();
+    private void sleep$onTell(Object task, CallbackInfo ci) {
+        sleep$stats().tasks.increment();
     }
 
     @Inject(method = "run", at = @At("HEAD"))
-    private void probe$onRun(CallbackInfo ci) {
-        probe$stats().runs.increment();
+    private void sleep$onRun(CallbackInfo ci) {
+        sleep$stats().runs.increment();
     }
 }

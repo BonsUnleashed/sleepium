@@ -10,8 +10,8 @@ import org.spongepowered.asm.mixin.gen.Invoker;
 @Mixin(ChunkStorage.class)
 public interface ReactorStorageAccessor {
     @Accessor("worker")
-    IOWorker probe$worker();
+    IOWorker sleep$worker();
 
     @Invoker("storageInfo")
-    net.minecraft.world.level.chunk.storage.RegionStorageInfo probe$storageInfo();
+    net.minecraft.world.level.chunk.storage.RegionStorageInfo sleep$storageInfo();
 }

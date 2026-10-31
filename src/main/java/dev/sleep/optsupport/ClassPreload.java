@@ -33,7 +33,7 @@ public final class ClassPreload {
 
     private static Path file() {
         String f = System.getProperty("lab.preload.file");
-        return f != null ? Path.of(f) : net.neoforged.fml.loading.FMLPaths.GAMEDIR.get().resolve("probe").resolve("preload-classes.txt");
+        return f != null ? Path.of(f) : net.neoforged.fml.loading.FMLPaths.GAMEDIR.get().resolve(dev.sleep.SleepOut.ROOT).resolve("preload-classes.txt");
     }
 
     /** ServerAboutToStartEvent: the learned classes, loaded in the background while the server starts */
@@ -56,10 +56,10 @@ public final class ClassPreload {
                     }
                 }
             } catch (Exception e) {
-                System.out.println("[probe/preload] " + e);
+                System.out.println("[sleep/preload] " + e);
             }
-            System.out.printf("[probe/preload] %d classes loaded in the background, %d skipped, %.0f ms%n", ok, missing, (System.nanoTime() - t0) / 1e6);
-        }, "probe-class-preload");
+            System.out.printf("[sleep/preload] %d classes loaded in the background, %d skipped, %.0f ms%n", ok, missing, (System.nanoTime() - t0) / 1e6);
+        }, "sleep-class-preload");
         t.setDaemon(true);
         t.setPriority(Thread.MIN_PRIORITY);
         t.start();
@@ -68,7 +68,7 @@ public final class ClassPreload {
     /** ServerStartedEvent: what is loaded once the world is up (loading itself is not "while playing") */
     public static void started() {
         if (!ON || System.getProperty("lab.preload.file") != null) return;
-        Thread t = new Thread(() -> atStart = loaded(), "probe-class-snapshot");
+        Thread t = new Thread(() -> atStart = loaded(), "sleep-class-snapshot");
         t.setDaemon(true);
         t.start();
     }
@@ -90,9 +90,9 @@ public final class ClassPreload {
             if (out.size() > MAX) out = out.subList(out.size() - MAX, out.size());
             Files.createDirectories(f.getParent());
             Files.write(f, out);
-            System.out.printf("[probe/preload] learned %d classes loaded while playing, %d new; list %d%n", now.size(), all.size() - before, out.size());
+            System.out.printf("[sleep/preload] learned %d classes loaded while playing, %d new; list %d%n", now.size(), all.size() - before, out.size());
         } catch (Exception e) {
-            System.out.println("[probe/preload] not learned: " + e);
+            System.out.println("[sleep/preload] not learned: " + e);
         }
     }
 
@@ -114,7 +114,7 @@ public final class ClassPreload {
                 names.add(n);
             }
         } catch (Exception e) {
-            System.out.println("[probe/preload] class list unavailable: " + e);
+            System.out.println("[sleep/preload] class list unavailable: " + e);
         }
         return names;
     }

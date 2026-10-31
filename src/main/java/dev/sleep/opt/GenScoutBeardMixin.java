@@ -21,7 +21,7 @@ public abstract class GenScoutBeardMixin {
     @Shadow @Final protected ObjectListIterator<JigsawJunction> junctionIterator;
 
     @Inject(method = "forStructuresInChunk", at = @At("RETURN"))
-    private static void probe$sizes(StructureManager sm, ChunkPos pos, CallbackInfoReturnable<Beardifier> cir) {
+    private static void sleep$sizes(StructureManager sm, ChunkPos pos, CallbackInfoReturnable<Beardifier> cir) {
         GenScoutBeardMixin b = (GenScoutBeardMixin) (Object) cir.getReturnValue();
         int r = 0, j = 0;
         while (b.pieceIterator.hasNext()) { b.pieceIterator.next(); r++; }
@@ -37,7 +37,7 @@ public abstract class GenScoutBeardMixin {
     }
 
     @Inject(method = "compute", at = @At("HEAD"))
-    private void probe$call(DensityFunction.FunctionContext ctx, org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable<Double> cir) {
+    private void sleep$call(DensityFunction.FunctionContext ctx, org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable<Double> cir) {
         GenScout.BEARD_CALLS.increment();
     }
 }

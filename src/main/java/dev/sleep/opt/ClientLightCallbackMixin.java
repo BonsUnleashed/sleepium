@@ -13,7 +13,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(ClientChunkCache.class)
 public abstract class ClientLightCallbackMixin {
     @Inject(method = "onLightUpdate", at = @At("HEAD"), cancellable = true)
-    private void probe$record(LightLayer type, SectionPos pos, CallbackInfo ci) {
+    private void sleep$record(LightLayer type, SectionPos pos, CallbackInfo ci) {
         if (ClientLightAsync.onWorker()) {
             ClientLightAsync.record(pos);
             ci.cancel();

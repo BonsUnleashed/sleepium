@@ -47,7 +47,7 @@ public final class IndirectCommands {
         if (i == null) {
             var caps = GL.getCapabilities();
             immutable = i = (caps.OpenGL44 || caps.GL_ARB_buffer_storage) && !Boolean.getBoolean("lab.indirect.respecify");
-            System.out.println("[probe/opt] indirect commands: " + (i ? "immutable buffer, written in place" : "re-specified per upload"));
+            System.out.println("[sleep/opt] indirect commands: " + (i ? "immutable buffer, written in place" : "re-specified per upload"));
         }
         return i;
     }

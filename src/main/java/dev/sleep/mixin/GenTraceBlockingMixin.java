@@ -21,7 +21,7 @@ public abstract class GenTraceBlockingMixin {
 
     @WrapOperation(method = "getChunk(IILnet/minecraft/world/level/chunk/status/ChunkStatus;Z)Lnet/minecraft/world/level/chunk/ChunkAccess;",
             at = @At(value = "INVOKE", target = "Lnet/minecraft/server/level/ServerChunkCache$MainThreadExecutor;managedBlock(Ljava/util/function/BooleanSupplier;)V"))
-    private void probe$blocking(@org.spongepowered.asm.mixin.injection.Coerce BlockableEventLoop<?> executor, BooleanSupplier done, Operation<Void> original) {
+    private void sleep$blocking(@org.spongepowered.asm.mixin.injection.Coerce BlockableEventLoop<?> executor, BooleanSupplier done, Operation<Void> original) {
         level.getProfiler().push("blockingGetChunk");
         long t = System.nanoTime();
         try {
@@ -30,7 +30,7 @@ public abstract class GenTraceBlockingMixin {
             level.getProfiler().pop();
             long ms = (System.nanoTime() - t) / 1_000_000L;
             if (ms >= 20) {   // who asked: the first frames above the chunk cache
-                StringBuilder sb = new StringBuilder("[probe/blocking] " + ms + " ms:");
+                StringBuilder sb = new StringBuilder("[sleep/blocking] " + ms + " ms:");
                 int n = 0;
                 for (StackTraceElement e : Thread.currentThread().getStackTrace()) {
                     String c = e.getClassName();

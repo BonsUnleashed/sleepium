@@ -26,7 +26,7 @@ public abstract class BlockMeshMemoMixin {
     private static final String ARGS = "(Lnet/minecraft/world/level/BlockAndTintGetter;Lnet/minecraft/client/resources/model/BakedModel;Lnet/minecraft/world/level/block/state/BlockState;Lnet/minecraft/core/BlockPos;Lcom/mojang/blaze3d/vertex/PoseStack;Lcom/mojang/blaze3d/vertex/VertexConsumer;ZLnet/minecraft/util/RandomSource;JILnet/neoforged/neoforge/client/model/data/ModelData;Lnet/minecraft/client/renderer/RenderType;)V";
 
     @Redirect(method = TESSELATE, at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/block/ModelBlockRenderer;tesselateWithAO" + ARGS))
-    private void probe$ao(ModelBlockRenderer self, BlockAndTintGetter level, BakedModel model, BlockState state, BlockPos pos, PoseStack pose, VertexConsumer vc,
+    private void sleep$ao(ModelBlockRenderer self, BlockAndTintGetter level, BakedModel model, BlockState state, BlockPos pos, PoseStack pose, VertexConsumer vc,
                           boolean checkSides, RandomSource random, long seed, int overlay, ModelData data, RenderType rt) {
         int r = BlockMeshMemo.begin(level, model, state, pos, pose, vc, checkSides, seed, overlay, data, rt, true);
         if (r == BlockMeshMemo.SERVED) return;
@@ -44,7 +44,7 @@ public abstract class BlockMeshMemoMixin {
     }
 
     @Redirect(method = TESSELATE, at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/block/ModelBlockRenderer;tesselateWithoutAO" + ARGS))
-    private void probe$flat(ModelBlockRenderer self, BlockAndTintGetter level, BakedModel model, BlockState state, BlockPos pos, PoseStack pose, VertexConsumer vc,
+    private void sleep$flat(ModelBlockRenderer self, BlockAndTintGetter level, BakedModel model, BlockState state, BlockPos pos, PoseStack pose, VertexConsumer vc,
                             boolean checkSides, RandomSource random, long seed, int overlay, ModelData data, RenderType rt) {
         int r = BlockMeshMemo.begin(level, model, state, pos, pose, vc, checkSides, seed, overlay, data, rt, false);
         if (r == BlockMeshMemo.SERVED) return;

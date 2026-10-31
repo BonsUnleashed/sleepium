@@ -14,22 +14,22 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 @Mixin(LevelChunk.class)
 public abstract class ScoutChunkMixin {
     @Inject(method = "getBlockState", at = @At("HEAD"))
-    private void probe$read(BlockPos pos, CallbackInfoReturnable<BlockState> cir) {
+    private void sleep$read(BlockPos pos, CallbackInfoReturnable<BlockState> cir) {
         ParallelTickScout.read(pos.getX(), pos.getY(), pos.getZ());
     }
 
     @Inject(method = "getFluidState(III)Lnet/minecraft/world/level/material/FluidState;", at = @At("HEAD"))
-    private void probe$readFluid(int x, int y, int z, CallbackInfoReturnable<FluidState> cir) {
+    private void sleep$readFluid(int x, int y, int z, CallbackInfoReturnable<FluidState> cir) {
         ParallelTickScout.read(x, y, z);
     }
 
     @Inject(method = "getBlockEntity(Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/chunk/LevelChunk$EntityCreationType;)Lnet/minecraft/world/level/block/entity/BlockEntity;", at = @At("HEAD"))
-    private void probe$readBe(BlockPos pos, LevelChunk.EntityCreationType t, CallbackInfoReturnable<?> cir) {
+    private void sleep$readBe(BlockPos pos, LevelChunk.EntityCreationType t, CallbackInfoReturnable<?> cir) {
         ParallelTickScout.read(pos.getX(), pos.getY(), pos.getZ());
     }
 
     @Inject(method = "setBlockState", at = @At("HEAD"))
-    private void probe$write(BlockPos pos, BlockState state, boolean moving, CallbackInfoReturnable<BlockState> cir) {
+    private void sleep$write(BlockPos pos, BlockState state, boolean moving, CallbackInfoReturnable<BlockState> cir) {
         ParallelTickScout.write(pos.getX(), pos.getY(), pos.getZ());
     }
 }

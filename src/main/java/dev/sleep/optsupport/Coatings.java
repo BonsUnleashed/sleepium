@@ -13,7 +13,7 @@ import net.minecraft.world.entity.Entity;
  * the entity's height), so only part-batched geometry (vanilla parts, GeckoLib bones)
  * shows them, as with materials. An entity with a coating is drawn live, not from the render cache (its recorded
  * vertices carry no records); one without draws exactly as before (the shader's branch is off).
- * {@code -Dprobe.coatings=false} turns them off.
+ * {@code -Dsleep.coatings=false} turns them off.
  * <p>
  * 10-07 (one's own armour showing its damage): the third word (n2.w) carries the height in its low 8 bits (tenths of
  * a block) and the blows' marks above them: a game's {@link #damage} - three 4-bit amounts (the head, the body, the
@@ -23,7 +23,7 @@ import net.minecraft.world.entity.Entity;
 public final class Coatings {
     private Coatings() {}
 
-    public static final boolean ON = !"false".equals(System.getProperty("probe.coatings"));
+    public static final boolean ON = !"false".equals(System.getProperty("sleep.coatings"));
     public static final int WET = 0, MUD = 6, SNOW = 12, ICE = 18, BLOOD = 24, SOOT = 30, GLOW = 36, GLOW_HUE = 42;
 
     /** the game's: an entity's packed coatings (render thread or a ParallelRender worker; must not touch the world) */

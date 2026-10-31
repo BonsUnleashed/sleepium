@@ -28,13 +28,13 @@ public abstract class WorldgenAllocSequenceMixin {
         List<Object> l = rules;
         if (l instanceof RandomAccess) {
             for (int i = 0, n = l.size(); i < n; i++) {
-                BlockState s = ((SurfaceRuleInvoker) l.get(i)).probe$tryApply(x, y, z);
+                BlockState s = ((SurfaceRuleInvoker) l.get(i)).sleep$tryApply(x, y, z);
                 if (s != null) return s;
             }
             return null;
         }
         for (Object r : l) {
-            BlockState s = ((SurfaceRuleInvoker) r).probe$tryApply(x, y, z);
+            BlockState s = ((SurfaceRuleInvoker) r).sleep$tryApply(x, y, z);
             if (s != null) return s;
         }
         return null;

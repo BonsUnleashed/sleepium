@@ -91,9 +91,9 @@ public abstract class FluidSpreadMixin {
      */
     @Overwrite
     protected Map<Direction, FluidState> getSpread(Level level, BlockPos pos, BlockState state) {
-        if (!FluidCaches.fastSpread(this.getClass()) || !FluidCaches.onServerThread()) return probe$vanillaSpread(level, pos, state);
+        if (!FluidCaches.fastSpread(this.getClass()) || !FluidCaches.onServerThread()) return sleep$vanillaSpread(level, pos, state);
         FluidCaches c = FluidCaches.begin();
-        if (c == null) return probe$vanillaSpread(level, pos, state);   // nested
+        if (c == null) return sleep$vanillaSpread(level, pos, state);   // nested
         try {
             int i = 1000;
             Map<Direction, FluidState> map = Maps.newEnumMap(Direction.class);
@@ -113,7 +113,7 @@ public abstract class FluidSpreadMixin {
                         BlockState below = level.getBlockState(blockpos1);
                         c.putHole(key, this.isWaterHole(level, this.getFlowing(), blockpos, blockstate, blockpos1, below));
                     }
-                    int j = c.hole(key) ? 0 : probe$slope(level, blockpos, 1, direction.getOpposite(), blockstate, pos, c);
+                    int j = c.hole(key) ? 0 : sleep$slope(level, blockpos, 1, direction.getOpposite(), blockstate, pos, c);
                     if (j < i) map.clear();
                     if (j <= i) {
                         map.put(direction, fluidstate1);
@@ -129,7 +129,7 @@ public abstract class FluidSpreadMixin {
 
     /** vanilla getSlopeDistance on the stamped caches */
     @org.spongepowered.asm.mixin.Unique
-    private int probe$slope(LevelReader level, BlockPos spreadPos, int distance, Direction from, BlockState currentSpreadState, BlockPos sourcePos, FluidCaches c) {
+    private int sleep$slope(LevelReader level, BlockPos spreadPos, int distance, Direction from, BlockState currentSpreadState, BlockPos sourcePos, FluidCaches c) {
         int i = 1000;
         for (Direction direction : Direction.Plane.HORIZONTAL) {
             if (direction != from) {
@@ -149,7 +149,7 @@ public abstract class FluidSpreadMixin {
                     }
                     if (c.hole(key)) return distance;
                     if (distance < this.getSlopeFindDistance(level)) {
-                        int j = probe$slope(level, blockpos, distance + 1, direction.getOpposite(), blockstate, sourcePos, c);
+                        int j = sleep$slope(level, blockpos, distance + 1, direction.getOpposite(), blockstate, sourcePos, c);
                         if (j < i) i = j;
                     }
                 }
@@ -160,7 +160,7 @@ public abstract class FluidSpreadMixin {
 
     /** vanilla getSpread, verbatim (maps and pairs) */
     @org.spongepowered.asm.mixin.Unique
-    private Map<Direction, FluidState> probe$vanillaSpread(Level level, BlockPos pos, BlockState state) {
+    private Map<Direction, FluidState> sleep$vanillaSpread(Level level, BlockPos pos, BlockState state) {
         int i = 1000;
         Map<Direction, FluidState> map = Maps.newEnumMap(Direction.class);
         Short2ObjectMap<Pair<BlockState, FluidState>> short2objectmap = new Short2ObjectOpenHashMap<>();

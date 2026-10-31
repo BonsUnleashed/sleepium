@@ -24,7 +24,7 @@ import org.spongepowered.asm.mixin.injection.At;
 public abstract class GenProfileReadPartsMixin {
     @WrapOperation(method = "read", at = @At(value = "INVOKE",
             target = "Lnet/minecraft/world/entity/ai/village/poi/PoiManager;checkConsistencyWithBlocks(Lnet/minecraft/core/SectionPos;Lnet/minecraft/world/level/chunk/LevelChunkSection;)V"))
-    private static void probe$poi(PoiManager poi, SectionPos pos, LevelChunkSection section, Operation<Void> original) {
+    private static void sleep$poi(PoiManager poi, SectionPos pos, LevelChunkSection section, Operation<Void> original) {
         if (!GenProfile.active()) { original.call(poi, pos, section); return; }
         long t = System.nanoTime(), m = GenProfile.allocated();
         original.call(poi, pos, section);
@@ -33,7 +33,7 @@ public abstract class GenProfileReadPartsMixin {
 
     @WrapOperation(method = "read", at = @At(value = "INVOKE",
             target = "Lnet/minecraft/world/level/lighting/LevelLightEngine;queueSectionData(Lnet/minecraft/world/level/LightLayer;Lnet/minecraft/core/SectionPos;Lnet/minecraft/world/level/chunk/DataLayer;)V"))
-    private static void probe$light(LevelLightEngine light, LightLayer layer, SectionPos pos, DataLayer data, Operation<Void> original) {
+    private static void sleep$light(LevelLightEngine light, LightLayer layer, SectionPos pos, DataLayer data, Operation<Void> original) {
         if (!GenProfile.active()) { original.call(light, layer, pos, data); return; }
         long t = System.nanoTime(), m = GenProfile.allocated();
         original.call(light, layer, pos, data);
@@ -42,7 +42,7 @@ public abstract class GenProfileReadPartsMixin {
 
     @WrapOperation(method = "read", at = @At(value = "INVOKE",
             target = "Lnet/minecraft/world/level/chunk/storage/ChunkSerializer;unpackStructureStart(Lnet/minecraft/world/level/levelgen/structure/pieces/StructurePieceSerializationContext;Lnet/minecraft/nbt/CompoundTag;J)Ljava/util/Map;"))
-    private static Map<Structure, StructureStart> probe$starts(StructurePieceSerializationContext ctx, CompoundTag tag, long seed,
+    private static Map<Structure, StructureStart> sleep$starts(StructurePieceSerializationContext ctx, CompoundTag tag, long seed,
                                                               Operation<Map<Structure, StructureStart>> original) {
         if (!GenProfile.active()) return original.call(ctx, tag, seed);
         long t = System.nanoTime(), m = GenProfile.allocated();
@@ -55,7 +55,7 @@ public abstract class GenProfileReadPartsMixin {
 
     @WrapOperation(method = "read", at = @At(value = "INVOKE",
             target = "Lnet/minecraft/world/level/chunk/storage/ChunkSerializer;unpackStructureReferences(Lnet/minecraft/core/RegistryAccess;Lnet/minecraft/world/level/ChunkPos;Lnet/minecraft/nbt/CompoundTag;)Ljava/util/Map;"))
-    private static Map<?, ?> probe$refs(net.minecraft.core.RegistryAccess access, ChunkPos pos, CompoundTag tag, Operation<Map<?, ?>> original) {
+    private static Map<?, ?> sleep$refs(net.minecraft.core.RegistryAccess access, ChunkPos pos, CompoundTag tag, Operation<Map<?, ?>> original) {
         if (!GenProfile.active()) return original.call(access, pos, tag);
         long t = System.nanoTime(), m = GenProfile.allocated();
         try {

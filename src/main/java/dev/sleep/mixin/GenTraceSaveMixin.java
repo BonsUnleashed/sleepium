@@ -20,7 +20,7 @@ import org.spongepowered.asm.mixin.injection.At;
 @Mixin(ChunkSerializer.class)
 public abstract class GenTraceSaveMixin {
     @WrapMethod(method = "write")
-    private static CompoundTag probe$write(ServerLevel level, ChunkAccess chunk, Operation<CompoundTag> original) {
+    private static CompoundTag sleep$write(ServerLevel level, ChunkAccess chunk, Operation<CompoundTag> original) {
         long t = System.nanoTime();
         try {
             return original.call(level, chunk);
@@ -31,7 +31,7 @@ public abstract class GenTraceSaveMixin {
 
     @WrapOperation(method = "write", at = @At(value = "INVOKE",
             target = "Lnet/minecraft/world/level/lighting/LayerLightEventListener;getDataLayerData(Lnet/minecraft/core/SectionPos;)Lnet/minecraft/world/level/chunk/DataLayer;"))
-    private static DataLayer probe$light(LayerLightEventListener l, SectionPos pos, Operation<DataLayer> original) {
+    private static DataLayer sleep$light(LayerLightEventListener l, SectionPos pos, Operation<DataLayer> original) {
         long t = System.nanoTime();
         try {
             return original.call(l, pos);
@@ -42,7 +42,7 @@ public abstract class GenTraceSaveMixin {
 
     @WrapOperation(method = "write", at = @At(value = "INVOKE",
             target = "Lnet/minecraft/world/level/chunk/ChunkAccess;getBlockEntityNbtForSaving(Lnet/minecraft/core/BlockPos;Lnet/minecraft/core/HolderLookup$Provider;)Lnet/minecraft/nbt/CompoundTag;"))
-    private static CompoundTag probe$be(ChunkAccess c, BlockPos pos, HolderLookup.Provider p, Operation<CompoundTag> original) {
+    private static CompoundTag sleep$be(ChunkAccess c, BlockPos pos, HolderLookup.Provider p, Operation<CompoundTag> original) {
         long t = System.nanoTime();
         try {
             return original.call(c, pos, p);
@@ -52,7 +52,7 @@ public abstract class GenTraceSaveMixin {
     }
 
     @WrapMethod(method = "saveTicks")
-    private static void probe$ticks(ServerLevel level, CompoundTag tag, ChunkAccess.TicksToSave ticks, Operation<Void> original) {
+    private static void sleep$ticks(ServerLevel level, CompoundTag tag, ChunkAccess.TicksToSave ticks, Operation<Void> original) {
         long t = System.nanoTime();
         try {
             original.call(level, tag, ticks);
@@ -62,7 +62,7 @@ public abstract class GenTraceSaveMixin {
     }
 
     @WrapMethod(method = "packStructureData")
-    private static CompoundTag probe$structures(net.minecraft.world.level.levelgen.structure.pieces.StructurePieceSerializationContext ctx,
+    private static CompoundTag sleep$structures(net.minecraft.world.level.levelgen.structure.pieces.StructurePieceSerializationContext ctx,
                                                 net.minecraft.world.level.ChunkPos pos,
                                                 java.util.Map<net.minecraft.world.level.levelgen.structure.Structure, net.minecraft.world.level.levelgen.structure.StructureStart> starts,
                                                 java.util.Map<net.minecraft.world.level.levelgen.structure.Structure, it.unimi.dsi.fastutil.longs.LongSet> refs,
@@ -77,7 +77,7 @@ public abstract class GenTraceSaveMixin {
 
     @WrapOperation(method = "write", at = @At(value = "INVOKE",
             target = "Lnet/minecraft/world/level/chunk/ChunkAccess;writeAttachmentsToNBT(Lnet/minecraft/core/HolderLookup$Provider;)Lnet/minecraft/nbt/CompoundTag;"))
-    private static CompoundTag probe$attachments(ChunkAccess c, HolderLookup.Provider p, Operation<CompoundTag> original) {
+    private static CompoundTag sleep$attachments(ChunkAccess c, HolderLookup.Provider p, Operation<CompoundTag> original) {
         long t = System.nanoTime();
         try {
             return original.call(c, p);

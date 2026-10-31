@@ -23,12 +23,12 @@ public abstract class GenTraceSendMixin {
     @Shadow private int maxUnacknowledgedBatches;
 
     @Inject(method = "sendChunk", at = @At("HEAD"))
-    private static void probe$sent(ServerGamePacketListenerImpl listener, ServerLevel level, LevelChunk chunk, CallbackInfo ci) {
+    private static void sleep$sent(ServerGamePacketListenerImpl listener, ServerLevel level, LevelChunk chunk, CallbackInfo ci) {
         GenTrace.sent.increment();
     }
 
     @Inject(method = "sendNextChunks", at = @At("TAIL"))
-    private void probe$state(ServerPlayer player, CallbackInfo ci) {
+    private void sleep$state(ServerPlayer player, CallbackInfo ci) {
         long now = System.nanoTime();
         if (now - GenTrace.lastSenderSample < 1_000_000_000L) return;
         GenTrace.lastSenderSample = now;

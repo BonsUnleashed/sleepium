@@ -18,7 +18,7 @@ import org.spongepowered.asm.mixin.Mixin;
 @Mixin(ChunkStep.class)
 public abstract class GenProfileMixin {
     @WrapMethod(method = "apply")
-    private CompletableFuture<ChunkAccess> probe$time(WorldGenContext ctx, StaticCache2D<GenerationChunkHolder> cache, ChunkAccess chunk,
+    private CompletableFuture<ChunkAccess> sleep$time(WorldGenContext ctx, StaticCache2D<GenerationChunkHolder> cache, ChunkAccess chunk,
                                                      Operation<CompletableFuture<ChunkAccess>> original) {
         if (!GenProfile.active()) return original.call(ctx, cache, chunk);
         long t = System.nanoTime(), m = GenProfile.allocated(), pn = GenProfile.perlin();

@@ -10,9 +10,9 @@ import org.spongepowered.asm.mixin.gen.Accessor;
 public interface NoiseInterpolatorAccessor extends CellProof.Corners {
     @Override
     @Accessor("slice0")
-    double[][] probe$slice0();
+    double[][] sleep$slice0();
 
     @Override
     @Accessor("slice1")
-    double[][] probe$slice1();
+    double[][] sleep$slice1();
 }

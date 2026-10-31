@@ -19,46 +19,46 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
  */
 @Mixin(EntitySection.class)
 public abstract class EntitySectionIndexMixin<T extends EntityAccess> implements IndexedSection {
-    @Unique private long probe$key = Long.MIN_VALUE;
-    @Unique private SectionIndex probe$index;
-    @Unique private IdentityHashMap<Class<?>, SectionIndex> probe$typed;
+    @Unique private long sleep$key = Long.MIN_VALUE;
+    @Unique private SectionIndex sleep$index;
+    @Unique private IdentityHashMap<Class<?>, SectionIndex> sleep$typed;
 
-    @Override public long probe$key() { return probe$key; }
-    @Override public void probe$setKey(long key) { probe$key = key; }
-    @Override public SectionIndex probe$index() { return probe$index; }
-    @Override public void probe$setIndex(SectionIndex index) { probe$index = index; }
+    @Override public long sleep$key() { return sleep$key; }
+    @Override public void sleep$setKey(long key) { sleep$key = key; }
+    @Override public SectionIndex sleep$index() { return sleep$index; }
+    @Override public void sleep$setIndex(SectionIndex index) { sleep$index = index; }
 
     @Override
-    public SectionIndex probe$typedIndex(Class<?> baseClass) {
-        return probe$typed == null ? null : probe$typed.get(baseClass);
+    public SectionIndex sleep$typedIndex(Class<?> baseClass) {
+        return sleep$typed == null ? null : sleep$typed.get(baseClass);
     }
 
     @Override
-    public void probe$putTypedIndex(Class<?> baseClass, SectionIndex index) {
-        if (probe$typed == null) probe$typed = new IdentityHashMap<>(4);
-        probe$typed.put(baseClass, index);
+    public void sleep$putTypedIndex(Class<?> baseClass, SectionIndex index) {
+        if (sleep$typed == null) sleep$typed = new IdentityHashMap<>(4);
+        sleep$typed.put(baseClass, index);
     }
 
     @Override
-    public void probe$forEachTyped(Object entity, net.minecraft.world.phys.AABB bb) {
-        if (probe$typed == null) return;
+    public void sleep$forEachTyped(Object entity, net.minecraft.world.phys.AABB bb) {
+        if (sleep$typed == null) return;
         Thread t = Thread.currentThread();
-        for (SectionIndex i : probe$typed.values()) if (i.owner == t) i.update(entity, bb);
+        for (SectionIndex i : sleep$typed.values()) if (i.owner == t) i.update(entity, bb);
     }
 
     @Unique
-    private void probe$dirty() {
-        if (probe$index != null) probe$index.markDirty();
-        if (probe$typed != null) for (SectionIndex i : probe$typed.values()) i.markDirty();
+    private void sleep$dirty() {
+        if (sleep$index != null) sleep$index.markDirty();
+        if (sleep$typed != null) for (SectionIndex i : sleep$typed.values()) i.markDirty();
     }
 
     @Inject(method = "add", at = @At("RETURN"))
-    private void probe$added(T entity, CallbackInfo ci) {
-        probe$dirty();
+    private void sleep$added(T entity, CallbackInfo ci) {
+        sleep$dirty();
     }
 
     @Inject(method = "remove", at = @At("RETURN"))
-    private void probe$removed(T entity, CallbackInfoReturnable<Boolean> cir) {
-        probe$dirty();
+    private void sleep$removed(T entity, CallbackInfoReturnable<Boolean> cir) {
+        sleep$dirty();
     }
 }

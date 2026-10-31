@@ -15,27 +15,27 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 @Mixin(ServerLevel.class)
 public abstract class ScoutEffectsMixin {
     @Inject(method = "addFreshEntity", at = @At("HEAD"))
-    private void probe$add(CallbackInfoReturnable<Boolean> cir) {
+    private void sleep$add(CallbackInfoReturnable<Boolean> cir) {
         ParallelTickScout.effect(ParallelTickScout.ENTITY_ADD_REMOVE);
     }
 
     @Inject(method = "gameEvent", at = @At("HEAD"))
-    private void probe$gameEvent(CallbackInfo ci) {
+    private void sleep$gameEvent(CallbackInfo ci) {
         ParallelTickScout.effect(ParallelTickScout.GAME_EVENT);
     }
 
     @Inject(method = "blockEvent", at = @At("HEAD"))
-    private void probe$blockEvent(CallbackInfo ci) {
+    private void sleep$blockEvent(CallbackInfo ci) {
         ParallelTickScout.effect(ParallelTickScout.BLOCK_EVENT_Q);
     }
 
     @Inject(method = {"playSeededSound", "levelEvent", "broadcastEntityEvent"}, at = @At("HEAD"))
-    private void probe$packets(CallbackInfo ci) {
+    private void sleep$packets(CallbackInfo ci) {
         ParallelTickScout.effect(ParallelTickScout.PACKETS);
     }
 
     @Inject(method = "sendParticles(Lnet/minecraft/core/particles/ParticleOptions;DDDIDDDD)I", at = @At("HEAD"))
-    private void probe$particles(CallbackInfoReturnable<Integer> cir) {
+    private void sleep$particles(CallbackInfoReturnable<Integer> cir) {
         ParallelTickScout.effect(ParallelTickScout.PACKETS);
     }
 }

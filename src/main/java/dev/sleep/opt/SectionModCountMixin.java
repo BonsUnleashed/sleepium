@@ -15,30 +15,30 @@ import org.spongepowered.asm.mixin.injection.Redirect;
  */
 @Mixin(LevelChunkSection.class)
 public abstract class SectionModCountMixin implements BlockCollisionMemo.Counted {
-    @Unique private int probe$mod;
+    @Unique private int sleep$mod;
 
     @Override
-    public int probe$mod() {
-        return probe$mod;
+    public int sleep$mod() {
+        return sleep$mod;
     }
 
     @Redirect(method = "setBlockState(IIILnet/minecraft/world/level/block/state/BlockState;Z)Lnet/minecraft/world/level/block/state/BlockState;",
             at = @At(value = "INVOKE", target = "Lnet/minecraft/world/level/chunk/PalettedContainer;getAndSet(IIILjava/lang/Object;)Ljava/lang/Object;"))
-    private Object probe$set(PalettedContainer<Object> states, int x, int y, int z, Object state) {
-        probe$mod++;
+    private Object sleep$set(PalettedContainer<Object> states, int x, int y, int z, Object state) {
+        sleep$mod++;
         return states.getAndSet(x, y, z, state);
     }
 
     @Redirect(method = "setBlockState(IIILnet/minecraft/world/level/block/state/BlockState;Z)Lnet/minecraft/world/level/block/state/BlockState;",
             at = @At(value = "INVOKE", target = "Lnet/minecraft/world/level/chunk/PalettedContainer;getAndSetUnchecked(IIILjava/lang/Object;)Ljava/lang/Object;"))
-    private Object probe$setUnchecked(PalettedContainer<Object> states, int x, int y, int z, Object state) {
-        probe$mod++;
+    private Object sleep$setUnchecked(PalettedContainer<Object> states, int x, int y, int z, Object state) {
+        sleep$mod++;
         return states.getAndSetUnchecked(x, y, z, state);
     }
 
     @Redirect(method = "read", at = @At(value = "INVOKE", target = "Lnet/minecraft/world/level/chunk/PalettedContainer;read(Lnet/minecraft/network/FriendlyByteBuf;)V"))
-    private void probe$read(PalettedContainer<?> container, FriendlyByteBuf buf) {
-        probe$mod++;
+    private void sleep$read(PalettedContainer<?> container, FriendlyByteBuf buf) {
+        sleep$mod++;
         container.read(buf);
     }
 }

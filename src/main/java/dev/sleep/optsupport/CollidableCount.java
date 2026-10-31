@@ -4,10 +4,10 @@ import net.minecraft.world.phys.AABB;
 
 /** EntitySection: how many of its entities may return true from canBeCollidedWith (EntityCollide.CAPABLE). */
 public interface CollidableCount {
-    int probe$collidable();
+    int sleep$collidable();
 
     /** EntitySectionStorage: does any section vanilla's walk would visit for {@code bb} hold such an entity? */
     interface Storage {
-        boolean probe$anyCollidable(AABB bb);
+        boolean sleep$anyCollidable(AABB bb);
     }
 }

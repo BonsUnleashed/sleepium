@@ -73,7 +73,7 @@ public final class ParallelTickScout {
         entityWritten.clear();
         for (Long2LongOpenHashMap m : writer) m.clear();
         for (Long2LongOpenHashMap m : entityWriter) m.clear();
-        if (++ticks % 600 == 0) System.out.println("[probe/scout] " + report());
+        if (++ticks % 600 == 0) System.out.println("[sleep/scout] " + report());
     }
 
     private static long region(int cx, int cz, int shift) {

@@ -79,12 +79,12 @@ public final class MolangJit {
         }
 
         /** the compiled code alone (tests) */
-        public final double probe$eval() {
+        public final double sleep$eval() {
             return eval();
         }
 
         /** GeckoLib's tree this was compiled from (tests) */
-        public final MathValue probe$original() {
+        public final MathValue sleep$original() {
             return original;
         }
     }
@@ -97,7 +97,7 @@ public final class MolangJit {
             compiled++;
             return c;
         } catch (Throwable t) {
-            if (failed++ < 5) System.out.println("[probe/opt] molang jit: kept as GeckoLib's tree (" + t + "): " + expr);
+            if (failed++ < 5) System.out.println("[sleep/opt] molang jit: kept as GeckoLib's tree (" + t + "): " + expr);
             return expr;
         }
     }

@@ -14,7 +14,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(MinecraftServer.class)
 public abstract class NetReactorWaitMixin {
     @Inject(method = "waitForTasks", at = @At("HEAD"))
-    private void probe$flush(CallbackInfo ci) {
+    private void sleep$flush(CallbackInfo ci) {
         NetReactor.beforeSleep();
     }
 }

@@ -23,28 +23,28 @@ public abstract class AsyncChunkSaveStorageMixin implements AsyncChunkSave.Stora
     @Shadow private volatile LegacyStructureDataHandler legacyStructureHandler;
 
     @Override
-    public Object probe$legacyHandler() {
+    public Object sleep$legacyHandler() {
         return legacyStructureHandler;
     }
 
     @Override
-    public CompletableFuture<Optional<CompoundTag>> probe$loadDirect(ChunkPos pos) {
+    public CompletableFuture<Optional<CompoundTag>> sleep$loadDirect(ChunkPos pos) {
         return worker.loadAsync(pos);
     }
 
     @Inject(method = "read", at = @At("HEAD"), cancellable = true)
-    private void probe$read(ChunkPos pos, CallbackInfoReturnable<CompletableFuture<Optional<CompoundTag>>> cir) {
+    private void sleep$read(ChunkPos pos, CallbackInfoReturnable<CompletableFuture<Optional<CompoundTag>>> cir) {
         cir.setReturnValue(AsyncChunkSave.read((ChunkStorage) (Object) this, pos));
     }
 
     @Inject(method = "flushWorker", at = @At("HEAD"))
-    private void probe$flush(CallbackInfo ci) {
+    private void sleep$flush(CallbackInfo ci) {
         AsyncChunkSave.drain();
     }
 
     @Inject(method = "close", at = @At("HEAD"))
-    private void probe$close(CallbackInfo ci) {
+    private void sleep$close(CallbackInfo ci) {
         AsyncChunkSave.drain();
-        System.out.println("[probe/opt] " + AsyncChunkSave.report());
+        System.out.println("[sleep/opt] " + AsyncChunkSave.report());
     }
 }

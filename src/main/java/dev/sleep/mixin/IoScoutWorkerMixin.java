@@ -11,20 +11,20 @@ import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 
-/** Measurement only (-Dprobe.ioScout=true): the IOWorker queue: stores posted, loads, each chunk written and the backlog. */
+/** Measurement only (-Dsleep.ioScout=true): the IOWorker queue: stores posted, loads, each chunk written and the backlog. */
 @Mixin(IOWorker.class)
 public abstract class IoScoutWorkerMixin {
     @Shadow @Final private Map<ChunkPos, ?> pendingWrites;
     @Shadow public abstract RegionStorageInfo storageInfo();
 
     @WrapMethod(method = "store")
-    private java.util.concurrent.CompletableFuture<Void> probe$store(ChunkPos pos, net.minecraft.nbt.CompoundTag data, Operation<java.util.concurrent.CompletableFuture<Void>> original) {
+    private java.util.concurrent.CompletableFuture<Void> sleep$store(ChunkPos pos, net.minecraft.nbt.CompoundTag data, Operation<java.util.concurrent.CompletableFuture<Void>> original) {
         IoScout.stored(storageInfo().type());
         return original.call(pos, data);
     }
 
     @WrapMethod(method = "loadAsync")
-    private java.util.concurrent.CompletableFuture<java.util.Optional<net.minecraft.nbt.CompoundTag>> probe$load(ChunkPos pos,
+    private java.util.concurrent.CompletableFuture<java.util.Optional<net.minecraft.nbt.CompoundTag>> sleep$load(ChunkPos pos,
             Operation<java.util.concurrent.CompletableFuture<java.util.Optional<net.minecraft.nbt.CompoundTag>>> original) {
         IoScout.loaded(storageInfo().type());
         return original.call(pos);
@@ -32,12 +32,12 @@ public abstract class IoScoutWorkerMixin {
 
     // PendingStore is private: plain injects without the arguments (runStore catches everything, so RETURN always runs)
     @org.spongepowered.asm.mixin.injection.Inject(method = "runStore", at = @org.spongepowered.asm.mixin.injection.At("HEAD"))
-    private void probe$runStoreStart(org.spongepowered.asm.mixin.injection.callback.CallbackInfo ci) {
+    private void sleep$runStoreStart(org.spongepowered.asm.mixin.injection.callback.CallbackInfo ci) {
         IoScout.beginWrite(storageInfo().type());
     }
 
     @org.spongepowered.asm.mixin.injection.Inject(method = "runStore", at = @org.spongepowered.asm.mixin.injection.At("RETURN"))
-    private void probe$runStoreEnd(org.spongepowered.asm.mixin.injection.callback.CallbackInfo ci) {
+    private void sleep$runStoreEnd(org.spongepowered.asm.mixin.injection.callback.CallbackInfo ci) {
         IoScout.endWrite(pendingWrites.size());
     }
 }

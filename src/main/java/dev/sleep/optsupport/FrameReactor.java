@@ -46,7 +46,7 @@ public final class FrameReactor {
     public static synchronized LabRuntime pool() {
         if (pool == null) {
             pool = new LabRuntime(LabRuntime.Config.of("Frame-Worker", THREADS).withPriority(OsThreads.NORMAL).withDaemon(true));
-            System.out.println("[probe/opt] frame reactor: " + THREADS + " workers");
+            System.out.println("[sleep/opt] frame reactor: " + THREADS + " workers");
         }
         return pool;
     }

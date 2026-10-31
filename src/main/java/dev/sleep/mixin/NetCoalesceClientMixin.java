@@ -18,7 +18,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(Connection.class)
 public abstract class NetCoalesceClientMixin {
     @Inject(method = "configureSerialization", at = @At("RETURN"))
-    private static void probe$decoder(ChannelPipeline pipeline, PacketFlow flow, boolean memoryOnly, @Nullable BandwidthDebugMonitor monitor, CallbackInfo ci) {
+    private static void sleep$decoder(ChannelPipeline pipeline, PacketFlow flow, boolean memoryOnly, @Nullable BandwidthDebugMonitor monitor, CallbackInfo ci) {
         if (!memoryOnly && flow == PacketFlow.CLIENTBOUND && pipeline.get("splitter") != null && pipeline.get("probe_uncoalesce") == null)
             pipeline.addBefore("splitter", "probe_uncoalesce", new dev.sleep.net.CoalesceDecoder());
     }

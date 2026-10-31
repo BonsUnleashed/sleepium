@@ -14,7 +14,7 @@ import org.spongepowered.asm.mixin.Unique;
  */
 @Mixin(ItemFrameRenderer.class)
 public abstract class ItemFrameOffsetMixin<T extends ItemFrame> {
-    @Unique private static final Vec3[] probe$offsets = new Vec3[Direction.values().length];
+    @Unique private static final Vec3[] sleep$offsets = new Vec3[Direction.values().length];
 
     /**
      * @author probe
@@ -23,10 +23,10 @@ public abstract class ItemFrameOffsetMixin<T extends ItemFrame> {
     @Overwrite
     public Vec3 getRenderOffset(T entity, float partialTicks) {
         Direction d = entity.getDirection();
-        Vec3 v = probe$offsets[d.ordinal()];
+        Vec3 v = sleep$offsets[d.ordinal()];
         if (v == null) {
             v = new Vec3((double) ((float) d.getStepX() * 0.3F), -0.25, (double) ((float) d.getStepZ() * 0.3F));
-            probe$offsets[d.ordinal()] = v;
+            sleep$offsets[d.ordinal()] = v;
         }
         return v;
     }

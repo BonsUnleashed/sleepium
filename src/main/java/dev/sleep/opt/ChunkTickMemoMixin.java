@@ -14,15 +14,15 @@ import org.spongepowered.asm.mixin.injection.Redirect;
 @Mixin(ServerChunkCache.class)
 public abstract class ChunkTickMemoMixin {
     @Redirect(method = "tickChunks", at = @At(value = "INVOKE", target = "Lnet/minecraft/server/level/ServerLevel;isNaturalSpawningAllowed(Lnet/minecraft/world/level/ChunkPos;)Z"))
-    private boolean probe$spawningAllowed(ServerLevel level, ChunkPos pos, @Local LevelChunk chunk) {
+    private boolean sleep$spawningAllowed(ServerLevel level, ChunkPos pos, @Local LevelChunk chunk) {
         ChunkTickMemo.Holder h = (ChunkTickMemo.Holder) chunk;
         int e = ChunkTickMemo.epoch;
-        if (h.probe$visEpoch() == e) {
+        if (h.sleep$visEpoch() == e) {
             ChunkTickMemo.hits++;
-            return h.probe$vis();
+            return h.sleep$vis();
         }
         boolean v = level.isNaturalSpawningAllowed(pos);
-        h.probe$setVis(e, v);
+        h.sleep$setVis(e, v);
         ChunkTickMemo.misses++;
         return v;
     }

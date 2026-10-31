@@ -16,18 +16,18 @@ public abstract class ReactorMainDrainMixin {
     @org.spongepowered.asm.mixin.Shadow @org.spongepowered.asm.mixin.Final public net.minecraft.server.level.ChunkMap chunkMap;
 
     @Inject(method = "pollTask", at = @At("HEAD"))
-    private void probe$idleOn(CallbackInfoReturnable<Boolean> cir) {
+    private void sleep$idleOn(CallbackInfoReturnable<Boolean> cir) {
         FullRing.idle = true;
-        if ((Object) this.chunkMap instanceof dev.sleep.optsupport.ChunkLoadMarks m) m.probe$drainMarks();
+        if ((Object) this.chunkMap instanceof dev.sleep.optsupport.ChunkLoadMarks m) m.sleep$drainMarks();
     }
 
     @Inject(method = "tick", at = @At("HEAD"))
-    private void probe$marks(java.util.function.BooleanSupplier hasTimeLeft, boolean tickChunks, org.spongepowered.asm.mixin.injection.callback.CallbackInfo ci) {
-        if ((Object) this.chunkMap instanceof dev.sleep.optsupport.ChunkLoadMarks m) m.probe$drainMarks();
+    private void sleep$marks(java.util.function.BooleanSupplier hasTimeLeft, boolean tickChunks, org.spongepowered.asm.mixin.injection.callback.CallbackInfo ci) {
+        if ((Object) this.chunkMap instanceof dev.sleep.optsupport.ChunkLoadMarks m) m.sleep$drainMarks();
     }
 
     @Inject(method = "pollTask", at = @At("RETURN"))
-    private void probe$idleOff(CallbackInfoReturnable<Boolean> cir) {
+    private void sleep$idleOff(CallbackInfoReturnable<Boolean> cir) {
         FullRing.idle = false;
     }
 }

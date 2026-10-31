@@ -57,7 +57,7 @@ public final class PartBatch {
         if (c == null) {
             GLCapabilities caps = GL.getCapabilities();
             capable = c = (caps.OpenGL46 || caps.GL_ARB_shader_draw_parameters) && (caps.OpenGL43 || caps.GL_ARB_shader_storage_buffer_object);
-            System.out.println("[probe/opt] part batch: " + (c ? "available" : "not available (needs shader draw parameters and storage buffers)"));
+            System.out.println("[sleep/opt] part batch: " + (c ? "available" : "not available (needs shader draw parameters and storage buffers)"));
         }
         return c;
     }
@@ -123,14 +123,14 @@ public final class PartBatch {
     /** A consumer that keeps position, UV and normal of what a part's compile emits (identity pose: local space). */
     /** A geometry consumer that takes per-cube flags (GeckoLib flat cubes) for the vertices that follow. */
     public interface Flagged {
-        void probe$flags(int flags);
+        void sleep$flags(int flags);
     }
 
     static final class GeometryRecorder implements VertexConsumer, Flagged {
         int n, flags;
 
         @Override
-        public void probe$flags(int f) {
+        public void sleep$flags(int f) {
             flags = f;
         }
         float nx, ny, nz;
@@ -194,7 +194,7 @@ public final class PartBatch {
         int[] g = GEOMETRY.get(part);
         if (g != null) return g;
         GEOM.reset();
-        compiler.probe$geometry(IDENTITY.last(), GEOM);
+        compiler.sleep$geometry(IDENTITY.last(), GEOM);
         return upload(part);
     }
 
@@ -234,7 +234,7 @@ public final class PartBatch {
 
     /** The vanilla compile of one part with a given pose into a consumer (ModelPart's private compile). */
     public interface PartCompiler {
-        void probe$geometry(PoseStack.Pose pose, VertexConsumer consumer);
+        void sleep$geometry(PoseStack.Pose pose, VertexConsumer consumer);
     }
 
     // ------------------------------------------------------------------ capture
@@ -283,7 +283,7 @@ public final class PartBatch {
         if (EntityBatch.typeOf(bb) == t) return typeOk(t) && capable();
         // experiment (-Dlab.rcache.translucentResident): a sorted (translucent) type, drawn per object back to front
         return TRANSLUCENT_RESIDENT && t.sortOnUpload() && buffers instanceof net.minecraft.client.renderer.MultiBufferSource.BufferSource bs
-                && ((dev.sleep.opt.BufferSourceAccessor) bs).probe$started().get(t) == bb && typeOk(t) && capable();
+                && ((dev.sleep.opt.BufferSourceAccessor) bs).sleep$started().get(t) == bb && typeOk(t) && capable();
     }
 
     /**
@@ -320,7 +320,7 @@ public final class PartBatch {
     /** One resident segment drawn with the pose M this frame (the batch gets an empty quad so it is drawn). */
     public static void queueResident(RenderType t, BufferBuilder bb, int start, int n, Matrix4f m) {
         dev.sleep.opt.BufferBuilderAccessor a = (dev.sleep.opt.BufferBuilderAccessor) bb;
-        if (a.probe$vertices() == 0) for (int i = 0; i < 4; i++) bb.addVertex(0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0);
+        if (a.sleep$vertices() == 0) for (int i = 0; i < 4; i++) bb.addVertex(0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0);
         Queue q = RESIDENT.computeIfAbsent(t, x -> new Queue());
         q.ensure();
         m.getToAddress(q.mem + 144L * q.n);
@@ -351,14 +351,14 @@ public final class PartBatch {
 
     /** Emits a key's geometry (local space, identity pose) into the consumer; false if it cannot be drawn this way. */
     public interface GeometrySource {
-        boolean probe$emit(Object a, Object b, VertexConsumer consumer);
+        boolean sleep$emit(Object a, Object b, VertexConsumer consumer);
     }
 
     public static long geoParts;
 
     /**
      * GeckoLib bones (mode 3: normals transformed as GeckoLib emits them, not normalised): as capture, with the
-     * geometry under {@code key}, built once from {@code src.probe$emit(a, b, ...)}.
+     * geometry under {@code key}, built once from {@code src.sleep$emit(a, b, ...)}.
      */
     public static boolean captureGeo(Object key, GeometrySource src, Object a, Object b, PoseStack.Pose pose, VertexConsumer buffer, int light, int overlay, int color) {
         RenderType type = batchedType(buffer);
@@ -366,7 +366,7 @@ public final class PartBatch {
         int[] g = GEOMETRY.get(key);
         if (g == null) {
             GEOM.reset();
-            if (src.probe$emit(a, b, GEOM)) g = upload(key);
+            if (src.sleep$emit(a, b, GEOM)) g = upload(key);
             else GEOMETRY.put(key, g = new int[] {-1, 0});
         }
         if (g[0] < 0) return false;
@@ -392,7 +392,7 @@ public final class PartBatch {
     /** The type's queue with room for one more record (the batch gets its empty quad if it has no vertices yet). */
     private static Queue slot(Map<RenderType, Queue> queues, RenderType type, BufferBuilder bb) {
         dev.sleep.opt.BufferBuilderAccessor a = (dev.sleep.opt.BufferBuilderAccessor) bb;
-        if (a.probe$vertices() == 0) {   // the batch must be drawn even if every part of it is queued: one empty quad
+        if (a.sleep$vertices() == 0) {   // the batch must be drawn even if every part of it is queued: one empty quad
             for (int i = 0; i < 4; i++) bb.addVertex(0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0);
         }
         Queue q = queues.computeIfAbsent(type, t -> new Queue());
@@ -497,7 +497,7 @@ public final class PartBatch {
                 ASKED_GEO.remove(key);
                 if (GEOMETRY.get(key) == null) {
                     GEOM.reset();
-                    if (src.probe$emit(a, b, GEOM)) upload(key);
+                    if (src.sleep$emit(a, b, GEOM)) upload(key);
                     else GEOMETRY.put(key, new int[] {-1, 0});
                 }
                 publishGeo(key);
@@ -554,7 +554,7 @@ public final class PartBatch {
                 bb = (BufferBuilder) buffers.getBuffer(last);
                 q = GEO_QUEUES.get(last);
             }
-            if (q == null || q.n == q.cap || ((dev.sleep.opt.BufferBuilderAccessor) bb).probe$vertices() == 0) q = slot(GEO_QUEUES, last, bb);
+            if (q == null || q.n == q.cap || ((dev.sleep.opt.BufferBuilderAccessor) bb).sleep$vertices() == 0) q = slot(GEO_QUEUES, last, bb);
             MemoryUtil.memCopy(parts.mem + 144L * i, q.mem + 144L * q.n, 144);
             commit(q, parts.first[i], parts.quads[i]);
         }

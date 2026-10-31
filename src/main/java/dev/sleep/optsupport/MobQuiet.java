@@ -8,18 +8,18 @@ import java.util.TreeMap;
 import net.minecraft.world.entity.Mob;
 
 /**
- * Measurement only (-Dprobe.mobQuiet=true, MobQuietMixin): how idle mobs are, the ceiling of a mob sleep. Per class:
+ * Measurement only (-Dsleep.mobQuiet=true, MobQuietMixin): how idle mobs are, the ceiling of a mob sleep. Per class:
  * the share of ticks whose visible state (position, rotations, motion, on-ground, the running goals) is the same after
  * the tick as before, the lengths of such quiet streaks, and the random draws per tick on the mob's own random and on
  * any other (shared) random. Printed every 600 game ticks on the server thread, then reset.
  */
 public final class MobQuiet {
-    public static final boolean ON = Boolean.getBoolean("probe.mobQuiet");
+    public static final boolean ON = Boolean.getBoolean("sleep.mobQuiet");
     /** the mob being ticked (server thread), for the draw counter */
     public static Mob current;
     public static int own, shared;
-    /** -Dprobe.mobQuiet.sites=true: where the own draws come from (caller of the RandomSource method), per class */
-    public static final boolean SITES = Boolean.getBoolean("probe.mobQuiet.sites");
+    /** -Dsleep.mobQuiet.sites=true: where the own draws come from (caller of the RandomSource method), per class */
+    public static final boolean SITES = Boolean.getBoolean("sleep.mobQuiet.sites");
     private static final StringBuilder SIG = new StringBuilder();
     private static final Map<String, Map<String, long[]>> SITE_COUNT = new TreeMap<>();   // class -> site -> {draws, quiet-tick draws}
     private static final Map<String, Map<String, long[]>> QUIET_SIGS = new TreeMap<>();   // class -> sequence of sites in a quiet tick -> count
@@ -118,7 +118,7 @@ public final class MobQuiet {
     }
 
     private static void print() {
-        StringBuilder sb = new StringBuilder("[probe/mobquiet] per class: ticks, quiet %, quiet with own draws %, own draws/tick, shared draws/tick, ticks with shared %, mean quiet streak, streaks 1|2|4|8|16|32|64|128+");
+        StringBuilder sb = new StringBuilder("[sleep/mobquiet] per class: ticks, quiet %, quiet with own draws %, own draws/tick, shared draws/tick, ticks with shared %, mean quiet streak, streaks 1|2|4|8|16|32|64|128+");
         for (var e : STATS.entrySet()) {
             Stats s = e.getValue();
             if (s.ticks == 0) continue;

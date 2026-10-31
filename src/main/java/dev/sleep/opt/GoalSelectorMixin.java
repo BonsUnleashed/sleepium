@@ -27,16 +27,16 @@ import org.spongepowered.asm.mixin.injection.Redirect;
 @Mixin(GoalSelector.class)
 public abstract class GoalSelectorMixin {
     @Unique
-    private static final Goal.Flag[] probe$FLAGS = Goal.Flag.values();
+    private static final Goal.Flag[] sleep$FLAGS = Goal.Flag.values();
 
     @Shadow
     @Final
     private Map<Goal.Flag, WrappedGoal> lockedFlags;
 
     @Redirect(method = "tick", at = @At(value = "INVOKE", target = "Ljava/util/Set;removeIf(Ljava/util/function/Predicate;)Z"))
-    private boolean probe$removeStoppedWithoutIterator(Set<?> entrySet, Predicate<?> vanillaFilter) {
+    private boolean sleep$removeStoppedWithoutIterator(Set<?> entrySet, Predicate<?> vanillaFilter) {
         boolean removed = false;
-        for (Goal.Flag flag : probe$FLAGS) {
+        for (Goal.Flag flag : sleep$FLAGS) {
             WrappedGoal goal = lockedFlags.get(flag);
             if (goal != null && !goal.isRunning()) {
                 lockedFlags.remove(flag);

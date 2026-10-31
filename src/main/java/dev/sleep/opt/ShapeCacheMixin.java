@@ -33,26 +33,26 @@ public abstract class ShapeCacheMixin implements BlockCollisionMemo.StaticShape 
     @Shadow public abstract VoxelShape getCollisionShape(BlockGetter level, BlockPos pos);
 
     @Unique private static final boolean CHECK = Boolean.getBoolean("lab.opt.shapeCheck");
-    @Unique private VoxelShape probe$collision;
+    @Unique private VoxelShape sleep$collision;
 
     @Unique
-    private void probe$check(VoxelShape cached, BlockGetter level, BlockPos pos, CollisionContext context) {
-        VoxelShape v = ((BlockBehaviourInvoker) getBlock()).probe$getCollisionShape(asState(), level, pos, context);
+    private void sleep$check(VoxelShape cached, BlockGetter level, BlockPos pos, CollisionContext context) {
+        VoxelShape v = ((BlockBehaviourInvoker) getBlock()).sleep$getCollisionShape(asState(), level, pos, context);
         OptCounters.SHAPE_CHECKED.incrementAndGet();
         if (v != cached && OptCounters.SHAPE_MISMATCHES.incrementAndGet() <= 5)
-            System.out.println("[probe/opt] shape cache MISMATCH " + asState() + " at " + pos + (v.equals(cached) ? " (equal, not same object)" : ""));
+            System.out.println("[sleep/opt] shape cache MISMATCH " + asState() + " at " + pos + (v.equals(cached) ? " (equal, not same object)" : ""));
     }
 
     @Override
-    public boolean probe$staticShape() {
-        return probe$collision != null;
+    public boolean sleep$staticShape() {
+        return sleep$collision != null;
     }
 
     @Inject(method = "initCache", at = @At("TAIL"))
-    private void probe$initCache(CallbackInfo ci) {
+    private void sleep$initCache(CallbackInfo ci) {
         Block block = getBlock();
         // getCollisionShape(level, pos) returns cache.collisionShape whenever the cache exists (no dynamic shape)
-        probe$collision = !block.hasDynamicShape() && ShapePurity.isStatic(block)
+        sleep$collision = !block.hasDynamicShape() && ShapePurity.isStatic(block)
                 ? getCollisionShape(EmptyBlockGetter.INSTANCE, BlockPos.ZERO) : null;
     }
 
@@ -62,11 +62,11 @@ public abstract class ShapeCacheMixin implements BlockCollisionMemo.StaticShape 
      */
     @Overwrite
     public VoxelShape getCollisionShape(BlockGetter level, BlockPos pos, CollisionContext context) {
-        VoxelShape s = probe$collision;
+        VoxelShape s = sleep$collision;
         if (s != null) {
-            if (CHECK) probe$check(s, level, pos, context);
+            if (CHECK) sleep$check(s, level, pos, context);
             return s;
         }
-        return ((BlockBehaviourInvoker) getBlock()).probe$getCollisionShape(asState(), level, pos, context);
+        return ((BlockBehaviourInvoker) getBlock()).sleep$getCollisionShape(asState(), level, pos, context);
     }
 }

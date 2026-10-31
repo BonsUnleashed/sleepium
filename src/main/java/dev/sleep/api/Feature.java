@@ -1,7 +1,7 @@
 package dev.sleep.api;
 
 /**
- * probe's switchable features, as {@link ProbeApi#isEnabled(Feature)} reports them. The flag is the JVM property
+ * probe's switchable features, as {@link SleepApi#isEnabled(Feature)} reports them. The flag is the JVM property
  * {@code -Dlab.opt.<flag>=true}; features {@link #inAll() in the "all" set} are also on with {@code -Dlab.opt.all=true},
  * and {@code -Dlab.opt.universal=true} has already been expanded into its individual flags when mods load.
  */

@@ -8,7 +8,7 @@ import net.minecraft.world.level.Level;
  * shared by both sides (tags, fluid shapes, registries) must stay server-only in singleplayer.
  */
 public final class OwnerThread {
-    /** set by the client every frame (ClientProbe, RenderFrameEvent.Pre); null on a dedicated server */
+    /** set by the client every frame (ClientMeter, RenderFrameEvent.Pre); null on a dedicated server */
     public static volatile Thread client;
     /** -Dlab.opt.noClientLogic=true: memos stay server-only (A/B of the client side) */
     public static final boolean CLIENT_LOGIC = !Boolean.getBoolean("lab.opt.noClientLogic");

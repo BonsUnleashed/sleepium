@@ -11,15 +11,15 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 /** Mob sleep: a modification counter on GoalSelector - goals added or removed change a sleeping mob's contexts. */
 @Mixin(GoalSelector.class)
 public abstract class MobSleepGoalsMixin implements MobSleepHooks.GoalEpoch {
-    @Unique private int probe$goalEpoch;
+    @Unique private int sleep$goalEpoch;
 
     @Override
-    public int probe$goalEpoch() {
-        return probe$goalEpoch;
+    public int sleep$goalEpoch() {
+        return sleep$goalEpoch;
     }
 
     @Inject(method = {"addGoal", "removeGoal", "removeAllGoals"}, at = @At("HEAD"))
-    private void probe$changed(CallbackInfo ci) {
-        probe$goalEpoch++;
+    private void sleep$changed(CallbackInfo ci) {
+        sleep$goalEpoch++;
     }
 }

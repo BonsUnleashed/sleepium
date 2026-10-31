@@ -20,8 +20,8 @@ import org.spongepowered.asm.mixin.Unique;
 public abstract class TagCacheMixin<T> {
     @Shadow private Set<TagKey<T>> tags;
 
-    @Unique private Object probe$set, probe$k1, probe$k2;
-    @Unique private boolean probe$v1, probe$v2;
+    @Unique private Object sleep$set, sleep$k1, sleep$k2;
+    @Unique private boolean sleep$v1, sleep$v2;
 
     /**
      * @author probe (lab.opt.TagCacheMixin)
@@ -32,18 +32,18 @@ public abstract class TagCacheMixin<T> {
         Set<TagKey<T>> t = this.tags;
         var server = net.neoforged.neoforge.server.ServerLifecycleHooks.getCurrentServer();   // current one: a client starts a new server per world
         if (server == null || Thread.currentThread() != server.getRunningThread()) return t.contains(tagKey);
-        if (probe$set == t) {
-            if (probe$k1 == tagKey) return probe$v1;
-            if (probe$k2 == tagKey) return probe$v2;
+        if (sleep$set == t) {
+            if (sleep$k1 == tagKey) return sleep$v1;
+            if (sleep$k2 == tagKey) return sleep$v2;
         } else {
-            probe$set = t;
-            probe$k1 = probe$k2 = null;
+            sleep$set = t;
+            sleep$k1 = sleep$k2 = null;
         }
         boolean r = t.contains(tagKey);
-        probe$k2 = probe$k1;
-        probe$v2 = probe$v1;
-        probe$k1 = tagKey;
-        probe$v1 = r;
+        sleep$k2 = sleep$k1;
+        sleep$v2 = sleep$v1;
+        sleep$k1 = tagKey;
+        sleep$v1 = r;
         return r;
     }
 }

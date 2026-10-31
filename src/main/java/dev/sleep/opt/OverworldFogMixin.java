@@ -13,7 +13,7 @@ import org.spongepowered.asm.mixin.Unique;
  */
 @Mixin(targets = "net.minecraft.client.renderer.DimensionSpecialEffects$OverworldEffects")
 public abstract class OverworldFogMixin {
-    @Unique private static final dev.sleep.optsupport.MixinHelpers.FogEntry[] probe$fog = new dev.sleep.optsupport.MixinHelpers.FogEntry[64];
+    @Unique private static final dev.sleep.optsupport.MixinHelpers.FogEntry[] sleep$fog = new dev.sleep.optsupport.MixinHelpers.FogEntry[64];
 
     /**
      * @author probe
@@ -23,10 +23,10 @@ public abstract class OverworldFogMixin {
     public Vec3 getBrightnessDependentFogColor(Vec3 color, float brightness) {
         int b = Float.floatToRawIntBits(brightness);
         int i = (System.identityHashCode(color) ^ b * 31) & 63;
-        var e = probe$fog[i];
+        var e = sleep$fog[i];
         if (e != null && e.in() == color && e.brightness() == b) return e.out();
         Vec3 out = color.multiply((double) (brightness * 0.94F + 0.06F), (double) (brightness * 0.94F + 0.06F), (double) (brightness * 0.91F + 0.09F));
-        probe$fog[i] = new dev.sleep.optsupport.MixinHelpers.FogEntry(color, b, out);
+        sleep$fog[i] = new dev.sleep.optsupport.MixinHelpers.FogEntry(color, b, out);
         return out;
     }
 }

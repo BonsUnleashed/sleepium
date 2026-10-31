@@ -13,7 +13,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(Entity.class)
 public abstract class JobSiteReleaseMixin {
     @Inject(method = "setRemoved", at = @At("HEAD"))
-    private void probe$removed(Entity.RemovalReason reason, CallbackInfo ci) {
-        if ((Object) this instanceof LivingEntity e && !e.level().isClientSide) ((JobSiteBrainAccess) e.getBrain()).probe$release();
+    private void sleep$removed(Entity.RemovalReason reason, CallbackInfo ci) {
+        if ((Object) this instanceof LivingEntity e && !e.level().isClientSide) ((JobSiteBrainAccess) e.getBrain()).sleep$release();
     }
 }

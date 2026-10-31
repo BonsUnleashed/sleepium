@@ -35,7 +35,7 @@ public final class LightSnapshot {
 
     /** DataLayerStorageMap, through LightSnapshotMixin */
     public interface Tracked {
-        Long2ObjectOpenHashMap<DataLayer> probe$snapshot(Long2ObjectOpenHashMap<DataLayer> live);
+        Long2ObjectOpenHashMap<DataLayer> sleep$snapshot(Long2ObjectOpenHashMap<DataLayer> live);
     }
 
     /** per updating map: its base, the keys written since, and the snapshot to publish */
@@ -77,7 +77,7 @@ public final class LightSnapshot {
             long k = it.nextLong();
             if (snap.get(k) != live.get(k) || snap.containsKey(k) != live.containsKey(k)) bad = true;
         }
-        if (bad && mismatches.incrementAndGet() <= 5) System.out.println("[probe/opt] light snapshot MISMATCH (size " + snap.size() + " vs " + live.size() + ")");
+        if (bad && mismatches.incrementAndGet() <= 5) System.out.println("[sleep/opt] light snapshot MISMATCH (size " + snap.size() + " vs " + live.size() + ")");
     }
 
     public static String report() {

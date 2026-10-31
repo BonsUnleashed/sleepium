@@ -12,15 +12,15 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 /** lab.opt.MoveMemo: a modification counter on AttributeMap (every AttributeInstance change reports here). */
 @Mixin(AttributeMap.class)
 public abstract class MoveMemoAttributesMixin implements MoveMemo.AttrEpoch {
-    @Unique private int probe$attrEpoch;
+    @Unique private int sleep$attrEpoch;
 
     @Override
-    public int probe$attrEpoch() {
-        return probe$attrEpoch;
+    public int sleep$attrEpoch() {
+        return sleep$attrEpoch;
     }
 
     @Inject(method = "onAttributeModified", at = @At("HEAD"))
-    private void probe$modified(AttributeInstance instance, CallbackInfo ci) {
-        probe$attrEpoch++;
+    private void sleep$modified(AttributeInstance instance, CallbackInfo ci) {
+        sleep$attrEpoch++;
     }
 }

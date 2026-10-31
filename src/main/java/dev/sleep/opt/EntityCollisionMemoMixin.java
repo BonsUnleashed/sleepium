@@ -8,20 +8,20 @@ import org.spongepowered.asm.mixin.Unique;
 /** Goes with BlockCollisionMemoMixin: the per-entity memo slot. */
 @Mixin(Entity.class)
 public abstract class EntityCollisionMemoMixin implements BlockCollisionMemo.Holder {
-    @Unique private BlockCollisionMemo probe$collisionMemo, probe$collideMemo, probe$supportMemo;
+    @Unique private BlockCollisionMemo sleep$collisionMemo, sleep$collideMemo, sleep$supportMemo;
 
-    @Override public BlockCollisionMemo probe$collideMemo() { return probe$collideMemo; }
-    @Override public void probe$setCollideMemo(BlockCollisionMemo m) { probe$collideMemo = m; }
-    @Override public BlockCollisionMemo probe$supportMemo() { return probe$supportMemo; }
-    @Override public void probe$setSupportMemo(BlockCollisionMemo m) { probe$supportMemo = m; }
+    @Override public BlockCollisionMemo sleep$collideMemo() { return sleep$collideMemo; }
+    @Override public void sleep$setCollideMemo(BlockCollisionMemo m) { sleep$collideMemo = m; }
+    @Override public BlockCollisionMemo sleep$supportMemo() { return sleep$supportMemo; }
+    @Override public void sleep$setSupportMemo(BlockCollisionMemo m) { sleep$supportMemo = m; }
 
     @Override
-    public BlockCollisionMemo probe$collisionMemo() {
-        return probe$collisionMemo;
+    public BlockCollisionMemo sleep$collisionMemo() {
+        return sleep$collisionMemo;
     }
 
     @Override
-    public void probe$setCollisionMemo(BlockCollisionMemo m) {
-        probe$collisionMemo = m;
+    public void sleep$setCollisionMemo(BlockCollisionMemo m) {
+        sleep$collisionMemo = m;
     }
 }

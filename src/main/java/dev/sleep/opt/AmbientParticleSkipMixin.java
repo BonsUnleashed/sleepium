@@ -21,24 +21,24 @@ import org.spongepowered.asm.mixin.injection.Redirect;
  */
 @Mixin(ClientLevel.class)
 public abstract class AmbientParticleSkipMixin {
-    @Unique private Holder<Biome> probe$none;
-    @Unique private long probe$tick = Long.MIN_VALUE;
-    @Unique private boolean probe$any;
+    @Unique private Holder<Biome> sleep$none;
+    @Unique private long sleep$tick = Long.MIN_VALUE;
+    @Unique private boolean sleep$any;
 
     @Redirect(method = "doAnimateTick", at = @At(value = "INVOKE",
             target = "Lnet/minecraft/client/multiplayer/ClientLevel;getBiome(Lnet/minecraft/core/BlockPos;)Lnet/minecraft/core/Holder;"))
-    private Holder<Biome> probe$biome(ClientLevel level, BlockPos pos) {
+    private Holder<Biome> sleep$biome(ClientLevel level, BlockPos pos) {
         long t = ClientCounters.ambientVersion;   // bumped at every chunk load, biome update and drop
-        if (t != probe$tick) {
-            probe$tick = t;
-            probe$any = ((ClientCounters.AmbientChunks) level.getChunkSource()).probe$anyAmbient();
+        if (t != sleep$tick) {
+            sleep$tick = t;
+            sleep$any = ((ClientCounters.AmbientChunks) level.getChunkSource()).sleep$anyAmbient();
         }
-        if (!probe$any) {
-            Holder<Biome> none = probe$none;
+        if (!sleep$any) {
+            Holder<Biome> none = sleep$none;
             if (none == null) {
                 none = level.registryAccess().registryOrThrow(Registries.BIOME).getHolderOrThrow(Biomes.PLAINS);
                 if (none.value().getAmbientParticle().isPresent()) none = null;   // datapack gave plains particles
-                probe$none = none;
+                sleep$none = none;
             }
             if (none != null) {
                 ClientCounters.biomeSkips++;

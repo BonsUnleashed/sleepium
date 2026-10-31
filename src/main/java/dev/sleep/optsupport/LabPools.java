@@ -28,12 +28,12 @@ public final class LabPools {
     public static ExecutorService background(String serviceName, Thread.UncaughtExceptionHandler handler) {
         LabRuntime rt = new LabRuntime(LabRuntime.Config.of("Worker-" + serviceName, BG)
                 .withPriority(OsThreads.BELOW_NORMAL).withHandler(handler));
-        System.out.println("[probe/opt] LabRuntime background pool 'Worker-" + serviceName + "': " + BG
+        System.out.println("[sleep/opt] LabRuntime background pool 'Worker-" + serviceName + "': " + BG
                 + " workers, BELOW_NORMAL, native priorities: " + OsThreads.nativeAvailable());
         // commonPool cannot be redirected: its only user is NeoForge's bootstrap (JarModuleFinder parallel stream),
         // which runs before any mod or mixin exists. Cap it with a JVM flag instead.
         int cp = java.util.concurrent.ForkJoinPool.getCommonPoolParallelism();
-        if (cp > 2) System.out.println("[probe/opt] commonPool parallelism " + cp
+        if (cp > 2) System.out.println("[sleep/opt] commonPool parallelism " + cp
                 + ": add -Djava.util.concurrent.ForkJoinPool.common.parallelism=2 (bootstrap spawns " + cp + " idle threads)");
         return rt;
     }
@@ -43,7 +43,7 @@ public final class LabPools {
         int n = base.startsWith("Download") ? 2 : IO;
         LabRuntime rt = new LabRuntime(LabRuntime.Config.of(base, n)
                 .withPriority(OsThreads.ABOVE_NORMAL).withDaemon(daemon).withHandler(handler));
-        System.out.println("[probe/opt] LabRuntime IO pool '" + base + "': " + n + " workers, ABOVE_NORMAL, daemon " + daemon);
+        System.out.println("[sleep/opt] LabRuntime IO pool '" + base + "': " + n + " workers, ABOVE_NORMAL, daemon " + daemon);
         return rt;
     }
 }

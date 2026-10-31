@@ -23,7 +23,7 @@ import org.spongepowered.asm.mixin.injection.Redirect;
         "net.minecraft.world.level.redstone.CollectingNeighborUpdater$FullNeighborUpdate"})
 public abstract class NeighborReactMixin {
     @Redirect(method = "runNext", at = @At(value = "INVOKE", target = "Lnet/minecraft/world/level/redstone/NeighborUpdater;executeUpdate(Lnet/minecraft/world/level/Level;Lnet/minecraft/world/level/block/state/BlockState;Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/block/Block;Lnet/minecraft/core/BlockPos;Z)V"))
-    private void probe$maybeUpdate(Level level, BlockState state, BlockPos pos, Block block, BlockPos neighborPos, boolean moved) {
-        if (((ReactsHolder) state).probe$reacts()) NeighborUpdater.executeUpdate(level, state, pos, block, neighborPos, moved);
+    private void sleep$maybeUpdate(Level level, BlockState state, BlockPos pos, Block block, BlockPos neighborPos, boolean moved) {
+        if (((ReactsHolder) state).sleep$reacts()) NeighborUpdater.executeUpdate(level, state, pos, block, neighborPos, moved);
     }
 }

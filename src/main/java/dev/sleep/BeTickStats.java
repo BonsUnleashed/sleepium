@@ -12,7 +12,7 @@ import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 
 /**
- * Generic "idle tick" detector for every block-entity type, vanilla or modded ({@code -Dprobe.beStats=true}).
+ * Generic "idle tick" detector for every block-entity type, vanilla or modded ({@code -Dsleep.beStats=true}).
  *
  * <p>Each block-entity tick is wrapped (BeTickMixin, the one call site all types share). A tick is <b>idle</b> when
  * it made no world-visible write: {@link #writes} is bumped by hooks on setBlock, BlockEntity.setChanged, entity
@@ -23,12 +23,12 @@ import net.minecraft.world.level.block.entity.BlockEntityType;
  * seen, so "idle" means "nothing the world could observe happened", not "the object did not change".
  */
 public final class BeTickStats {
-    public static final boolean ON = Boolean.getBoolean("probe.beStats") || Boolean.getBoolean("probe.beFields")
-            || Boolean.getBoolean("probe.beReads");
+    public static final boolean ON = Boolean.getBoolean("sleep.beStats") || Boolean.getBoolean("sleep.beFields")
+            || Boolean.getBoolean("sleep.beReads");
     /** Also diff every field of the block entity before/after its tick (FieldDiff). */
-    public static final boolean FIELDS = Boolean.getBoolean("probe.beFields");
+    public static final boolean FIELDS = Boolean.getBoolean("sleep.beFields");
     /** Record world reads during each tick (ReadProbeMixin, applied only with this flag). */
-    public static final boolean READS = Boolean.getBoolean("probe.beReads");
+    public static final boolean READS = Boolean.getBoolean("sleep.beReads");
     static final int STREAK = 20;
 
     /** World-visible writes, bumped by the write hooks (server thread). */
@@ -161,7 +161,7 @@ public final class BeTickStats {
         long tick = server.getTickCount();
         long dt = Math.max(1, tick - lastTick);
         lastTick = tick;
-        if (!ON) return "block-entity stats are off: start with -Dprobe.beStats=true\n";
+        if (!ON) return "block-entity stats are off: start with -Dsleep.beStats=true\n";
         Map<BlockEntityType<?>, Integer> instances = new HashMap<>();
         for (BlockEntity be : STREAKS.keySet()) instances.merge(be.getType(), 1, Integer::sum);
         List<Map.Entry<BlockEntityType<?>, Stat>> rows = new ArrayList<>(STATS.entrySet());

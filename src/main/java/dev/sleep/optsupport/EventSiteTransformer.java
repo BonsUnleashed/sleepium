@@ -57,7 +57,7 @@ public final class EventSiteTransformer {
                 rewritten++;
             }
         }
-        System.out.println("[probe/opt] event sites: " + cn.name + " " + (rewritten - before) + " post calls rewritten");
+        System.out.println("[sleep/opt] event sites: " + cn.name + " " + (rewritten - before) + " post calls rewritten");
     }
 
     private static boolean isPost(AbstractInsnNode in) {

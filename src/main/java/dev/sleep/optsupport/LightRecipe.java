@@ -175,7 +175,7 @@ public final class LightRecipe {
             int e = emulate(level, pos, rec[i]);
             if (e == lightmap[i]) matches.incrementAndGet();
             else if (mismatches.incrementAndGet() <= 10)
-                System.out.println("[probe/lightrecipe] MISMATCH " + level.getBlockState(pos) + " at " + pos + " face " + dir + " vertex " + i + ": recipe "
+                System.out.println("[sleep/lightrecipe] MISMATCH " + level.getBlockState(pos) + " at " + pos + " face " + dir + " vertex " + i + ": recipe "
                         + Integer.toHexString(e) + " vanilla " + Integer.toHexString(lightmap[i]) + " flags " + flags);
         }
     }

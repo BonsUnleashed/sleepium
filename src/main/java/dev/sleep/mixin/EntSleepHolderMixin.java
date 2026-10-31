@@ -7,15 +7,15 @@ import org.spongepowered.asm.mixin.Unique;
 
 @Mixin(Entity.class)
 public abstract class EntSleepHolderMixin implements EntSleeperHolder {
-    @Unique private Object probe$es;
+    @Unique private Object sleep$es;
 
     @Override
-    public Object probe$es() {
-        return probe$es;
+    public Object sleep$es() {
+        return sleep$es;
     }
 
     @Override
-    public void probe$setEs(Object s) {
-        probe$es = s;
+    public void sleep$setEs(Object s) {
+        sleep$es = s;
     }
 }

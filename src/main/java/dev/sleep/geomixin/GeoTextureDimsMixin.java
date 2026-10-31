@@ -17,7 +17,7 @@ import software.bernie.geckolib.renderer.specialty.DynamicGeoEntityRenderer;
 @SuppressWarnings({"rawtypes", "unchecked"})
 public abstract class GeoTextureDimsMixin {
     @Redirect(method = "computeTextureSize", at = @At(value = "INVOKE", target = "Ljava/util/Map;computeIfAbsent(Ljava/lang/Object;Ljava/util/function/Function;)Ljava/lang/Object;"))
-    private Object probe$dims(Map map, Object key, Function fill) {
+    private Object sleep$dims(Map map, Object key, Function fill) {
         synchronized (map) {
             Object v = map.get(key);
             if (v != null) return v;

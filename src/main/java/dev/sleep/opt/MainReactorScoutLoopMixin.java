@@ -11,7 +11,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(BlockableEventLoop.class)
 public abstract class MainReactorScoutLoopMixin {
     @Inject(method = "doRunTask", at = @At("HEAD"))
-    private void probe$task(Runnable task, CallbackInfo ci) {
+    private void sleep$task(Runnable task, CallbackInfo ci) {
         MainReactor.found("queued task: " + ((BlockableEventLoop<?>) (Object) this).name());
     }
 }

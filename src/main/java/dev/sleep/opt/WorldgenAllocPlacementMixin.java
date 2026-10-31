@@ -35,18 +35,18 @@ public abstract class WorldgenAllocPlacementMixin {
     private boolean placeWithContext(PlacementContext context, RandomSource source, BlockPos pos) {
         ConfiguredFeature<?, ?> configuredfeature = this.feature.value();
         boolean[] placed = new boolean[1];
-        probe$apply(0, pos, context, source, configuredfeature, placed);
+        sleep$apply(0, pos, context, source, configuredfeature, placed);
         return placed[0];
     }
 
     @Unique
-    private void probe$apply(int i, BlockPos pos, PlacementContext context, RandomSource source, ConfiguredFeature<?, ?> feature, boolean[] placed) {
+    private void sleep$apply(int i, BlockPos pos, PlacementContext context, RandomSource source, ConfiguredFeature<?, ?> feature, boolean[] placed) {
         if (i == this.placement.size()) {
             if (feature.place(context.getLevel(), context.generator(), source, pos)) placed[0] = true;
             return;
         }
         try (Stream<BlockPos> s = this.placement.get(i).getPositions(context, source, pos)) {
-            if (s != null) s.sequential().forEach(p -> probe$apply(i + 1, p, context, source, feature, placed));
+            if (s != null) s.sequential().forEach(p -> sleep$apply(i + 1, p, context, source, feature, placed));
         }
     }
 }

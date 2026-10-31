@@ -28,11 +28,11 @@ public abstract class UniformDedupeMixin {
     @Shadow @Final private FloatBuffer floatValues;
     @Shadow private boolean dirty;
 
-    @Unique private int[] probe$last;
-    @Unique private int probe$lastLocation = Integer.MIN_VALUE;
+    @Unique private int[] sleep$last;
+    @Unique private int sleep$lastLocation = Integer.MIN_VALUE;
 
     @Inject(method = "upload", at = @At("HEAD"), cancellable = true)
-    private void probe$dedupe(CallbackInfo ci) {
+    private void sleep$dedupe(CallbackInfo ci) {
         if (this.location == -1) {
             this.dirty = false;
             ClientCounters.uniformsSkipped++;
@@ -41,9 +41,9 @@ public abstract class UniformDedupeMixin {
         }
         if (this.type > 10) return;
         int n = this.count;
-        int[] last = probe$last;
+        int[] last = sleep$last;
         boolean ints = this.type <= 3;
-        if (last != null && last.length == n && probe$lastLocation == this.location) {
+        if (last != null && last.length == n && sleep$lastLocation == this.location) {
             boolean same = true;
             for (int i = 0; i < n; i++) {
                 int v = ints ? this.intValues.get(i) : Float.floatToRawIntBits(this.floatValues.get(i));
@@ -59,9 +59,9 @@ public abstract class UniformDedupeMixin {
                 return;
             }
         }
-        if (last == null || last.length != n) probe$last = last = new int[n];
+        if (last == null || last.length != n) sleep$last = last = new int[n];
         for (int i = 0; i < n; i++) last[i] = ints ? this.intValues.get(i) : Float.floatToRawIntBits(this.floatValues.get(i));
-        probe$lastLocation = this.location;
+        sleep$lastLocation = this.location;
         ClientCounters.uniformsSent++;
     }
 }

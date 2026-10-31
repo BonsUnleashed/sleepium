@@ -13,30 +13,30 @@ import org.spongepowered.asm.mixin.Unique;
 public abstract class ChunkIoPendingMixin implements ChunkIo.Entry {
     @Shadow CompoundTag data;
     @Shadow @Final CompletableFuture<Void> result;
-    @Unique private byte[] probe$bytes;
+    @Unique private byte[] sleep$bytes;
 
     @Override
-    public CompoundTag probe$data() {
+    public CompoundTag sleep$data() {
         return data;
     }
 
     @Override
-    public void probe$setData(CompoundTag data) {
+    public void sleep$setData(CompoundTag data) {
         this.data = data;
     }
 
     @Override
-    public byte[] probe$bytes() {
-        return probe$bytes;
+    public byte[] sleep$bytes() {
+        return sleep$bytes;
     }
 
     @Override
-    public void probe$setBytes(byte[] bytes) {
-        probe$bytes = bytes;
+    public void sleep$setBytes(byte[] bytes) {
+        sleep$bytes = bytes;
     }
 
     @Override
-    public CompletableFuture<Void> probe$result() {
+    public CompletableFuture<Void> sleep$result() {
         return result;
     }
 }

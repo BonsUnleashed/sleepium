@@ -14,7 +14,7 @@ import org.spongepowered.asm.mixin.Mixin;
 @Mixin(LevelChunk.class)
 public abstract class GenProfileAdmitMixin {
     @WrapMethod(method = "runPostLoad")
-    private void probe$postLoad(Operation<Void> original) {
+    private void sleep$postLoad(Operation<Void> original) {
         if (!GenProfile.active()) {
             original.call();
             return;
@@ -28,7 +28,7 @@ public abstract class GenProfileAdmitMixin {
     }
 
     @WrapMethod(method = "registerAllBlockEntitiesAfterLevelLoad")
-    private void probe$bes(Operation<Void> original) {
+    private void sleep$bes(Operation<Void> original) {
         if (!GenProfile.active()) {
             original.call();
             return;
@@ -42,7 +42,7 @@ public abstract class GenProfileAdmitMixin {
     }
 
     @WrapMethod(method = "registerTickContainerInLevel")
-    private void probe$ticks(ServerLevel level, Operation<Void> original) {
+    private void sleep$ticks(ServerLevel level, Operation<Void> original) {
         if (!GenProfile.active()) {
             original.call(level);
             return;
@@ -56,7 +56,7 @@ public abstract class GenProfileAdmitMixin {
     }
 
     @WrapMethod(method = "postProcessGeneration")
-    private void probe$post(Operation<Void> original) {
+    private void sleep$post(Operation<Void> original) {
         if (!GenProfile.active()) {
             original.call();
             return;

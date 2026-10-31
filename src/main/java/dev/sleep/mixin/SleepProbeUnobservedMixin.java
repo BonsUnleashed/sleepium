@@ -19,50 +19,50 @@ import net.minecraft.world.level.lighting.LevelLightEngine;
 @Mixin(Level.class)
 public abstract class SleepProbeUnobservedMixin {
     @ModifyVariable(method = "getFluidState", at = @At("HEAD"), argsOnly = true)
-    private BlockPos probe$fluid(BlockPos pos) {
+    private BlockPos sleep$fluid(BlockPos pos) {
         SleepEngine.readPos('F', pos);   // a fluid is part of the block state: block changes at pos wake the sleeper
         return pos;
     }
 
     @ModifyVariable(method = "isRainingAt", at = @At("HEAD"), argsOnly = true)
-    private BlockPos probe$rainAt(BlockPos pos) {
+    private BlockPos sleep$rainAt(BlockPos pos) {
         SleepEngine.weatherRead((Level) (Object) this);
         return pos;
     }
 
     @ModifyVariable(method = "getHeight(Lnet/minecraft/world/level/levelgen/Heightmap$Types;II)I", at = @At("HEAD"), argsOnly = true)
-    private Heightmap.Types probe$height(Heightmap.Types t) {
+    private Heightmap.Types sleep$height(Heightmap.Types t) {
         SleepEngine.unobservedRead();
         return t;
     }
 
     @ModifyVariable(method = "getRainLevel", at = @At("HEAD"), argsOnly = true)
-    private float probe$rainLevel(float d) {
+    private float sleep$rainLevel(float d) {
         SleepEngine.weatherRead((Level) (Object) this);
         return d;
     }
 
     @ModifyVariable(method = "getThunderLevel", at = @At("HEAD"), argsOnly = true)
-    private float probe$thunderLevel(float d) {
+    private float sleep$thunderLevel(float d) {
         SleepEngine.weatherRead((Level) (Object) this);
         return d;
     }
 
     // no-argument getters: pass-through return values (MixinExtras, no CallbackInfo allocation)
     @ModifyReturnValue(method = {"isRaining", "isThundering"}, at = @At("RETURN"))
-    private boolean probe$weather(boolean v) {
+    private boolean sleep$weather(boolean v) {
         SleepEngine.weatherRead((Level) (Object) this);
         return v;
     }
 
     @ModifyReturnValue(method = "getDayTime", at = @At("RETURN"))
-    private long probe$dayTime(long v) {
+    private long sleep$dayTime(long v) {
         SleepEngine.unobservedRead();
         return v;
     }
 
     @ModifyReturnValue(method = "getLightEngine", at = @At("RETURN"))
-    private LevelLightEngine probe$light(LevelLightEngine v) {
+    private LevelLightEngine sleep$light(LevelLightEngine v) {
         SleepEngine.unobservedRead();
         return v;
     }

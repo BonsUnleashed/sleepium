@@ -41,27 +41,27 @@ public abstract class BrainFlatMixin<E extends LivingEntity> {
 
     @Unique private static final boolean CHECK = Boolean.getBoolean("lab.opt.brainCheck");
 
-    @Unique private int probe$epoch, probe$builtEpoch = -1;
-    @Unique private BehaviorControl<? super E>[] probe$beh;
-    @Unique private Activity[] probe$groupAct;
-    @Unique private int[] probe$groupEnd;
-    @Unique private BehaviorControl<? super E>[] probe$runBuf;
-    @Unique private boolean probe$runBusy;
+    @Unique private int sleep$epoch, sleep$builtEpoch = -1;
+    @Unique private BehaviorControl<? super E>[] sleep$beh;
+    @Unique private Activity[] sleep$groupAct;
+    @Unique private int[] sleep$groupEnd;
+    @Unique private BehaviorControl<? super E>[] sleep$runBuf;
+    @Unique private boolean sleep$runBusy;
 
     @Inject(method = "addActivityAndRemoveMemoriesWhenStopped", at = @At("TAIL"))
-    private void probe$added(CallbackInfo ci) {
-        probe$epoch++;
+    private void sleep$added(CallbackInfo ci) {
+        sleep$epoch++;
     }
 
     @Inject(method = "removeAllBehaviors", at = @At("TAIL"))
-    private void probe$cleared(CallbackInfo ci) {
-        probe$epoch++;
+    private void sleep$cleared(CallbackInfo ci) {
+        sleep$epoch++;
     }
 
     @Unique
     @SuppressWarnings("unchecked")
-    private BehaviorControl<? super E>[] probe$flat() {
-        if (probe$builtEpoch == probe$epoch) return probe$beh;
+    private BehaviorControl<? super E>[] sleep$flat() {
+        if (sleep$builtEpoch == sleep$epoch) return sleep$beh;
         int n = 0, g = 0;
         for (Map<Activity, Set<BehaviorControl<? super E>>> map : availableBehaviorsByPriority.values()) {
             for (Set<BehaviorControl<? super E>> set : map.values()) {
@@ -81,11 +81,11 @@ public abstract class BrainFlatMixin<E extends LivingEntity> {
                 end[g++] = n;
             }
         }
-        probe$beh = beh;
-        probe$groupAct = act;
-        probe$groupEnd = end;
-        probe$runBuf = (BehaviorControl<? super E>[]) new BehaviorControl<?>[n];
-        probe$builtEpoch = probe$epoch;
+        sleep$beh = beh;
+        sleep$groupAct = act;
+        sleep$groupEnd = end;
+        sleep$runBuf = (BehaviorControl<? super E>[]) new BehaviorControl<?>[n];
+        sleep$builtEpoch = sleep$epoch;
         OptCounters.BRAIN_REBUILDS.incrementAndGet();
         return beh;
     }
@@ -97,18 +97,18 @@ public abstract class BrainFlatMixin<E extends LivingEntity> {
     @Overwrite
     private void startEachNonRunningBehavior(ServerLevel level, E entity) {
         long time = level.getGameTime();
-        probe$flat();
-        if (CHECK) probe$check();
-        probe$start(level, entity, time, null);
+        sleep$flat();
+        if (CHECK) sleep$check();
+        sleep$start(level, entity, time, null);
     }
 
     /** Start pass from the beginning, or (after a mid-pass mutation) right after {@code after} in the rebuilt order. */
     @Unique
-    private void probe$start(ServerLevel level, E entity, long time, BehaviorControl<? super E> after) {
-        BehaviorControl<? super E>[] beh = probe$flat();
-        Activity[] act = probe$groupAct;
-        int[] end = probe$groupEnd;
-        int epoch = probe$epoch;
+    private void sleep$start(ServerLevel level, E entity, long time, BehaviorControl<? super E> after) {
+        BehaviorControl<? super E>[] beh = sleep$flat();
+        Activity[] act = sleep$groupAct;
+        int[] end = sleep$groupEnd;
+        int epoch = sleep$epoch;
         int i = 0, g = 0;
         boolean checked = false;   // the group of i already passed vanilla's activity check
         if (after != null) {
@@ -127,9 +127,9 @@ public abstract class BrainFlatMixin<E extends LivingEntity> {
                     BehaviorControl<? super E> b = beh[i];
                     if (b.getStatus() == Behavior.Status.STOPPED) {
                         b.tryStart(level, entity, time);
-                        if (probe$epoch != epoch) {
+                        if (sleep$epoch != epoch) {
                             OptCounters.BRAIN_RESUMES.incrementAndGet();
-                            probe$start(level, entity, time, b);
+                            sleep$start(level, entity, time, b);
                             return;
                         }
                     }
@@ -147,18 +147,18 @@ public abstract class BrainFlatMixin<E extends LivingEntity> {
     @SuppressWarnings("unchecked")
     private void tickEachRunningBehavior(ServerLevel level, E entity) {
         long time = level.getGameTime();
-        BehaviorControl<? super E>[] beh = probe$flat();
-        boolean own = !probe$runBusy;
-        BehaviorControl<? super E>[] run = own ? probe$runBuf : (BehaviorControl<? super E>[]) new BehaviorControl<?>[beh.length];
+        BehaviorControl<? super E>[] beh = sleep$flat();
+        boolean own = !sleep$runBusy;
+        BehaviorControl<? super E>[] run = own ? sleep$runBuf : (BehaviorControl<? super E>[]) new BehaviorControl<?>[beh.length];
         int n = 0;
         for (BehaviorControl<? super E> b : beh) {
             if (b.getStatus() == Behavior.Status.RUNNING) run[n++] = b;
         }
-        if (own) probe$runBusy = true;
+        if (own) sleep$runBusy = true;
         try {
             for (int k = 0; k < n; k++) run[k].tickOrStop(level, entity, time);
         } finally {
-            if (own) probe$runBusy = false;
+            if (own) sleep$runBusy = false;
         }
     }
 
@@ -169,7 +169,7 @@ public abstract class BrainFlatMixin<E extends LivingEntity> {
     @Overwrite
     public List<BehaviorControl<? super E>> getRunningBehaviors() {
         List<BehaviorControl<? super E>> list = new ObjectArrayList<>();
-        for (BehaviorControl<? super E> b : probe$flat()) {
+        for (BehaviorControl<? super E> b : sleep$flat()) {
             if (b.getStatus() == Behavior.Status.RUNNING) list.add(b);
         }
         return list;
@@ -177,7 +177,7 @@ public abstract class BrainFlatMixin<E extends LivingEntity> {
 
     /** Shadow check: the vanilla nested walk must give the same behaviours, activities and group boundaries. */
     @Unique
-    private void probe$check() {
+    private void sleep$check() {
         List<Object> a = new ArrayList<>(), b = new ArrayList<>();
         for (Map<Activity, Set<BehaviorControl<? super E>>> map : availableBehaviorsByPriority.values()) {
             for (Map.Entry<Activity, Set<BehaviorControl<? super E>>> e : map.entrySet()) {
@@ -186,14 +186,14 @@ public abstract class BrainFlatMixin<E extends LivingEntity> {
             }
         }
         int i = 0;
-        for (int g = 0; g < probe$groupAct.length; g++) {
-            b.add(probe$groupAct[g]);
-            for (; i < probe$groupEnd[g]; i++) b.add(probe$beh[i]);
+        for (int g = 0; g < sleep$groupAct.length; g++) {
+            b.add(sleep$groupAct[g]);
+            for (; i < sleep$groupEnd[g]; i++) b.add(sleep$beh[i]);
         }
         OptCounters.BRAIN_CHECKED.incrementAndGet();
         boolean same = a.size() == b.size();
         for (int k = 0; same && k < a.size(); k++) same = a.get(k) == b.get(k);
         if (!same && OptCounters.BRAIN_MISMATCHES.incrementAndGet() <= 5)
-            System.out.println("[probe/opt] brain flat order MISMATCH: vanilla " + a.size() + " vs flat " + b.size());
+            System.out.println("[sleep/opt] brain flat order MISMATCH: vanilla " + a.size() + " vs flat " + b.size());
     }
 }

@@ -35,7 +35,7 @@ public abstract class ChunkMultiDrawMixin {
     @Unique private static final boolean ACTIVE = !dev.sleep.optsupport.MixinTouch.touched("net/minecraft/client/renderer/LevelRenderer", "renderSectionLayer");
 
     @Inject(method = "renderSectionLayer", at = @At("HEAD"), cancellable = true)
-    private void probe$multi(RenderType renderType, double x, double y, double z, Matrix4f frustumMatrix, Matrix4f projectionMatrix, CallbackInfo ci) {
+    private void sleep$multi(RenderType renderType, double x, double y, double z, Matrix4f frustumMatrix, Matrix4f projectionMatrix, CallbackInfo ci) {
         dev.sleep.optsupport.SectionLists.currentLayer = renderType;
         if (!ACTIVE || !ChunkMultiDraw.layerSupported(renderType) || ChunkMultiDraw.PATCHED.isEmpty()) return;
         RenderSystem.assertOnRenderThread();

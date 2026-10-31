@@ -14,7 +14,7 @@ import org.spongepowered.asm.mixin.injection.Redirect;
 @Mixin(LevelRenderer.class)
 public abstract class ShaderLightTranslucentMixin {
     @Redirect(method = "renderSectionLayer", at = @At(value = "INVOKE", target = "Lcom/mojang/blaze3d/vertex/VertexBuffer;draw()V"))
-    private void probe$draw(VertexBuffer vb, @Local(argsOnly = true) RenderType type, @Local SectionRenderDispatcher.RenderSection section) {
+    private void sleep$draw(VertexBuffer vb, @Local(argsOnly = true) RenderType type, @Local SectionRenderDispatcher.RenderSection section) {
         boolean translucent = type == RenderType.translucent();
         if (translucent) LightVolumes.translucentDraw(section);
         vb.draw();

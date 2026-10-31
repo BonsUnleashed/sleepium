@@ -26,12 +26,12 @@ public abstract class LabPoolsMixin {
     private static void onThreadException(Thread thread, Throwable throwable) {}
 
     @Inject(method = "makeExecutor", at = @At("HEAD"), cancellable = true)
-    private static void probe$labBackground(String serviceName, CallbackInfoReturnable<ExecutorService> cir) {
+    private static void sleep$labBackground(String serviceName, CallbackInfoReturnable<ExecutorService> cir) {
         cir.setReturnValue(LabPools.background(serviceName, (t, e) -> onThreadException(t, e)));
     }
 
     @Inject(method = "makeIoExecutor", at = @At("HEAD"), cancellable = true)
-    private static void probe$labIo(String name, boolean daemon, CallbackInfoReturnable<ExecutorService> cir) {
+    private static void sleep$labIo(String name, boolean daemon, CallbackInfoReturnable<ExecutorService> cir) {
         cir.setReturnValue(LabPools.io(name, daemon, (t, e) -> onThreadException(t, e)));
     }
 }

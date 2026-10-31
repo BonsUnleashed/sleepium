@@ -27,7 +27,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(BlockableEventLoop.class)
 public abstract class CondWakeMixin {
     @Redirect(method = "tell", at = @At(value = "INVOKE", target = "Ljava/util/concurrent/locks/LockSupport;unpark(Ljava/lang/Thread;)V"))
-    private void probe$unparkOnlyIfParked(Thread thread) {
+    private void sleep$unparkOnlyIfParked(Thread thread) {
         AtomicBoolean flag = WakeFlags.of(thread);
         if (flag == null || flag.getAndSet(false)) {
             LockSupport.unpark(thread);
@@ -38,12 +38,12 @@ public abstract class CondWakeMixin {
     }
 
     @Inject(method = "waitForTasks", at = @At("HEAD"))
-    private void probe$arm(CallbackInfo ci) {
+    private void sleep$arm(CallbackInfo ci) {
         WakeFlags.current().set(true);
     }
 
     @Inject(method = "waitForTasks", at = @At("RETURN"))
-    private void probe$disarm(CallbackInfo ci) {
+    private void sleep$disarm(CallbackInfo ci) {
         WakeFlags.current().set(false);
     }
 }

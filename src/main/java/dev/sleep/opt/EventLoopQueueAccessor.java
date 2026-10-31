@@ -9,5 +9,5 @@ import org.spongepowered.asm.mixin.gen.Accessor;
 @Mixin(BlockableEventLoop.class)
 public interface EventLoopQueueAccessor {
     @Accessor("pendingRunnables")
-    Queue<?> probe$pending();
+    Queue<?> sleep$pending();
 }

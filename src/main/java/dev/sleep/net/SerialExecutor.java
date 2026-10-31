@@ -29,7 +29,7 @@ public final class SerialExecutor implements Executor {
             try {
                 r.run();
             } catch (RuntimeException e) {
-                org.slf4j.LoggerFactory.getLogger("probe").error("serial task failed", e);
+                org.slf4j.LoggerFactory.getLogger("sleep").error("serial task failed", e);
             }
         }
         scheduled.set(false);

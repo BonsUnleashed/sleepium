@@ -18,7 +18,7 @@ import org.spongepowered.asm.mixin.Unique;
 @Mixin(SectionRenderDispatcher.CompiledSection.class)
 public abstract class SectionLayerMaskMixin {
     @Shadow @Final Set<RenderType> hasBlocks;
-    @Unique private int probe$mask = -1;
+    @Unique private int sleep$mask = -1;
 
     /**
      * @author probe (lab.opt.SectionLayerMaskMixin)
@@ -28,14 +28,14 @@ public abstract class SectionLayerMaskMixin {
     public boolean isEmpty(RenderType renderType) {
         int id = renderType.getChunkLayerId();
         if (id < 0 || id > 30) return !hasBlocks.contains(renderType);
-        int m = probe$mask;
+        int m = sleep$mask;
         if (m < 0) {
             m = 0;
             for (RenderType t : hasBlocks) {
                 int k = t.getChunkLayerId();
                 if (k >= 0 && k <= 30) m |= 1 << k;
             }
-            probe$mask = m;
+            sleep$mask = m;
         }
         return (m & (1 << id)) == 0;
     }

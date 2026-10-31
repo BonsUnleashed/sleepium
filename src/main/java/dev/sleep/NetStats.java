@@ -3,13 +3,13 @@ package dev.sleep;
 import java.util.concurrent.atomic.LongAdder;
 
 /**
- * Measurement only (-Dprobe.net.stats=true, NetStats* mixins): what sending costs the server thread and what reaches
+ * Measurement only (-Dsleep.net.stats=true, NetStats* mixins): what sending costs the server thread and what reaches
  * the sockets. sends / sendNanos: Connection.send calls on the server thread and the time inside them (vanilla: a netty
  * task per packet; NetReactor: an append to the batch); frames / bytes: every length-prefixed frame written to a
  * socket, after compression (in-memory singleplayer connections write none).
  */
 public final class NetStats {
-    public static final boolean ON = Boolean.getBoolean("probe.net.stats");
+    public static final boolean ON = Boolean.getBoolean("sleep.net.stats");
     public static final LongAdder SENDS = new LongAdder(), SEND_NANOS = new LongAdder(), FRAMES = new LongAdder(), BYTES = new LongAdder();
     /** server thread only */
     public static long sendStart;

@@ -27,32 +27,32 @@ public abstract class MainReactorServerMixin {
     @Shadow
     public abstract Iterable<ServerLevel> getAllLevels();
 
-    @org.spongepowered.asm.mixin.Unique private Queue<?>[] probe$queues;
-    @org.spongepowered.asm.mixin.Unique private int probe$levelCount = -1;
+    @org.spongepowered.asm.mixin.Unique private Queue<?>[] sleep$queues;
+    @org.spongepowered.asm.mixin.Unique private int sleep$levelCount = -1;
 
     /** the server's own task queue and each level's chunk executor queue (rebuilt if the set of levels changes) */
     @org.spongepowered.asm.mixin.Unique
-    private Queue<?>[] probe$queues() {
+    private Queue<?>[] sleep$queues() {
         int n = 0;
         for (ServerLevel ignored : this.getAllLevels()) n++;
-        if (n != probe$levelCount || probe$queues == null) {
+        if (n != sleep$levelCount || sleep$queues == null) {
             java.util.ArrayList<Queue<?>> qs = new java.util.ArrayList<>(n + 1);
-            qs.add(((EventLoopQueueAccessor) this).probe$pending());
+            qs.add(((EventLoopQueueAccessor) this).sleep$pending());
             for (ServerLevel level : this.getAllLevels())
-                qs.add(((EventLoopQueueAccessor) dev.sleep.optsupport.Reflect.get(level.getChunkSource(), "mainThreadProcessor")).probe$pending());
-            probe$queues = qs.toArray(new Queue<?>[0]);
-            probe$levelCount = n;
+                qs.add(((EventLoopQueueAccessor) dev.sleep.optsupport.Reflect.get(level.getChunkSource(), "mainThreadProcessor")).sleep$pending());
+            sleep$queues = qs.toArray(new Queue<?>[0]);
+            sleep$levelCount = n;
         }
-        return probe$queues;
+        return sleep$queues;
     }
 
     @Inject(method = "waitUntilNextTick", at = @At("HEAD"))
-    private void probe$idleOn(CallbackInfo ci) {
+    private void sleep$idleOn(CallbackInfo ci) {
         MainReactor.idle = true;
     }
 
     @Inject(method = "waitUntilNextTick", at = @At("RETURN"))
-    private void probe$idleOff(CallbackInfo ci) {
+    private void sleep$idleOff(CallbackInfo ci) {
         MainReactor.idle = false;
     }
 
@@ -67,7 +67,7 @@ public abstract class MainReactorServerMixin {
         long i = flag ? Util.getNanos() : 0L;
         if (MainReactor.idle) {
             long deadline = this.mayHaveDelayedTasks ? this.delayedTasksMaxNextTickTimeNanos : this.nextTickTimeNanos;
-            MainReactor.park(deadline, probe$queues());
+            MainReactor.park(deadline, sleep$queues());
         } else {   // vanilla's wait (super.waitForTasks), with CondWakeMixin's arming that super would have done
             java.util.concurrent.atomic.AtomicBoolean armed = dev.sleep.optsupport.WakeFlags.current();
             armed.set(true);

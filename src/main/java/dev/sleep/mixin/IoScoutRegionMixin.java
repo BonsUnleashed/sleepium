@@ -8,11 +8,11 @@ import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.chunk.storage.RegionFile;
 import org.spongepowered.asm.mixin.Mixin;
 
-/** Measurement only (-Dprobe.ioScout=true): the disk part of a chunk write (sectors + header) and the header alone. */
+/** Measurement only (-Dsleep.ioScout=true): the disk part of a chunk write (sectors + header) and the header alone. */
 @Mixin(RegionFile.class)
 public abstract class IoScoutRegionMixin {
     @WrapMethod(method = "write")
-    private void probe$write(ChunkPos pos, ByteBuffer data, Operation<Void> original) {
+    private void sleep$write(ChunkPos pos, ByteBuffer data, Operation<Void> original) {
         long t = System.nanoTime();
         try {
             original.call(pos, data);
@@ -22,7 +22,7 @@ public abstract class IoScoutRegionMixin {
     }
 
     @WrapMethod(method = "writeHeader")
-    private void probe$header(Operation<Void> original) {
+    private void sleep$header(Operation<Void> original) {
         long t = System.nanoTime();
         try {
             original.call();

@@ -20,7 +20,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 @Mixin(ChunkMap.class)
 public abstract class ChunkStepHashMixin {
     @Inject(method = "applyStep", at = @At("RETURN"))
-    private void probe$hashAfterStep(GenerationChunkHolder chunk, ChunkStep step, StaticCache2D<GenerationChunkHolder> cache,
+    private void sleep$hashAfterStep(GenerationChunkHolder chunk, ChunkStep step, StaticCache2D<GenerationChunkHolder> cache,
                                      CallbackInfoReturnable<CompletableFuture<ChunkAccess>> cir) {
         if (GenBenchHooks.active()) {
             CompletableFuture<ChunkAccess> f = cir.getReturnValue();

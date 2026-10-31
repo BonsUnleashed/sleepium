@@ -10,9 +10,9 @@ import org.spongepowered.asm.mixin.gen.Accessor;
 public interface XoroshiroStateAccessor extends ReusableRandom.State {
     @Override
     @Accessor("seedLo")
-    void probe$setLo(long v);
+    void sleep$setLo(long v);
 
     @Override
     @Accessor("seedHi")
-    void probe$setHi(long v);
+    void sleep$setHi(long v);
 }

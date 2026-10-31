@@ -16,7 +16,7 @@ import net.minecraft.world.level.ChunkPos;
  * how long until every one is a FULL LevelChunk. Exercises the worldgen / light / sorter mailboxes, IO and the
  * chunk-source main executor — the cross-thread paths that stay idle in the static lag scenes.
  *
- * <p>{@code /probe genbench <side> <label>}: side x side chunks (e.g. 24 -> 576 chunks). Tick stats, event and task
+ * <p>{@code /sleep genbench <side> <label>}: side x side chunks (e.g. 24 -> 576 chunks). Tick stats, event and task
  * counters run for the whole generation and are written as a normal report plus a row in genbench.csv.
  */
 final class GenBench {
@@ -32,11 +32,11 @@ final class GenBench {
     private static final it.unimi.dsi.fastutil.longs.Long2LongOpenHashMap loadHashes = new it.unimi.dsi.fastutil.longs.Long2LongOpenHashMap();
 
     /**
-     * -Dprobe.genbench.hash: "carvers,full" (default), "carvers", "full" or "none". Hashing reads all ~98k block states
+     * -Dsleep.genbench.hash: "carvers,full" (default), "carvers", "full" or "none". Hashing reads all ~98k block states
      * of a chunk: the FULL hash runs on the server thread (a quarter of its time at 140 chunks/s, inflating MSPT), the
      * CARVERS hash on the worker that finished the step. Throughput runs use "none".
      */
-    static final String HASH = System.getProperty("probe.genbench.hash", "carvers,full");
+    static final String HASH = System.getProperty("sleep.genbench.hash", "carvers,full");
     static final boolean HASH_FULL = HASH.contains("full"), HASH_CARVERS = HASH.contains("carvers");
 
     /** chunks of this level that reached FULL (ChunkEvent.Load) during the current tick, any position */
@@ -78,8 +78,8 @@ final class GenBench {
     }
 
     static void start(MinecraftServer server, int sideChunks, String l) {
-        // -Dprobe.genbench.dim=minecraft:the_nether | minecraft:the_end (default the overworld)
-        String dim = System.getProperty("probe.genbench.dim");
+        // -Dsleep.genbench.dim=minecraft:the_nether | minecraft:the_end (default the overworld)
+        String dim = System.getProperty("sleep.genbench.dim");
         level = dim == null ? server.overworld()
                 : server.getLevel(net.minecraft.resources.ResourceKey.create(net.minecraft.core.registries.Registries.DIMENSION,
                         net.minecraft.resources.ResourceLocation.parse(dim)));
@@ -96,7 +96,7 @@ final class GenBench {
         GenBenchHooks.z0 = z0;
         GenBenchHooks.side = side;
         GenBenchHooks.active = true;
-        ProbeCommand.startRecording();
+        SleepCommand.startRecording();
         startTick = TickTimer.INSTANCE.ticks();
         startNanos = System.nanoTime();
         cpu = new CpuWindow();
@@ -109,7 +109,7 @@ final class GenBench {
             }
         }
         active = true;
-        SleepMod.LOGGER.info("probe: genbench '{}' started, {} chunks at chunk {},{}", label, total, x0, z0);
+        SleepMod.LOGGER.info("sleep: genbench '{}' started, {} chunks at chunk {},{}", label, total, x0, z0);
     }
 
     /**
@@ -133,11 +133,11 @@ final class GenBench {
                 carv.append(x0 + dx).append(' ').append(z0 + dz).append(' ').append(c == null ? "0" : Long.toHexString(c)).append('\n');
             }
         try {
-            Files.writeString(server.getServerDirectory().resolve("probe").resolve("genhash-" + label + "-carvers.txt"), carv.toString());
+            Files.writeString(server.getServerDirectory().resolve(dev.sleep.SleepOut.ROOT).resolve("genhash-" + label + "-carvers.txt"), carv.toString());
         } catch (IOException e) {
             SleepMod.LOGGER.error("Cannot write carvers hashes", e);
         }
-        Path f = server.getServerDirectory().resolve("probe").resolve("genhash-" + label + ".txt");
+        Path f = server.getServerDirectory().resolve(dev.sleep.SleepOut.ROOT).resolve("genhash-" + label + ".txt");
         try {
             Files.createDirectories(f.getParent());
             Files.writeString(f, out.toString());
@@ -208,13 +208,13 @@ final class GenBench {
                 + (Boolean.getBoolean("lab.genscout") ? System.lineSeparator() + dev.sleep.optsupport.GenScout.reportAndReset() + System.lineSeparator() + dev.sleep.optsupport.GenScout.perlinBench()
                         + System.lineSeparator() + dev.sleep.optsupport.ColumnBound.report() : "");
         String hashLine = writeChunkHashes(server) + "\n" + cpuLine;
-        Path report = ProbeCommand.finishRecording(server, "genbench-" + label, line + "\n" + hashLine);
+        Path report = SleepCommand.finishRecording(server, "genbench-" + label, line + "\n" + hashLine);
         for (int dx = 0; dx < side; dx++) {
             for (int dz = 0; dz < side; dz++) {
                 level.getChunkSource().updateChunkForced(new ChunkPos(x0 + dx, z0 + dz), false);
             }
         }
-        Path csv = server.getServerDirectory().resolve("probe").resolve("genbench.csv");
+        Path csv = server.getServerDirectory().resolve(dev.sleep.SleepOut.ROOT).resolve("genbench.csv");
         try {
             if (!Files.exists(csv)) {
                 Files.writeString(csv, "time,label,chunks,seconds,chunks_per_s,ticks\n");
@@ -224,8 +224,8 @@ final class GenBench {
         } catch (IOException e) {
             SleepMod.LOGGER.error("Cannot append {}", csv, e);
         }
-        server.getPlayerList().broadcastSystemMessage(Component.literal("probe: " + line), false);
-        SleepMod.LOGGER.info("probe: {} -> {}", line, report);
-        SleepMod.LOGGER.info("probe: genbench '{}' {}", label, cpuLine);
+        server.getPlayerList().broadcastSystemMessage(Component.literal("sleep: " + line), false);
+        SleepMod.LOGGER.info("sleep: {} -> {}", line, report);
+        SleepMod.LOGGER.info("sleep: genbench '{}' {}", label, cpuLine);
     }
 }

@@ -67,7 +67,7 @@ public abstract class ShaderSamplerCacheMixin {
     }
 
     @Redirect(method = "apply", at = @At(value = "INVOKE", target = "Lcom/mojang/blaze3d/shaders/Uniform;glGetUniformLocation(ILjava/lang/CharSequence;)I"))
-    private int probe$location(int program, CharSequence name) {
+    private int sleep$location(int program, CharSequence name) {
         List<String> names = samplerNames;
         for (int i = 0, n = Math.min(names.size(), samplerLocations.size()); i < n; i++) {
             if (names.get(i) == name) {

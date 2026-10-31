@@ -47,7 +47,7 @@ public final class SignalProof {
             ok = false;
             first = t.toString();
         }
-        if (LOG) System.out.println("[probe/opt] all conductor predicates proven: " + ok + (first != null ? " (first refusal " + first + ")" : ""));
+        if (LOG) System.out.println("[sleep/opt] all conductor predicates proven: " + ok + (first != null ? " (first refusal " + first + ")" : ""));
         allConductors = ok;
         return ok;
     }
@@ -56,21 +56,21 @@ public final class SignalProof {
 
     /** Implemented on BlockStateBase: 0 = unknown, 1 = proven, 2 = not. */
     public interface Flags {
-        byte probe$sigFlag();
+        byte sleep$sigFlag();
 
-        void probe$setSigFlag(byte v);
+        void sleep$setSigFlag(byte v);
 
-        byte probe$dirFlag();
+        byte sleep$dirFlag();
 
-        void probe$setDirFlag(byte v);
+        void sleep$setDirFlag(byte v);
     }
 
     public static boolean signalOk(BlockState state) {
         Flags f = (Flags) state;
-        byte v = f.probe$sigFlag();
+        byte v = f.sleep$sigFlag();
         if (v == 0) {
             boolean ok = compute(state, true);
-            f.probe$setSigFlag(v = (byte) (ok ? 1 : 2));
+            f.sleep$setSigFlag(v = (byte) (ok ? 1 : 2));
             if (ok) provenSignal++;
             else refusedSignal++;
         }
@@ -79,10 +79,10 @@ public final class SignalProof {
 
     public static boolean directOk(BlockState state) {
         Flags f = (Flags) state;
-        byte v = f.probe$dirFlag();
+        byte v = f.sleep$dirFlag();
         if (v == 0) {
             boolean ok = compute(state, false);
-            f.probe$setDirFlag(v = (byte) (ok ? 1 : 2));
+            f.sleep$setDirFlag(v = (byte) (ok ? 1 : 2));
             if (ok) provenDirect++;
             else refusedDirect++;
         }
@@ -94,7 +94,7 @@ public final class SignalProof {
     private static boolean compute(BlockState state, boolean neighbour) {
         if (!WRAPPERS_UNTOUCHED) return false;
         boolean r = compute0(state, neighbour);
-        if (LOG && !r) System.out.println("[probe/opt] signal proof refused " + state.getBlock().getClass().getSimpleName() + (neighbour ? " neighbour" : " direct")
+        if (LOG && !r) System.out.println("[sleep/opt] signal proof refused " + state.getBlock().getClass().getSimpleName() + (neighbour ? " neighbour" : " direct")
                 + ": " + PosEscape.lastReason);
         return r;
     }
@@ -112,7 +112,7 @@ public final class SignalProof {
             }
             Object pred = conductor(state);
             boolean conductorOk = pred != null && PosEscape.lambdaHostNonRetaining(loader, pred.getClass(), PREDICATE, 1, cached, cls);
-            if (LOG && !conductorOk) System.out.println("[probe/opt] conductor predicate not proven for " + state.getBlock().getClass().getSimpleName() + " (" + (pred == null ? "null" : pred.getClass().getName()) + "): " + PosEscape.lastReason);
+            if (LOG && !conductorOk) System.out.println("[sleep/opt] conductor predicate not proven for " + state.getBlock().getClass().getSimpleName() + " (" + (pred == null ? "null" : pred.getClass().getName()) + "): " + PosEscape.lastReason);
             PosEscape.StateCtx ctx = new PosEscape.StateCtx(0, conductorOk, cached, cls);
             return PosEscape.nonRetaining(loader, cls, "getSignal", GET_SIGNAL, 2, ctx)
                     && PosEscape.nonRetaining(loader, cls, "shouldCheckWeakPower", WEAK, 2, ctx);

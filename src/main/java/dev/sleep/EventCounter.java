@@ -24,7 +24,7 @@ import net.neoforged.bus.api.IEventBus;
  *
  * <p>Side effect to keep in mind: while counting, every event has at least one listener, so this mode
  * measures <b>how often</b> events fire, not how much a listener-free post costs (that is what
- * {@code /probe bench} is for). {@link #stop()} detaches all counting listeners again.
+ * {@code /sleep bench} is for). {@link #stop()} detaches all counting listeners again.
  */
 final class EventCounter {
     static final EventCounter INSTANCE = new EventCounter();
@@ -76,8 +76,8 @@ final class EventCounter {
         }
     }
 
-    /** -Dprobe.noEventCount=true: no counting listeners (they force every event site of the bus onto the full post path) */
-    private static final boolean OFF = Boolean.getBoolean("probe.noEventCount");
+    /** -Dsleep.noEventCount=true: no counting listeners (they force every event site of the bus onto the full post path) */
+    private static final boolean OFF = Boolean.getBoolean("sleep.noEventCount");
 
     boolean available() {
         return listenerLists != null && !OFF;

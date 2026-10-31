@@ -186,7 +186,7 @@ final class MobSleep {
         List<Field> out = new ArrayList<>();
         for (Class<?> k = c; k != null && k != Object.class; k = k.getSuperclass())
             for (Field f : k.getDeclaredFields()) {
-                if (f.getName().equals("probe$w")) continue;   // the write barrier's watcher (WriteBarrier), not state
+                if (f.getName().equals("sleep$w")) continue;   // the write barrier's watcher (WriteBarrier), not state
                 if (Modifier.isStatic(f.getModifiers())) continue;
                 f.setAccessible(true);
                 out.add(f);

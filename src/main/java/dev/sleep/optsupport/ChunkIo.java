@@ -50,28 +50,28 @@ public final class ChunkIo {
 
     /** IOWorker$PendingStore, through ChunkIoPendingMixin. Touched on the IOWorker's thread only. */
     public interface Entry {
-        CompoundTag probe$data();
+        CompoundTag sleep$data();
 
-        void probe$setData(CompoundTag data);
+        void sleep$setData(CompoundTag data);
 
-        byte[] probe$bytes();
+        byte[] sleep$bytes();
 
-        void probe$setBytes(byte[] bytes);
+        void sleep$setBytes(byte[] bytes);
 
-        java.util.concurrent.CompletableFuture<Void> probe$result();
+        java.util.concurrent.CompletableFuture<Void> sleep$result();
     }
 
     /** RegionFile, through ChunkIoRegionMixin. */
     public interface Region {
-        int probe$versionId();
+        int sleep$versionId();
 
         /** writes n chunks (bytes as {@link #encode} makes them): sectors, one sync, the header, one sync, then the frees */
-        void probe$writeBatch(ChunkPos[] pos, byte[][] data, int n) throws IOException;
+        void sleep$writeBatch(ChunkPos[] pos, byte[][] data, int n) throws IOException;
     }
 
     /** RegionFileStorage, through ChunkIoStorageMixin. */
     public interface Storage {
-        RegionFile probe$region(ChunkPos pos) throws IOException;
+        RegionFile sleep$region(ChunkPos pos) throws IOException;
     }
 
     /** a region file's chunk record: 4 bytes length, 1 byte version, the compressed NBT — RegionFile.ChunkBuffer's bytes */
@@ -174,9 +174,9 @@ public final class ChunkIo {
                         if (now - (long) v[1] < 10_000_000_000L) continue;
                         if (old++ < 12) sb.append("\n   ").append(v[0]).append(" from ").append(v[2]).append(", ").append((now - (long) v[1]) / 1_000_000_000L).append(" s");
                     }
-                    if (old > 0) System.out.println("[probe/chunkio] " + old + " IO futures over 10 s (of " + OUT.size() + " open):" + sb);
+                    if (old > 0) System.out.println("[sleep/chunkio] " + old + " IO futures over 10 s (of " + OUT.size() + " open):" + sb);
                 }
-            }, "probe-chunkio-watch");
+            }, "sleep-chunkio-watch");
             t.setDaemon(true);
             t.start();
         }

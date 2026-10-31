@@ -15,7 +15,7 @@ import java.util.concurrent.atomic.LongAdder;
  *   <li>mailboxes ({@code ProcessorMailbox}): tasks told vs {@code run()} dispatches to the executor;
  *       vanilla runs exactly one task per dispatch, so the ratio shows how much batching is lost</li>
  * </ul>
- * Always on (a LongAdder increment is a few ns), reset by {@code /probe start}.
+ * Always on (a LongAdder increment is a few ns), reset by {@code /sleep start}.
  */
 public final class TaskStats {
     public static final class Loop {

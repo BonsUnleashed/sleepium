@@ -15,7 +15,7 @@ public abstract class AsyncChunkSaveEncodeMixin {
     @SuppressWarnings("rawtypes")
     @Redirect(method = "write", at = @At(value = "INVOKE",
             target = "Lcom/mojang/serialization/Codec;encodeStart(Lcom/mojang/serialization/DynamicOps;Ljava/lang/Object;)Lcom/mojang/serialization/DataResult;"))
-    private static DataResult probe$encode(Codec codec, DynamicOps ops, Object value) {
+    private static DataResult sleep$encode(Codec codec, DynamicOps ops, Object value) {
         return AsyncChunkSave.encode(codec, ops, value);
     }
 }

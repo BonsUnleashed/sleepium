@@ -10,7 +10,7 @@ import org.spongepowered.asm.mixin.Mixin;
 @Mixin(NoiseChunk.class)
 public abstract class GenScoutSurfaceMixin {
     @WrapMethod(method = "computePreliminarySurfaceLevel")
-    private int probe$time(long packedChunkPos, Operation<Integer> original) {
+    private int sleep$time(long packedChunkPos, Operation<Integer> original) {
         long t = System.nanoTime();
         try {
             return original.call(packedChunkPos);

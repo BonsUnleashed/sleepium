@@ -60,12 +60,12 @@ public abstract class WorldgenSkipFillMixin {
         Aquifer aquifer = noisechunk.aquifer();
         noisechunk.initializeForFirstCellX();
         BlockPos.MutableBlockPos blockpos$mutableblockpos = new BlockPos.MutableBlockPos();
-        int k = ((NoiseChunkStateInvoker) noisechunk).probe$cellWidth();
-        int l = ((NoiseChunkStateInvoker) noisechunk).probe$cellHeight();
+        int k = ((NoiseChunkStateInvoker) noisechunk).sleep$cellWidth();
+        int l = ((NoiseChunkStateInvoker) noisechunk).sleep$cellHeight();
         int i1 = 16 / k;
         int j1 = 16 / k;
         CellProof.Host host = (CellProof.Host) noisechunk;
-        CellProof proof = host.probe$proof();
+        CellProof proof = host.sleep$proof();
         CellProof.AirBox airBox = aquifer instanceof CellProof.AirBox a ? a : null;
         // aquifers that return null for substance > 0 without other effects: ours (NoiseBasedAquifer) and the disabled one
         boolean solidAquifer = airBox != null || (aquifer.getClass().isAnonymousClass() && aquifer.getClass().getNestHost() == Aquifer.class);
@@ -90,11 +90,11 @@ public abstract class WorldgenSkipFillMixin {
                         cell.y0 = (minCellY + j2) * l;
                         cell.y1 = cell.y0 + l - 1;
                         if (proof.allNegative(cell)) {
-                            if (airBox != null && airBox.probe$boxAir(cell.x0, cell.y0, cell.z0, cell.x1, cell.y1, cell.z1)) continue;
-                        } else if (solidAquifer && proof.lastAllPositive() && host.probe$solidIsDefault(cell)) {
+                            if (airBox != null && airBox.sleep$boxAir(cell.x0, cell.y0, cell.z0, cell.x1, cell.y1, cell.z1)) continue;
+                        } else if (solidAquifer && proof.lastAllPositive() && host.sleep$solidIsDefault(cell)) {
                             // every block: aquifer null (density > 0), ore null → the default block; vanilla's writes, in order
                             BlockState def = this.settings.value().defaultBlock();
-                            if (solidHook != null) solidHook.probe$solid();
+                            if (solidHook != null) solidHook.sleep$solid();
                             for (int k2 = l - 1; k2 >= 0; k2--) {
                                 int l2 = (minCellY + j2) * l + k2;
                                 int i3 = l2 & 15;
@@ -150,7 +150,7 @@ public abstract class WorldgenSkipFillMixin {
                                 int l4 = k4 & 15;
                                 double d2 = (double) j4 / (double) k;
                                 noisechunk.updateForZ(k4, d2);
-                                BlockState blockstate = ((NoiseChunkStateInvoker) noisechunk).probe$getInterpolatedState();
+                                BlockState blockstate = ((NoiseChunkStateInvoker) noisechunk).sleep$getInterpolatedState();
                                 if (blockstate == null) {
                                     blockstate = this.settings.value().defaultBlock();
                                 }

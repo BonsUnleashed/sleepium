@@ -10,8 +10,8 @@ import org.spongepowered.asm.mixin.gen.Accessor;
 @Mixin(ClassInstanceMultiMap.class)
 public interface ClassInstanceMultiMapAccessor<T> {
     @Accessor("allInstances")
-    List<T> probe$all();
+    List<T> sleep$all();
 
     @Accessor("byClass")
-    Map<Class<?>, List<T>> probe$byClass();
+    Map<Class<?>, List<T>> sleep$byClass();
 }

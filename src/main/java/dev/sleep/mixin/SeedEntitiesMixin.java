@@ -10,18 +10,18 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
- * Exactness tests (-Dprobe.seedEntities=true): every entity's random seeded from its id instead of the clock, so a
+ * Exactness tests (-Dsleep.seedEntities=true): every entity's random seeded from its id instead of the clock, so a
  * scene built from the same first entity id runs the same draws (tools/ent_hash.sh with mobs).
  */
 @Mixin(Entity.class)
 public abstract class SeedEntitiesMixin {
-    private static final boolean PROBE$SEED = Boolean.getBoolean("probe.seedEntities");
+    private static final boolean PROBE$SEED = Boolean.getBoolean("sleep.seedEntities");
 
     @Shadow @Final protected RandomSource random;
     @Shadow private int id;
 
     @Inject(method = "<init>", at = @At("RETURN"))
-    private void probe$seed(CallbackInfo ci) {
+    private void sleep$seed(CallbackInfo ci) {
         if (PROBE$SEED) random.setSeed(id * 0x9E3779B97F4A7C15L + 12345);
     }
 }

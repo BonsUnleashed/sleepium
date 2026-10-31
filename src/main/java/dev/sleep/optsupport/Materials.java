@@ -25,12 +25,12 @@ import org.lwjgl.opengl.GL20C;
  * A polish is a sharp highlight and the sky's bright horizon (and the ground's glint) sliding over the metal as it
  * turns (10-04, the user: "a stronger shine, light running over the metal" - no colours the forge could not give).
  * A model without a mask draws exactly as before (the branch is off), and so does one whose B is 0 or 128.
- * {@code -Dprobe.materials=false} turns it off.
+ * {@code -Dsleep.materials=false} turns it off.
  */
 public final class Materials {
     private Materials() {}
 
-    public static final boolean ON = !"false".equals(System.getProperty("probe.materials"));
+    public static final boolean ON = !"false".equals(System.getProperty("sleep.materials"));
     static final int UNIT = 7;   // a texture unit the entity shaders do not use
     /** the fragment stage reads what the vertex stage of the same name writes: patched only after it */
     private static final java.util.Set<String> VERTEX_PATCHED = java.util.concurrent.ConcurrentHashMap.newKeySet();
@@ -214,7 +214,7 @@ public final class Materials {
             return o instanceof Optional<?> opt && opt.orElse(null) instanceof ResourceLocation rl ? rl : null;
         } catch (ReflectiveOperationException | RuntimeException e) {
             reflectFailed = true;
-            System.out.println("[probe/opt] materials: render type texture not readable (" + e + "), off");
+            System.out.println("[sleep/opt] materials: render type texture not readable (" + e + "), off");
             return null;
         }
     }

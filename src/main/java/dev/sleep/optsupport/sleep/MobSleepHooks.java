@@ -17,6 +17,6 @@ public final class MobSleepHooks {
 
     /** A goal selector's modification counter (goals added or removed: a sleeping mob's contexts are stale). */
     public interface GoalEpoch {
-        int probe$goalEpoch();
+        int sleep$goalEpoch();
     }
 }

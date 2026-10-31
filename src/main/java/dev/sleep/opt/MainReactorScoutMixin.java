@@ -14,7 +14,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 @Mixin(ServerChunkCache.class)
 public abstract class MainReactorScoutMixin {
     @Inject(method = "runDistanceManagerUpdates", at = @At("RETURN"))
-    private void probe$dm(CallbackInfoReturnable<Boolean> cir) {
+    private void sleep$dm(CallbackInfoReturnable<Boolean> cir) {
         if (cir.getReturnValueZ()) MainReactor.found("distance manager / generation tasks");
     }
 }

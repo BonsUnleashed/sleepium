@@ -13,10 +13,10 @@ import org.spongepowered.asm.mixin.gen.Invoker;
 @Mixin(EntityRenderDispatcher.class)
 public interface EntityRenderDispatcherInvoker {
     @Accessor("shouldRenderShadow")
-    boolean probe$shouldRenderShadow();
+    boolean sleep$shouldRenderShadow();
 
     @Invoker("renderShadow")
-    static void probe$renderShadow(PoseStack pose, MultiBufferSource buffers, Entity entity, float weight, float partialTicks, LevelReader level, float size) {
+    static void sleep$renderShadow(PoseStack pose, MultiBufferSource buffers, Entity entity, float weight, float partialTicks, LevelReader level, float size) {
         throw new AssertionError();
     }
 }

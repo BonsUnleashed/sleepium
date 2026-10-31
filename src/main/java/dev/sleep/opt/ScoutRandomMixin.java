@@ -11,7 +11,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 @Mixin(LegacyRandomSource.class)
 public abstract class ScoutRandomMixin {
     @Inject(method = "next", at = @At("HEAD"))
-    private void probe$draw(int bits, CallbackInfoReturnable<Integer> cir) {
+    private void sleep$draw(int bits, CallbackInfoReturnable<Integer> cir) {
         ParallelTickScout.rngDraw(this);
     }
 }

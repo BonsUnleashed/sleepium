@@ -16,7 +16,7 @@ public abstract class ClientAutoFlickerMixin {
     @Shadow private float blockLightRedFlicker;
 
     @Inject(method = "tick", at = @At("RETURN"))
-    private void probe$noFlicker(CallbackInfo ci) {
+    private void sleep$noFlicker(CallbackInfo ci) {
         if (dev.sleep.optsupport.ClientCounters.freezeTextures) blockLightRedFlicker = 0f;
     }
 }

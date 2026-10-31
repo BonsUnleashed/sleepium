@@ -13,7 +13,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(PersistentEntitySectionManager.class)
 public abstract class ChunkTickMemoEpochMixin {
     @Inject(method = "updateChunkStatus(Lnet/minecraft/world/level/ChunkPos;Lnet/minecraft/world/level/entity/Visibility;)V", at = @At("HEAD"))
-    private void probe$visibilityChanged(ChunkPos pos, Visibility visibility, CallbackInfo ci) {
+    private void sleep$visibilityChanged(ChunkPos pos, Visibility visibility, CallbackInfo ci) {
         ChunkTickMemo.epoch++;
     }
 }

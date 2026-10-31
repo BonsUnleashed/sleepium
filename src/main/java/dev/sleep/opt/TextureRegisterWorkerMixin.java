@@ -17,7 +17,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(TextureManager.class)
 public abstract class TextureRegisterWorkerMixin {
     @Inject(method = "register(Lnet/minecraft/resources/ResourceLocation;Lnet/minecraft/client/renderer/texture/AbstractTexture;)V", at = @At("HEAD"))
-    private void probe$notInJobs(ResourceLocation path, AbstractTexture texture, CallbackInfo ci) {
+    private void sleep$notInJobs(ResourceLocation path, AbstractTexture texture, CallbackInfo ci) {
         if (dev.sleep.optsupport.ParallelRender.inJob()) throw dev.sleep.optsupport.ParallelRender.REFUSE_NOT_READY;
     }
 }

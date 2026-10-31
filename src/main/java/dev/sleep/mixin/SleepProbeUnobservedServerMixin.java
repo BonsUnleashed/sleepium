@@ -15,31 +15,31 @@ import net.minecraft.server.level.ServerPlayer;
 @Mixin(ServerLevel.class)
 public abstract class SleepProbeUnobservedServerMixin {
     @ModifyVariable(method = "getPlayers(Ljava/util/function/Predicate;I)Ljava/util/List;", at = @At("HEAD"), argsOnly = true)
-    private Predicate<?> probe$players(Predicate<?> p) {
+    private Predicate<?> sleep$players(Predicate<?> p) {
         SleepEngine.unobservedRead();
         return p;
     }
 
     @ModifyVariable(method = "getEntity(Ljava/util/UUID;)Lnet/minecraft/world/entity/Entity;", at = @At("HEAD"), argsOnly = true)
-    private UUID probe$entityByUuid(UUID id) {
+    private UUID sleep$entityByUuid(UUID id) {
         SleepEngine.unobservedRead();
         return id;
     }
 
     @ModifyVariable(method = "getEntity(I)Lnet/minecraft/world/entity/Entity;", at = @At("HEAD"), argsOnly = true)
-    private int probe$entityById(int id) {
+    private int sleep$entityById(int id) {
         SleepEngine.unobservedRead();
         return id;
     }
 
     @ModifyReturnValue(method = "players", at = @At("RETURN"))
-    private List<ServerPlayer> probe$playerList(List<ServerPlayer> v) {
+    private List<ServerPlayer> sleep$playerList(List<ServerPlayer> v) {
         SleepEngine.playersRead((ServerLevel) (Object) this, v);
         return v;
     }
 
     @ModifyReturnValue(method = "getRandomPlayer", at = @At("RETURN"))
-    private ServerPlayer probe$randomPlayer(ServerPlayer v) {
+    private ServerPlayer sleep$randomPlayer(ServerPlayer v) {
         SleepEngine.unobservedRead();
         return v;
     }

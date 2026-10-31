@@ -25,7 +25,7 @@ import net.minecraft.world.level.Level;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.event.RegisterCommandsEvent;
 
-final class ProbeCommand {
+final class SleepCommand {
     /**
      * NBT as text that does not depend on hash-map order: compound keys sorted, lists of compounds sorted (a mob's
      * Attributes list follows the identity hashes of attribute holders, different every run).
@@ -52,14 +52,14 @@ final class ProbeCommand {
 
     private static final DateTimeFormatter FILE_TS = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss");
 
-    private ProbeCommand() {}
+    private SleepCommand() {}
 
     static void register(RegisterCommandsEvent event) {
         CommandDispatcher<CommandSourceStack> d = event.getDispatcher();
-        d.register(Commands.literal("probe")
+        d.register(Commands.literal("sleep")
                 .requires(src -> src.hasPermission(2))
-                .then(Commands.literal("start").executes(ProbeCommand::start))
-                .then(Commands.literal("stop").executes(ProbeCommand::stop))
+                .then(Commands.literal("start").executes(SleepCommand::start))
+                .then(Commands.literal("stop").executes(SleepCommand::stop))
                 .then(Commands.literal("run")
                         .then(Commands.argument("seconds", IntegerArgumentType.integer(5, 3600))
                                 .then(Commands.argument("label", StringArgumentType.word())
@@ -70,13 +70,13 @@ final class ProbeCommand {
                                 .then(Commands.argument("label", StringArgumentType.word()).executes(ctx -> {
                                     GenBench.start(ctx.getSource().getServer(), IntegerArgumentType.getInteger(ctx, "side"),
                                             StringArgumentType.getString(ctx, "label"));
-                                    say(ctx, "probe: genbench started");
+                                    say(ctx, "sleep: genbench started");
                                     return 1;
                                 }))))
                 .then(Commands.literal("idle")
                         .then(Commands.argument("seconds", IntegerArgumentType.integer(1, 600)).executes(ctx -> {
                             IdleBench.start(IntegerArgumentType.getInteger(ctx, "seconds"));
-                            say(ctx, "probe: idle measurement started");
+                            say(ctx, "sleep: idle measurement started");
                             return 1;
                         })))
                 .then(Commands.literal("bulktest")
@@ -86,10 +86,10 @@ final class ProbeCommand {
                         .then(Commands.argument("seed", IntegerArgumentType.integer()).executes(ctx -> {
                             String r = dev.sleep.net.BulkSelfTest.publish(IntegerArgumentType.getInteger(ctx, "entries"), IntegerArgumentType.getInteger(ctx, "kb"),
                                     IntegerArgumentType.getInteger(ctx, "changed"), IntegerArgumentType.getInteger(ctx, "seed"));
-                            SleepMod.LOGGER.info("probe: bulktest published: {}", r);
-                            say(ctx, "probe: bulktest published: " + r);
+                            SleepMod.LOGGER.info("sleep: bulktest published: {}", r);
+                            say(ctx, "sleep: bulktest published: " + r);
                             for (var p : ctx.getSource().getServer().getPlayerList().getPlayers())
-                                if (!dev.sleep.net.Bulk.capable(p)) say(ctx, "probe: bulktest: " + p.getScoreboardName() + " is not on the bulk path");
+                                if (!dev.sleep.net.Bulk.capable(p)) say(ctx, "sleep: bulktest: " + p.getScoreboardName() + " is not on the bulk path");
                             return 1;
                         }))))))
                 .then(Commands.literal("travel")   // a teleport that waits for the destination's chunks (dev.sleep.api.Travel)
@@ -100,7 +100,7 @@ final class ProbeCommand {
                             long t0 = System.nanoTime();
                             dev.sleep.api.Travel.teleportWhenReady(p, ctx.getSource().getLevel(), IntegerArgumentType.getInteger(ctx, "x") + 0.5,
                                     IntegerArgumentType.getInteger(ctx, "y"), IntegerArgumentType.getInteger(ctx, "z") + 0.5, p.getYRot(), p.getXRot(),
-                                    ready -> SleepMod.LOGGER.info("probe: travel done after {} ms ({})", (System.nanoTime() - t0) / 1_000_000L,
+                                    ready -> SleepMod.LOGGER.info("sleep: travel done after {} ms ({})", (System.nanoTime() - t0) / 1_000_000L,
                                             ready ? "the destination was ready" : "timed out"));
                             return 1;
                         })))))
@@ -108,12 +108,12 @@ final class ProbeCommand {
                         .then(Commands.argument("seconds", IntegerArgumentType.integer(1, 600))
                                 .then(Commands.argument("label", StringArgumentType.word()).executes(ctx -> {
                                     NetBench.start(IntegerArgumentType.getInteger(ctx, "seconds"), StringArgumentType.getString(ctx, "label"));
-                                    say(ctx, "probe: net measurement started");
+                                    say(ctx, "sleep: net measurement started");
                                     return 1;
                                 }))))
                 .then(Commands.literal("busbench").executes(ctx -> {
                     if (EventCounter.INSTANCE.enabled()) {
-                        say(ctx, "probe: run /probe stop first");
+                        say(ctx, "sleep: run /sleep stop first");
                         return 0;
                     }
                     try {
@@ -126,9 +126,9 @@ final class ProbeCommand {
                                 + BusAnatomy.format(BusAnatomy.run(400_000));
                         Path file = write(ctx.getSource().getServer(), "busbench", out);
                         say(ctx, out);
-                        say(ctx, "probe: written to " + file);
+                        say(ctx, "sleep: written to " + file);
                     } catch (ReflectiveOperationException e) {
-                        say(ctx, "probe: busbench failed: " + e);
+                        say(ctx, "sleep: busbench failed: " + e);
                     }
                     return 1;
                 }))
@@ -152,7 +152,7 @@ final class ProbeCommand {
                     say(ctx, sb.toString());
                     return 1;
                 }))
-                .then(Commands.literal("status").executes(ProbeCommand::status))
+                .then(Commands.literal("status").executes(SleepCommand::status))
                 .then(Commands.literal("sleep").executes(ctx -> {
                     String r = dev.sleep.optsupport.sleep.SleepEngine.report() + dev.sleep.optsupport.sleep.EntitySleep.report()
                             + dev.sleep.optsupport.sleep.EntitySleep.census(ctx.getSource().getLevel());
@@ -360,10 +360,10 @@ final class ProbeCommand {
                         h = h * 31 + be.saveWithoutMetadata(reg).toString().hashCode();
                     }
                 }
-        // -Dprobe.hashEntities=true: also every entity in the region (type, exact position and motion, NBT without
+        // -Dsleep.hashEntities=true: also every entity in the region (type, exact position and motion, NBT without
         // UUIDs), sorted, so the hash does not depend on iteration order but does on every value
         int ents = 0;
-        if (Boolean.getBoolean("probe.hashEntities")) {
+        if (Boolean.getBoolean("sleep.hashEntities")) {
             var box = new net.minecraft.world.phys.AABB(Math.min(x1, x2), Math.min(y1, y2), Math.min(z1, z2), Math.max(x1, x2) + 1, Math.max(y1, y2) + 1, Math.max(z1, z2) + 1);
             java.util.List<String> rows = new java.util.ArrayList<>();
             for (var e : level.getEntities((net.minecraft.world.entity.Entity) null, box, x -> !(x instanceof net.minecraft.world.entity.player.Player))) {
@@ -372,28 +372,28 @@ final class ProbeCommand {
                 tag.remove("UUID");
                 rows.add(net.minecraft.core.registries.BuiltInRegistries.ENTITY_TYPE.getKey(e.getType()) + " " + Double.doubleToLongBits(e.getX()) + " "
                         + Double.doubleToLongBits(e.getY()) + " " + Double.doubleToLongBits(e.getZ()) + " " + e.getDeltaMovement() + " " + canonNbt(tag)
-                        + (Boolean.getBoolean("probe.hashEntitiesDeep") ? " deep=" + Long.toHexString(dev.sleep.optsupport.sleep.EntitySleep.deepHash(e)) : "")
-                        + (Boolean.getBoolean("probe.hashRowsDump") ? " dump=" + dev.sleep.optsupport.sleep.EntitySleep.deepDump(e) : ""));
+                        + (Boolean.getBoolean("sleep.hashEntitiesDeep") ? " deep=" + Long.toHexString(dev.sleep.optsupport.sleep.EntitySleep.deepHash(e)) : "")
+                        + (Boolean.getBoolean("sleep.hashRowsDump") ? " dump=" + dev.sleep.optsupport.sleep.EntitySleep.deepDump(e) : ""));
             }
             java.util.Collections.sort(rows);
             int minId = Integer.MAX_VALUE;
             for (var e : level.getEntities((net.minecraft.world.entity.Entity) null, box, x -> !(x instanceof net.minecraft.world.entity.player.Player))) minId = Math.min(minId, e.getId());
-            System.out.println("[probe/hash] first entity id " + minId + " (mod 40: " + Math.floorMod(minId, 40) + ")");
-            // -Dprobe.hashRows=<file>: every entity's row, for a line diff between two runs
-            String rowsFile = System.getProperty("probe.hashRows");
+            System.out.println("[sleep/hash] first entity id " + minId + " (mod 40: " + Math.floorMod(minId, 40) + ")");
+            // -Dsleep.hashRows=<file>: every entity's row, for a line diff between two runs
+            String rowsFile = System.getProperty("sleep.hashRows");
             if (rowsFile != null) {
                 try {
                     java.nio.file.Files.write(java.nio.file.Path.of(rowsFile), rows);
                 } catch (java.io.IOException ex) {
-                    System.out.println("[probe/hash] rows not written: " + ex);
+                    System.out.println("[sleep/hash] rows not written: " + ex);
                 }
             }
-            if (Boolean.getBoolean("probe.hashDump")) {
+            if (Boolean.getBoolean("sleep.hashDump")) {
                 var list = level.getEntities((net.minecraft.world.entity.Entity) null, box, x -> !(x instanceof net.minecraft.world.entity.player.Player));
                 list.sort(java.util.Comparator.comparingDouble((net.minecraft.world.entity.Entity x) -> x.getX()).thenComparingDouble(x -> x.getY()).thenComparingDouble(x -> x.getZ()));
-                for (int i = 0; i < Math.min(2, list.size()); i++) System.out.println("[probe/hashdump] " + dev.sleep.optsupport.sleep.EntitySleep.deepDump(list.get(i)));
-                System.out.println("[probe/hashdump] row0 " + rows.get(0));
-                System.out.println("[probe/hashdump] rowN " + rows.get(rows.size() - 1));
+                for (int i = 0; i < Math.min(2, list.size()); i++) System.out.println("[sleep/hashdump] " + dev.sleep.optsupport.sleep.EntitySleep.deepDump(list.get(i)));
+                System.out.println("[sleep/hashdump] row0 " + rows.get(0));
+                System.out.println("[sleep/hashdump] rowN " + rows.get(rows.size() - 1));
             }
             for (String r : rows) h = h * 31 + r.hashCode();
             ents = rows.size();
@@ -419,20 +419,20 @@ final class ProbeCommand {
     private static int start(CommandContext<CommandSourceStack> ctx) {
         startRecording();
         say(ctx, EventCounter.INSTANCE.available()
-                ? "probe: recording. Tick stats reset, counting " + EventCounter.INSTANCE.trackedTypes() + " event types (more are discovered every second)."
-                : "probe: recording tick stats only (EventBus internals not reachable, see log).");
+                ? "sleep: recording. Tick stats reset, counting " + EventCounter.INSTANCE.trackedTypes() + " event types (more are discovered every second)."
+                : "sleep: recording tick stats only (EventBus internals not reachable, see log).");
         return 1;
     }
 
     private static int stop(CommandContext<CommandSourceStack> ctx) {
         autoStopAtTick = -1;
         Path file = finish(ctx.getSource().getServer(), "manual");
-        say(ctx, "probe: stopped, report written to " + file);
+        say(ctx, "sleep: stopped, report written to " + file);
         say(ctx, summary());
         return 1;
     }
 
-    /** Pending automatic stop for /probe run (server thread only). */
+    /** Pending automatic stop for /sleep run (server thread only). */
     private static int autoStopAtTick = -1;
     private static String autoLabel = "";
 
@@ -445,7 +445,7 @@ final class ProbeCommand {
         autoStopAtNanos = System.nanoTime() + seconds * 1_000_000_000L;
         autoLabel = label;
         boolean sprint = ctx.getSource().getServer().tickRateManager().isSprinting();
-        say(ctx, "probe: run '" + label + "' for " + seconds + " s (" + (sprint ? "wall time, sprinting" : autoStopAtTick + " ticks") + ")");
+        say(ctx, "sleep: run '" + label + "' for " + seconds + " s (" + (sprint ? "wall time, sprinting" : autoStopAtTick + " ticks") + ")");
         return 1;
     }
 
@@ -457,8 +457,8 @@ final class ProbeCommand {
         if (autoStopAtTick >= 0 && (server.tickRateManager().isSprinting() ? System.nanoTime() >= autoStopAtNanos : TickTimer.INSTANCE.ticks() >= autoStopAtTick)) {
             autoStopAtTick = -1;
             Path file = finish(server, autoLabel);
-            server.getPlayerList().broadcastSystemMessage(Component.literal("probe: run '" + autoLabel + "' done -> " + file), false);
-            SleepMod.LOGGER.info("probe: run '{}' done -> {}\n{}", autoLabel, file, summary());
+            server.getPlayerList().broadcastSystemMessage(Component.literal("sleep: run '" + autoLabel + "' done -> " + file), false);
+            SleepMod.LOGGER.info("sleep: run '{}' done -> {}\n{}", autoLabel, file, summary());
         }
     }
 
@@ -487,7 +487,7 @@ final class ProbeCommand {
             String bt = blockEntityTickers(level);
             tickers += bt.equals("?") ? 0 : Integer.parseInt(bt);
         }
-        Path csv = server.getServerDirectory().resolve("probe").resolve("summary.csv");
+        Path csv = server.getServerDirectory().resolve(dev.sleep.SleepOut.ROOT).resolve("summary.csv");
         String header = "time,label,ticks,mspt_mean,mspt_p50,mspt_p99,mspt_max,interval_p99,alloc_kib_mean,alloc_kib_p99,events_per_tick,entities,ticking_block_entities,loop_tells_per_tick,mailbox_tasks_per_tick,window_s,"
                 + String.join(",", JvmStats.csvHeader()) + "\n";
         String row = String.format(Locale.ROOT, "%s,%s,%d,%.3f,%.3f,%.3f,%.3f,%.3f,%.1f,%.1f,%.1f,%d,%d,%.1f,%.1f,%.1f,%s%n",
@@ -517,10 +517,10 @@ final class ProbeCommand {
 
     private static int bench(CommandContext<CommandSourceStack> ctx, int n) {
         if (EventCounter.INSTANCE.enabled()) {
-            say(ctx, "probe: run /probe stop first. Counting listeners would distort the bench.");
+            say(ctx, "sleep: run /sleep stop first. Counting listeners would distort the bench.");
             return 0;
         }
-        say(ctx, "probe: benchmarking IEventBus.post, n=" + n + " (the server thread is blocked while it runs)...");
+        say(ctx, "sleep: benchmarking IEventBus.post, n=" + n + " (the server thread is blocked while it runs)...");
         long t0 = System.nanoTime();
         List<EventBench.Result> results = EventBench.run(n);
         StringBuilder sb = new StringBuilder();
@@ -535,7 +535,7 @@ final class ProbeCommand {
         for (EventBench.Result r : results) {
             say(ctx, r.toString());
         }
-        say(ctx, "probe: written to " + file);
+        say(ctx, "sleep: written to " + file);
         return 1;
     }
 
@@ -557,7 +557,7 @@ final class ProbeCommand {
     private static String fullReport(MinecraftServer server, String label) {
         TickTimer t = TickTimer.INSTANCE;
         StringBuilder sb = new StringBuilder();
-        sb.append("# probe report '").append(label).append("' ").append(LocalDateTime.now()).append('\n')
+        sb.append("# sleep report '").append(label).append("' ").append(LocalDateTime.now()).append('\n')
                 .append(jvmLine()).append('\n')
                 .append(String.format(Locale.ROOT, "window: %.1f s, %d ticks recorded%n%n", t.windowSeconds(), t.ticks()));
 
@@ -589,7 +589,7 @@ final class ProbeCommand {
                     c.listeners < 0 ? "?" : Integer.toString(c.listeners), c.type.getName()));
         }
         sb.append("\n'off-server' = posted from any thread other than the server thread (render thread, workers, netty).\n")
-                .append("'listeners' = listeners one post invokes (incl. parent types), excluding the probe's own counter.\n");
+                .append("'listeners' = listeners one post invokes (incl. parent types), excluding the engine's own counter.\n");
         return sb.toString();
     }
 
@@ -636,7 +636,7 @@ final class ProbeCommand {
     }
 
     private static Path write(MinecraftServer server, String kind, String content) {
-        Path dir = server.getServerDirectory().resolve("probe");
+        Path dir = server.getServerDirectory().resolve(dev.sleep.SleepOut.ROOT);
         Path file = dir.resolve(kind + "-" + LocalDateTime.now().format(FILE_TS) + ".txt");
         try {
             Files.createDirectories(dir);

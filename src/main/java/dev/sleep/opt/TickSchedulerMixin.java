@@ -40,25 +40,25 @@ public abstract class TickSchedulerMixin<T> {
 
     @Unique private static final boolean CHECK = Boolean.getBoolean("lab.opt.tickSchedCheck");
     /** a foreign mixin that writes the schedule elsewhere could hide wake-ups: then vanilla's walk */
-    @Unique private static final boolean ACTIVE = probe$untouched();
+    @Unique private static final boolean ACTIVE = sleep$untouched();
 
     @Unique
-    private static boolean probe$untouched() {
+    private static boolean sleep$untouched() {
         String c = "net/minecraft/world/ticks/LevelTicks";
         for (String m : new String[] {"sortContainersToTick", "addContainer", "removeContainer", "updateContainerScheduling", "drainContainers",
                 "rescheduleLeftoverContainers", "clearArea", "collectTicks", "schedule"})
             if (dev.sleep.optsupport.MixinTouch.touched(c, m)) return false;
         return true;
     }
-    @Unique private final LabScheduler probe$wakes = new LabScheduler();
-    @Unique private final LongOpenHashSet probe$seen = new LongOpenHashSet();
+    @Unique private final LabScheduler sleep$wakes = new LabScheduler();
+    @Unique private final LongOpenHashSet sleep$seen = new LongOpenHashSet();
 
     /** every write of the container schedule also queues a wake-up at that time */
     @Redirect(method = {"addContainer", "updateContainerScheduling"},
             at = @At(value = "INVOKE", target = "Lit/unimi/dsi/fastutil/longs/Long2LongMap;put(JJ)J"))
-    private long probe$put(Long2LongMap map, long key, long time) {
+    private long sleep$put(Long2LongMap map, long key, long time) {
         long prev = map.put(key, time);
-        probe$wakes.add(time, key);
+        sleep$wakes.add(time, key);
         return prev;
     }
 
@@ -69,13 +69,13 @@ public abstract class TickSchedulerMixin<T> {
     @Overwrite
     private void sortContainersToTick(long gameTime) {
         if (!ACTIVE) {
-            probe$vanillaSort(gameTime);
+            sleep$vanillaSort(gameTime);
             return;
         }
-        LongOpenHashSet expected = CHECK ? probe$vanillaDue(gameTime) : null;
-        LongOpenHashSet seen = probe$seen;
+        LongOpenHashSet expected = CHECK ? sleep$vanillaDue(gameTime) : null;
+        LongOpenHashSet seen = sleep$seen;
         seen.clear();
-        LabScheduler wakes = probe$wakes;
+        LabScheduler wakes = sleep$wakes;
         for (long key; (key = wakes.takeDue(gameTime)) != LabScheduler.NONE; ) {
             if (!seen.add(key)) continue;
             long j = nextTickForContainer.get(key);   // default Long.MAX_VALUE: removed
@@ -99,12 +99,12 @@ public abstract class TickSchedulerMixin<T> {
             }
         }
         wakes.endTick(gameTime);   // later writes for times up to now are due next tick, as vanilla's walk would see them
-        if (CHECK) probe$check(expected);
+        if (CHECK) sleep$check(expected);
     }
 
     /** vanilla sortContainersToTick, verbatim */
     @Unique
-    private void probe$vanillaSort(long gameTime) {
+    private void sleep$vanillaSort(long gameTime) {
         ObjectIterator<Long2LongMap.Entry> it = Long2LongMaps.fastIterator(nextTickForContainer);
         while (it.hasNext()) {
             Long2LongMap.Entry entry = it.next();
@@ -131,7 +131,7 @@ public abstract class TickSchedulerMixin<T> {
 
     /** What vanilla's walk would take (read only), for the shadow check. */
     @Unique
-    private LongOpenHashSet probe$vanillaDue(long gameTime) {
+    private LongOpenHashSet sleep$vanillaDue(long gameTime) {
         LongOpenHashSet due = new LongOpenHashSet();
         ObjectIterator<Long2LongMap.Entry> it = Long2LongMaps.fastIterator(nextTickForContainer);
         while (it.hasNext()) {
@@ -146,7 +146,7 @@ public abstract class TickSchedulerMixin<T> {
     }
 
     @Unique
-    private void probe$check(LongOpenHashSet expected) {
+    private void sleep$check(LongOpenHashSet expected) {
         LongOpenHashSet got = new LongOpenHashSet();   // containersToTick is empty when the sort starts (cleanup)
         for (LevelChunkTicks<T> c : containersToTick) {
             ScheduledTick<T> first = c.peek();
@@ -154,6 +154,6 @@ public abstract class TickSchedulerMixin<T> {
         }
         OptCounters.TICKSCHED_CHECKED.incrementAndGet();
         if (!got.equals(expected) && OptCounters.TICKSCHED_MISMATCHES.incrementAndGet() <= 5)
-            System.out.println("[probe/opt] tick scheduler MISMATCH: vanilla " + expected.size() + " chunks, scheduler " + got.size());
+            System.out.println("[sleep/opt] tick scheduler MISMATCH: vanilla " + expected.size() + " chunks, scheduler " + got.size());
     }
 }

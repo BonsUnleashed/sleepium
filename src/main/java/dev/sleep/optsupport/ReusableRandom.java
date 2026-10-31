@@ -17,21 +17,21 @@ public final class ReusableRandom {
 
     /** implemented by accessor mixins */
     public interface Factory {
-        long probe$seedLo();
+        long sleep$seedLo();
 
-        long probe$seedHi();
+        long sleep$seedHi();
     }
 
     public interface Source {
-        net.minecraft.world.level.levelgen.Xoroshiro128PlusPlus probe$rng();
+        net.minecraft.world.level.levelgen.Xoroshiro128PlusPlus sleep$rng();
 
-        net.minecraft.world.level.levelgen.MarsagliaPolarGaussian probe$gaussian();
+        net.minecraft.world.level.levelgen.MarsagliaPolarGaussian sleep$gaussian();
     }
 
     public interface State {
-        void probe$setLo(long v);
+        void sleep$setLo(long v);
 
-        void probe$setHi(long v);
+        void sleep$setHi(long v);
     }
 
     private static final ThreadLocal<XoroshiroRandomSource[]> SLOTS = ThreadLocal.withInitial(() -> new XoroshiroRandomSource[3]);
@@ -40,7 +40,7 @@ public final class ReusableRandom {
 
     public static RandomSource at(PositionalRandomFactory f, int x, int y, int z, int slot) {
         if (!(f instanceof XoroshiroRandomSource.XoroshiroPositionalRandomFactory) || !(f instanceof Factory fa)) return f.at(x, y, z);
-        long lo = Mth.getSeed(x, y, z) ^ fa.probe$seedLo(), hi = fa.probe$seedHi();
+        long lo = Mth.getSeed(x, y, z) ^ fa.sleep$seedLo(), hi = fa.sleep$seedHi();
         XoroshiroRandomSource[] a = SLOTS.get();
         XoroshiroRandomSource r = a[slot];
         if (r == null) return a[slot] = new XoroshiroRandomSource(lo, hi);
@@ -49,10 +49,10 @@ public final class ReusableRandom {
             hi = 7640891576956012809L;
         }
         Source s = (Source) r;
-        State st = (State) (Object) s.probe$rng();
-        st.probe$setLo(lo);
-        st.probe$setHi(hi);
-        s.probe$gaussian().reset();
+        State st = (State) (Object) s.sleep$rng();
+        st.sleep$setLo(lo);
+        st.sleep$setHi(hi);
+        s.sleep$gaussian().reset();
         return r;
     }
 }

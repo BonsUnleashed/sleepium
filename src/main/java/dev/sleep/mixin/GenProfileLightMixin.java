@@ -10,7 +10,7 @@ import org.spongepowered.asm.mixin.Mixin;
 @Mixin(ThreadedLevelLightEngine.class)
 public abstract class GenProfileLightMixin {
     @WrapMethod(method = "runUpdate")
-    private void probe$light(Operation<Void> original) {
+    private void sleep$light(Operation<Void> original) {
         if (!GenProfile.active()) {
             original.call();
             return;

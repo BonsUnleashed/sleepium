@@ -9,13 +9,13 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 
 /**
- * Measurement only (-Dprobe.moveTime=true, MoveTime*Mixin): direct timings of a mob's tick by part - tick, aiStep, the
+ * Measurement only (-Dsleep.moveTime=true, MoveTime*Mixin): direct timings of a mob's tick by part - tick, aiStep, the
  * AI (serverAiStep), travel, move, collide, checkInsideBlocks, the fluid scan, baseTick, pushEntities - as self time (a
  * part's timed children subtracted), per entity type. Printed every 600 game ticks as us per entity tick, then reset.
  * Server thread only.
  */
 public final class MoveTime {
-    public static final boolean ON = Boolean.getBoolean("probe.moveTime");
+    public static final boolean ON = Boolean.getBoolean("sleep.moveTime");
     public static final String[] PARTS = {"tick", "aiStep", "ai", "travel", "move", "collide", "insideBlocks", "fluids", "baseTick", "push", "support", "fireCheck", "speed", "fall"};
     public static final int TICK = 0, AISTEP = 1, AI = 2, TRAVEL = 3, MOVE = 4, COLLIDE = 5, INSIDE = 6, FLUIDS = 7, BASE = 8, PUSH = 9, SUPPORT = 10, FIRE = 11, SPEED = 12, FALL = 13;
     private static final Map<EntityType<?>, long[]> BY_TYPE = new IdentityHashMap<>();   // PARTS self ns, then entity ticks
@@ -59,7 +59,7 @@ public final class MoveTime {
     }
 
     private static void print() {
-        StringBuilder sb = new StringBuilder("[probe/movetime] us per entity tick, self time:");
+        StringBuilder sb = new StringBuilder("[sleep/movetime] us per entity tick, self time:");
         List<Map.Entry<EntityType<?>, long[]>> l = new ArrayList<>(BY_TYPE.entrySet());
         l.sort((a, b) -> Long.compare(b.getValue()[0] + b.getValue()[1], a.getValue()[0] + a.getValue()[1]));
         sb.append(String.format(Locale.ROOT, "%n   %-14s %8s", "type", "ticks"));

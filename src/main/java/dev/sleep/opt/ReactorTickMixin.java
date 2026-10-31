@@ -20,20 +20,20 @@ public abstract class ReactorTickMixin {
     @Shadow private long delayedTasksMaxNextTickTimeNanos;
     @Shadow private boolean mayHaveDelayedTasks;
 
-    @Unique private long probe$tickStart;
+    @Unique private long sleep$tickStart;
 
     @Inject(method = "tickServer", at = @At("HEAD"))
-    private void probe$start(BooleanSupplier hasTimeLeft, CallbackInfo ci) {
-        probe$tickStart = System.nanoTime();
+    private void sleep$start(BooleanSupplier hasTimeLeft, CallbackInfo ci) {
+        sleep$tickStart = System.nanoTime();
     }
 
     @Inject(method = "tickServer", at = @At("RETURN"))
-    private void probe$end(BooleanSupplier hasTimeLeft, CallbackInfo ci) {
-        FullRing.onTick(System.nanoTime() - probe$tickStart);
+    private void sleep$end(BooleanSupplier hasTimeLeft, CallbackInfo ci) {
+        FullRing.onTick(System.nanoTime() - sleep$tickStart);
     }
 
     @Inject(method = "waitUntilNextTick", at = @At("HEAD"))
-    private void probe$deadline(CallbackInfo ci) {
+    private void sleep$deadline(CallbackInfo ci) {
         FullRing.deadlineNanos = this.nextTickTimeNanos;
     }
 }

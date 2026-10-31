@@ -13,5 +13,5 @@ import org.spongepowered.asm.mixin.gen.Accessor;
 @Mixin(ChunkGeneratorStructureState.class)
 public interface ReactorRingsAccessor {
     @Accessor("ringPositions")
-    Map<ConcentricRingsStructurePlacement, CompletableFuture<List<ChunkPos>>> probe$rings();
+    Map<ConcentricRingsStructurePlacement, CompletableFuture<List<ChunkPos>>> sleep$rings();
 }

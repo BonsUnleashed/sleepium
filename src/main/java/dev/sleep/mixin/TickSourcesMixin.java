@@ -19,7 +19,7 @@ public abstract class TickSourcesMixin {
     @Shadow public abstract boolean isClientSide();
 
     @Inject(method = "tickBlockEntities", at = @At("HEAD"))
-    private void probe$blockEntityTicks(CallbackInfo ci) {
+    private void sleep$blockEntityTicks(CallbackInfo ci) {
         if (!isClientSide()) EventSources.blockEntityTicks += blockEntityTickers.size();
     }
 }

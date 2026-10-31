@@ -13,12 +13,12 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 @Mixin(Entity.class)
 public abstract class MoveMemoReadersMixin {
     @Inject(method = "shouldPlayAmethystStepSound", at = @At("HEAD"))
-    private void probe$should(BlockState state, CallbackInfoReturnable<Boolean> cir) {
+    private void sleep$should(BlockState state, CallbackInfoReturnable<Boolean> cir) {
         MoveMemo.readerRan((Entity) (Object) this);
     }
 
     @Inject(method = "playAmethystStepSound", at = @At("HEAD"))
-    private void probe$play(CallbackInfo ci) {
+    private void sleep$play(CallbackInfo ci) {
         MoveMemo.readerRan((Entity) (Object) this);
     }
 }

@@ -63,12 +63,12 @@ public abstract class ReactorChunkLoadMixin implements dev.sleep.optsupport.Chun
         throw new AssertionError();
     }
 
-    @Unique private final ConcurrentLinkedQueue<Long> probe$replaceable = new ConcurrentLinkedQueue<>();
+    @Unique private final ConcurrentLinkedQueue<Long> sleep$replaceable = new ConcurrentLinkedQueue<>();
 
     @Override
-    public void probe$drainMarks() {
+    public void sleep$drainMarks() {
         Long p;
-        while ((p = probe$replaceable.poll()) != null) this.chunkTypeCache.put(p.longValue(), (byte) -1);   // markPositionReplaceable
+        while ((p = sleep$replaceable.poll()) != null) this.chunkTypeCache.put(p.longValue(), (byte) -1);   // markPositionReplaceable
     }
 
     /**
@@ -86,7 +86,7 @@ public abstract class ReactorChunkLoadMixin implements dev.sleep.optsupport.Chun
         })).thenCompose(tag -> {
             if (tag.isEmpty()) {
                 return CompletableFuture.supplyAsync(() -> {
-                    probe$replaceable.add(chunkPos.toLong());
+                    sleep$replaceable.add(chunkPos.toLong());
                     return (ChunkAccess) new ProtoChunk(chunkPos, UpgradeData.EMPTY, this.level, this.level.registryAccess().registryOrThrow(Registries.BIOME), null);
                 }, Util.backgroundExecutor());
             }
@@ -97,14 +97,14 @@ public abstract class ReactorChunkLoadMixin implements dev.sleep.optsupport.Chun
                 return CompletableFuture.supplyAsync(() -> {
                     this.level.getProfiler().incrementCounter("chunkLoad");
                     dev.sleep.optsupport.ReadJournal.ON_MAIN.increment();
-                    ChunkAccess chunkaccess = ChunkSerializer.read(this.level, this.poiManager, ((ReactorStorageAccessor) (Object) this).probe$storageInfo(), chunkPos, saved);
+                    ChunkAccess chunkaccess = ChunkSerializer.read(this.level, this.poiManager, ((ReactorStorageAccessor) (Object) this).sleep$storageInfo(), chunkPos, saved);
                     this.markPosition(chunkPos, chunkaccess.getPersistedStatus().getChunkType());
                     return chunkaccess;
                 }, this.mainThreadExecutor);
             }
             // saved data: the read runs on the pool over the saved tag; its shared-state calls replay on main (ReadJournal)
             return CompletableFuture.supplyAsync(() -> dev.sleep.optsupport.ReadJournal.read(() -> ChunkSerializer.read(this.level, this.poiManager,
-                    ((ReactorStorageAccessor) (Object) this).probe$storageInfo(), chunkPos, saved)), Util.backgroundExecutor()).thenApplyAsync(journal -> {
+                    ((ReactorStorageAccessor) (Object) this).sleep$storageInfo(), chunkPos, saved)), Util.backgroundExecutor()).thenApplyAsync(journal -> {
                 this.level.getProfiler().incrementCounter("chunkLoad");
                 ChunkAccess chunkaccess = journal.publish();
                 this.markPosition(chunkPos, chunkaccess.getPersistedStatus().getChunkType());

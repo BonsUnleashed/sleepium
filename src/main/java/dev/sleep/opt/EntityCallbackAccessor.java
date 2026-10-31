@@ -8,5 +8,5 @@ import org.spongepowered.asm.mixin.gen.Accessor;
 @Mixin(targets = "net.minecraft.world.level.entity.PersistentEntitySectionManager$Callback")
 public interface EntityCallbackAccessor {
     @Accessor("currentSection")
-    EntitySection<?> probe$section();
+    EntitySection<?> sleep$section();
 }

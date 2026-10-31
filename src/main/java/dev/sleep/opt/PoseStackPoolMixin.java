@@ -18,7 +18,7 @@ import org.spongepowered.asm.mixin.Unique;
 @Mixin(PoseStack.class)
 public abstract class PoseStackPoolMixin {
     @Shadow @Final private Deque<PoseStack.Pose> poseStack;
-    @Unique private final ArrayDeque<PoseStack.Pose> probe$free = new ArrayDeque<>();
+    @Unique private final ArrayDeque<PoseStack.Pose> sleep$free = new ArrayDeque<>();
 
     /**
      * @author probe (lab.opt.PoseStackPoolMixin)
@@ -27,14 +27,14 @@ public abstract class PoseStackPoolMixin {
     @Overwrite
     public void pushPose() {
         PoseStack.Pose last = this.poseStack.getLast();
-        PoseStack.Pose p = probe$free.pollLast();
+        PoseStack.Pose p = sleep$free.pollLast();
         if (p == null) {
-            p = PoseAccessor.probe$copyOf(last);
+            p = PoseAccessor.sleep$copyOf(last);
         } else {
             PoseAccessor a = (PoseAccessor) (Object) p, l = (PoseAccessor) (Object) last;
-            a.probe$pose().set(l.probe$pose());
-            a.probe$normal().set(l.probe$normal());
-            a.probe$setTrusted(l.probe$trusted());
+            a.sleep$pose().set(l.sleep$pose());
+            a.sleep$normal().set(l.sleep$normal());
+            a.sleep$setTrusted(l.sleep$trusted());
         }
         this.poseStack.addLast(p);
     }
@@ -45,6 +45,6 @@ public abstract class PoseStackPoolMixin {
      */
     @Overwrite
     public void popPose() {
-        probe$free.addLast(this.poseStack.removeLast());
+        sleep$free.addLast(this.poseStack.removeLast());
     }
 }

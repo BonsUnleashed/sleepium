@@ -14,7 +14,7 @@ import org.spongepowered.asm.mixin.injection.Redirect;
 public abstract class ChunkShaderPatchMixin {
     @Redirect(method = "compileShaderInternal", at = @At(value = "INVOKE",
             target = "Lcom/mojang/blaze3d/preprocessor/GlslPreprocessor;process(Ljava/lang/String;)Ljava/util/List;"))
-    private static List<String> probe$patch(GlslPreprocessor pp, String src, Program.Type type, String name, InputStream in, String sourceName,
+    private static List<String> sleep$patch(GlslPreprocessor pp, String src, Program.Type type, String name, InputStream in, String sourceName,
             GlslPreprocessor preprocessor) {
         if (type == Program.Type.VERTEX) {
             if (ChunkMultiDraw.SUPPORTED.contains(name)) {

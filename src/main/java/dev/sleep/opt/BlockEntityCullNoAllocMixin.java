@@ -14,7 +14,7 @@ import org.spongepowered.asm.mixin.injection.Redirect;
 public abstract class BlockEntityCullNoAllocMixin {
     @Redirect(method = "renderLevel", at = @At(value = "INVOKE",
             target = "Lnet/neoforged/neoforge/client/ClientHooks;isBlockEntityRendererVisible(Lnet/minecraft/client/renderer/blockentity/BlockEntityRenderDispatcher;Lnet/minecraft/world/level/block/entity/BlockEntity;Lnet/minecraft/client/renderer/culling/Frustum;)Z"))
-    private boolean probe$visible(BlockEntityRenderDispatcher dispatcher, BlockEntity be, Frustum frustum) {
+    private boolean sleep$visible(BlockEntityRenderDispatcher dispatcher, BlockEntity be, Frustum frustum) {
         return NoAllocChecks.blockEntityVisible(dispatcher, be, frustum);
     }
 }

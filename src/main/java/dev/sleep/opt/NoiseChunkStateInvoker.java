@@ -9,11 +9,11 @@ import org.spongepowered.asm.mixin.gen.Invoker;
 @Mixin(NoiseChunk.class)
 public interface NoiseChunkStateInvoker {
     @Invoker("getInterpolatedState")
-    BlockState probe$getInterpolatedState();
+    BlockState sleep$getInterpolatedState();
 
     @Invoker("cellWidth")
-    int probe$cellWidth();
+    int sleep$cellWidth();
 
     @Invoker("cellHeight")
-    int probe$cellHeight();
+    int sleep$cellHeight();
 }

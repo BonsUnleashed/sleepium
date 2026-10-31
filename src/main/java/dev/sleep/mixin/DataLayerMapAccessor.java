@@ -10,5 +10,5 @@ import org.spongepowered.asm.mixin.gen.Accessor;
 @Mixin(DataLayerStorageMap.class)
 public interface DataLayerMapAccessor {
     @Accessor("map")
-    Long2ObjectOpenHashMap<DataLayer> probe$map();
+    Long2ObjectOpenHashMap<DataLayer> sleep$map();
 }

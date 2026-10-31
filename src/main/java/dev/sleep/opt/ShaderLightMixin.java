@@ -28,7 +28,7 @@ public abstract class ShaderLightMixin {
                              float b0, float b1, float b2, float b3, int l0, int l1, int l2, int l3, int overlay) {}
 
     @Redirect(method = "renderModelFaceAO", at = @At(value = "INVOKE", target = PUT))
-    private void probe$ao(ModelBlockRenderer self, BlockAndTintGetter level, BlockState state, BlockPos pos, VertexConsumer consumer, PoseStack.Pose pose,
+    private void sleep$ao(ModelBlockRenderer self, BlockAndTintGetter level, BlockState state, BlockPos pos, VertexConsumer consumer, PoseStack.Pose pose,
                           BakedQuad quad, float b0, float b1, float b2, float b3, int l0, int l1, int l2, int l3, int overlay,
                           @Local(argsOnly = true) BitSet shapeFlags) {
         putQuadData(level, state, pos, consumer, pose, quad, b0, b1, b2, b3, l0, l1, l2, l3, overlay);
@@ -36,7 +36,7 @@ public abstract class ShaderLightMixin {
     }
 
     @Redirect(method = "renderModelFaceFlat", at = @At(value = "INVOKE", target = PUT))
-    private void probe$flat(ModelBlockRenderer self, BlockAndTintGetter level, BlockState state, BlockPos pos, VertexConsumer consumer, PoseStack.Pose pose,
+    private void sleep$flat(ModelBlockRenderer self, BlockAndTintGetter level, BlockState state, BlockPos pos, VertexConsumer consumer, PoseStack.Pose pose,
                             BakedQuad quad, float b0, float b1, float b2, float b3, int l0, int l1, int l2, int l3, int overlay,
                             @Local(argsOnly = true) BitSet shapeFlags, @Local(argsOnly = true) boolean repackLight) {
         putQuadData(level, state, pos, consumer, pose, quad, b0, b1, b2, b3, l0, l1, l2, l3, overlay);

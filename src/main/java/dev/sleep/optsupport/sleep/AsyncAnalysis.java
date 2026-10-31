@@ -18,7 +18,7 @@ final class AsyncAnalysis {
     private AsyncAnalysis() {}
 
     private static final ExecutorService EXEC = Executors.newSingleThreadExecutor(r -> {
-        Thread t = new Thread(r, "probe-sleep-analysis");
+        Thread t = new Thread(r, "sleep-sleep-analysis");
         t.setDaemon(true);
         t.setPriority(Thread.MIN_PRIORITY);
         return t;
@@ -35,7 +35,7 @@ final class AsyncAnalysis {
                     done.put(key, compute.apply(key));
                 } catch (Throwable t) {
                     FAILED.add(key);
-                    System.out.println("[probe/sleep] analysis of " + key + " failed, it ticks as vanilla: " + t);
+                    System.out.println("[sleep/sleep] analysis of " + key + " failed, it ticks as vanilla: " + t);
                 } finally {
                     PENDING.remove(key);
                 }

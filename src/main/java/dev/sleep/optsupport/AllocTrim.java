@@ -52,11 +52,11 @@ public final class AllocTrim {
                     count++;
                 }
             if (count != 1) {
-                System.out.println("[probe/opt] AllocTrim: PalettedContainer.pack has " + count + " int arrays, left alone");
+                System.out.println("[sleep/opt] AllocTrim: PalettedContainer.pack has " + count + " int arrays, left alone");
                 return;
             }
             m.instructions.set(na, new MethodInsnNode(Opcodes.INVOKESTATIC, "dev/sleep/optsupport/AllocTrim", "intScratch", "(I)[I", false));
-            System.out.println("[probe/opt] AllocTrim: PalettedContainer.pack's int[] from a per-thread array");
+            System.out.println("[sleep/opt] AllocTrim: PalettedContainer.pack's int[] from a per-thread array");
         }
     }
 }

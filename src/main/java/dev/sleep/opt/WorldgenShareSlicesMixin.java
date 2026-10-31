@@ -43,30 +43,30 @@ public abstract class WorldgenShareSlicesMixin {
     @Shadow @Final int cellWidth;
     @Shadow @Final private Blender blender;
 
-    @Unique private RandomState probe$random;
+    @Unique private RandomState sleep$random;
     /** 0 undecided, 1 share, 2 do not */
-    @Unique private byte probe$share;
-    @Unique private SliceColumns probe$table;
+    @Unique private byte sleep$share;
+    @Unique private SliceColumns sleep$table;
 
     @Inject(method = "<init>", at = @At("RETURN"))
-    private void probe$keep(int cellCountXZ, RandomState random, int firstNoiseX, int firstNoiseZ, NoiseSettings noiseSettings,
+    private void sleep$keep(int cellCountXZ, RandomState random, int firstNoiseX, int firstNoiseZ, NoiseSettings noiseSettings,
                             DensityFunctions.BeardifierOrMarker beardifier, NoiseGeneratorSettings noiseGeneratorSettings,
                             Aquifer.FluidPicker fluidPicker, Blender blendifier, CallbackInfo ci) {
-        probe$random = random;
+        sleep$random = random;
     }
 
     @Unique
-    private boolean probe$decide() {
-        if (probe$share == 0) {
-            boolean ok = blender == Blender.empty() && probe$random != null && !interpolators.isEmpty();
+    private boolean sleep$decide() {
+        if (sleep$share == 0) {
+            boolean ok = blender == Blender.empty() && sleep$random != null && !interpolators.isEmpty();
             if (ok) {
                 List<DensityFunction> roots = new ArrayList<>(interpolators);
                 ok = SliceColumns.cache2dAreFlat(roots);
             }
-            if (ok) probe$table = SliceColumns.forState(probe$random, cellNoiseMinY, cellCountY, cellWidth, interpolators.size());
-            probe$share = (byte) (ok ? 1 : 2);
+            if (ok) sleep$table = SliceColumns.forState(sleep$random, cellNoiseMinY, cellCountY, cellWidth, interpolators.size());
+            sleep$share = (byte) (ok ? 1 : 2);
         }
-        return probe$share == 1;
+        return sleep$share == 1;
     }
 
     /**
@@ -77,7 +77,7 @@ public abstract class WorldgenShareSlicesMixin {
     private void fillSlice(boolean isSlice0, int start) {
         this.cellStartBlockX = start * this.cellWidth;
         this.inCellX = 0;
-        boolean share = probe$decide();
+        boolean share = sleep$decide();
         boolean borderX = start == this.firstCellX || start == this.firstCellX + this.cellCountXZ;
 
         for (int i = 0; i < this.cellCountXZ + 1; i++) {
@@ -87,11 +87,11 @@ public abstract class WorldgenShareSlicesMixin {
             this.arrayInterpolationCounter++;
             boolean border = share && (borderX || i == 0 || i == this.cellCountXZ);
             if (border) {
-                double[][] got = probe$table.get(start, j);
+                double[][] got = sleep$table.get(start, j);
                 if (got != null) {
                     for (int n = 0; n < this.interpolators.size(); n++) {
                         CellProof.Corners c = (CellProof.Corners) this.interpolators.get(n);
-                        double[] dst = (isSlice0 ? c.probe$slice0() : c.probe$slice1())[i];
+                        double[] dst = (isSlice0 ? c.sleep$slice0() : c.sleep$slice1())[i];
                         System.arraycopy(got[n], 0, dst, 0, dst.length);
                     }
                     continue;
@@ -100,16 +100,16 @@ public abstract class WorldgenShareSlicesMixin {
 
             for (NoiseChunk.NoiseInterpolator noisechunk$noiseinterpolator : this.interpolators) {
                 CellProof.Corners c = (CellProof.Corners) noisechunk$noiseinterpolator;
-                double[] adouble = (isSlice0 ? c.probe$slice0() : c.probe$slice1())[i];
+                double[] adouble = (isSlice0 ? c.sleep$slice0() : c.sleep$slice1())[i];
                 noisechunk$noiseinterpolator.fillArray(adouble, this.sliceFillingContextProvider);
             }
             if (border) {
                 double[][] cols = new double[this.interpolators.size()][];
                 for (int n = 0; n < cols.length; n++) {
                     CellProof.Corners c = (CellProof.Corners) this.interpolators.get(n);
-                    cols[n] = (isSlice0 ? c.probe$slice0() : c.probe$slice1())[i].clone();
+                    cols[n] = (isSlice0 ? c.sleep$slice0() : c.sleep$slice1())[i].clone();
                 }
-                probe$table.put(start, j, cols);
+                sleep$table.put(start, j, cols);
             }
         }
 

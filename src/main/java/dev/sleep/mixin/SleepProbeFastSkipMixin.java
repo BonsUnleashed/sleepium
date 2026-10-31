@@ -29,10 +29,10 @@ public abstract class SleepProbeFastSkipMixin {
     @Shadow(aliases = "this$0") @Final private LevelChunk this$0;
 
     @Inject(method = "tick", at = @At("HEAD"), cancellable = true)
-    private void probe$fastSkip(CallbackInfo ci) {
+    private void sleep$fastSkip(CallbackInfo ci) {
         BlockEntity be = blockEntity;
         SleeperHolder h = (SleeperHolder) be;
-        long wakeAt = h.probe$wakeAt();
+        long wakeAt = h.sleep$wakeAt();
         if (wakeAt == Long.MIN_VALUE) return;
         Level level = be.getLevel();
         if (level == null || be.isRemoved() || level.getGameTime() >= wakeAt) return;
@@ -42,16 +42,16 @@ public abstract class SleepProbeFastSkipMixin {
         ChunkTickMemo memo = (ChunkTickMemo) chunk;
         long now = level.getGameTime();
         boolean ticking;
-        if (memo.probe$memoTick() == now) {
-            ticking = memo.probe$memoTicking();
+        if (memo.sleep$memoTick() == now) {
+            ticking = memo.sleep$memoTicking();
         } else {
             ticking = !(level instanceof ServerLevel sl)
                     || chunk.getFullStatus().isOrAfter(FullChunkStatus.BLOCK_TICKING) && sl.areEntitiesLoaded(ChunkPos.asLong(pos));
-            memo.probe$setMemo(now, ticking);
+            memo.sleep$setMemo(now, ticking);
         }
         if (!ticking) return;   // vanilla returns without ticking; nothing to count
         if (!SleepEngine.verifyAsleep(be)) return;   // changed from outside: let it tick (and wake) now
-        h.probe$setSkipped(h.probe$skipped() + 1);
+        h.sleep$setSkipped(h.sleep$skipped() + 1);
         SleepEngine.fastSkipped++;
         ci.cancel();
     }

@@ -9,5 +9,5 @@ import org.spongepowered.asm.mixin.gen.Accessor;
 @Mixin(Level.class)
 public interface LevelNeighborUpdaterAccessor {
     @Accessor("neighborUpdater")
-    NeighborUpdater probe$neighborUpdater();
+    NeighborUpdater sleep$neighborUpdater();
 }

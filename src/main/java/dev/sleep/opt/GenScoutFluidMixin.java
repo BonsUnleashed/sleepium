@@ -10,7 +10,7 @@ import org.spongepowered.asm.mixin.Mixin;
 @Mixin(Aquifer.NoiseBasedAquifer.class)
 public abstract class GenScoutFluidMixin {
     @WrapMethod(method = "computeFluid")
-    private Aquifer.FluidStatus probe$time(int x, int y, int z, Operation<Aquifer.FluidStatus> original) {
+    private Aquifer.FluidStatus sleep$time(int x, int y, int z, Operation<Aquifer.FluidStatus> original) {
         long t = System.nanoTime();
         try {
             return original.call(x, y, z);

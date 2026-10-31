@@ -19,8 +19,8 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(LevelRenderer.class)
 public abstract class ClientLightAsyncMixin {
     @Redirect(method = "renderLevel", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/multiplayer/ClientLevel;pollLightUpdates()V"))
-    private void probe$poll(ClientLevel level) {
-        if (ClientLightAsync.running() && ((ClientLevelLightQueueAccessor) level).probe$lightQueue().isEmpty()) {
+    private void sleep$poll(ClientLevel level) {
+        if (ClientLightAsync.running() && ((ClientLevelLightQueueAccessor) level).sleep$lightQueue().isEmpty()) {
             ClientLightAsync.skipNext = true;   // the running job has all the work there is
             ClientLightAsync.skipped++;
             return;
@@ -31,7 +31,7 @@ public abstract class ClientLightAsyncMixin {
     }
 
     @Redirect(method = "renderLevel", at = @At(value = "INVOKE", target = "Lnet/minecraft/world/level/lighting/LevelLightEngine;runLightUpdates()I"))
-    private int probe$async(LevelLightEngine engine) {
+    private int sleep$async(LevelLightEngine engine) {
         if (ClientLightAsync.skipNext) {
             ClientLightAsync.skipNext = false;
             return 0;
@@ -41,12 +41,12 @@ public abstract class ClientLightAsyncMixin {
     }
 
     @Inject(method = "renderLevel", at = @At("RETURN"))
-    private void probe$endOfLevel(CallbackInfo ci) {
+    private void sleep$endOfLevel(CallbackInfo ci) {
         dev.sleep.optsupport.FrameReactor.reach(dev.sleep.optsupport.FrameReactor.Point.END_OF_LEVEL);
     }
 
     @Inject(method = "setLevel", at = @At("HEAD"))
-    private void probe$levelChange(CallbackInfo ci) {
+    private void sleep$levelChange(CallbackInfo ci) {
         dev.sleep.optsupport.FrameReactor.reach(dev.sleep.optsupport.FrameReactor.Point.LEVEL_CHANGE);
     }
 }

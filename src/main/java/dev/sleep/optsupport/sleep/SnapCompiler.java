@@ -620,7 +620,7 @@ final class SnapCompiler {
             f.setAccessible(true);
             u = (sun.misc.Unsafe) f.get(null);
         } catch (Throwable t) {
-            System.out.println("[probe/entsleep] no sun.misc.Unsafe (" + t + "): VarHandle accessors");
+            System.out.println("[sleep/entsleep] no sun.misc.Unsafe (" + t + "): VarHandle accessors");
         }
         U = u;
     }

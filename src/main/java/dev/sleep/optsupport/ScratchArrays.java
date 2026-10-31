@@ -84,7 +84,7 @@ public final class ScratchArrays {
             rel.add(new VarInsnNode(Opcodes.ALOAD, local));
             rel.add(new MethodInsnNode(Opcodes.INVOKESTATIC, "dev/sleep/optsupport/ScratchArrays", "give", "([D)V", false));
             m.instructions.insert(at, rel);
-            System.out.println("[probe/opt] Ap2.fillArray: temporary arrays from the per-thread stack");
+            System.out.println("[sleep/opt] Ap2.fillArray: temporary arrays from the per-thread stack");
             return;
         }
     }

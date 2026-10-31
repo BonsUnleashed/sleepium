@@ -12,7 +12,7 @@ import org.spongepowered.asm.mixin.injection.Redirect;
 public abstract class LightSnapshotSkyMixin {
     @Redirect(method = "copy()Lnet/minecraft/world/level/lighting/SkyLightSectionStorage$SkyDataLayerStorageMap;", at = @At(value = "INVOKE",
             target = "Lit/unimi/dsi/fastutil/longs/Long2ObjectOpenHashMap;clone()Lit/unimi/dsi/fastutil/longs/Long2ObjectOpenHashMap;"))
-    private Long2ObjectOpenHashMap<DataLayer> probe$snapshot(Long2ObjectOpenHashMap<DataLayer> map) {
-        return ((LightSnapshot.Tracked) (Object) this).probe$snapshot(map);
+    private Long2ObjectOpenHashMap<DataLayer> sleep$snapshot(Long2ObjectOpenHashMap<DataLayer> map) {
+        return ((LightSnapshot.Tracked) (Object) this).sleep$snapshot(map);
     }
 }

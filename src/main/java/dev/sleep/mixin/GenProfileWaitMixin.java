@@ -14,12 +14,12 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 public abstract class GenProfileWaitMixin {
     /** event-to-wake latency of the server reactor: a task posted to an event loop while the server thread is parked */
     @Inject(method = "tell", at = @At("HEAD"))
-    private void probe$event(Runnable task, CallbackInfo ci) {
+    private void sleep$event(Runnable task, CallbackInfo ci) {
         dev.sleep.optsupport.MainReactor.noteEvent();
     }
 
     @WrapMethod(method = "waitForTasks")
-    private void probe$wait(Operation<Void> original) {
+    private void sleep$wait(Operation<Void> original) {
         if (!GenProfile.active() || !Thread.currentThread().getName().startsWith("Server thread")) { original.call(); return; }
         long t = System.nanoTime();
         original.call();

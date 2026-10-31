@@ -12,13 +12,13 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 @Mixin(SectionCompiler.class)
 public abstract class LightScoutMixin {
     @Inject(method = "compile(Lnet/minecraft/core/SectionPos;Lnet/minecraft/client/renderer/chunk/RenderChunkRegion;Lcom/mojang/blaze3d/vertex/VertexSorting;Lnet/minecraft/client/renderer/SectionBufferBuilderPack;Ljava/util/List;)Lnet/minecraft/client/renderer/chunk/SectionCompiler$Results;", at = @At("HEAD"))
-    private void probe$begin(CallbackInfoReturnable<?> cir) {
+    private void sleep$begin(CallbackInfoReturnable<?> cir) {
         LightScout.begin();
     }
 
     @Inject(method = "compile(Lnet/minecraft/core/SectionPos;Lnet/minecraft/client/renderer/chunk/RenderChunkRegion;Lcom/mojang/blaze3d/vertex/VertexSorting;Lnet/minecraft/client/renderer/SectionBufferBuilderPack;Ljava/util/List;)Lnet/minecraft/client/renderer/chunk/SectionCompiler$Results;", at = @At("RETURN"))
-    private void probe$end(CallbackInfoReturnable<?> cir) {
+    private void sleep$end(CallbackInfoReturnable<?> cir) {
         LightScout.end();
-        if (LightScout.sections.get() % 2000 == 0) System.out.println("[probe/lightscout] " + LightScout.report());
+        if (LightScout.sections.get() % 2000 == 0) System.out.println("[sleep/lightscout] " + LightScout.report());
     }
 }

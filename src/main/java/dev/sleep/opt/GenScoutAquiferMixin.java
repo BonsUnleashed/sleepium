@@ -13,7 +13,7 @@ import org.spongepowered.asm.mixin.Mixin;
 @Mixin(Aquifer.NoiseBasedAquifer.class)
 public abstract class GenScoutAquiferMixin {
     @WrapMethod(method = "computeSubstance")
-    private BlockState probe$count(DensityFunction.FunctionContext ctx, double substance, Operation<BlockState> original) {
+    private BlockState sleep$count(DensityFunction.FunctionContext ctx, double substance, Operation<BlockState> original) {
         BlockState s = original.call(ctx, substance);
         if (substance > 0.0) GenScout.AQ_SOLID.increment();
         else {

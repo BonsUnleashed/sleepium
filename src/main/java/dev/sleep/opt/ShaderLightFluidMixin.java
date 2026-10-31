@@ -28,14 +28,14 @@ public abstract class ShaderLightFluidMixin {
 
     @Redirect(method = "tesselate", at = @At(value = "INVOKE",
             target = "Lnet/minecraft/client/renderer/block/LiquidBlockRenderer;getLightColor(Lnet/minecraft/world/level/BlockAndTintGetter;Lnet/minecraft/core/BlockPos;)I"))
-    private int probe$light(LiquidBlockRenderer self, BlockAndTintGetter level, BlockPos p, @Local(argsOnly = true, ordinal = 0) BlockPos fluidPos) {
+    private int sleep$light(LiquidBlockRenderer self, BlockAndTintGetter level, BlockPos p, @Local(argsOnly = true, ordinal = 0) BlockPos fluidPos) {
         LightVolumes.fluidLight(fluidPos, p);
         return getLightColor(level, p);
     }
 
     @Redirect(method = "tesselate", at = @At(value = "INVOKE",
             target = "Lnet/minecraft/client/renderer/block/LiquidBlockRenderer;vertex(Lcom/mojang/blaze3d/vertex/VertexConsumer;FFFFFFFFFI)V"))
-    private void probe$vertex(LiquidBlockRenderer self, VertexConsumer buffer, float x, float y, float z, float r, float g, float b, float alpha, float u, float v, int light,
+    private void sleep$vertex(LiquidBlockRenderer self, VertexConsumer buffer, float x, float y, float z, float r, float g, float b, float alpha, float u, float v, int light,
                               @Local(argsOnly = true) BlockAndTintGetter level, @Local(argsOnly = true, ordinal = 0) BlockPos fluidPos) {
         vertex(buffer, x, y, z, r, g, b, alpha, u, v, light);
         LightVolumes.fluidVertex(level, fluidPos, buffer);

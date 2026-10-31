@@ -12,7 +12,7 @@ import org.spongepowered.asm.mixin.Unique;
  */
 @Mixin(JigsawBlockEntity.JointType.class)
 public abstract class WorldgenAllocJointMixin {
-    @Unique private static JigsawBlockEntity.JointType[] probe$values;
+    @Unique private static JigsawBlockEntity.JointType[] sleep$values;
 
     /**
      * @author probe
@@ -20,8 +20,8 @@ public abstract class WorldgenAllocJointMixin {
      */
     @Overwrite
     public static Optional<JigsawBlockEntity.JointType> byName(String name) {
-        JigsawBlockEntity.JointType[] v = probe$values;
-        if (v == null) probe$values = v = JigsawBlockEntity.JointType.values();
+        JigsawBlockEntity.JointType[] v = sleep$values;
+        if (v == null) sleep$values = v = JigsawBlockEntity.JointType.values();
         for (JigsawBlockEntity.JointType t : v) if (t.getSerializedName().equals(name)) return Optional.of(t);
         return Optional.empty();
     }

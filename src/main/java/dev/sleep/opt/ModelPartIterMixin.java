@@ -22,22 +22,22 @@ public abstract class ModelPartIterMixin {
     @Shadow @Final private List<ModelPart.Cube> cubes;
     @Shadow @Final private Map<String, ModelPart> children;
 
-    @Unique private final dev.sleep.optsupport.MixinHelpers.ArrayIter probe$childIter = new dev.sleep.optsupport.MixinHelpers.ArrayIter(),
-            probe$cubeIter = new dev.sleep.optsupport.MixinHelpers.ArrayIter();
-    @Unique private Object[] probe$children, probe$cubes;
+    @Unique private final dev.sleep.optsupport.MixinHelpers.ArrayIter sleep$childIter = new dev.sleep.optsupport.MixinHelpers.ArrayIter(),
+            sleep$cubeIter = new dev.sleep.optsupport.MixinHelpers.ArrayIter();
+    @Unique private Object[] sleep$children, sleep$cubes;
 
     @Redirect(method = "render(Lcom/mojang/blaze3d/vertex/PoseStack;Lcom/mojang/blaze3d/vertex/VertexConsumer;III)V", at = @At(value = "INVOKE",
             target = "Ljava/util/Collection;iterator()Ljava/util/Iterator;"))
-    private Iterator<?> probe$children(java.util.Collection<?> values) {
-        Object[] a = probe$children;
-        if (a == null || a.length != children.size()) probe$children = a = children.values().toArray();
-        return probe$childIter.reset(a);
+    private Iterator<?> sleep$children(java.util.Collection<?> values) {
+        Object[] a = sleep$children;
+        if (a == null || a.length != children.size()) sleep$children = a = children.values().toArray();
+        return sleep$childIter.reset(a);
     }
 
     @Redirect(method = "compile", at = @At(value = "INVOKE", target = "Ljava/util/List;iterator()Ljava/util/Iterator;"))
-    private Iterator<?> probe$cubes(List<?> list) {
-        Object[] a = probe$cubes;
-        if (a == null || a.length != cubes.size()) probe$cubes = a = cubes.toArray();
-        return probe$cubeIter.reset(a);
+    private Iterator<?> sleep$cubes(List<?> list) {
+        Object[] a = sleep$cubes;
+        if (a == null || a.length != cubes.size()) sleep$cubes = a = cubes.toArray();
+        return sleep$cubeIter.reset(a);
     }
 }

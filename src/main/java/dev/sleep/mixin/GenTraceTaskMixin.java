@@ -11,7 +11,7 @@ import org.spongepowered.asm.mixin.Mixin;
 @Mixin(ChunkGenerationTask.class)
 public abstract class GenTraceTaskMixin {
     @WrapMethod(method = "runUntilWait")
-    private CompletableFuture<?> probe$run(Operation<CompletableFuture<?>> original) {
+    private CompletableFuture<?> sleep$run(Operation<CompletableFuture<?>> original) {
         long t = System.nanoTime();
         try {
             return original.call();

@@ -34,7 +34,7 @@ public abstract class BlockCollisionMemoMixin {
     /** Overrides the CollisionGetter default: same steps, block part memoized. */
     public boolean noCollision(@Nullable Entity entity, AABB collisionBox) {
         if (dev.sleep.optsupport.sleep.SleepEngine.HOOKS) dev.sleep.optsupport.sleep.SleepEngine.readRegion(collisionBox);
-        if (!probe$blocksFree(entity, collisionBox)) return false;
+        if (!sleep$blocksFree(entity, collisionBox)) return false;
         if (!((CollisionGetter) (Object) this).getEntityCollisions(entity, collisionBox).isEmpty()) return false;
         if (entity == null) return true;
         WorldBorder border = this.getWorldBorder();   // CollisionGetter.borderCollision, inlined (private there)
@@ -45,7 +45,7 @@ public abstract class BlockCollisionMemoMixin {
     /** Overrides the CollisionGetter default. */
     public boolean noBlockCollision(@Nullable Entity entity, AABB boundingBox) {
         if (dev.sleep.optsupport.sleep.SleepEngine.HOOKS) dev.sleep.optsupport.sleep.SleepEngine.readRegion(boundingBox);
-        return probe$blocksFree(entity, boundingBox);
+        return sleep$blocksFree(entity, boundingBox);
     }
 
     /**
@@ -58,23 +58,23 @@ public abstract class BlockCollisionMemoMixin {
         BlockCollisionMemo m = null;
         CollisionGetter self = (CollisionGetter) (Object) this;
         if (memo) {
-            m = ((BlockCollisionMemo.Holder) entity).probe$supportMemo();
+            m = ((BlockCollisionMemo.Holder) entity).sleep$supportMemo();
             if (m != null && m.valid && m.sameBox(box) && m.sameKey(entity.getX(), entity.getY(), entity.getZ()) && BlockCollisionMemo.unchanged(self, m, box)) {
                 BlockCollisionMemo.supportHits++;
                 @SuppressWarnings("unchecked")
                 java.util.Optional<net.minecraft.core.BlockPos> r = (java.util.Optional<net.minecraft.core.BlockPos>) m.result;
                 if (CHECK) {
                     OptCounters.MEMO_CHECKED.incrementAndGet();
-                    if (!probe$vanillaSupport(entity, box).equals(r) && OptCounters.MEMO_MISMATCHES.incrementAndGet() <= 5)
-                        System.out.println("[probe/opt] supporting-block memo MISMATCH for " + entity);
+                    if (!sleep$vanillaSupport(entity, box).equals(r) && OptCounters.MEMO_MISMATCHES.incrementAndGet() <= 5)
+                        System.out.println("[sleep/opt] supporting-block memo MISMATCH for " + entity);
                 }
                 return r;
             }
             BlockCollisionMemo.supportMisses++;
         }
-        java.util.Optional<net.minecraft.core.BlockPos> r = probe$vanillaSupport(entity, box);
+        java.util.Optional<net.minecraft.core.BlockPos> r = sleep$vanillaSupport(entity, box);
         if (memo) {
-            if (m == null) ((BlockCollisionMemo.Holder) entity).probe$setSupportMemo(m = new BlockCollisionMemo());
+            if (m == null) ((BlockCollisionMemo.Holder) entity).sleep$setSupportMemo(m = new BlockCollisionMemo());
             m.valid = BlockCollisionMemo.worthRecording(m, box) && BlockCollisionMemo.record(self, m, box);
             if (m.valid) {
                 m.setBox(box);
@@ -87,7 +87,7 @@ public abstract class BlockCollisionMemoMixin {
 
     /** CollisionGetter.findSupportingBlock, verbatim */
     @Unique
-    private java.util.Optional<net.minecraft.core.BlockPos> probe$vanillaSupport(Entity entity, AABB box) {
+    private java.util.Optional<net.minecraft.core.BlockPos> sleep$vanillaSupport(Entity entity, AABB box) {
         net.minecraft.core.BlockPos blockpos = null;
         double d0 = Double.MAX_VALUE;
         net.minecraft.world.level.BlockCollisions<net.minecraft.core.BlockPos> blockcollisions =
@@ -104,7 +104,7 @@ public abstract class BlockCollisionMemoMixin {
     }
 
     @Unique
-    private boolean probe$vanillaBlocksFree(@Nullable Entity entity, AABB box) {
+    private boolean sleep$vanillaBlocksFree(@Nullable Entity entity, AABB box) {
         for (VoxelShape vs : ((CollisionGetter) (Object) this).getBlockCollisions(entity, box)) {
             if (!vs.isEmpty()) return false;
         }
@@ -112,23 +112,23 @@ public abstract class BlockCollisionMemoMixin {
     }
 
     @Unique
-    private boolean probe$blocksFree(@Nullable Entity entity, AABB box) {
-        if (entity == null || !BlockCollisionMemo.usable((Level) (Object) this)) return probe$vanillaBlocksFree(entity, box);
+    private boolean sleep$blocksFree(@Nullable Entity entity, AABB box) {
+        if (entity == null || !BlockCollisionMemo.usable((Level) (Object) this)) return sleep$vanillaBlocksFree(entity, box);
         CollisionGetter self = (CollisionGetter) (Object) this;
         BlockCollisionMemo.Holder holder = (BlockCollisionMemo.Holder) entity;
-        BlockCollisionMemo m = holder.probe$collisionMemo();
+        BlockCollisionMemo m = holder.sleep$collisionMemo();
         if (m != null && m.valid && m.sameBox(box) && BlockCollisionMemo.unchanged(self, m, box)) {
             BlockCollisionMemo.hits++;
             if (CHECK) {
                 OptCounters.MEMO_CHECKED.incrementAndGet();
-                if (probe$vanillaBlocksFree(entity, box) != m.free && OptCounters.MEMO_MISMATCHES.incrementAndGet() <= 5)
-                    System.out.println("[probe/opt] collision memo MISMATCH for " + entity + " box " + box);
+                if (sleep$vanillaBlocksFree(entity, box) != m.free && OptCounters.MEMO_MISMATCHES.incrementAndGet() <= 5)
+                    System.out.println("[sleep/opt] collision memo MISMATCH for " + entity + " box " + box);
             }
             return m.free;
         }
         BlockCollisionMemo.misses++;
-        boolean free = probe$vanillaBlocksFree(entity, box);
-        if (m == null) holder.probe$setCollisionMemo(m = new BlockCollisionMemo());
+        boolean free = sleep$vanillaBlocksFree(entity, box);
+        if (m == null) holder.sleep$setCollisionMemo(m = new BlockCollisionMemo());
         m.valid = BlockCollisionMemo.worthRecording(m, box) && BlockCollisionMemo.record(self, m, box);
         if (m.valid) {
             m.setBox(box);

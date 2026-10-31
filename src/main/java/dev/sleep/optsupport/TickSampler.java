@@ -21,7 +21,7 @@ public final class TickSampler {
         tickStart = System.nanoTime();
         SAMPLES.clear();
         if (sampler == null) {
-            sampler = new Thread(TickSampler::loop, "probe-tick-sampler");
+            sampler = new Thread(TickSampler::loop, "sleep-tick-sampler");
             sampler.setDaemon(true);
             sampler.start();
         }

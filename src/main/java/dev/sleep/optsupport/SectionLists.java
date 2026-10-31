@@ -62,12 +62,12 @@ public final class SectionLists {
         for (int i = 0; i < n; i++) {
             var s = (SectionRenderDispatcher.RenderSection) refs[i];
             ChunkMultiDraw.ChunkEntries ce = (ChunkMultiDraw.ChunkEntries) s;
-            ce.probe$setVis(i, build);
+            ce.sleep$setVis(i, build);
             if (s.isDirty()) {
                 DIRTY.add(s);
-                ce.probe$setDirtyBuild(build);
+                ce.sleep$setDirtyBuild(build);
             }
-            Object[] md = ce.probe$md();
+            Object[] md = ce.sleep$md();
             for (int k = 0; k < LAYERS.length; k++) if (md[2 * k] != null || md[2 * k + 1] != null) LAYERS[k].add(s);
             var c = s.getCompiled();
             if (!c.isEmpty(translucent)) TRANSLUCENT.add(s);
@@ -111,9 +111,9 @@ public final class SectionLists {
     /** RenderSection.setDirty / reset: a visible section of the current build joins its dirty list (once). */
     public static void dirtied(SectionRenderDispatcher.RenderSection s) {
         ChunkMultiDraw.ChunkEntries ce = (ChunkMultiDraw.ChunkEntries) s;
-        if (ce.probe$visIdx(build) >= 0 && ce.probe$dirtyBuild() != build) {
+        if (ce.sleep$visIdx(build) >= 0 && ce.sleep$dirtyBuild() != build) {
             DIRTY.add(s);
-            ce.probe$setDirtyBuild(build);
+            ce.sleep$setDirtyBuild(build);
         }
     }
 
@@ -128,7 +128,7 @@ public final class SectionLists {
         for (int i = 0; i < DIRTY.size(); i++) {
             var s = DIRTY.get(i);
             if (!s.isDirty()) {
-                ((ChunkMultiDraw.ChunkEntries) s).probe$setDirtyBuild(-1);
+                ((ChunkMultiDraw.ChunkEntries) s).sleep$setDirtyBuild(-1);
                 continue;
             }
             DIRTY.set(w++, s);
@@ -137,7 +137,7 @@ public final class SectionLists {
         DIRTY.size(w);
         if (DIRTY_OUT.size() > 1) {
             int b = build;
-            DIRTY_OUT.sort((a, c) -> Integer.compare(((ChunkMultiDraw.ChunkEntries) a).probe$visIdx(b), ((ChunkMultiDraw.ChunkEntries) c).probe$visIdx(b)));
+            DIRTY_OUT.sort((a, c) -> Integer.compare(((ChunkMultiDraw.ChunkEntries) a).sleep$visIdx(b), ((ChunkMultiDraw.ChunkEntries) c).sleep$visIdx(b)));
         }
         return DIRTY_OUT;
     }

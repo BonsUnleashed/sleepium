@@ -23,12 +23,12 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 @Mixin(PoiCompetitorScan.class)
 public abstract class JobSiteScanMixin {
     @Redirect(method = "lambda$create$4", at = @At(value = "INVOKE", target = "Lnet/minecraft/world/entity/ai/village/poi/PoiManager;getType(Lnet/minecraft/core/BlockPos;)Ljava/util/Optional;"))
-    private static Optional<Holder<PoiType>> probe$type(PoiManager poi, BlockPos pos) {
+    private static Optional<Holder<PoiType>> sleep$type(PoiManager poi, BlockPos pos) {
         return JobSiteIndex.alone(pos) ? Optional.empty() : poi.getType(pos);
     }
 
     @Inject(method = "competesForSameJobsite", at = @At("RETURN"))
-    private static void probe$verify(GlobalPos jobSite, Holder<PoiType> poi, Villager other, CallbackInfoReturnable<Boolean> cir) {
+    private static void sleep$verify(GlobalPos jobSite, Holder<PoiType> poi, Villager other, CallbackInfoReturnable<Boolean> cir) {
         if (JobSiteIndex.VERIFY && cir.getReturnValueZ()) JobSiteIndex.competitor(jobSite.pos());
     }
 }

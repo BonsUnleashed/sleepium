@@ -17,7 +17,7 @@ public final class PersistentPools {
     private PersistentPools() {}
 
     private static void uncaught(Thread t, Throwable e) {
-        System.err.println("[probe/opt] uncaught in " + t.getName() + ": " + e);
+        System.err.println("[sleep/opt] uncaught in " + t.getName() + ": " + e);
         e.printStackTrace();
     }
 
@@ -33,7 +33,7 @@ public final class PersistentPools {
         });
         pool.allowCoreThreadTimeOut(false);
         pool.prestartAllCoreThreads();
-        System.out.println("[probe/opt] persistent IO pool '" + name + "': " + IO_CORE + " core threads");
+        System.out.println("[sleep/opt] persistent IO pool '" + name + "': " + IO_CORE + " core threads");
         return pool;
     }
 
@@ -51,7 +51,7 @@ public final class PersistentPools {
                 parallelism + 256,      // maximumPoolSize (vanilla default spares)
                 1, null,
                 KEEP_ALIVE_DAYS, TimeUnit.DAYS);
-        System.out.println("[probe/opt] persistent background pool 'Worker-" + serviceName + "': " + parallelism + " workers, keepAlive " + KEEP_ALIVE_DAYS + " d");
+        System.out.println("[sleep/opt] persistent background pool 'Worker-" + serviceName + "': " + parallelism + " workers, keepAlive " + KEEP_ALIVE_DAYS + " d");
         return pool;
     }
 }

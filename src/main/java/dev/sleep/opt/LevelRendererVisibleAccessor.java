@@ -10,5 +10,5 @@ import org.spongepowered.asm.mixin.gen.Accessor;
 @Mixin(LevelRenderer.class)
 public interface LevelRendererVisibleAccessor {
     @Accessor("visibleSections")
-    ObjectArrayList<SectionRenderDispatcher.RenderSection> probe$visible();
+    ObjectArrayList<SectionRenderDispatcher.RenderSection> sleep$visible();
 }

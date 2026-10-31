@@ -20,13 +20,13 @@ import org.spongepowered.asm.mixin.injection.ModifyArg;
 @Mixin(ProcessorMailbox.class)
 public abstract class MailboxBatchMixin {
     @Unique
-    private static final int probe$BATCH = Integer.getInteger("lab.opt.mailboxBatch", 64);
+    private static final int sleep$BATCH = Integer.getInteger("lab.opt.mailboxBatch", 64);
     @Unique
-    private static final Int2BooleanFunction probe$UP_TO_BATCH = i -> i < probe$BATCH;
+    private static final Int2BooleanFunction sleep$UP_TO_BATCH = i -> i < sleep$BATCH;
 
     @ModifyArg(method = "run", at = @At(value = "INVOKE",
             target = "Lnet/minecraft/util/thread/ProcessorMailbox;pollUntil(Lit/unimi/dsi/fastutil/ints/Int2BooleanFunction;)I"))
-    private Int2BooleanFunction probe$batch(Int2BooleanFunction vanillaOneTask) {
-        return probe$UP_TO_BATCH;
+    private Int2BooleanFunction sleep$batch(Int2BooleanFunction vanillaOneTask) {
+        return sleep$UP_TO_BATCH;
     }
 }

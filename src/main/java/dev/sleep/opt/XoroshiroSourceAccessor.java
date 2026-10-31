@@ -12,9 +12,9 @@ import org.spongepowered.asm.mixin.gen.Accessor;
 public interface XoroshiroSourceAccessor extends ReusableRandom.Source {
     @Override
     @Accessor("randomNumberGenerator")
-    Xoroshiro128PlusPlus probe$rng();
+    Xoroshiro128PlusPlus sleep$rng();
 
     @Override
     @Accessor("gaussianSource")
-    MarsagliaPolarGaussian probe$gaussian();
+    MarsagliaPolarGaussian sleep$gaussian();
 }

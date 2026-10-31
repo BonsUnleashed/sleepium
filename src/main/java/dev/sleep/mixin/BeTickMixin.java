@@ -21,7 +21,7 @@ import org.spongepowered.asm.mixin.injection.Redirect;
 public abstract class BeTickMixin {
     @SuppressWarnings({"rawtypes", "unchecked"})
     @Redirect(method = "tick", at = @At(value = "INVOKE", target = "Lnet/minecraft/world/level/block/entity/BlockEntityTicker;tick(Lnet/minecraft/world/level/Level;Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/block/state/BlockState;Lnet/minecraft/world/level/block/entity/BlockEntity;)V"))
-    private void probe$tick(BlockEntityTicker ticker, Level level, BlockPos pos, BlockState state, BlockEntity be) {
+    private void sleep$tick(BlockEntityTicker ticker, Level level, BlockPos pos, BlockState state, BlockEntity be) {
         if (SleepEngine.ON && SleepEngine.skip(be)) return;
         if (BeTickStats.ON) BeTickStats.before(be);
         if (SleepEngine.ON) SleepEngine.before(be);

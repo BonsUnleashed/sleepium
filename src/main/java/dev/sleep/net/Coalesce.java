@@ -90,7 +90,7 @@ public final class Coalesce {
                 return v;
             }
         }
-        throw new io.netty.handler.codec.CorruptedFrameException("probe coalesce: VarInt too long");
+        throw new io.netty.handler.codec.CorruptedFrameException("sleep coalesce: VarInt too long");
     }
 
     public static String report() {

@@ -114,7 +114,7 @@ public final class CompositeEventBus implements IEventBus {
         } catch (ReflectiveOperationException e) {
             throw new IllegalStateException("cannot wrap EventBus", e);
         }
-        System.out.println("[probe/opt] NeoForge.EVENT_BUS wrapped by CompositeEventBus");
+        System.out.println("[sleep/opt] NeoForge.EVENT_BUS wrapped by CompositeEventBus");
     }
 
     public EventBus delegate() {

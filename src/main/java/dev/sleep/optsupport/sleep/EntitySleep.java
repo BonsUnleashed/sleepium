@@ -250,7 +250,7 @@ public final class EntitySleep {
             List<Field> fl = new ArrayList<>();
             for (Class<?> k = c; k != null && k != Object.class; k = k.getSuperclass()) {
                 for (Field x : k.getDeclaredFields()) {
-                    if (x.getName().equals("probe$w")) continue;   // the write barrier's watcher (WriteBarrier), not state
+                    if (x.getName().equals("sleep$w")) continue;   // the write barrier's watcher (WriteBarrier), not state
                     if (Modifier.isStatic(x.getModifiers())) continue;
                     try {
                         x.setAccessible(true);
@@ -400,7 +400,7 @@ public final class EntitySleep {
             refOrd = new int[n];
             java.util.Arrays.fill(refOrd, -1);
             for (int k = 0; k < refSlots.length; k++) refOrd[refSlots[k]] = k;
-            if (SnapCompiler.failure != null) System.out.println("[probe/entsleep] snapshot fallback (reflection): " + SnapCompiler.failure);
+            if (SnapCompiler.failure != null) System.out.println("[sleep/entsleep] snapshot fallback (reflection): " + SnapCompiler.failure);
             clocks = cl.stream().mapToInt(Integer::intValue).toArray();
             if (comp != null && SnapCompiler.U != null) {
                 clockPart = new int[clocks.length];
@@ -421,7 +421,7 @@ public final class EntitySleep {
                 barrier = true;
                 for (MobSleep.Part pt : comp.parts) if (WB.rootIndex(pt.cls) < 0) {
                     barrier = false;
-                    System.out.println("[probe/entsleep] " + c.getSimpleName() + ": no write barrier, part " + pt.path + " (" + pt.cls.getSimpleName() + ") has no watcher");
+                    System.out.println("[sleep/entsleep] " + c.getSimpleName() + ": no write barrier, part " + pt.path + " (" + pt.cls.getSimpleName() + ") has no watcher");
                 }
                 if (barrier) {
                     slotOff = new long[n];
@@ -816,7 +816,7 @@ public final class EntitySleep {
     private EntitySleep() {}
 
     private static ES es(Entity e) {
-        return (ES) ((EntSleeperHolder) e).probe$es();
+        return (ES) ((EntSleeperHolder) e).sleep$es();
     }
 
     static ES esOf(Entity e) {
@@ -927,7 +927,7 @@ public final class EntitySleep {
             MobSleep.REC = null;
         }
         java.util.concurrent.atomic.AtomicLong sd = MobSleep.seedOf(MobSleep.fieldValue(e, "random"));
-        System.out.println("[probe/trace] t=" + e.tickCount + " " + before + " " + mode + " amb=" + MobSleep.fieldValue(e, "ambientSoundTime") + " head=" + e.getYHeadRot()
+        System.out.println("[sleep/trace] t=" + e.tickCount + " " + before + " " + mode + " amb=" + MobSleep.fieldValue(e, "ambientSoundTime") + " head=" + e.getYHeadRot()
                 + " body=" + (e instanceof net.minecraft.world.entity.LivingEntity le ? le.yBodyRot : 0) + " seed=" + (sd == null ? "?" : Long.toHexString(sd.get()))
                 + " pos=" + e.position() + " dm=" + e.getDeltaMovement() + " run=" + traceGoals(e) + " draws=" + traceDraws());
     }
@@ -983,7 +983,7 @@ public final class EntitySleep {
         if (s == null) {
             EClass c = AsyncAnalysis.get(CLASSES, e.getClass(), k -> {
                 EClass x = new EClass(k, e);
-                System.out.println("[probe/entsleep] " + k.getSimpleName() + " (" + x.analysisMs + " ms): " + (x.refuse == null ? "ELIGIBLE fields " + x.n + " (final "
+                System.out.println("[sleep/entsleep] " + k.getSimpleName() + " (" + x.analysisMs + " ms): " + (x.refuse == null ? "ELIGIBLE fields " + x.n + " (final "
                         + java.util.Arrays.stream(x.f).filter(q -> Modifier.isFinal(q.getModifiers())).count() + ", primitive "
                         + java.util.Arrays.stream(x.f).filter(q -> q.getType().isPrimitive()).count() + ") period " + x.period
                         + " clocks=" + java.util.Arrays.stream(x.clocks).mapToObj(i -> x.f[i].getName()).toList()
@@ -1003,7 +1003,7 @@ public final class EntitySleep {
                 s.barrierOn = true;
                 watchParts(s);
             }
-            ((EntSleeperHolder) e).probe$setEs(s);
+            ((EntSleeperHolder) e).sleep$setEs(s);
         }
         if (s.st == St.ASLEEP && !s.woken && now >= s.wakeAt && s.drawWake) {
             // a draw takes the other branch this tick: run it for real; when it left the state the phase expects
@@ -1288,7 +1288,7 @@ public final class EntitySleep {
             for (int i = 0; i < n; i++) {
                 if (!c.special[i] && b[i] != s.base[i]) {
                     s.k = -1;
-                    if (DEBUG && dbgP++ < 6) System.out.println("[probe/entsleep] not periodic: " + slotName(c, i) + " #" + e.getId() + " t=" + e.tickCount);
+                    if (DEBUG && dbgP++ < 6) System.out.println("[sleep/entsleep] not periodic: " + slotName(c, i) + " #" + e.getId() + " t=" + e.tickCount);
                     fail(s, c.comp != null ? "not periodic: " + slotName(c, i) : "not periodic");
                     return;
                 }
@@ -1511,13 +1511,13 @@ public final class EntitySleep {
 
     private static int attrEpoch(Entity e) {
         ES s = es(e);
-        return s != null && s.attrObj != null ? s.attrObj.probe$attrEpoch() : 0;
+        return s != null && s.attrObj != null ? s.attrObj.sleep$attrEpoch() : 0;
     }
 
     private static int goalEpoch(Entity e, boolean goals) {
         ES s = es(e);
         MobSleepHooks.GoalEpoch g = s == null ? null : goals ? s.goal0 : s.goal1;
-        return g == null ? 0 : g.probe$goalEpoch();
+        return g == null ? 0 : g.sleep$goalEpoch();
     }
 
     /** the collections assumed empty, by the objects resolved when it fell asleep */
@@ -1750,7 +1750,7 @@ public final class EntitySleep {
                 continue;
             }
             if (r == 0) continue;
-            if (TRACE == e.getId()) System.out.println("[probe/trace] cond " + cond.text() + " slot " + slotName(c, ci) + " cv=" + cv + " r=" + r + " best=" + best);
+            if (TRACE == e.getId()) System.out.println("[sleep/trace] cond " + cond.text() + " slot " + slotName(c, ci) + " cv=" + cv + " r=" + r + " best=" + best);
             long t = cond.thresholdConst();
             if (cond.thresholdField() != null) {
                 int ti = c.condThreshold != null ? c.condThreshold[cj] : index(c, cond.thresholdField());
@@ -2064,7 +2064,7 @@ public final class EntitySleep {
         verifyFails++;
         if (DEBUG && dbg++ < 12) {
             long el = (long) s.e.tickCount - s.startTick;
-            StringBuilder sb = new StringBuilder("[probe/entsleep] verify fail " + field + " #" + s.e.getId() + " el=" + el + " phase=" + Math.floorMod(el, (long) s.c.period) + " now=");
+            StringBuilder sb = new StringBuilder("[sleep/entsleep] verify fail " + field + " #" + s.e.getId() + " el=" + el + " phase=" + Math.floorMod(el, (long) s.c.period) + " now=");
             for (int j = 0; j < s.v.length; j++) sb.append(slotName(s.c, s.v[j])).append(' ');
             sb.append(" table:");
             for (int p = 0; p < Math.min(8, s.c.period); p++) {
@@ -2465,7 +2465,7 @@ public final class EntitySleep {
     }
 
     /**
-     * Exactness checks ({@code probe hash} with -Dprobe.hashEntitiesDeep=true): every primitive field and every value
+     * Exactness checks ({@code probe hash} with -Dsleep.hashEntitiesDeep=true): every primitive field and every value
      * object (vectors, boxes, positions, synched data, random seeds, boxed values, enums) of the entity, by value.
      * Identity-only references, ids and UUIDs are left out (they differ between runs without meaning anything).
      */
@@ -2495,7 +2495,7 @@ public final class EntitySleep {
         long h = 17;
         for (Field f : fs) {
             String n = f.getName();
-            if (n.equals("id") || n.equals("uuid") || n.equals("stringUUID") || n.startsWith("probe$") || n.equals("bobOffs") || n.equals("timeOffs") || n.equals("rotA")) continue;   // per run (timeOffs, rotA: Math.random() in LivingEntity's constructor, cosmetic)
+            if (n.equals("id") || n.equals("uuid") || n.equals("stringUUID") || n.startsWith("sleep$") || n.startsWith("probe$") || n.equals("bobOffs") || n.equals("timeOffs") || n.equals("rotA")) continue;   // per run (timeOffs, rotA: Math.random() in LivingEntity's constructor, cosmetic)
             Class<?> t = f.getType();
             // (random seeds are per run: RandomSource.create() is seeded from the clock)
             if (!t.isPrimitive() && !(valueType(t) || SynchedEntityData.class.isAssignableFrom(t))) continue;
@@ -2532,7 +2532,7 @@ public final class EntitySleep {
         e.tick();
         long[] after = dsnap(e, fs);
         long[] prev = DPREV.put(id, after);
-        StringBuilder sb = new StringBuilder("[probe/entsleep] ").append(e.getClass().getSimpleName()).append(" #").append(id).append(" t=").append(e.tickCount).append(':');
+        StringBuilder sb = new StringBuilder("[sleep/entsleep] ").append(e.getClass().getSimpleName()).append(" #").append(id).append(" t=").append(e.tickCount).append(':');
         for (int i = 0; i < fs.length; i++) if (before[i] != after[i]) sb.append(' ').append(fs[i].getName()).append('=').append(show(fs[i], e));
         if (prev != null) {
             sb.append("  | outside tick:");
@@ -2546,7 +2546,7 @@ public final class EntitySleep {
         List<Field> out = new ArrayList<>();
         for (Class<?> k = c; k != null && k != Object.class; k = k.getSuperclass()) {
             for (Field f : k.getDeclaredFields()) {
-                if (f.getName().equals("probe$w")) continue;   // the write barrier's watcher (WriteBarrier), not state
+                if (f.getName().equals("sleep$w")) continue;   // the write barrier's watcher (WriteBarrier), not state
                 if (Modifier.isStatic(f.getModifiers())) continue;
                 try {
                     f.setAccessible(true);

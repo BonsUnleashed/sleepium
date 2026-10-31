@@ -16,7 +16,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(LiquidBlockRenderer.class)
 public abstract class LightScoutFluidMixin {
     @Inject(method = "tesselate", at = @At("HEAD"))
-    private void probe$fluid(BlockAndTintGetter level, BlockPos pos, VertexConsumer buffer, BlockState state, FluidState fluid, CallbackInfo ci) {
+    private void sleep$fluid(BlockAndTintGetter level, BlockPos pos, VertexConsumer buffer, BlockState state, FluidState fluid, CallbackInfo ci) {
         LightScout.fluidBlock();
     }
 }

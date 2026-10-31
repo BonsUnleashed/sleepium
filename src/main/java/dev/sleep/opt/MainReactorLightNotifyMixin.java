@@ -23,15 +23,15 @@ public abstract class MainReactorLightNotifyMixin {
     @Nullable
     protected abstract ChunkHolder getVisibleChunkIfPresent(long chunkPos);
 
-    @Unique private final LightNotifyRing probe$ring = new LightNotifyRing();
-    @Unique private BlockableEventLoop<Runnable> probe$executor;
-    @Unique private final Runnable probe$drain = this::probe$drain;
+    @Unique private final LightNotifyRing sleep$ring = new LightNotifyRing();
+    @Unique private BlockableEventLoop<Runnable> sleep$executor;
+    @Unique private final Runnable sleep$drain = this::sleep$drain;
 
     @Unique
     @SuppressWarnings("unchecked")
-    private BlockableEventLoop<Runnable> probe$executor() {
-        BlockableEventLoop<Runnable> e = probe$executor;
-        if (e == null) probe$executor = e = (BlockableEventLoop<Runnable>) dev.sleep.optsupport.Reflect.get(this, "mainThreadProcessor");
+    private BlockableEventLoop<Runnable> sleep$executor() {
+        BlockableEventLoop<Runnable> e = sleep$executor;
+        if (e == null) sleep$executor = e = (BlockableEventLoop<Runnable>) dev.sleep.optsupport.Reflect.get(this, "mainThreadProcessor");
         return e;
     }
 
@@ -41,16 +41,16 @@ public abstract class MainReactorLightNotifyMixin {
      */
     @Overwrite
     public void onLightUpdate(LightLayer type, SectionPos pos) {
-        if (probe$ring.note(type == LightLayer.SKY, pos.asLong())) probe$executor().execute(probe$drain);
+        if (sleep$ring.note(type == LightLayer.SKY, pos.asLong())) sleep$executor().execute(sleep$drain);
     }
 
     @Unique
-    private void probe$drain() {
-        probe$ring.drain(p -> probe$apply(LightLayer.SKY, p), p -> probe$apply(LightLayer.BLOCK, p));
+    private void sleep$drain() {
+        sleep$ring.drain(p -> sleep$apply(LightLayer.SKY, p), p -> sleep$apply(LightLayer.BLOCK, p));
     }
 
     @Unique
-    private void probe$apply(LightLayer type, long p) {
+    private void sleep$apply(LightLayer type, long p) {
         ChunkHolder chunkholder = this.getVisibleChunkIfPresent(ChunkPos.asLong(SectionPos.x(p), SectionPos.z(p)));
         if (chunkholder != null) {
             chunkholder.sectionLightChanged(type, SectionPos.y(p));

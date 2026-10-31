@@ -6,8 +6,8 @@ import org.objectweb.asm.tree.ClassNode;
 import org.spongepowered.asm.mixin.extensibility.IMixinConfigPlugin;
 import org.spongepowered.asm.mixin.extensibility.IMixinInfo;
 
-/** Measurement mixins are always on, except the expensive read probes (ReadProbe*), which need -Dprobe.beReads=true. */
-public final class ProbeMixinPlugin implements IMixinConfigPlugin {
+/** Measurement mixins are always on, except the expensive read probes (ReadProbe*), which need -Dsleep.beReads=true. */
+public final class SleepMixinPlugin implements IMixinConfigPlugin {
     static {
         dev.sleep.optsupport.GameDefaults.ensure();   // a built jar's flags before any is read
     }
@@ -18,21 +18,21 @@ public final class ProbeMixinPlugin implements IMixinConfigPlugin {
         boolean sleep = Boolean.getBoolean("lab.opt.SleepMixin") || Boolean.getBoolean("lab.opt.EntitySleep");
         if (simple.startsWith("SleepProbeUnobserved")) return sleep && !Boolean.getBoolean("lab.sleep.noUnobserved");   // off only for measurements
         if (simple.startsWith("SleepProbe")) return sleep;
-        if (simple.startsWith("FrameHash")) return Boolean.getBoolean("probe.clientAuto.framehash");
-        if (simple.startsWith("DrawStats")) return Boolean.getBoolean("probe.drawStats");
-        if (simple.startsWith("NetStats")) return Boolean.getBoolean("probe.net.stats");
+        if (simple.startsWith("FrameHash")) return Boolean.getBoolean("sleep.clientAuto.framehash");
+        if (simple.startsWith("DrawStats")) return Boolean.getBoolean("sleep.drawStats");
+        if (simple.startsWith("NetStats")) return Boolean.getBoolean("sleep.net.stats");
         if (simple.startsWith("GenTrace") || simple.equals("DataLayerMapAccessor")) return Boolean.getBoolean("lab.pgen.trace");
-        if (simple.startsWith("IoScout")) return Boolean.getBoolean("probe.ioScout");
-        if (simple.startsWith("GlTrace")) return Boolean.getBoolean("probe.glTrace");
-        if (simple.startsWith("MobQuiet")) return Boolean.getBoolean("probe.mobQuiet");
-        if (simple.startsWith("BrainTime")) return Boolean.getBoolean("probe.brainTime");
-        if (simple.startsWith("ComponentShadow")) return Boolean.getBoolean("probe.componentShadow");
-        if (simple.startsWith("MoveShadow")) return Boolean.getBoolean("probe.moveShadow");
-        if (simple.startsWith("MoveTime")) return Boolean.getBoolean("probe.moveTime");
-        if (simple.startsWith("Knock")) return System.getProperty("probe.knock") != null;
-        if (simple.equals("ClientAutoMouseMixin")) return System.getProperty("probe.clientAuto") != null;
+        if (simple.startsWith("IoScout")) return Boolean.getBoolean("sleep.ioScout");
+        if (simple.startsWith("GlTrace")) return Boolean.getBoolean("sleep.glTrace");
+        if (simple.startsWith("MobQuiet")) return Boolean.getBoolean("sleep.mobQuiet");
+        if (simple.startsWith("BrainTime")) return Boolean.getBoolean("sleep.brainTime");
+        if (simple.startsWith("ComponentShadow")) return Boolean.getBoolean("sleep.componentShadow");
+        if (simple.startsWith("MoveShadow")) return Boolean.getBoolean("sleep.moveShadow");
+        if (simple.startsWith("MoveTime")) return Boolean.getBoolean("sleep.moveTime");
+        if (simple.startsWith("Knock")) return System.getProperty("sleep.knock") != null;
+        if (simple.equals("ClientAutoMouseMixin")) return System.getProperty("sleep.clientAuto") != null;
         if (simple.startsWith("EntSleep")) return Boolean.getBoolean("lab.opt.EntitySleep") || System.getProperty("lab.entsleep.diag") != null;
-        return !simple.startsWith("ReadProbe") || Boolean.getBoolean("probe.beReads") || sleep;
+        return !simple.startsWith("ReadProbe") || Boolean.getBoolean("sleep.beReads") || sleep;
     }
 
     @Override public void onLoad(String mixinPackage) {}

@@ -15,10 +15,10 @@ import org.joml.Vector3f;
  * byte is the same for every key are skipped. Every VertexSorting.byDistance user gets it: immediate translucent
  * buffers (item frames, particles, entities), chunk translucency resorts, mods that use the vanilla sorting.
  *
- * <p>{@code -Dprobe.quadSortCheck=true}: every call also runs vanilla's sort and counts differences.
+ * <p>{@code -Dsleep.quadSortCheck=true}: every call also runs vanilla's sort and counts differences.
  */
 public final class QuadSort {
-    private static final boolean CHECK = Boolean.getBoolean("probe.quadSortCheck");
+    private static final boolean CHECK = Boolean.getBoolean("sleep.quadSortCheck");
     public static volatile long sorts, quads, checked, mismatches;
 
     private QuadSort() {}
@@ -120,7 +120,7 @@ public final class QuadSort {
             m.instructions.add(new org.objectweb.asm.tree.InsnNode(org.objectweb.asm.Opcodes.ARETURN));
             m.maxStack = 2;
             m.maxLocals = 2;
-            System.out.println("[probe/opt] quad sort: " + cn.name + "." + m.name + " -> QuadSort.byDistance");
+            System.out.println("[sleep/opt] quad sort: " + cn.name + "." + m.name + " -> QuadSort.byDistance");
         }
     }
 
@@ -228,7 +228,7 @@ public final class QuadSort {
                 p += 24;
             }
         }
-        ((dev.sleep.opt.MeshDataAccessor) (Object) m).probe$setIndexBuffer(bb.build());
+        ((dev.sleep.opt.MeshDataAccessor) (Object) m).sleep$setIndexBuffer(bb.build());
         fastSorts++;
         fastQuads += quads;
         return null;

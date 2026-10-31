@@ -23,7 +23,7 @@ public abstract class WorldgenAllocSurfaceContextMixin {
     @Shadow int stoneDepthAbove;
     @Shadow @Final BlockPos.MutableBlockPos pos;
     @Shadow @Final private Function<BlockPos, Holder<Biome>> biomeGetter;
-    @Unique private LazyBiome probe$biome;
+    @Unique private LazyBiome sleep$biome;
 
     /**
      * @author probe
@@ -32,8 +32,8 @@ public abstract class WorldgenAllocSurfaceContextMixin {
     @Overwrite
     protected void updateY(int stoneDepthAbove, int stoneDepthBelow, int waterHeight, int blockX, int blockY, int blockZ) {
         this.lastUpdateY++;
-        LazyBiome b = probe$biome;
-        if (b == null) probe$biome = b = new LazyBiome(biomeGetter, pos);
+        LazyBiome b = sleep$biome;
+        if (b == null) sleep$biome = b = new LazyBiome(biomeGetter, pos);
         this.biome = b.reset(blockX, blockY, blockZ);
         this.blockY = blockY;
         this.waterHeight = waterHeight;

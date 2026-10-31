@@ -39,10 +39,10 @@ public abstract class NeighborQueueMixin {
     /** NeighborReactMixin's skip (its redirects sit in the record classes this queue no longer uses) */
     @Unique private static final boolean REACT = Boolean.getBoolean("lab.opt.all") || Boolean.getBoolean("lab.opt.NeighborReactMixin");
 
-    @Unique private int probe$count;
+    @Unique private int sleep$count;
 
     // the stack (index size-1 = top) and the entries added during the current layer, same record layout
-    @Unique private final NeighborRecs probe$stack = new NeighborRecs(), probe$added = new NeighborRecs();
+    @Unique private final NeighborRecs sleep$stack = new NeighborRecs(), sleep$added = new NeighborRecs();
 
     /**
      * @author probe (lab.opt.NeighborQueueMixin)
@@ -50,7 +50,7 @@ public abstract class NeighborQueueMixin {
      */
     @Overwrite
     public void shapeUpdate(Direction direction, BlockState state, BlockPos pos, BlockPos neighborPos, int flags, int recursionLevel) {
-        NeighborRecs r = probe$target(pos);
+        NeighborRecs r = sleep$target(pos);
         if (r == null) return;
         int i = r.add();
         r.kind[i] = SHAPE;
@@ -60,7 +60,7 @@ public abstract class NeighborQueueMixin {
         r.npos[i] = neighborPos.immutable();
         r.flags[i] = flags;
         r.limit[i] = recursionLevel;
-        probe$run();
+        sleep$run();
     }
 
     /**
@@ -69,14 +69,14 @@ public abstract class NeighborQueueMixin {
      */
     @Overwrite
     public void neighborChanged(BlockPos pos, Block neighborBlock, BlockPos neighborPos) {
-        NeighborRecs r = probe$target(pos);
+        NeighborRecs r = sleep$target(pos);
         if (r == null) return;
         int i = r.add();
         r.kind[i] = SIMPLE;
         r.pos[i] = pos;
         r.block[i] = neighborBlock;
         r.npos[i] = neighborPos.immutable();
-        probe$run();
+        sleep$run();
     }
 
     /**
@@ -85,7 +85,7 @@ public abstract class NeighborQueueMixin {
      */
     @Overwrite
     public void neighborChanged(BlockState state, BlockPos pos, Block neighborBlock, BlockPos neighborPos, boolean movedByPiston) {
-        NeighborRecs r = probe$target(pos);
+        NeighborRecs r = sleep$target(pos);
         if (r == null) return;
         int i = r.add();
         r.kind[i] = FULL;
@@ -94,7 +94,7 @@ public abstract class NeighborQueueMixin {
         r.block[i] = neighborBlock;
         r.npos[i] = neighborPos.immutable();
         r.moved[i] = movedByPiston;
-        probe$run();
+        sleep$run();
     }
 
     /**
@@ -103,7 +103,7 @@ public abstract class NeighborQueueMixin {
      */
     @Overwrite
     public void updateNeighborsAtExceptFromFacing(BlockPos pos, Block block, @Nullable Direction facing) {
-        NeighborRecs r = probe$target(pos);
+        NeighborRecs r = sleep$target(pos);
         if (r == null) return;
         int i = r.add();
         r.kind[i] = MULTI;
@@ -111,49 +111,49 @@ public abstract class NeighborQueueMixin {
         r.block[i] = block;
         r.dir[i] = facing == null ? -1 : facing.ordinal();
         r.idx[i] = ORDER[0] == facing ? 1 : 0;   // vanilla MultiNeighborUpdate constructor
-        probe$run();
+        sleep$run();
     }
 
     /**
      * Vanilla addAndRun, first half: count, chain limit (same log line), and where the new record goes. Returns null when
-     * it is skipped; probe$run() must still follow (it runs the queue when this was the first update).
+     * it is skipped; sleep$run() must still follow (it runs the queue when this was the first update).
      */
     @Unique
-    private NeighborRecs probe$target(BlockPos pos) {
-        boolean nested = probe$count > 0;
-        boolean limited = maxChainedNeighborUpdates >= 0 && probe$count >= maxChainedNeighborUpdates;
-        probe$count++;
+    private NeighborRecs sleep$target(BlockPos pos) {
+        boolean nested = sleep$count > 0;
+        boolean limited = maxChainedNeighborUpdates >= 0 && sleep$count >= maxChainedNeighborUpdates;
+        sleep$count++;
         if (limited) {
-            if (probe$count - 1 == maxChainedNeighborUpdates)
+            if (sleep$count - 1 == maxChainedNeighborUpdates)
                 PROBE_LOGGER.error("Too many chained neighbor updates. Skipping the rest. First skipped position: " + pos.toShortString());
-            if (!nested) probe$runUpdates();
+            if (!nested) sleep$runUpdates();
             return null;
         }
-        probe$first = !nested;
-        return nested ? probe$added : probe$stack;
+        sleep$first = !nested;
+        return nested ? sleep$added : sleep$stack;
     }
 
-    @Unique private boolean probe$first;
+    @Unique private boolean sleep$first;
 
     @Unique
-    private void probe$run() {
-        if (probe$first) {
-            probe$first = false;
-            probe$runUpdates();
+    private void sleep$run() {
+        if (sleep$first) {
+            sleep$first = false;
+            sleep$runUpdates();
         }
     }
 
     /** Vanilla runUpdates on the record arrays. */
     @Unique
-    private void probe$runUpdates() {
-        NeighborRecs stack = probe$stack, added = probe$added;
+    private void sleep$runUpdates() {
+        NeighborRecs stack = sleep$stack, added = sleep$added;
         try {
             while (stack.size > 0 || added.size > 0) {
                 for (int i = added.size - 1; i >= 0; i--) added.copyTo(i, stack);
                 added.clear();
                 int top = stack.size - 1;
                 while (added.size == 0) {
-                    if (!probe$runNext(stack, top)) {
+                    if (!sleep$runNext(stack, top)) {
                         stack.release(top);
                         stack.size--;
                         break;
@@ -163,23 +163,23 @@ public abstract class NeighborQueueMixin {
         } finally {
             stack.clear();
             added.clear();
-            probe$count = 0;
+            sleep$count = 0;
         }
     }
 
     @Unique
-    private static void probe$execute(Level lvl, BlockState state, BlockPos pos, Block block, BlockPos from, boolean moved) {
-        if (REACT && !((dev.sleep.optsupport.ReactsHolder) state).probe$reacts()) return;
+    private static void sleep$execute(Level lvl, BlockState state, BlockPos pos, Block block, BlockPos from, boolean moved) {
+        if (REACT && !((dev.sleep.optsupport.ReactsHolder) state).sleep$reacts()) return;
         NeighborUpdater.executeUpdate(lvl, state, pos, block, from, moved);
     }
 
     /** The runNext of vanilla's four record types. */
     @Unique
-    private boolean probe$runNext(NeighborRecs s, int i) {
+    private boolean sleep$runNext(NeighborRecs s, int i) {
         Level lvl = this.level;
         switch (s.kind[i]) {
             case FULL -> {
-                probe$execute(lvl, (BlockState) s.state[i], (BlockPos) s.pos[i], (Block) s.block[i], (BlockPos) s.npos[i], s.moved[i]);
+                sleep$execute(lvl, (BlockState) s.state[i], (BlockPos) s.pos[i], (Block) s.block[i], (BlockPos) s.npos[i], s.moved[i]);
                 return false;
             }
             case SHAPE -> {
@@ -188,7 +188,7 @@ public abstract class NeighborQueueMixin {
             }
             case SIMPLE -> {
                 BlockPos pos = (BlockPos) s.pos[i];
-                probe$execute(lvl, lvl.getBlockState(pos), pos, (Block) s.block[i], (BlockPos) s.npos[i], false);
+                sleep$execute(lvl, lvl.getBlockState(pos), pos, (Block) s.block[i], (BlockPos) s.npos[i], false);
                 return false;
             }
             default -> {   // MULTI
@@ -198,7 +198,7 @@ public abstract class NeighborQueueMixin {
                 int k = s.idx[i];
                 s.idx[i] = k + 1;   // written before the call: nothing touches the stack while it runs
                 BlockPos p = source.relative(ORDER[k]);
-                probe$execute(lvl, lvl.getBlockState(p), p, sourceBlock, source, false);
+                sleep$execute(lvl, lvl.getBlockState(p), p, sourceBlock, source, false);
                 k = s.idx[i];
                 if (k < ORDER.length && skip >= 0 && ORDER[k].ordinal() == skip) s.idx[i] = ++k;
                 return k < ORDER.length;

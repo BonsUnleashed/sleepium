@@ -11,7 +11,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(Entity.class)
 public abstract class WriteProbeEntityMixin {
     @Inject(method = "setRemoved", at = @At("HEAD"))
-    private void probe$removed(Entity.RemovalReason reason, CallbackInfo ci) {
+    private void sleep$removed(Entity.RemovalReason reason, CallbackInfo ci) {
         BeTickStats.writes++;
         if (dev.sleep.optsupport.sleep.SleepEngine.HOOKS) dev.sleep.optsupport.sleep.SleepEngine.onEntity((Entity) (Object) this, "entity-removed");
     }

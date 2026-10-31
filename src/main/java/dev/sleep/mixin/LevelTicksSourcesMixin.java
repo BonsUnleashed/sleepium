@@ -12,7 +12,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(LevelTicks.class)
 public abstract class LevelTicksSourcesMixin {
     @Inject(method = "schedule", at = @At("HEAD"))
-    private void probe$schedule(ScheduledTick<?> tick, CallbackInfo ci) {
+    private void sleep$schedule(ScheduledTick<?> tick, CallbackInfo ci) {
         EventSources.scheduledTicks++;
         dev.sleep.BeTickStats.writes++;
     }

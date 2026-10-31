@@ -41,7 +41,7 @@ public abstract class EntityCullNoAllocMixin<T extends Entity> {
         }
         boolean infinite = Double.isInfinite(minX) && Double.isInfinite(minY) && Double.isInfinite(minZ) && Double.isInfinite(maxX)
                 && Double.isInfinite(maxY) && Double.isInfinite(maxZ);
-        if (infinite || ((FrustumInvoker) camera).probe$cubeInFrustum(minX, minY, minZ, maxX, maxY, maxZ)) return true;
+        if (infinite || ((FrustumInvoker) camera).sleep$cubeInFrustum(minX, minY, minZ, maxX, maxY, maxZ)) return true;
         if (e instanceof Leashable leashable) {
             Entity holder = leashable.getLeashHolder();
             if (holder != null) return camera.isVisible(holder.getBoundingBoxForCulling());

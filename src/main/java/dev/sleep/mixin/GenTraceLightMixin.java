@@ -18,7 +18,7 @@ public abstract class GenTraceLightMixin<M extends DataLayerStorageMap<M>> {
     @Shadow @Final protected LongSet changedSections;
 
     @Inject(method = "swapSectionMap", at = @At("HEAD"))
-    private void probe$swap(CallbackInfo ci) {
-        if (!changedSections.isEmpty()) GenTrace.lightCopy(((DataLayerMapAccessor) (Object) updatingSectionData).probe$map().size(), changedSections.size());
+    private void sleep$swap(CallbackInfo ci) {
+        if (!changedSections.isEmpty()) GenTrace.lightCopy(((DataLayerMapAccessor) (Object) updatingSectionData).sleep$map().size(), changedSections.size());
     }
 }

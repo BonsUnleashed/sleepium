@@ -28,6 +28,6 @@ public abstract class PoiColumnMixin {
     @Overwrite
     @SuppressWarnings("unchecked")
     public Stream<PoiRecord> getInChunk(Predicate<Holder<PoiType>> typePredicate, ChunkPos posChunk, PoiManager.Occupancy status) {
-        return ((SectionColumns<PoiSection>) (Object) this).probe$sectionsInColumn(posChunk).flatMap(s -> s.getRecords(typePredicate, status));
+        return ((SectionColumns<PoiSection>) (Object) this).sleep$sectionsInColumn(posChunk).flatMap(s -> s.getRecords(typePredicate, status));
     }
 }

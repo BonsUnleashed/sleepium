@@ -5,7 +5,7 @@ import java.util.Map;
 import net.minecraft.resources.ResourceLocation;
 
 /**
- * {@code /probe bulktest <entries> <kb> <changed> <seed>}: a synthetic content set {@code probe:selftest} for testing
+ * {@code /sleep bulktest <entries> <kb> <changed> <seed>}: a synthetic content set {@code probe:selftest} for testing
  * the bulk transfer without touching real content. Entry i is {@code kb} KB of text-like bytes; the first
  * {@code changed} entries depend on {@code seed}, the rest never change — so a second publish with another seed is a
  * delta of {@code changed} entries. The client logs a digest of what it received (same line on every client).
@@ -22,7 +22,7 @@ public final class BulkSelfTest {
                 d = d * 31 + java.util.Arrays.hashCode(e.getValue()) + e.getKey().hashCode();
                 bytes += e.getValue().length;
             }
-            System.out.println("[probe/net] selftest received: " + m.size() + " entries, " + bytes / 1024 + " KB, digest " + Long.toHexString(d));
+            System.out.println("[sleep/net] selftest received: " + m.size() + " entries, " + bytes / 1024 + " KB, digest " + Long.toHexString(d));
         });
     }
 

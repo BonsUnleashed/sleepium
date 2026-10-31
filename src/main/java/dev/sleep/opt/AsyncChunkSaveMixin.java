@@ -17,13 +17,13 @@ import org.spongepowered.asm.mixin.injection.Redirect;
 public abstract class AsyncChunkSaveMixin {
     @Redirect(method = "save(Lnet/minecraft/world/level/chunk/ChunkAccess;)Z", at = @At(value = "INVOKE",
             target = "Lnet/minecraft/world/level/chunk/storage/ChunkSerializer;write(Lnet/minecraft/server/level/ServerLevel;Lnet/minecraft/world/level/chunk/ChunkAccess;)Lnet/minecraft/nbt/CompoundTag;"))
-    private CompoundTag probe$write(ServerLevel level, ChunkAccess chunk) {
+    private CompoundTag sleep$write(ServerLevel level, ChunkAccess chunk) {
         return AsyncChunkSave.write((ChunkStorage) (Object) this, level, chunk);
     }
 
     @Redirect(method = "save(Lnet/minecraft/world/level/chunk/ChunkAccess;)Z", at = @At(value = "INVOKE",
             target = "Lnet/minecraft/server/level/ChunkMap;write(Lnet/minecraft/world/level/ChunkPos;Lnet/minecraft/nbt/CompoundTag;)Ljava/util/concurrent/CompletableFuture;"))
-    private CompletableFuture<Void> probe$store(ChunkMap self, ChunkPos pos, CompoundTag tag) {
+    private CompletableFuture<Void> sleep$store(ChunkMap self, ChunkPos pos, CompoundTag tag) {
         return AsyncChunkSave.store(self, pos, tag);
     }
 }

@@ -202,7 +202,7 @@ final class SleepAnalysis {
 
     private void nullGuard(String key) {
         if (!collect) return;
-        if (key.equals(NULL_TRACE)) System.out.println("[probe/sleep] null " + key + " guards " + curGuards + " assumed " + zeroFields + falseCalls + emptyFields + " stack " + STACK);
+        if (key.equals(NULL_TRACE)) System.out.println("[sleep/sleep] null " + key + " guards " + curGuards + " assumed " + zeroFields + falseCalls + emptyFields + " stack " + STACK);
         // the union: each place needs one of its own guards (the search keeps neutral steps until all are covered)
         nullGuards.computeIfAbsent(key, k -> new HashSet<>()).addAll(curGuards);
     }
@@ -687,7 +687,7 @@ final class SleepAnalysis {
             }
             if (collect && op == Opcodes.PUTFIELD && in[i] instanceof FieldInsnNode wf0 && onThis(fr[i], 2, fr, m)) {   // another instance's field is not ours
                 String o = declOf(wf0.owner, wf0.name);
-                if (writtenNow.add(o + "." + wf0.name) && wf0.name.equals(WHO_WRITES)) System.out.println("[probe/sleep] " + o + "." + wf0.name + " written @" + simple(owner) + "." + m.name + " ctx=" + ctxPath);
+                if (writtenNow.add(o + "." + wf0.name) && wf0.name.equals(WHO_WRITES)) System.out.println("[sleep/sleep] " + o + "." + wf0.name + " written @" + simple(owner) + "." + m.name + " ctx=" + ctxPath);
             }
             if (op == Opcodes.PUTFIELD && in[i] instanceof FieldInsnNode f && beChain.contains(f.owner) && (!entityMode || onThis(fr[i], 2, fr, m))) {
                 String kind = clockKind(f, fr, m, i);
@@ -743,7 +743,7 @@ final class SleepAnalysis {
                         if (entityMode && !ctxPath.isEmpty() && o.kind == Kind.FIELD && o.self && o.type != null && o.type.length() > 1 && !finalField(ctxObj, o.name)) {
                             String key = ctxPath + "." + o.name;   // a context's own object, assumed null like the entity's
                             nullGuard(key);
-                            if (nullCandidates.add(key) && NULL_WHY) System.out.println("[probe/sleep] null candidate " + key + " @" + simple(owner) + "." + m.name + " call " + simple(mi.owner) + "." + mi.name);
+                            if (nullCandidates.add(key) && NULL_WHY) System.out.println("[sleep/sleep] null candidate " + key + " @" + simple(owner) + "." + m.name + " call " + simple(mi.owner) + "." + mi.name);
                             continue;
                         }
                         if (entityMode && !ctxPath.isEmpty()) {
@@ -752,7 +752,7 @@ final class SleepAnalysis {
                         }
                         if (entityMode && o.kind == Kind.FIELD && o.type != null && o.type.length() > 1) {
                             nullGuard(o.name);
-                            if (nullCandidates.add(o.name) && NULL_WHY) System.out.println("[probe/sleep] null candidate " + o.name + " @" + simple(owner) + "." + m.name + " ctx=" + ctxPath + " call " + simple(mi.owner) + "." + mi.name + " guards " + curGuards + " stack " + STACK);
+                            if (nullCandidates.add(o.name) && NULL_WHY) System.out.println("[sleep/sleep] null candidate " + o.name + " @" + simple(owner) + "." + m.name + " ctx=" + ctxPath + " call " + simple(mi.owner) + "." + mi.name + " guards " + curGuards + " stack " + STACK);
                             continue;
                         }
                         reject = "calls " + simple(mi.owner) + "." + mi.name + (k == 0 && op != Opcodes.INVOKESTATIC ? " on" : " with") + " owned state " + o.name;
@@ -1331,7 +1331,7 @@ final class SleepAnalysis {
     private static boolean fieldsImmutable(Class<?> c, Set<Class<?>> seen) {
         for (Class<?> k = c; k != null && k != Object.class && k != Enum.class && k != Record.class; k = k.getSuperclass()) {
             for (Field f : k.getDeclaredFields()) {
-                if (f.getName().equals("probe$w")) continue;   // the write barrier's watcher (WriteBarrier), not state
+                if (f.getName().equals("sleep$w")) continue;   // the write barrier's watcher (WriteBarrier), not state
                 if (Modifier.isStatic(f.getModifiers())) continue;
                 if (!Modifier.isFinal(f.getModifiers()) || !deeplyImmutable(f.getType(), seen)) return false;
             }
@@ -1427,14 +1427,14 @@ final class SleepAnalysis {
                 cur = r;
                 dirty = false;
                 tried.clear();   // what failed alone may help now
-                if (SEARCH_LOG) System.out.println("[probe/sleep] " + simple(internal(ec)) + " assume " + best + ": " + r + " reasons");
+                if (SEARCH_LOG) System.out.println("[sleep/sleep] " + simple(internal(ec)) + " assume " + best + ": " + r + " reasons");
             } else if (r == cur) {
                 // neutral: kept (it holds on the sample and guards a remaining reason) - some code needs two assumptions
                 dirty = false;
                 neutral.add(best);
-                if (SEARCH_LOG) System.out.println("[probe/sleep] " + simple(internal(ec)) + " assume (neutral) " + best);
+                if (SEARCH_LOG) System.out.println("[sleep/sleep] " + simple(internal(ec)) + " assume (neutral) " + best);
             } else {
-                if (SEARCH_LOG) System.out.println("[probe/sleep] " + simple(internal(ec)) + " tried " + best + ": " + r + " reasons, kept " + cur + " " + reasons.keySet());
+                if (SEARCH_LOG) System.out.println("[sleep/sleep] " + simple(internal(ec)) + " tried " + best + ": " + r + " reasons, kept " + cur + " " + reasons.keySet());
                 assume(best, false);
                 dirty = true;
             }
@@ -1442,18 +1442,18 @@ final class SleepAnalysis {
         // the neutral ones nothing needed in the end are dropped
         if (!neutral.isEmpty() && dirty) rounds(decl, root, ec, tickCount, chainSet, seen);
         Set<String> have = new HashSet<>(reasons.keySet());
-        if (SEARCH_LOG) System.out.println("[probe/sleep] " + simple(internal(ec)) + " left: " + have);
+        if (SEARCH_LOG) System.out.println("[sleep/sleep] " + simple(internal(ec)) + " left: " + have);
         for (String g : neutral) {
             assume(g, false);
             rounds(decl, root, ec, tickCount, chainSet, seen);
             boolean needed = !have.containsAll(reasons.keySet());   // a reason came back without it
             if (needed) assume(g, true);
-            else if (SEARCH_LOG) System.out.println("[probe/sleep] " + simple(internal(ec)) + " dropped " + g);
+            else if (SEARCH_LOG) System.out.println("[sleep/sleep] " + simple(internal(ec)) + " dropped " + g);
             dirty = needed;
         }
         if (dirty) rounds(decl, root, ec, tickCount, chainSet, seen);
         ok();
-        if (SEARCH_LOG) System.out.println("[probe/sleep] " + simple(internal(ec)) + " search: " + runCount + " runs, " + roundCount + " rounds, "
+        if (SEARCH_LOG) System.out.println("[sleep/sleep] " + simple(internal(ec)) + " search: " + runCount + " runs, " + roundCount + " rounds, "
                 + roundNs / 1_000_000 + " ms in rounds, " + guardNs / 1_000_000 + " ms in guards");
     }
 
@@ -1975,7 +1975,7 @@ final class SleepAnalysis {
             }
             for (Class<?> c = ctxObj.getClass(); c != null && c != Object.class; c = c.getSuperclass())
                 for (Field f : declaredFields(c)) {
-                    if (f.getName().equals("probe$w")) continue;   // the write barrier's watcher (WriteBarrier), not state
+                    if (f.getName().equals("sleep$w")) continue;   // the write barrier's watcher (WriteBarrier), not state
                     if (java.lang.reflect.Modifier.isStatic(f.getModifiers()) || !java.util.Collection.class.isAssignableFrom(f.getType())
                             || !effectivelyFinal(ctxObj.getClass(), f.getName())) continue;
                     Object col = fieldValue(ctxObj, f.getName());

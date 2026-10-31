@@ -51,8 +51,8 @@ public abstract class EntitySectionScanMixin<T extends EntityAccess> {
         int k1 = SectionPos.posToSectionCoord(bb.maxZ + 2.0);
         // the consumer is passed only inside the rarely-taken branch: C2 has no partial escape analysis, so a
         // non-inlined call receiving it on the common path would force the capturing lambdas onto the heap
-        if (probe$useDense(j, i1, k, j1, l, k1)) {
-            probe$dense(j, i1, k, j1, l, k1, consumer);
+        if (sleep$useDense(j, i1, k, j1, l, k1)) {
+            sleep$dense(j, i1, k, j1, l, k1, consumer);
             return;
         }
         for (int l1 = j; l1 <= i1; l1++) {
@@ -78,7 +78,7 @@ public abstract class EntitySectionScanMixin<T extends EntityAccess> {
      * Dense section map and a small box: generate the candidate keys, sort them in LongAVLTreeSet order (signed long
      * order of SectionPos.asLong) and look them up directly.
      */
-    private boolean probe$useDense(int x0, int x1, int y0, int y1, int z0, int z1) {
+    private boolean sleep$useDense(int x0, int x1, int y0, int y1, int z0, int z1) {
         long ny = (long) y1 - y0 + 1, nz = (long) z1 - z0 + 1;
         if (ny <= 0 || nz <= 0 || x1 < x0 || ny * nz > MAX_CANDIDATES || sections.size() <= ny * nz * (x1 - x0 + 1)) {
             if (CHECK) OptCounters.SECTION_FALLBACK.incrementAndGet();
@@ -87,7 +87,7 @@ public abstract class EntitySectionScanMixin<T extends EntityAccess> {
         return true;
     }
 
-    private void probe$dense(int x0, int x1, int y0, int y1, int z0, int z1, AbortableIterationConsumer<EntitySection<T>> consumer) {
+    private void sleep$dense(int x0, int x1, int y0, int y1, int z0, int z1, AbortableIterationConsumer<EntitySection<T>> consumer) {
         if (CHECK) {
             OptCounters.SECTION_FAST.incrementAndGet();
             check(x0, x1, y0, y1, z0, z1);
@@ -137,7 +137,7 @@ public abstract class EntitySectionScanMixin<T extends EntityAccess> {
         }
         OptCounters.SECTION_CHECKED.incrementAndGet();
         if (!a.toString().contentEquals(b)) {
-            if (OptCounters.SECTION_MISMATCHES.incrementAndGet() <= 5) System.out.println("[probe/opt] section scan MISMATCH vanilla=" + a + " ours=" + b);
+            if (OptCounters.SECTION_MISMATCHES.incrementAndGet() <= 5) System.out.println("[sleep/opt] section scan MISMATCH vanilla=" + a + " ours=" + b);
         }
     }
 }

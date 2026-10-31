@@ -16,7 +16,7 @@ public abstract class ChunkCacheClearMixin {
     @Shadow @Final public ServerLevel level;
 
     @Inject(method = "clearCache", at = @At("TAIL"))
-    private void probe$clear(CallbackInfo ci) {
-        if (level != null) ((ChunkCacheHolder) level).probe$ccReset();
+    private void sleep$clear(CallbackInfo ci) {
+        if (level != null) ((ChunkCacheHolder) level).sleep$ccReset();
     }
 }

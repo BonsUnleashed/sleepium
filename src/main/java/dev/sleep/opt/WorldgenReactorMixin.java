@@ -31,23 +31,23 @@ import org.spongepowered.asm.mixin.Unique;
 public abstract class WorldgenReactorMixin {
     @Shadow @Final private ChunkGeneratorStructureState chunkGeneratorState;
 
-    @Unique private volatile boolean probe$ringsReady;
+    @Unique private volatile boolean sleep$ringsReady;
 
     @Unique
-    private CompletableFuture<?> probe$gate(ChunkGenerationTask task) {
+    private CompletableFuture<?> sleep$gate(ChunkGenerationTask task) {
         List<CompletableFuture<?>> wait = null;
-        if (!probe$ringsReady) {
-            for (CompletableFuture<?> f : ((ReactorRingsAccessor) this.chunkGeneratorState).probe$rings().values())
+        if (!sleep$ringsReady) {
+            for (CompletableFuture<?> f : ((ReactorRingsAccessor) this.chunkGeneratorState).sleep$rings().values())
                 if (!f.isDone()) (wait = wait == null ? new ArrayList<>() : wait).add(f);
-            if (wait == null) probe$ringsReady = true;
+            if (wait == null) sleep$ringsReady = true;
         }
-        if ((Object) this instanceof ReactorStorageAccessor sa && sa.probe$worker() instanceof ReactorIOWorkerInvoker io) {
+        if ((Object) this instanceof ReactorStorageAccessor sa && sa.sleep$worker() instanceof ReactorIOWorkerInvoker io) {
             ChunkPos c = task.getCenter().getPos();
             int r = ChunkPyramid.GENERATION_PYRAMID.getStepTo(task.targetStatus).getAccumulatedRadiusOf(ChunkStatus.EMPTY) + 7;
             int rx0 = (c.x - r) >> 5, rx1 = (c.x + r) >> 5, rz0 = (c.z - r) >> 5, rz1 = (c.z + r) >> 5;
             for (int rx = rx0; rx <= rx1; rx++)
                 for (int rz = rz0; rz <= rz1; rz++) {
-                    CompletableFuture<?> f = io.probe$oldData(rx, rz);
+                    CompletableFuture<?> f = io.sleep$oldData(rx, rz);
                     if (!f.isDone()) (wait = wait == null ? new ArrayList<>() : wait).add(f);
                 }
         }
@@ -62,7 +62,7 @@ public abstract class WorldgenReactorMixin {
     @Overwrite
     private void runGenerationTask(ChunkGenerationTask task) {
         GenReactor.post(task.getCenter().getQueueLevel(), () -> {
-            CompletableFuture<?> gate = probe$gate(task);
+            CompletableFuture<?> gate = sleep$gate(task);
             if (gate != null) {
                 GenReactor.GATED.increment();
                 gate.whenComplete((v, e) -> this.runGenerationTask(task));

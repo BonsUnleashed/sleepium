@@ -27,50 +27,50 @@ public abstract class ChunkCacheMixin implements ChunkCacheHolder {
 
     @Shadow public abstract LevelChunk getChunk(int x, int z);
 
-    @Unique private long probe$ccKey = Long.MIN_VALUE;
-    @Unique private LevelChunk probe$ccChunk;
+    @Unique private long sleep$ccKey = Long.MIN_VALUE;
+    @Unique private LevelChunk sleep$ccChunk;
     @Unique private static final boolean CHECK = Boolean.getBoolean("lab.opt.chunkCacheCheck");
 
     @Override
-    public void probe$ccReset() {
-        probe$ccKey = Long.MIN_VALUE;
-        probe$ccChunk = null;
+    public void sleep$ccReset() {
+        sleep$ccKey = Long.MIN_VALUE;
+        sleep$ccChunk = null;
     }
 
     /** Hot path kept tiny so getBlockState stays inlinable (escape analysis of callers' BlockPos depends on it). */
     @Unique
-    private LevelChunk probe$cached(int x, int z) {
+    private LevelChunk sleep$cached(int x, int z) {
         long key = ChunkPos.asLong(x, z);
-        if (key == probe$ccKey && Thread.currentThread() == thread) {
-            if (CHECK) probe$check(x, z);
-            return probe$ccChunk;
+        if (key == sleep$ccKey && Thread.currentThread() == thread) {
+            if (CHECK) sleep$check(x, z);
+            return sleep$ccChunk;
         }
-        return probe$miss(x, z, key);
+        return sleep$miss(x, z, key);
     }
 
     @Unique
-    private LevelChunk probe$miss(int x, int z, long key) {
+    private LevelChunk sleep$miss(int x, int z, long key) {
         LevelChunk c = getChunk(x, z);
         if (Thread.currentThread() == thread && (Object) this instanceof ServerLevel) {
-            probe$ccKey = key;
-            probe$ccChunk = c;
+            sleep$ccKey = key;
+            sleep$ccChunk = c;
         }
         return c;
     }
 
     @Unique
-    private void probe$check(int x, int z) {
+    private void sleep$check(int x, int z) {
         OptCounters.CHUNK_CHECKED.incrementAndGet();
-        if (getChunk(x, z) != probe$ccChunk) OptCounters.CHUNK_MISMATCHES.incrementAndGet();
+        if (getChunk(x, z) != sleep$ccChunk) OptCounters.CHUNK_MISMATCHES.incrementAndGet();
     }
 
     @Redirect(method = "getBlockState", at = @At(value = "INVOKE", target = "Lnet/minecraft/world/level/Level;getChunk(II)Lnet/minecraft/world/level/chunk/LevelChunk;"))
-    private LevelChunk probe$blockState(Level self, int x, int z) {
-        return probe$cached(x, z);
+    private LevelChunk sleep$blockState(Level self, int x, int z) {
+        return sleep$cached(x, z);
     }
 
     @Redirect(method = "getChunkAt", at = @At(value = "INVOKE", target = "Lnet/minecraft/world/level/Level;getChunk(II)Lnet/minecraft/world/level/chunk/LevelChunk;"))
-    private LevelChunk probe$chunkAt(Level self, int x, int z) {
-        return probe$cached(x, z);
+    private LevelChunk sleep$chunkAt(Level self, int x, int z) {
+        return sleep$cached(x, z);
     }
 }

@@ -12,7 +12,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(EntityRenderDispatcher.class)
 public abstract class ParallelReloadMixin {
     @Inject(method = "onResourceManagerReload", at = @At("TAIL"))
-    private void probe$reloaded(ResourceManager rm, CallbackInfo ci) {
+    private void sleep$reloaded(ResourceManager rm, CallbackInfo ci) {
         ParallelRender.reloaded();
     }
 }

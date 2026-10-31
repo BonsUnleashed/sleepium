@@ -11,7 +11,7 @@ import org.spongepowered.asm.mixin.Mixin;
 @Mixin(SectionStorage.class)
 public abstract class GenProfilePoiReadMixin {
     @WrapMethod(method = "readColumn(Lnet/minecraft/world/level/ChunkPos;)V")
-    private void probe$readColumn(ChunkPos pos, Operation<Void> original) {
+    private void sleep$readColumn(ChunkPos pos, Operation<Void> original) {
         if (!GenProfile.active()) { original.call(pos); return; }
         long t = System.nanoTime(), m = GenProfile.allocated();
         original.call(pos);

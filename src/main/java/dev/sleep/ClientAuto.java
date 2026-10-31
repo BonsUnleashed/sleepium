@@ -25,30 +25,32 @@ import net.neoforged.bus.api.IEventBus;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
 
 /**
- * Hands-free client test, enabled with {@code -Dprobe.clientAuto=<label>}:
+ * Hands-free client test, enabled with {@code -Dsleep.clientAuto=<label>}:
  * <ol>
- *   <li>title screen → create a fresh world "probe-auto" (fixed seed, creative, commands on); render distance 12,
+ *   <li>title screen → create a fresh world "sleep-auto" (fixed seed, creative, commands on); render distance 12,
  *       no pause on lost focus</li>
  *   <li>after joining: time until the initial terrain is meshed (section compile queue empty and stable 2 s)</li>
- *   <li>frame recording (ClientProbe, 40 s) with two teleports far away: each measures the time until the new
+ *   <li>frame recording (ClientMeter, 40 s) with two teleports far away: each measures the time until the new
  *       terrain is generated (server pools) and meshed (client pool) again</li>
  *   <li>thread census, then the client closes itself</li>
  * </ol>
- * Everything is logged with the prefix {@code [probe/auto]}.
+ * Everything is logged with the prefix {@code [sleep/auto]}.
  */
 public final class ClientAuto {
     /** other mods' reports at the end of a run, given its label (null: nothing); log with their own files if they need */
     public static final java.util.List<java.util.function.Function<String, String>> REPORTS = new java.util.concurrent.CopyOnWriteArrayList<>();
     /**
      * The function a scene name means: "ns:name" as given; else the engine's (sleep:) when the integrated server has
-     * it, then the framework's / game's (probe:, their datapack), else sleep:.
+     * it, then any other namespace's function of that name (a mod's own scenes), else sleep:.
      */
     private static String sceneFunction(Minecraft mc, String scene) {
         if (scene.contains(":")) return scene;
         var server = mc.getSingleplayerServer();
         if (server != null) {
-            for (String ns : new String[] {"sleep", "probe"})
-                if (server.getFunctions().get(net.minecraft.resources.ResourceLocation.fromNamespaceAndPath(ns, scene)).isPresent()) return ns + ":" + scene;
+            var functions = server.getFunctions();
+            if (functions.get(net.minecraft.resources.ResourceLocation.fromNamespaceAndPath("sleep", scene)).isPresent()) return "sleep:" + scene;
+            for (net.minecraft.resources.ResourceLocation id : functions.getFunctionNames())
+                if (id.getPath().equals(scene)) return id.toString();
         }
         return "sleep:" + scene;
     }
@@ -56,40 +58,40 @@ public final class ClientAuto {
     /** other mods' work once the client is in the world (before the scripted steps) */
     public static final java.util.List<Runnable> READY = new java.util.concurrent.CopyOnWriteArrayList<>();
 
-    private static final String LABEL = System.getProperty("probe.clientAuto", "auto");
-    private static final String WORLD = "probe-auto";
+    private static final String LABEL = System.getProperty("sleep.clientAuto", "auto");
+    private static final String WORLD = "sleep-auto";
     private static final long SEED = 20260925L;
-    /** -Dprobe.clientAuto.fps=N: frame cap for resource measurements at equal frame rate (default 260 = unlimited) */
-    private static final int FPS_CAP = Integer.getInteger("probe.clientAuto.fps", 260);
-    /** -Dprobe.clientAuto.steady=true: after the initial terrain, 30 s (steadySeconds) of frames standing still, no teleports */
-    private static final boolean STEADY = Boolean.getBoolean("probe.clientAuto.steady");
-    private static final int SETTLE_S = Integer.getInteger("probe.clientAuto.settle", 0);
-    /** -Dprobe.clientAuto.scene=client_entities: run that probe function after the terrain is ready, then look at it */
-    private static final String SCENE = System.getProperty("probe.clientAuto.scene");
-    /** -Dprobe.clientAuto.server=host:port: join that server instead of creating a world (commands go as chat commands; op the player) */
-    private static final String SERVER = System.getProperty("probe.clientAuto.server");
-    /** -Dprobe.clientAuto.tp="x y z yaw pitch": where the scene is looked at from (default: the sky platform's view) */
-    private static final String SCENE_TP = "tp @s " + System.getProperty("probe.clientAuto.tp", "24 258 4 0 25").replace(',', ' ');   // commas allowed (JVM flags split on spaces)
-    /** -Dprobe.clientAuto.sceneWait=S: the scene is measured no earlier than S seconds after it was built (scenes that change for a while) */
-    private static final int SCENE_MIN_S = Integer.getInteger("probe.clientAuto.sceneWait", 0);
-    /** -Dprobe.clientAuto.framehash=true: freeze, then hash the frame's pixels and save it as a PNG (render exactness) */
-    private static final boolean FRAMEHASH = Boolean.getBoolean("probe.clientAuto.framehash");
+    /** -Dsleep.clientAuto.fps=N: frame cap for resource measurements at equal frame rate (default 260 = unlimited) */
+    private static final int FPS_CAP = Integer.getInteger("sleep.clientAuto.fps", 260);
+    /** -Dsleep.clientAuto.steady=true: after the initial terrain, 30 s (steadySeconds) of frames standing still, no teleports */
+    private static final boolean STEADY = Boolean.getBoolean("sleep.clientAuto.steady");
+    private static final int SETTLE_S = Integer.getInteger("sleep.clientAuto.settle", 0);
+    /** -Dsleep.clientAuto.scene=client_entities: run that probe function after the terrain is ready, then look at it */
+    private static final String SCENE = System.getProperty("sleep.clientAuto.scene");
+    /** -Dsleep.clientAuto.server=host:port: join that server instead of creating a world (commands go as chat commands; op the player) */
+    private static final String SERVER = System.getProperty("sleep.clientAuto.server");
+    /** -Dsleep.clientAuto.tp="x y z yaw pitch": where the scene is looked at from (default: the sky platform's view) */
+    private static final String SCENE_TP = "tp @s " + System.getProperty("sleep.clientAuto.tp", "24 258 4 0 25").replace(',', ' ');   // commas allowed (JVM flags split on spaces)
+    /** -Dsleep.clientAuto.sceneWait=S: the scene is measured no earlier than S seconds after it was built (scenes that change for a while) */
+    private static final int SCENE_MIN_S = Integer.getInteger("sleep.clientAuto.sceneWait", 0);
+    /** -Dsleep.clientAuto.framehash=true: freeze, then hash the frame's pixels and save it as a PNG (render exactness) */
+    private static final boolean FRAMEHASH = Boolean.getBoolean("sleep.clientAuto.framehash");
     private static int hashAt = -1, idleTicks, sceneAt;
-    /** -Dprobe.clientAuto.shot=S: a screenshot S seconds into the measured window, nothing frozen (moving scenes) */
-    private static final double SHOT_S = Double.parseDouble(System.getProperty("probe.clientAuto.shot", "-1"));   // seconds, fractions allowed
+    /** -Dsleep.clientAuto.shot=S: a screenshot S seconds into the measured window, nothing frozen (moving scenes) */
+    private static final double SHOT_S = Double.parseDouble(System.getProperty("sleep.clientAuto.shot", "-1"));   // seconds, fractions allowed
     private static int shotAt = -1;
-    /** -Dprobe.clientAuto.gamemode=survival: the game mode once the terrain is ready (default spectator) */
-    private static final String GAMEMODE = System.getProperty("probe.clientAuto.gamemode", "spectator");
-    /** -Dprobe.clientAuto.cmdAt=S:command[|S:command...]: server commands S seconds into the measured window (e.g. 10:reload) */
-    private static final String CMD_AT = System.getProperty("probe.clientAuto.cmdAt");
+    /** -Dsleep.clientAuto.gamemode=survival: the game mode once the terrain is ready (default spectator) */
+    private static final String GAMEMODE = System.getProperty("sleep.clientAuto.gamemode", "spectator");
+    /** -Dsleep.clientAuto.cmdAt=S:command[|S:command...]: server commands S seconds into the measured window (e.g. 10:reload) */
+    private static final String CMD_AT = System.getProperty("sleep.clientAuto.cmdAt");
     private static final java.util.List<Object[]> CMDS = new java.util.ArrayList<>();
 
-    /** -Dprobe.clientAuto.jfr=file.jfr[;settings.jfc]: a JFR recording of exactly the measured window */
-    private static final String JFR = System.getProperty("probe.clientAuto.jfr");
+    /** -Dsleep.clientAuto.jfr=file.jfr[;settings.jfc]: a JFR recording of exactly the measured window */
+    private static final String JFR = System.getProperty("sleep.clientAuto.jfr");
     private static jdk.jfr.Recording recording;
 
-    /** -Dprobe.clientAuto.serverProbe=true: the integrated server's tick stats over the same window (probe run) */
-    private static final boolean SERVER_PROBE = Boolean.getBoolean("probe.clientAuto.serverProbe");
+    /** -Dsleep.clientAuto.serverProbe=true: the integrated server's tick stats over the same window (probe run) */
+    private static final boolean SERVER_PROBE = Boolean.getBoolean("sleep.clientAuto.serverProbe");
 
     /**
      * Frame hashes: every animated texture (water, lava, fire, portals...) put on its first frame before the freeze —
@@ -140,8 +142,8 @@ public final class ClientAuto {
     private static void startMeasuring() {
         log("measuring started");   // the marker external profilers wait for (uprof_run.sh)
         if (DrawStats.ON) DrawStats.start();
-        if (SERVER_PROBE) command(Minecraft.getInstance(), "probe run 30 " + LABEL + "-srv");
-        if (SERVER != null && !"false".equals(System.getProperty("probe.clientAuto.netBench"))) command(Minecraft.getInstance(), "probe net " + (STEADY ? Integer.getInteger("probe.clientAuto.steadySeconds", 30) : 40) + " " + LABEL);
+        if (SERVER_PROBE) command(Minecraft.getInstance(), "sleep run 30 " + LABEL + "-srv");
+        if (SERVER != null && !"false".equals(System.getProperty("sleep.clientAuto.netBench"))) command(Minecraft.getInstance(), "sleep net " + (STEADY ? Integer.getInteger("sleep.clientAuto.steadySeconds", 30) : 40) + " " + LABEL);
         if (JFR != null) {
             try {
                 String[] j = JFR.split(";");
@@ -158,9 +160,9 @@ public final class ClientAuto {
             dev.sleep.optsupport.ClientCounters.freezeTextures = true;
             resetAnimations();
             hashAt = ticks + 60;
-            // -Dprobe.clientAuto.remesh=true: the scene's sections re-meshed first (the plain re-mesh path, light as it is
+            // -Dsleep.clientAuto.remesh=true: the scene's sections re-meshed first (the plain re-mesh path, light as it is
             // now): every renderer takes the light at the same moment, whatever each kept since the last light change
-            if (Boolean.getBoolean("probe.clientAuto.remesh")) Minecraft.getInstance().levelRenderer.setBlocksDirty(-16, 216, 0, 64, 272, 80);
+            if (Boolean.getBoolean("sleep.clientAuto.remesh")) Minecraft.getInstance().levelRenderer.setBlocksDirty(-16, 216, 0, 64, 272, 80);
         }
         windowStart = ticks;
         if (CMD_AT != null) for (String c : CMD_AT.split("[|]")) {
@@ -169,21 +171,21 @@ public final class ClientAuto {
             String cmd = c.substring(i + 1).replace("__", "\0").replace('_', ' ').replace('\0', '_');
             CMDS.add(new Object[] {ticks + Integer.parseInt(c.substring(0, i).trim()) * 20, cmd});
         }
-        if (Boolean.getBoolean("probe.clientAuto.thirdPerson")) Minecraft.getInstance().options.setCameraType(net.minecraft.client.CameraType.THIRD_PERSON_BACK);
+        if (Boolean.getBoolean("sleep.clientAuto.thirdPerson")) Minecraft.getInstance().options.setCameraType(net.minecraft.client.CameraType.THIRD_PERSON_BACK);
         if (!SHOTS.isEmpty()) {
             shotsBase = ticks;
-            Minecraft.getInstance().options.hideGui = !Boolean.getBoolean("probe.clientAuto.shotGui");
+            Minecraft.getInstance().options.hideGui = !Boolean.getBoolean("sleep.clientAuto.shotGui");
         }
         if (SHOT_S >= 0) {
             shotAt = ticks + (int) Math.round(SHOT_S * 20);
-            Minecraft.getInstance().options.hideGui = !Boolean.getBoolean("probe.clientAuto.shotGui");   // shotGui: the HUD in the shot
+            Minecraft.getInstance().options.hideGui = !Boolean.getBoolean("sleep.clientAuto.shotGui");   // shotGui: the HUD in the shot
         }
         if (STEADY) {
             if (dev.sleep.optsupport.LightTiming.ON) dev.sleep.optsupport.LightTiming.reset();
-            ClientProbe.start(Integer.getInteger("probe.clientAuto.steadySeconds", 30), LABEL);   // stationary: rendering only, no loading in the window
+            ClientMeter.start(Integer.getInteger("sleep.clientAuto.steadySeconds", 30), LABEL);   // stationary: rendering only, no loading in the window
             enter(Phase.FINISH);
         } else {
-            ClientProbe.start(40, LABEL);
+            ClientMeter.start(40, LABEL);
             enter(Phase.RECORD);
         }
     }
@@ -192,13 +194,13 @@ public final class ClientAuto {
     private static net.minecraft.client.CloudStatus savedClouds;
 
     /**
-     * -Dprobe.clientAuto.shots="S:x,y,z,yaw,pitch;S:...": several views in one run - at S seconds into the measured
+     * -Dsleep.clientAuto.shots="S:x,y,z,yaw,pitch;S:...": several views in one run - at S seconds into the measured
      * window the camera is moved there, and half a second later frame-<label>-<i>.png is taken; "S:-" takes it at S
      * without moving
      */
     private static final java.util.List<double[]> SHOTS = new java.util.ArrayList<>();
     static {
-        String sp = System.getProperty("probe.clientAuto.shots");
+        String sp = System.getProperty("sleep.clientAuto.shots");
         if (sp != null) for (String one : sp.split(";")) {
             String[] a = one.split(":");
             if (a[1].trim().equals("-")) {   // "S:-": a shot exactly at S, where the camera is (no teleport, no half-second wait)
@@ -229,7 +231,7 @@ public final class ClientAuto {
             if (s[6] > 0 && ticks >= s[6]) {
                 s[6] = 0;
                 try (com.mojang.blaze3d.platform.NativeImage img = net.minecraft.client.Screenshot.takeScreenshot(mc.getMainRenderTarget())) {
-                    Path out = ProbeOut.dir(mc.gameDirectory.toPath(), "frame", LABEL).resolve("frame-" + LABEL + "-" + i + ".png");
+                    Path out = SleepOut.dir(mc.gameDirectory.toPath(), "frame", LABEL).resolve("frame-" + LABEL + "-" + i + ".png");
                     Files.createDirectories(out.getParent());
                     img.writeToFile(out);
                     log("shot " + i + " -> " + out.getFileName());
@@ -248,7 +250,7 @@ public final class ClientAuto {
             int rows = (int) (img.getHeight() * 0.66);   // the scene; the terrain far below may still be loading
             for (int y = 0; y < rows; y++)
                 for (int x = 0; x < img.getWidth(); x++) h = (h ^ (img.getPixelRGBA(x, y) & 0x00FFFFFF)) * 1099511628211L;   // colour only: the framebuffer's alpha is arbitrary
-            Path out = ProbeOut.dir(mc.gameDirectory.toPath(), "frame", LABEL).resolve("frame-" + LABEL + ".png");
+            Path out = SleepOut.dir(mc.gameDirectory.toPath(), "frame", LABEL).resolve("frame-" + LABEL + ".png");
             Files.createDirectories(out.getParent());
             img.writeToFile(out);
             log(String.format(Locale.ROOT, "frame hash %016x (%dx%d) -> %s", h, img.getWidth(), img.getHeight(), out.getFileName()));
@@ -256,10 +258,10 @@ public final class ClientAuto {
             log("frame hash failed: " + e);
         }
     }
-    /** -Dprobe.clientAuto.settleExtra=S: keep waiting S more seconds after the terrain is ready (lighting, stragglers) */
-    private static final int SETTLE_EXTRA = Integer.getInteger("probe.clientAuto.settleExtra", 0);
-    /** -Dprobe.clientAuto.stopInTp=S: quit the game S seconds after the last teleport's command (a shutdown during generation) */
-    private static final int STOP_IN_TP = Integer.getInteger("probe.clientAuto.stopInTp", -1);
+    /** -Dsleep.clientAuto.settleExtra=S: keep waiting S more seconds after the terrain is ready (lighting, stragglers) */
+    private static final int SETTLE_EXTRA = Integer.getInteger("sleep.clientAuto.settleExtra", 0);
+    /** -Dsleep.clientAuto.stopInTp=S: quit the game S seconds after the last teleport's command (a shutdown during generation) */
+    private static final int STOP_IN_TP = Integer.getInteger("sleep.clientAuto.stopInTp", -1);
     private static long meshedAt;
 
     private enum Phase { TITLE, JOIN, SETTLE, SCENE_WAIT, RECORD, TP_WAIT_START, TP_WAIT_DONE, FINISH, DONE }
@@ -283,7 +285,7 @@ public final class ClientAuto {
     }
 
     private static void log(String s) {
-        SleepMod.LOGGER.info("[probe/auto] {}", s);
+        SleepMod.LOGGER.info("[sleep/auto] {}", s);
     }
 
     private static double sinceJvm() {
@@ -381,7 +383,7 @@ public final class ClientAuto {
                     mc.options.framerateLimit().set(FPS_CAP);
                     mc.getWindow().updateVsync(false);
                     mc.getWindow().setFramerateLimit(FPS_CAP);
-                    String gs = System.getProperty("probe.clientAuto.guiScale");   // the interface's scale in the shots (0: auto)
+                    String gs = System.getProperty("sleep.clientAuto.guiScale");   // the interface's scale in the shots (0: auto)
                     if (gs != null) {
                         mc.options.guiScale().set(Integer.parseInt(gs));
                         mc.resizeDisplay();
@@ -390,7 +392,7 @@ public final class ClientAuto {
                         enter(Phase.JOIN);
                         net.minecraft.client.gui.screens.ConnectScreen.startConnecting(new TitleScreen(), mc,
                                 net.minecraft.client.multiplayer.resolver.ServerAddress.parseString(SERVER),
-                                new net.minecraft.client.multiplayer.ServerData("probe", SERVER, net.minecraft.client.multiplayer.ServerData.Type.OTHER), false, null);
+                                new net.minecraft.client.multiplayer.ServerData("sleep", SERVER, net.minecraft.client.multiplayer.ServerData.Type.OTHER), false, null);
                         return;
                     }
                     Path dir = mc.getLevelSource().getBaseDir().resolve(WORLD);
@@ -412,7 +414,7 @@ public final class ClientAuto {
                 }
             }
             case SETTLE -> {
-                // -Dprobe.clientAuto.settle=S: wait a fixed S seconds instead (renderers that replace vanilla's section
+                // -Dsleep.clientAuto.settle=S: wait a fixed S seconds instead (renderers that replace vanilla's section
                 // dispatcher, like Sodium, do not show their progress in its counters)
                 boolean meshed = SETTLE_S > 0 ? since(phaseStart) > SETTLE_S : (meshedStable(mc) || since(phaseStart) > 90);
                 if (meshed && meshedAt == 0) meshedAt = System.nanoTime();
@@ -447,8 +449,8 @@ public final class ClientAuto {
                 // empty sky at 2000 / 140 / 2000 for every scene)
                 if (since(phaseStart) > 3 && hashAt < 0) {
                     int[] p = TP[tpIndex];
-                    // -Dprobe.clientAuto.travel=true: through dev.sleep.api.Travel (the destination loaded first, no stall)
-                    command(mc, (Boolean.getBoolean("probe.clientAuto.travel") ? "probe travel " : "tp @s ") + p[0] + " 140 " + p[1]);
+                    // -Dsleep.clientAuto.travel=true: through dev.sleep.api.Travel (the destination loaded first, no stall)
+                    command(mc, (Boolean.getBoolean("sleep.clientAuto.travel") ? "sleep travel " : "tp @s ") + p[0] + " 140 " + p[1]);
                     enter(Phase.TP_WAIT_START);
                 }
             }
@@ -472,7 +474,7 @@ public final class ClientAuto {
                 }
             }
             case FINISH -> {
-                if (!ClientProbe.running()) {
+                if (!ClientMeter.running()) {
                     if (recording != null) {
                         recording.stop();   // written to its destination
                         recording.close();

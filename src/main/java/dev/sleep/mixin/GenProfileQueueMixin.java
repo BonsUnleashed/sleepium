@@ -17,7 +17,7 @@ public abstract class GenProfileQueueMixin<R extends Runnable> {
 
     /** what a task is: a completion stage names its function's class, a plain task its own class */
     @Unique
-    private static String probe$kind(Object task) {
+    private static String sleep$kind(Object task) {
         Object t = task;
         if (t instanceof net.minecraft.server.TickTask tt) t = dev.sleep.optsupport.Reflect.get(tt, "runnable");
         String n = t.getClass().getName();
@@ -33,22 +33,22 @@ public abstract class GenProfileQueueMixin<R extends Runnable> {
     }
 
     @Inject(method = "tell", at = @At("HEAD"))
-    private void probe$in(R task, CallbackInfo ci) {
+    private void sleep$in(R task, CallbackInfo ci) {
         if (GenProfile.active()) {
             PROBE$ENQUEUED.put(task, System.nanoTime());
             if (task.getClass().getName().endsWith("CompletableFuture$AsyncSupply") && PROBE$TRACES.incrementAndGet() <= 2) {
-                StringBuilder b = new StringBuilder("probe: AsyncSupply to " + ((BlockableEventLoop<?>) (Object) this).name() + " from " + Thread.currentThread().getName());
+                StringBuilder b = new StringBuilder("sleep: AsyncSupply to " + ((BlockableEventLoop<?>) (Object) this).name() + " from " + Thread.currentThread().getName());
                 StackTraceElement[] st = new Throwable().getStackTrace();
                 for (int i = 1; i < Math.min(st.length, 16); i++) b.append(System.lineSeparator()).append("    at ").append(st[i]);
-                org.slf4j.LoggerFactory.getLogger("probe").info(b.toString());
+                org.slf4j.LoggerFactory.getLogger("sleep").info(b.toString());
             }
         }
     }
 
     @Inject(method = "doRunTask", at = @At("HEAD"))
-    private void probe$out(R task, CallbackInfo ci) {
+    private void sleep$out(R task, CallbackInfo ci) {
         Long t = PROBE$ENQUEUED.remove(task);
         if (t != null && GenProfile.active())
-            GenProfile.add("main: queue wait, " + ((BlockableEventLoop<?>) (Object) this).name() + " / " + probe$kind(task), System.nanoTime() - t, 0);
+            GenProfile.add("main: queue wait, " + ((BlockableEventLoop<?>) (Object) this).name() + " / " + sleep$kind(task), System.nanoTime() - t, 0);
     }
 }

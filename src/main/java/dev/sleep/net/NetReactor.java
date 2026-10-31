@@ -32,7 +32,7 @@ public final class NetReactor {
     /** a connection that batches (the Connection mixin) */
     public interface Batched {
         /** schedule the pending batch, if any (any thread) */
-        void probe$flush();
+        void sleep$flush();
     }
 
     private static volatile Thread serverThread;
@@ -52,7 +52,7 @@ public final class NetReactor {
 
     /** server thread, a flush point: every pending batch goes to netty */
     public static void flushAll() {
-        for (int i = 0; i < DIRTY.size(); i++) DIRTY.get(i).probe$flush();
+        for (int i = 0; i < DIRTY.size(); i++) DIRTY.get(i).sleep$flush();
         DIRTY.clear();
     }
 

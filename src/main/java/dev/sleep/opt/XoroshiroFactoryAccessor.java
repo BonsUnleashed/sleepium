@@ -10,9 +10,9 @@ import org.spongepowered.asm.mixin.gen.Accessor;
 public interface XoroshiroFactoryAccessor extends ReusableRandom.Factory {
     @Override
     @Accessor("seedLo")
-    long probe$seedLo();
+    long sleep$seedLo();
 
     @Override
     @Accessor("seedHi")
-    long probe$seedHi();
+    long sleep$seedHi();
 }

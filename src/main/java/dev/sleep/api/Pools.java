@@ -40,6 +40,6 @@ public final class Pools {
     /** as {@link #create(String, int)} with an OS priority: {@link OsThreads#BELOW_NORMAL}, {@code NORMAL}, {@code ABOVE_NORMAL} */
     public static LabRuntime create(String name, int workers, int osPriority) {
         return new LabRuntime(LabRuntime.Config.of(name, workers).withPriority(osPriority).withDaemon(true)
-                .withHandler((t, e) -> org.slf4j.LoggerFactory.getLogger("probe").error("task failed on {}", t.getName(), e)));
+                .withHandler((t, e) -> org.slf4j.LoggerFactory.getLogger("sleep").error("task failed on {}", t.getName(), e)));
     }
 }

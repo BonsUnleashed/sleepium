@@ -15,10 +15,10 @@ public final class ChunkTickMemo {
     public static long hits, misses;
 
     public interface Holder {
-        int probe$visEpoch();
+        int sleep$visEpoch();
 
-        boolean probe$vis();
+        boolean sleep$vis();
 
-        void probe$setVis(int epoch, boolean v);
+        void sleep$setVis(int epoch, boolean v);
     }
 }

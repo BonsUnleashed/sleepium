@@ -14,7 +14,7 @@ import org.spongepowered.asm.mixin.Unique;
  */
 @Mixin(Vec3.class)
 public abstract class Vec3FromRgbMixin {
-    @Unique private static final dev.sleep.optsupport.MixinHelpers.RgbEntry[] probe$rgb = new dev.sleep.optsupport.MixinHelpers.RgbEntry[256];
+    @Unique private static final dev.sleep.optsupport.MixinHelpers.RgbEntry[] sleep$rgb = new dev.sleep.optsupport.MixinHelpers.RgbEntry[256];
 
     /**
      * @author probe
@@ -23,13 +23,13 @@ public abstract class Vec3FromRgbMixin {
     @Overwrite
     public static Vec3 fromRGB24(int packed) {
         int i = (packed * 0x9E3779B1) >>> 24;
-        var e = probe$rgb[i];
+        var e = sleep$rgb[i];
         if (e != null && e.rgb() == packed) return e.v();
         double d0 = (double) (packed >> 16 & 0xFF) / 255.0;
         double d1 = (double) (packed >> 8 & 0xFF) / 255.0;
         double d2 = (double) (packed & 0xFF) / 255.0;
         Vec3 v = new Vec3(d0, d1, d2);
-        probe$rgb[i] = new dev.sleep.optsupport.MixinHelpers.RgbEntry(packed, v);
+        sleep$rgb[i] = new dev.sleep.optsupport.MixinHelpers.RgbEntry(packed, v);
         return v;
     }
 }

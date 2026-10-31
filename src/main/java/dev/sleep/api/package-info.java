@@ -4,7 +4,7 @@
  *
  * <h2>Contents</h2>
  * <ul>
- *   <li>{@link dev.sleep.api.ProbeApi}: version, which features are active, waking the server thread.</li>
+ *   <li>{@link dev.sleep.api.SleepApi}: version, which features are active, waking the server thread.</li>
  *   <li>{@link dev.sleep.api.Pools}: the shared worker pools and new {@link dev.lab.runtime.LabRuntime} pools.</li>
  *   <li>{@link dev.sleep.api.CompletionRing}: hand results from any thread to an owner thread (server or render
  *       thread), one drain task per batch, no blocking.</li>
@@ -20,11 +20,11 @@
  *
  * <h2>Using it from another mod</h2>
  * Declare probe as an optional dependency and touch these classes only when it is loaded
- * ({@code ModList.get().isLoaded("probe")}), so the mod still runs without it. Build against the jar published by
+ * ({@code ModList.get().isLoaded("sleep")}), so the mod still runs without it. Build against the jar published by
  * {@code ./gradlew publish} ({@code dev.probe:probe-mod:<version>} in {@code probe-mod/repo}).
  *
  * <h2>Stability</h2>
- * {@link dev.sleep.api.ProbeApi#VERSION} grows when something is added; nothing in this package is removed or changes
+ * {@link dev.sleep.api.SleepApi#VERSION} grows when something is added; nothing in this package is removed or changes
  * meaning without a new major version. Every call is safe whatever flags are set: a feature that is off makes the
  * call a plain vanilla-equivalent path (a ring still delivers, a journal still runs its calls, an exclusion is simply
  * kept for when the feature is on).

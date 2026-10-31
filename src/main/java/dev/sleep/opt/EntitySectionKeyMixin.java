@@ -12,7 +12,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 @Mixin(EntitySectionStorage.class)
 public abstract class EntitySectionKeyMixin {
     @Inject(method = "createSection", at = @At("RETURN"))
-    private void probe$key(long sectionPos, CallbackInfoReturnable<EntitySection<?>> cir) {
-        ((IndexedSection) cir.getReturnValue()).probe$setKey(sectionPos);
+    private void sleep$key(long sectionPos, CallbackInfoReturnable<EntitySection<?>> cir) {
+        ((IndexedSection) cir.getReturnValue()).sleep$setKey(sectionPos);
     }
 }

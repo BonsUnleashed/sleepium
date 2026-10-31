@@ -33,9 +33,9 @@ public abstract class EntitySectionIterMixin<T extends EntityAccess> {
     @Overwrite
     @SuppressWarnings("unchecked")
     public AbortableIterationConsumer.Continuation getEntities(AABB bounds, AbortableIterationConsumer<T> consumer) {
-        List<T> list = ((ClassInstanceMultiMapAccessor<T>) storage).probe$all();
+        List<T> list = ((ClassInstanceMultiMapAccessor<T>) storage).sleep$all();
         if (INDEX && list.size() >= INDEX_MIN) {
-            AbortableIterationConsumer.Continuation c = probe$indexed(list, bounds, consumer);
+            AbortableIterationConsumer.Continuation c = sleep$indexed(list, bounds, consumer);
             if (c != null) return c;
         }
         for (int i = 0; i < list.size(); i++) {
@@ -46,31 +46,31 @@ public abstract class EntitySectionIterMixin<T extends EntityAccess> {
     }
 
     /** Index path, kept out of getEntities so that method stays small enough to be inlined; null = not indexed. */
-    private AbortableIterationConsumer.Continuation probe$indexed(List<T> list, AABB bounds, AbortableIterationConsumer<T> consumer) {
+    private AbortableIterationConsumer.Continuation sleep$indexed(List<T> list, AABB bounds, AbortableIterationConsumer<T> consumer) {
         IndexedSection is = (IndexedSection) this;
-        SectionIndex idx = is.probe$index();
+        SectionIndex idx = is.sleep$index();
         Thread t = Thread.currentThread();
-        if (idx == null && is.probe$key() != Long.MIN_VALUE && t == serverThread()) {
-            idx = new SectionIndex(is.probe$key());
-            is.probe$setIndex(idx);
+        if (idx == null && is.sleep$key() != Long.MIN_VALUE && t == serverThread()) {
+            idx = new SectionIndex(is.sleep$key());
+            is.sleep$setIndex(idx);
         }
         if (idx == null || idx.owner != t) return null;
-        if (INDEX_CHECK) probe$check(idx, list, bounds);
+        if (INDEX_CHECK) sleep$check(idx, list, bounds);
         return idx.query(list, bounds, consumer);
     }
 
     @SuppressWarnings({"unchecked", "rawtypes"})
-    private AbortableIterationConsumer.Continuation probe$indexedTyped(List<T> list, AABB bounds, EntityTypeTest test, AbortableIterationConsumer consumer) {
+    private AbortableIterationConsumer.Continuation sleep$indexedTyped(List<T> list, AABB bounds, EntityTypeTest test, AbortableIterationConsumer consumer) {
         IndexedSection is = (IndexedSection) this;
         Class<?> base = test.getBaseClass();
-        SectionIndex idx = is.probe$typedIndex(base);
+        SectionIndex idx = is.sleep$typedIndex(base);
         Thread th = Thread.currentThread();
-        if (idx == null && is.probe$key() != Long.MIN_VALUE && th == serverThread()) {
-            idx = new SectionIndex(is.probe$key());
-            is.probe$putTypedIndex(base, idx);
+        if (idx == null && is.sleep$key() != Long.MIN_VALUE && th == serverThread()) {
+            idx = new SectionIndex(is.sleep$key());
+            is.sleep$putTypedIndex(base, idx);
         }
         if (idx == null || idx.owner != th) return null;
-        if (INDEX_CHECK) probe$checkTyped(idx, list, bounds, test);
+        if (INDEX_CHECK) sleep$checkTyped(idx, list, bounds, test);
         return idx.queryTyped(list, bounds, test, consumer);
     }
 
@@ -84,7 +84,7 @@ public abstract class EntitySectionIterMixin<T extends EntityAccess> {
     }
 
     /** Shadow check: the index must yield exactly the entities (and order) of the vanilla scan. */
-    private void probe$check(SectionIndex idx, List<T> list, AABB bounds) {
+    private void sleep$check(SectionIndex idx, List<T> list, AABB bounds) {
         List<T> a = new java.util.ArrayList<>(), b = new java.util.ArrayList<>();
         for (int i = 0; i < list.size(); i++) if (list.get(i).getBoundingBox().intersects(bounds)) a.add(list.get(i));
         idx.query(list, bounds, e -> {
@@ -93,11 +93,11 @@ public abstract class EntitySectionIterMixin<T extends EntityAccess> {
         });
         OptCounters.INDEX_CHECKED.incrementAndGet();
         if (!a.equals(b) && OptCounters.INDEX_MISMATCHES.incrementAndGet() <= 5)
-            System.out.println("[probe/opt] section index MISMATCH: vanilla " + a.size() + " vs index " + b.size());
+            System.out.println("[sleep/opt] section index MISMATCH: vanilla " + a.size() + " vs index " + b.size());
     }
 
     @SuppressWarnings({"unchecked", "rawtypes"})
-    private void probe$checkTyped(SectionIndex idx, List<T> list, AABB bounds, EntityTypeTest test) {
+    private void sleep$checkTyped(SectionIndex idx, List<T> list, AABB bounds, EntityTypeTest test) {
         List<Object> a = new java.util.ArrayList<>(), b = new java.util.ArrayList<>();
         for (int i = 0; i < list.size(); i++) {
             Object u = test.tryCast(list.get(i));
@@ -109,7 +109,7 @@ public abstract class EntitySectionIterMixin<T extends EntityAccess> {
         });
         OptCounters.INDEX_CHECKED.incrementAndGet();
         if (!a.equals(b) && OptCounters.INDEX_MISMATCHES.incrementAndGet() <= 5)
-            System.out.println("[probe/opt] typed section index MISMATCH: vanilla " + a.size() + " vs index " + b.size());
+            System.out.println("[sleep/opt] typed section index MISMATCH: vanilla " + a.size() + " vs index " + b.size());
     }
 
     /**
@@ -119,14 +119,14 @@ public abstract class EntitySectionIterMixin<T extends EntityAccess> {
     @Overwrite
     @SuppressWarnings({"unchecked", "rawtypes"})
     public <U extends T> AbortableIterationConsumer.Continuation getEntities(EntityTypeTest<T, U> test, AABB bounds, AbortableIterationConsumer<? super U> consumer) {
-        List<T> list = ((ClassInstanceMultiMapAccessor<T>) storage).probe$byClass().get(test.getBaseClass());
+        List<T> list = ((ClassInstanceMultiMapAccessor<T>) storage).sleep$byClass().get(test.getBaseClass());
         if (list == null) {
             if (this.storage.find(test.getBaseClass()).isEmpty()) return AbortableIterationConsumer.Continuation.CONTINUE;   // vanilla: creates the list
-            list = ((ClassInstanceMultiMapAccessor<T>) storage).probe$byClass().get(test.getBaseClass());
+            list = ((ClassInstanceMultiMapAccessor<T>) storage).sleep$byClass().get(test.getBaseClass());
             if (list == null) return AbortableIterationConsumer.Continuation.CONTINUE;
         }
         if (INDEX && list.size() >= INDEX_MIN) {
-            AbortableIterationConsumer.Continuation c = probe$indexedTyped(list, bounds, test, (AbortableIterationConsumer) consumer);
+            AbortableIterationConsumer.Continuation c = sleep$indexedTyped(list, bounds, test, (AbortableIterationConsumer) consumer);
             if (c != null) return c;
         }
         for (int i = 0; i < list.size(); i++) {

@@ -27,12 +27,12 @@ public final class EntityBatch {
         if (c == null) {
             c = false;
             if (t instanceof CompositeRenderTypeAccessor a && !t.sortOnUpload() && t.canConsolidateConsecutiveGeometry() && !t.isOutline()) {
-                CompositeStateAccessor s = (CompositeStateAccessor) (Object) a.probe$state();
-                c = s.probe$transparency() == RenderStateShard.NO_TRANSPARENCY
-                        && s.probe$depthTest() == RenderStateShard.LEQUAL_DEPTH_TEST
-                        && s.probe$writeMask() == RenderStateShard.COLOR_DEPTH_WRITE
-                        && s.probe$output() == RenderStateShard.MAIN_TARGET
-                        && s.probe$colorLogic() == RenderStateShard.NO_COLOR_LOGIC;
+                CompositeStateAccessor s = (CompositeStateAccessor) (Object) a.sleep$state();
+                c = s.sleep$transparency() == RenderStateShard.NO_TRANSPARENCY
+                        && s.sleep$depthTest() == RenderStateShard.LEQUAL_DEPTH_TEST
+                        && s.sleep$writeMask() == RenderStateShard.COLOR_DEPTH_WRITE
+                        && s.sleep$output() == RenderStateShard.MAIN_TARGET
+                        && s.sleep$colorLogic() == RenderStateShard.NO_COLOR_LOGIC;
             }
             COMMUTES.put(t, c);
         }
@@ -58,9 +58,9 @@ public final class EntityBatch {
     /** The shader a composite render type sets up (its shader shard's supplier), or null. */
     public static net.minecraft.client.renderer.ShaderInstance shaderOf(RenderType t) {
         if (!(t instanceof CompositeRenderTypeAccessor a)) return null;
-        var shard = ((CompositeStateAccessor) (Object) a.probe$state()).probe$shader();
+        var shard = ((CompositeStateAccessor) (Object) a.sleep$state()).sleep$shader();
         if (shard == null) return null;
-        var sup = ((dev.sleep.opt.ShaderStateShardAccessor) shard).probe$shader();
+        var sup = ((dev.sleep.opt.ShaderStateShardAccessor) shard).sleep$shader();
         return sup.isPresent() ? sup.get().get() : null;
     }
 

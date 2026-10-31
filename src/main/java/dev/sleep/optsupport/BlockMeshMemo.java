@@ -155,7 +155,7 @@ public final class BlockMeshMemo {
     private static VertexFormat formatOf(VertexConsumer vc) {
         if (vc instanceof BufferBuilder bb) {
             BufferBuilderAccessor a = (BufferBuilderAccessor) bb;
-            return a.probe$mode() == VertexFormat.Mode.QUADS ? a.probe$format() : null;
+            return a.sleep$mode() == VertexFormat.Mode.QUADS ? a.sleep$format() : null;
         }
         if (vc instanceof RecordingBuilder rb) return rb.format;
         return null;
@@ -305,13 +305,13 @@ public final class BlockMeshMemo {
         Matrix3f nm = memo.nrm.set(pose.last().normal());
         boolean normalIdentity = nm.equals(memo.identity3);
         long dst;
-        if (consumer instanceof BufferBuilder bb && ((BufferBuilderAccessor) (Object) bb).probe$elementsToFill() == 0) {
+        if (consumer instanceof BufferBuilder bb && ((BufferBuilderAccessor) (Object) bb).sleep$elementsToFill() == 0) {
             BufferBuilderAccessor a = (BufferBuilderAccessor) bb;
-            dst = a.probe$buffer().reserve(n * vs);
+            dst = a.sleep$buffer().reserve(n * vs);
             MemoryUtil.memCopy(e.mem, dst, (long) n * vs);
             transform(dst, n, f, m, nm, normalIdentity);
-            a.probe$setVertices(a.probe$vertices() + n);
-            a.probe$setVertexPointer(dst + (long) (n - 1) * vs);
+            a.sleep$setVertices(a.sleep$vertices() + n);
+            a.sleep$setVertexPointer(dst + (long) (n - 1) * vs);
         } else if (consumer instanceof RecordingBuilder rb) {
             dst = rb.appendRaw(n);
             MemoryUtil.memCopy(e.mem, dst, (long) n * vs);

@@ -11,5 +11,5 @@ import org.spongepowered.asm.mixin.gen.Accessor;
 @Mixin(MultiBufferSource.BufferSource.class)
 public interface BufferSourceAccessor {
     @Accessor("startedBuilders")
-    Map<RenderType, BufferBuilder> probe$started();
+    Map<RenderType, BufferBuilder> sleep$started();
 }

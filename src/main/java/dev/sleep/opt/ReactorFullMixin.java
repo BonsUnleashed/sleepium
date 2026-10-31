@@ -14,7 +14,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(ChunkStatusTasks.class)
 public abstract class ReactorFullMixin {
     @Inject(method = "lambda$full$3", at = @At("HEAD"), cancellable = true)
-    private static void probe$ring(WorldGenContext ctx, ChunkPos pos, GenerationChunkHolder holder, Runnable task, CallbackInfo ci) {
+    private static void sleep$ring(WorldGenContext ctx, ChunkPos pos, GenerationChunkHolder holder, Runnable task, CallbackInfo ci) {
         FullRing.offer(holder.getTicketLevel(), task);
         ci.cancel();
     }

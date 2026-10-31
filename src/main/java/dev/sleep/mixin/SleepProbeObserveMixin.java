@@ -16,32 +16,32 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
  */
 @Mixin(BlockEntity.class)
 public abstract class SleepProbeObserveMixin {
-    private void probe$materialize() {
+    private void sleep$materialize() {
         SleepEngine.materialize((BlockEntity) (Object) this);
     }
 
     @Inject(method = "saveWithFullMetadata", at = @At("HEAD"))
-    private void probe$saveFull(HolderLookup.Provider r, CallbackInfoReturnable<CompoundTag> cir) { probe$materialize(); }
+    private void sleep$saveFull(HolderLookup.Provider r, CallbackInfoReturnable<CompoundTag> cir) { sleep$materialize(); }
 
     @Inject(method = "saveWithId", at = @At("HEAD"))
-    private void probe$saveId(HolderLookup.Provider r, CallbackInfoReturnable<CompoundTag> cir) { probe$materialize(); }
+    private void sleep$saveId(HolderLookup.Provider r, CallbackInfoReturnable<CompoundTag> cir) { sleep$materialize(); }
 
     @Inject(method = "saveWithoutMetadata", at = @At("HEAD"))
-    private void probe$saveNoMeta(HolderLookup.Provider r, CallbackInfoReturnable<CompoundTag> cir) { probe$materialize(); }
+    private void sleep$saveNoMeta(HolderLookup.Provider r, CallbackInfoReturnable<CompoundTag> cir) { sleep$materialize(); }
 
     @Inject(method = "saveCustomOnly", at = @At("HEAD"))
-    private void probe$saveCustom(HolderLookup.Provider r, CallbackInfoReturnable<CompoundTag> cir) { probe$materialize(); }
+    private void sleep$saveCustom(HolderLookup.Provider r, CallbackInfoReturnable<CompoundTag> cir) { sleep$materialize(); }
 
     @Inject(method = "saveCustomAndMetadata", at = @At("HEAD"))
-    private void probe$saveCustomMeta(HolderLookup.Provider r, CallbackInfoReturnable<CompoundTag> cir) { probe$materialize(); }
+    private void sleep$saveCustomMeta(HolderLookup.Provider r, CallbackInfoReturnable<CompoundTag> cir) { sleep$materialize(); }
 
     @Inject(method = "loadWithComponents", at = @At("HEAD"))
-    private void probe$load(CompoundTag tag, HolderLookup.Provider r, CallbackInfo ci) {
+    private void sleep$load(CompoundTag tag, HolderLookup.Provider r, CallbackInfo ci) {
         SleepEngine.onLoad((BlockEntity) (Object) this);
     }
 
     @Inject(method = "loadCustomOnly", at = @At("HEAD"))
-    private void probe$loadCustom(CompoundTag tag, HolderLookup.Provider r, CallbackInfo ci) {
+    private void sleep$loadCustom(CompoundTag tag, HolderLookup.Provider r, CallbackInfo ci) {
         SleepEngine.onLoad((BlockEntity) (Object) this);
     }
 }

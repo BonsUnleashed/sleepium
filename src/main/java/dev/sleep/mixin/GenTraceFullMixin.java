@@ -17,7 +17,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 @Mixin(ChunkStatusTasks.class)
 public abstract class GenTraceFullMixin {
     @Inject(method = "full", at = @At("HEAD"))
-    private static void probe$full(WorldGenContext ctx, ChunkStep step, StaticCache2D<GenerationChunkHolder> cache, ChunkAccess chunk,
+    private static void sleep$full(WorldGenContext ctx, ChunkStep step, StaticCache2D<GenerationChunkHolder> cache, ChunkAccess chunk,
                                    CallbackInfoReturnable<CompletableFuture<ChunkAccess>> cir) {
         GenTrace.fulls.increment();
     }

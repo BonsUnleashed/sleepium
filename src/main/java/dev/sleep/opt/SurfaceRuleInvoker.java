@@ -10,5 +10,5 @@ import org.spongepowered.asm.mixin.gen.Invoker;
 public interface SurfaceRuleInvoker {
     @Invoker("tryApply")
     @Nullable
-    BlockState probe$tryApply(int x, int y, int z);
+    BlockState sleep$tryApply(int x, int y, int z);
 }

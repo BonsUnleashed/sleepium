@@ -8,11 +8,11 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-/** -Dprobe.drawStats: every immediate-mode batch drawn by a render type. */
+/** -Dsleep.drawStats: every immediate-mode batch drawn by a render type. */
 @Mixin(RenderType.class)
 public abstract class DrawStatsMixin {
     @Inject(method = "draw", at = @At("HEAD"))
-    private void probe$draw(MeshData mesh, CallbackInfo ci) {
+    private void sleep$draw(MeshData mesh, CallbackInfo ci) {
         DrawStats.draw(this.toString(), mesh.drawState().vertexCount(), mesh.vertexBuffer().remaining());
     }
 }

@@ -41,7 +41,7 @@ public final class BulkClient {
     private BulkClient() {}
 
     private static Path dir() {
-        return net.neoforged.fml.loading.FMLPaths.GAMEDIR.get().resolve("probe-cache").resolve("bulk");
+        return net.neoforged.fml.loading.FMLPaths.GAMEDIR.get().resolve("sleep-cache").resolve("bulk");
     }
 
     /** reply: sends on the connection the manifest came by (the client's player may not exist yet at login) */
@@ -71,7 +71,7 @@ public final class BulkClient {
                     OWNER.put(hex, m.set());
                 }
                 CURRENT.put(m.set(), new Pending(m, System.nanoTime(), new long[1]));
-                System.out.println("[probe/net] bulk " + m.set() + " v" + m.version() + ": " + m.entries().size() + " entries, " + cached
+                System.out.println("[sleep/net] bulk " + m.set() + " v" + m.version() + ": " + m.entries().size() + " entries, " + cached
                         + " from the cache, asking for " + want.size());
                 reply.accept(new Want(m.set(), m.version(), cached, want, from));
                 if (want.isEmpty()) complete(m.set());
@@ -124,17 +124,17 @@ public final class BulkClient {
                 byte[] h = java.security.MessageDigest.getInstance("SHA-256").digest(raw);
                 if (!java.util.Arrays.equals(h, e.hash())) {
                     Files.deleteIfExists(f);   // a damaged cache file: the next manifest fetches it again
-                    System.out.println("[probe/net] bulk " + set + ": entry " + e.name() + " failed its hash check; dropped");
+                    System.out.println("[sleep/net] bulk " + set + ": entry " + e.name() + " failed its hash check; dropped");
                     return;
                 }
                 out.put(e.name(), raw);
             } catch (Exception ex) {
-                System.out.println("[probe/net] bulk " + set + ": entry " + e.name() + " unreadable: " + ex);
+                System.out.println("[sleep/net] bulk " + set + ": entry " + e.name() + " unreadable: " + ex);
                 return;
             }
         }
         double ms = (System.nanoTime() - p.start()) / 1e6;
-        System.out.println(String.format(java.util.Locale.ROOT, "[probe/net] bulk %s v%d complete: %d entries, %d KB received, %.0f ms after the manifest",
+        System.out.println(String.format(java.util.Locale.ROOT, "[sleep/net] bulk %s v%d complete: %d entries, %d KB received, %.0f ms after the manifest",
                 set, p.manifest().version(), out.size(), p.received()[0] / 1024, ms));
         var consumer = Bulk.consumerFor(set);
         if (consumer != null) Minecraft.getInstance().execute(() -> consumer.accept(out));

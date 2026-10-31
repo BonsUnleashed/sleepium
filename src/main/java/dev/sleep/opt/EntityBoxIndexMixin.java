@@ -18,14 +18,14 @@ public abstract class EntityBoxIndexMixin {
     @Shadow private EntityInLevelCallback levelCallback;
 
     @Inject(method = "setBoundingBox", at = @At("RETURN"))
-    private void probe$box(AABB bb, CallbackInfo ci) {
+    private void sleep$box(AABB bb, CallbackInfo ci) {
         if (levelCallback instanceof EntityCallbackAccessor cb) {
-            EntitySection<?> s = cb.probe$section();
+            EntitySection<?> s = cb.sleep$section();
             if (s != null) {
                 IndexedSection is = (IndexedSection) s;
-                SectionIndex idx = is.probe$index();
+                SectionIndex idx = is.sleep$index();
                 if (idx != null && idx.owner == Thread.currentThread()) idx.update(this, bb);
-                is.probe$forEachTyped(this, bb);
+                is.sleep$forEachTyped(this, bb);
             }
         }
     }

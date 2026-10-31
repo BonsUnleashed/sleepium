@@ -100,5 +100,5 @@
   "injectors": {
     "defaultRequire": 1
   },
-  "plugin": "dev.sleep.mixin.ProbeMixinPlugin"
+  "plugin": "dev.sleep.mixin.SleepMixinPlugin"
 }

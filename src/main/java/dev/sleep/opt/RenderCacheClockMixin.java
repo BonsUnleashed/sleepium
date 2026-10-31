@@ -13,7 +13,7 @@ import org.spongepowered.asm.mixin.injection.At;
 @Mixin(Blaze3D.class)
 public abstract class RenderCacheClockMixin {
     @ModifyReturnValue(method = "getTime", at = @At("RETURN"))
-    private static double probe$probeShift(double t) {
+    private static double sleep$probeShift(double t) {
         return dev.sleep.optsupport.RenderCache.clockShiftThread == Thread.currentThread() ? t + dev.sleep.optsupport.RenderCache.CLOCK_SHIFT : t;
     }
 }

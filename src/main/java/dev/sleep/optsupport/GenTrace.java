@@ -7,7 +7,7 @@ import java.util.concurrent.atomic.LongAdder;
 /**
  * Measurement (-Dlab.pgen.trace=true): the generation pipeline second by second — what ParallelGen was given, started
  * and finished, how long steps waited for a worker and FEATURES for their 3x3 window, how often generation tasks ran
- * (runUntilWait), how many chunks reached FULL. Printed as "[probe/gentrace]" once a second while anything moved.
+ * (runUntilWait), how many chunks reached FULL. Printed as "[sleep/gentrace]" once a second while anything moved.
  */
 public final class GenTrace {
     public static final boolean ON = Boolean.getBoolean("lab.pgen.trace");
@@ -140,18 +140,18 @@ public final class GenTrace {
                     toBatchMax = 0;
                     if (sub + st + fin + tr + fu + se + cc + cl + nr + bt + up == 0) continue;
                     long lc = lightCopies.sumThenReset(), lce = lightCopied.sumThenReset(), lch = lightChanged.sumThenReset();
-                    if (lc > 0) System.out.println(String.format(java.util.Locale.ROOT, "[probe/gentrace] light snapshots %d: %d entries copied (%.0f each) for %d changed sections", lc, lce, (double) lce / lc, lch));
-                    if (Boolean.getBoolean("lab.opt.LightSnapshotMixin")) System.out.println("[probe/gentrace] " + LightSnapshot.report());
+                    if (lc > 0) System.out.println(String.format(java.util.Locale.ROOT, "[sleep/gentrace] light snapshots %d: %d entries copied (%.0f each) for %d changed sections", lc, lce, (double) lce / lc, lch));
+                    if (Boolean.getBoolean("lab.opt.LightSnapshotMixin")) System.out.println("[sleep/gentrace] " + LightSnapshot.report());
                     String parts = parts();
-                    if (!parts.isEmpty()) System.out.println("[probe/gentrace] save parts:" + parts);
-                    System.out.println("[probe/gentrace] " + ticks() + " | " + gc() + " | steps (count x avg/max ms):" + steps());
-                    if (Boolean.getBoolean("lab.reactor.scout")) System.out.println("[probe/gentrace] " + MainReactor.scoutReport() + " | " + MainReactor.wakeReport());
+                    if (!parts.isEmpty()) System.out.println("[sleep/gentrace] save parts:" + parts);
+                    System.out.println("[sleep/gentrace] " + ticks() + " | " + gc() + " | steps (count x avg/max ms):" + steps());
+                    if (Boolean.getBoolean("lab.reactor.scout")) System.out.println("[sleep/gentrace] " + MainReactor.scoutReport() + " | " + MainReactor.wakeReport());
                     System.out.println(String.format(java.util.Locale.ROOT,
-                            "[probe/gentrace] pool steps: given %d, started %d (to a worker %.2f ms avg, max %.1f), done %d (%.2f ms each), running %d, FEATURES waiting %d now, %d waited (%.1f ms avg, max %.1f) | tasks run %d (%.3f ms each) | FULL %d | sent %d, %s | client: chunks %d, light %d; of %d ticks not all rendered %d, batching %d (max %d), uploading %d",
+                            "[sleep/gentrace] pool steps: given %d, started %d (to a worker %.2f ms avg, max %.1f), done %d (%.2f ms each), running %d, FEATURES waiting %d now, %d waited (%.1f ms avg, max %.1f) | tasks run %d (%.3f ms each) | FULL %d | sent %d, %s | client: chunks %d, light %d; of %d ticks not all rendered %d, batching %d (max %d), uploading %d",
                             sub, st, st == 0 ? 0 : q / 1e6 / st, qm / 1e6, fin, fin == 0 ? 0 : r / 1e6 / fin, running.get(), ParallelGen.waiting(),
                             fw, fw == 0 ? 0 : fwn / 1e6 / fw, fwm / 1e6, tr, tr == 0 ? 0 : trn / 1e6 / tr, fu, se, sender, cc, cl, ct, nr, bt, tbm, up));
                 }
-            }, "probe-gentrace");
+            }, "sleep-gentrace");
             t.setDaemon(true);
             t.start();
         }

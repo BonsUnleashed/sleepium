@@ -14,7 +14,7 @@ import org.spongepowered.asm.mixin.Mixin;
 @Mixin(NoiseChunk.class)
 public abstract class GenProfileNoiseChunkMixin {
     @WrapMethod(method = "fillSlice")
-    private void probe$corners(boolean isSlice0, int start, Operation<Void> original) {
+    private void sleep$corners(boolean isSlice0, int start, Operation<Void> original) {
         if (!GenProfile.active()) {
             original.call(isSlice0, start);
             return;
@@ -28,7 +28,7 @@ public abstract class GenProfileNoiseChunkMixin {
     }
 
     @WrapMethod(method = "selectCellYZ")
-    private void probe$cell(int y, int z, Operation<Void> original) {
+    private void sleep$cell(int y, int z, Operation<Void> original) {
         if (!GenProfile.active()) {
             original.call(y, z);
             return;
@@ -42,7 +42,7 @@ public abstract class GenProfileNoiseChunkMixin {
     }
 
     @WrapMethod(method = "wrap")
-    private net.minecraft.world.level.levelgen.DensityFunction probe$wrap(net.minecraft.world.level.levelgen.DensityFunction f,
+    private net.minecraft.world.level.levelgen.DensityFunction sleep$wrap(net.minecraft.world.level.levelgen.DensityFunction f,
                                                                             Operation<net.minecraft.world.level.levelgen.DensityFunction> original) {
         if (!GenProfile.active()) return original.call(f);
         long t = System.nanoTime(), m = GenProfile.allocated();

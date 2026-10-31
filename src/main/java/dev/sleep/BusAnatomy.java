@@ -16,7 +16,7 @@ import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.neoforge.common.NeoForge;
 
 /**
- * Where do the nanoseconds of IEventBus.post go? Same listeners, different dispatch shapes (/probe busbench).
+ * Where do the nanoseconds of IEventBus.post go? Same listeners, different dispatch shapes (/sleep busbench).
  *
  *   bus      - NeoForge.EVENT_BUS.post(e)                         (vanilla: megamorphic loop in EventBus)
  *   loop     - our own for-loop over the SAME EventListener[]     (bus minus its bookkeeping)

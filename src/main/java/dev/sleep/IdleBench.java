@@ -4,7 +4,7 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
 
 /**
- * {@code /probe idle <seconds>}: what the server costs while it has nothing to do — process CPU and the Java threads
+ * {@code /sleep idle <seconds>}: what the server costs while it has nothing to do — process CPU and the Java threads
  * by group over the window, plus the MainReactor's park / wake counters when it is on.
  */
 final class IdleBench {
@@ -37,7 +37,7 @@ final class IdleBench {
         double secs = (System.nanoTime() - startNanos) / 1e9;
         String line = "idle " + String.format(java.util.Locale.ROOT, "%.1f s: ", secs) + cpu.report(secs, 8) + " | " + memory()
                 + (dev.sleep.optsupport.MainReactor.ENABLED ? " | " + dev.sleep.optsupport.MainReactor.report(secs) : "");
-        SleepMod.LOGGER.info("probe: {}", line);
-        server.getPlayerList().broadcastSystemMessage(Component.literal("probe: " + line), false);
+        SleepMod.LOGGER.info("sleep: {}", line);
+        server.getPlayerList().broadcastSystemMessage(Component.literal("sleep: " + line), false);
     }
 }

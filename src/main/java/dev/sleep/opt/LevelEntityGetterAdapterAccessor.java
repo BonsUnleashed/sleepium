@@ -8,5 +8,5 @@ import org.spongepowered.asm.mixin.gen.Accessor;
 @Mixin(LevelEntityGetterAdapter.class)
 public interface LevelEntityGetterAdapterAccessor {
     @Accessor("sectionStorage")
-    EntitySectionStorage<?> probe$sectionStorage();
+    EntitySectionStorage<?> sleep$sectionStorage();
 }

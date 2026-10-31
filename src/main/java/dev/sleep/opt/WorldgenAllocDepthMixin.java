@@ -13,7 +13,7 @@ import org.spongepowered.asm.mixin.injection.Redirect;
 public abstract class WorldgenAllocDepthMixin {
     @Redirect(method = "getSurfaceDepth", at = @At(value = "INVOKE",
             target = "Lnet/minecraft/world/level/levelgen/PositionalRandomFactory;at(III)Lnet/minecraft/util/RandomSource;"))
-    private RandomSource probe$at(PositionalRandomFactory f, int x, int y, int z) {
+    private RandomSource sleep$at(PositionalRandomFactory f, int x, int y, int z) {
         return ReusableRandom.at(f, x, y, z, ReusableRandom.DEPTH);
     }
 }

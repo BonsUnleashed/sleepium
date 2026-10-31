@@ -73,7 +73,7 @@ public final class MoveMemo {
             List<Field> fl = new ArrayList<>();
             for (Class<?> k = c; k != null && k != Object.class; k = k.getSuperclass())
                 for (Field x : k.getDeclaredFields()) {
-                    if (x.getName().equals("probe$w")) continue;   // the write barrier's watcher (WriteBarrier), not state
+                    if (x.getName().equals("sleep$w")) continue;   // the write barrier's watcher (WriteBarrier), not state
                     if (Modifier.isStatic(x.getModifiers())) continue;
                     try {
                         x.setAccessible(true);
@@ -118,9 +118,9 @@ public final class MoveMemo {
     private static final Map<Class<?>, K> KINDS = new HashMap<>();
     /** MoveMemoMixin: the entity's record, on the entity itself (gone with it) */
     public interface Holder {
-        Object probe$moveMemo();
+        Object sleep$moveMemo();
 
-        void probe$setMoveMemo(Object s);
+        void sleep$setMoveMemo(Object s);
     }
     /** the entity whose move is being recorded (server thread), for the draw hook */
     static Entity recording;
@@ -145,16 +145,16 @@ public final class MoveMemo {
     public static boolean before(Entity e, MoverType type, Vec3 v) {
         if (recording != null || !eligible(e)) return false;
         if (DIAG) tStart = System.nanoTime();
-        if (((hits + misses + verified) & 0x3FFFF) == 0x3FFFF) System.out.println("[probe/opt] " + report());
+        if (((hits + misses + verified) & 0x3FFFF) == 0x3FFFF) System.out.println("[sleep/opt] " + report());
         K k = KINDS.get(e.getClass());
         if (k == null) {
             KINDS.put(e.getClass(), k = new K(e.getClass()));
-            System.out.println("[probe/movememo] " + e.getClass().getSimpleName() + ": " + (k.refuse == null ? "ok, " + k.f.length + " fields" : "no: " + k.refuse)
+            System.out.println("[sleep/movememo] " + e.getClass().getSimpleName() + ": " + (k.refuse == null ? "ok, " + k.f.length + " fields" : "no: " + k.refuse)
                     + (DIAG ? "; move reads " + READ_SETS.getOrDefault(e.getClass(), Set.of()).size() + ": " + READ_SETS.get(e.getClass()) : ""));
         }
         if (k.refuse != null) return false;
-        S s = (S) ((Holder) e).probe$moveMemo();
-        if (s == null) ((Holder) e).probe$setMoveMemo(s = new S());
+        S s = (S) ((Holder) e).sleep$moveMemo();
+        if (s == null) ((Holder) e).sleep$setMoveMemo(s = new S());
         if (s.before == null) s.before = new long[k.f.length];
         k.snap.snap(e, s.before);
         if (s.valid && type == s.type && v.x == s.mx && v.y == s.my && v.z == s.mz && attrEpoch(e) == s.attrEpoch && dataEpoch(e) == s.dataEpoch && sameKey(k, s.before, s.key)
@@ -213,7 +213,7 @@ public final class MoveMemo {
 
     /** Move's RETURN (not reached for a skipped move). */
     public static void after(Entity e, Vec3 v) {
-        S s = (S) ((Holder) e).probe$moveMemo();
+        S s = (S) ((Holder) e).sleep$moveMemo();
         if (s == null) return;
         K k = KINDS.get(e.getClass());
         if (recording != e) {
@@ -287,7 +287,7 @@ public final class MoveMemo {
             if (k.skip[i]) continue;
             if (now[i] != s.after[i]) {
                 mismatches++;
-                if (mismatches <= 20) System.out.println("[probe/movememo] MISMATCH " + e.getClass().getSimpleName() + "." + k.f[i].getName());
+                if (mismatches <= 20) System.out.println("[sleep/movememo] MISMATCH " + e.getClass().getSimpleName() + "." + k.f[i].getName());
                 s.valid = false;
                 return;
             }
@@ -296,20 +296,20 @@ public final class MoveMemo {
 
     /** AttributeMap's modification counter (MoveMemoAttributesMixin): attributes are read by value through it */
     public interface AttrEpoch {
-        int probe$attrEpoch();
+        int sleep$attrEpoch();
     }
 
     /** SynchedEntityData's modification counter (MoveMemoDataMixin) */
     public interface DataEpoch {
-        int probe$dataEpoch();
+        int sleep$dataEpoch();
     }
 
     private static int dataEpoch(Entity e) {
-        return ((DataEpoch) e.getEntityData()).probe$dataEpoch();
+        return ((DataEpoch) e.getEntityData()).sleep$dataEpoch();
     }
 
     private static int attrEpoch(Entity e) {
-        return ((AttrEpoch) ((LivingEntity) e).getAttributes()).probe$attrEpoch();
+        return ((AttrEpoch) ((LivingEntity) e).getAttributes()).sleep$attrEpoch();
     }
 
     /** collide reads the world border's shape near it: as it was at the record */

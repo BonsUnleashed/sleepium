@@ -34,7 +34,7 @@ public final class JobSiteIndex {
 
     /** whether at most one live brain holds pos as its job site (the caller's own) */
     public static boolean alone(BlockPos pos) {
-        if (((skipped + walked + verified) & 0xFFFF) == 0xFFFF) System.out.println("[probe/opt] " + report());
+        if (((skipped + walked + verified) & 0xFFFF) == 0xFFFF) System.out.println("[sleep/opt] " + report());
         if (off || Thread.currentThread() != thread) return false;
         if (VERIFY) {
             verified++;
@@ -49,10 +49,10 @@ public final class JobSiteIndex {
     /** verify mode: vanilla found a competitor at pos */
     public static void competitor(BlockPos pos) {
         competitors++;
-        if (competitors <= 50) System.out.println("[probe/jobsite] competitor at " + pos + ", brains holding it " + COUNT.getInt(pos));
+        if (competitors <= 50) System.out.println("[sleep/jobsite] competitor at " + pos + ", brains holding it " + COUNT.getInt(pos));
         if (!off && Thread.currentThread() == thread && COUNT.getInt(pos) <= 1) {
             mismatches++;
-            System.out.println("[probe/jobsite] MISMATCH: a competitor at " + pos + " the index did not count");
+            System.out.println("[sleep/jobsite] MISMATCH: a competitor at " + pos + " the index did not count");
         }
     }
 

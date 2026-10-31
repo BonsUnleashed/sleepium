@@ -8,15 +8,15 @@ import org.spongepowered.asm.mixin.Unique;
 /** ShaderLightMixin: a mesh built with light recipes in its normal bytes. */
 @Mixin(MeshData.class)
 public abstract class ShaderLightMeshMixin implements LightVolumes.RecipeMesh {
-    @Unique private LightVolumes.CompileInfo probe$recipeInfo;
+    @Unique private LightVolumes.CompileInfo sleep$recipeInfo;
 
     @Override
-    public LightVolumes.CompileInfo probe$recipeInfo() {
-        return probe$recipeInfo;
+    public LightVolumes.CompileInfo sleep$recipeInfo() {
+        return sleep$recipeInfo;
     }
 
     @Override
-    public void probe$setRecipeInfo(LightVolumes.CompileInfo info) {
-        probe$recipeInfo = info;
+    public void sleep$setRecipeInfo(LightVolumes.CompileInfo info) {
+        sleep$recipeInfo = info;
     }
 }

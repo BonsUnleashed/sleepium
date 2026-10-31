@@ -11,5 +11,5 @@ import org.spongepowered.asm.mixin.gen.Invoker;
 @Mixin(LevelRenderer.class)
 public interface LevelRendererInvoker {
     @Invoker("renderEntity")
-    void probe$renderEntity(Entity entity, double camX, double camY, double camZ, float partialTick, PoseStack poseStack, MultiBufferSource bufferSource);
+    void sleep$renderEntity(Entity entity, double camX, double camY, double camZ, float partialTick, PoseStack poseStack, MultiBufferSource bufferSource);
 }

@@ -17,7 +17,7 @@ public abstract class JobSiteReplaceMixin {
     @Shadow protected Brain<?> brain;
 
     @Inject(method = "readAdditionalSaveData", at = @At(value = "FIELD", target = "Lnet/minecraft/world/entity/LivingEntity;brain:Lnet/minecraft/world/entity/ai/Brain;", opcode = org.objectweb.asm.Opcodes.PUTFIELD))
-    private void probe$replaced(CompoundTag tag, CallbackInfo ci) {
-        if (brain != null) ((JobSiteBrainAccess) brain).probe$release();
+    private void sleep$replaced(CompoundTag tag, CallbackInfo ci) {
+        if (brain != null) ((JobSiteBrainAccess) brain).sleep$release();
     }
 }

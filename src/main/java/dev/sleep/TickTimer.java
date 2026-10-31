@@ -50,7 +50,7 @@ final class TickTimer {
         bus.addListener(EventPriority.HIGHEST, ServerTickEvent.Pre.class, e -> onPre());
         bus.addListener(EventPriority.LOWEST, ServerTickEvent.Post.class, e -> {
             onPost();
-            ProbeCommand.onTickEnd(e.getServer());
+            SleepCommand.onTickEnd(e.getServer());
         });
         bus.addListener(EventPriority.HIGHEST, LevelTickEvent.Pre.class, e -> onLevel(e.getLevel(), true));
         bus.addListener(EventPriority.LOWEST, LevelTickEvent.Post.class, e -> onLevel(e.getLevel(), false));

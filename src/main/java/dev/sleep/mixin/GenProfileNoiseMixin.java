@@ -15,7 +15,7 @@ import org.spongepowered.asm.mixin.Mixin;
 @Mixin(NoiseBasedChunkGenerator.class)
 public abstract class GenProfileNoiseMixin {
     @WrapMethod(method = "doFill")
-    private ChunkAccess probe$fill(Blender blender, StructureManager sm, RandomState random, ChunkAccess chunk, int minCellY, int cellCountY,
+    private ChunkAccess sleep$fill(Blender blender, StructureManager sm, RandomState random, ChunkAccess chunk, int minCellY, int cellCountY,
                                    Operation<ChunkAccess> original) {
         if (!GenProfile.active()) return original.call(blender, sm, random, chunk, minCellY, cellCountY);
         long t = System.nanoTime(), m = GenProfile.allocated(), pn = GenProfile.perlin();
@@ -27,7 +27,7 @@ public abstract class GenProfileNoiseMixin {
     }
 
     @WrapMethod(method = "doCreateBiomes")
-    private void probe$biomes(Blender blender, RandomState random, StructureManager sm, ChunkAccess chunk, Operation<Void> original) {
+    private void sleep$biomes(Blender blender, RandomState random, StructureManager sm, ChunkAccess chunk, Operation<Void> original) {
         if (!GenProfile.active()) {
             original.call(blender, random, sm, chunk);
             return;
@@ -41,7 +41,7 @@ public abstract class GenProfileNoiseMixin {
     }
 
     @WrapMethod(method = "createNoiseChunk")
-    private NoiseChunk probe$noiseChunk(ChunkAccess chunk, StructureManager sm, Blender blender, RandomState random, Operation<NoiseChunk> original) {
+    private NoiseChunk sleep$noiseChunk(ChunkAccess chunk, StructureManager sm, Blender blender, RandomState random, Operation<NoiseChunk> original) {
         if (!GenProfile.active()) return original.call(chunk, sm, blender, random);
         long t = System.nanoTime(), m = GenProfile.allocated(), pn = GenProfile.perlin();
         try {

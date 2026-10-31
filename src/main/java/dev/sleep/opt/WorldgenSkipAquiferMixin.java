@@ -71,15 +71,15 @@ public abstract class WorldgenSkipAquiferMixin implements dev.sleep.optsupport.C
         throw new AssertionError();
     }
 
-    /** per base cell (index as aquiferCache): 0 unknown, 1 uniform (status in probe$uniS), 2 not uniform */
-    @Unique private byte[] probe$uni;
-    @Unique private Aquifer.FluidStatus[] probe$uniS;
+    /** per base cell (index as aquiferCache): 0 unknown, 1 uniform (status in sleep$uniS), 2 not uniform */
+    @Unique private byte[] sleep$uni;
+    @Unique private Aquifer.FluidStatus[] sleep$uniS;
     /** the fast path left shouldScheduleFluidUpdate to be computed for this block */
-    @Unique private boolean probe$flagPending;
-    @Unique private int probe$fx, probe$fy, probe$fz;
+    @Unique private boolean sleep$flagPending;
+    @Unique private int sleep$fx, sleep$fy, sleep$fz;
 
     @Unique
-    private long probe$location(int l3, int i4, int j4) {
+    private long sleep$location(int l3, int i4, int j4) {
         int k4 = this.getIndex(l3, i4, j4);
         long i5 = this.aquiferLocationCache[k4];
         if (i5 != Long.MAX_VALUE) return i5;
@@ -96,7 +96,7 @@ public abstract class WorldgenSkipAquiferMixin implements dev.sleep.optsupport.C
      */
     @Unique
     @Nullable
-    private Aquifer.FluidStatus probe$cheapStatus(long loc) {
+    private Aquifer.FluidStatus sleep$cheapStatus(long loc) {
         int x = BlockPos.getX(loc), y = BlockPos.getY(loc), z = BlockPos.getZ(loc);
         Aquifer.FluidStatus cached = this.aquiferCache[this.getIndex(this.gridX(x), this.gridY(y), this.gridZ(z))];
         if (cached != null) return cached;
@@ -107,33 +107,33 @@ public abstract class WorldgenSkipAquiferMixin implements dev.sleep.optsupport.C
     /** the common status of the 12 candidates of base cell (l, i1, j1), or null if they differ */
     @Unique
     @Nullable
-    private Aquifer.FluidStatus probe$uniform(int l, int i1, int j1) {
-        if (probe$uni == null) {
-            probe$uni = new byte[aquiferCache.length];
-            probe$uniS = new Aquifer.FluidStatus[aquiferCache.length];
+    private Aquifer.FluidStatus sleep$uniform(int l, int i1, int j1) {
+        if (sleep$uni == null) {
+            sleep$uni = new byte[aquiferCache.length];
+            sleep$uniS = new Aquifer.FluidStatus[aquiferCache.length];
         }
         int idx = this.getIndex(l, i1, j1);
-        byte st = probe$uni[idx];
-        if (st == 1) return probe$uniS[idx];
+        byte st = sleep$uni[idx];
+        if (st == 1) return sleep$uniS[idx];
         if (st == 2) return null;
         Aquifer.FluidStatus first = null;
         for (int i3 = 0; i3 <= 1; i3++)
             for (int j3 = -1; j3 <= 1; j3++)
                 for (int k3 = 0; k3 <= 1; k3++) {
-                    Aquifer.FluidStatus s = probe$cheapStatus(probe$location(l + i3, i1 + j3, j1 + k3));
+                    Aquifer.FluidStatus s = sleep$cheapStatus(sleep$location(l + i3, i1 + j3, j1 + k3));
                     if (s == null) {
-                        probe$uni[idx] = 2;
+                        sleep$uni[idx] = 2;
                         return null;
                     }
                     if (first == null) first = s;
-                    else if (s != first && (((FluidStatusAccessor) (Object) s).probe$level() != ((FluidStatusAccessor) (Object) first).probe$level()
-                            || ((FluidStatusAccessor) (Object) s).probe$type() != ((FluidStatusAccessor) (Object) first).probe$type())) {
-                        probe$uni[idx] = 2;
+                    else if (s != first && (((FluidStatusAccessor) (Object) s).sleep$level() != ((FluidStatusAccessor) (Object) first).sleep$level()
+                            || ((FluidStatusAccessor) (Object) s).sleep$type() != ((FluidStatusAccessor) (Object) first).sleep$type())) {
+                        sleep$uni[idx] = 2;
                         return null;
                     }
                 }
-        probe$uni[idx] = 1;
-        probe$uniS[idx] = first;
+        sleep$uni[idx] = 1;
+        sleep$uniS[idx] = first;
         return first;
     }
 
@@ -143,13 +143,13 @@ public abstract class WorldgenSkipAquiferMixin implements dev.sleep.optsupport.C
      * heights (the vanilla AIR instance: doFill skips exactly that one; another air-like fluid type would be written).
      */
     @Override
-    public void probe$solid() {   // what computeSubstance does for substance > 0
-        probe$flagPending = false;
+    public void sleep$solid() {   // what computeSubstance does for substance > 0
+        sleep$flagPending = false;
         this.shouldScheduleFluidUpdate = false;
     }
 
     @Override
-    public boolean probe$boxAir(int x0, int y0, int z0, int x1, int y1, int z1) {
+    public boolean sleep$boxAir(int x0, int y0, int z0, int x1, int y1, int z1) {
         for (int x = x0; x <= x1; x++)
             for (int z = z0; z <= z1; z++)
                 for (int y = y0; y <= y1; y++)
@@ -158,11 +158,11 @@ public abstract class WorldgenSkipAquiferMixin implements dev.sleep.optsupport.C
         for (int l = Math.floorDiv(x0 - 5, 16); l <= Math.floorDiv(x1 - 5, 16); l++)
             for (int i1 = Math.floorDiv(y0 + 1, 12); i1 <= Math.floorDiv(y1 + 1, 12); i1++)
                 for (int j1 = Math.floorDiv(z0 - 5, 16); j1 <= Math.floorDiv(z1 - 5, 16); j1++) {
-                    Aquifer.FluidStatus s = probe$uniform(l, i1, j1);
+                    Aquifer.FluidStatus s = sleep$uniform(l, i1, j1);
                     if (s == null) return false;
                     FluidStatusAccessor a = (FluidStatusAccessor) (Object) s;
                     // at(y) = y < level ? type : AIR
-                    if (a.probe$type() != air && y0 < a.probe$level()) return false;
+                    if (a.sleep$type() != air && y0 < a.sleep$level()) return false;
                 }
         return true;
     }
@@ -174,7 +174,7 @@ public abstract class WorldgenSkipAquiferMixin implements dev.sleep.optsupport.C
     @Overwrite
     @Nullable
     public BlockState computeSubstance(DensityFunction.FunctionContext context, double substance) {
-        probe$flagPending = false;
+        sleep$flagPending = false;
         int i = context.blockX();
         int j = context.blockY();
         int k = context.blockZ();
@@ -190,14 +190,14 @@ public abstract class WorldgenSkipAquiferMixin implements dev.sleep.optsupport.C
                 int l = Math.floorDiv(i - 5, 16);
                 int i1 = Math.floorDiv(j + 1, 12);
                 int j1 = Math.floorDiv(k - 5, 16);
-                Aquifer.FluidStatus uni = probe$uniform(l, i1, j1);
+                Aquifer.FluidStatus uni = sleep$uniform(l, i1, j1);
                 if (uni != null) {
                     BlockState bs = uni.at(j);
                     if (!bs.is(Blocks.WATER) || !this.globalFluidPicker.computeFluid(i, j - 1, k).at(j - 1).is(Blocks.LAVA)) {
-                        probe$flagPending = true;
-                        probe$fx = i;
-                        probe$fy = j;
-                        probe$fz = k;
+                        sleep$flagPending = true;
+                        sleep$fx = i;
+                        sleep$fy = j;
+                        sleep$fz = k;
                         return bs;
                     }
                 }
@@ -301,9 +301,9 @@ public abstract class WorldgenSkipAquiferMixin implements dev.sleep.optsupport.C
      */
     @Overwrite
     public boolean shouldScheduleFluidUpdate() {
-        if (probe$flagPending) {
-            probe$flagPending = false;
-            int i = probe$fx, j = probe$fy, k = probe$fz;
+        if (sleep$flagPending) {
+            sleep$flagPending = false;
+            int i = sleep$fx, j = sleep$fy, k = sleep$fz;
             int l = Math.floorDiv(i - 5, 16);
             int i1 = Math.floorDiv(j + 1, 12);
             int j1 = Math.floorDiv(k - 5, 16);
@@ -312,7 +312,7 @@ public abstract class WorldgenSkipAquiferMixin implements dev.sleep.optsupport.C
             for (int i3 = 0; i3 <= 1; i3++)
                 for (int j3 = -1; j3 <= 1; j3++)
                     for (int k3 = 0; k3 <= 1; k3++) {
-                        long l4 = probe$location(l + i3, i1 + j3, j1 + k3);
+                        long l4 = sleep$location(l + i3, i1 + j3, j1 + k3);
                         int i6 = BlockPos.getX(l4) - i;
                         int j5 = BlockPos.getY(l4) - j;
                         int k5 = BlockPos.getZ(l4) - k;

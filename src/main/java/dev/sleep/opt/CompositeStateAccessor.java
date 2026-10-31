@@ -9,20 +9,20 @@ import org.spongepowered.asm.mixin.gen.Accessor;
 @Mixin(RenderType.CompositeState.class)
 public interface CompositeStateAccessor {
     @Accessor("transparencyState")
-    RenderStateShard.TransparencyStateShard probe$transparency();
+    RenderStateShard.TransparencyStateShard sleep$transparency();
 
     @Accessor("depthTestState")
-    RenderStateShard.DepthTestStateShard probe$depthTest();
+    RenderStateShard.DepthTestStateShard sleep$depthTest();
 
     @Accessor("writeMaskState")
-    RenderStateShard.WriteMaskStateShard probe$writeMask();
+    RenderStateShard.WriteMaskStateShard sleep$writeMask();
 
     @Accessor("outputState")
-    RenderStateShard.OutputStateShard probe$output();
+    RenderStateShard.OutputStateShard sleep$output();
 
     @Accessor("shaderState")
-    RenderStateShard.ShaderStateShard probe$shader();
+    RenderStateShard.ShaderStateShard sleep$shader();
 
     @Accessor("colorLogicState")
-    RenderStateShard.ColorLogicStateShard probe$colorLogic();
+    RenderStateShard.ColorLogicStateShard sleep$colorLogic();
 }

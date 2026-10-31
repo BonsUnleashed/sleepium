@@ -14,7 +14,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(ClientChunkCache.class)
 public abstract class ShaderLightChunkCacheMixin {
     @Inject(method = "onLightUpdate", at = @At("HEAD"), cancellable = true)
-    private void probe$light(LightLayer type, SectionPos pos, CallbackInfo ci) {
+    private void sleep$light(LightLayer type, SectionPos pos, CallbackInfo ci) {
         if (ClientLightAsync.onWorker()) return;   // recorded there, replayed through LightVolumes
         LightVolumes.lightChanged(pos.x(), pos.y(), pos.z());
         ci.cancel();

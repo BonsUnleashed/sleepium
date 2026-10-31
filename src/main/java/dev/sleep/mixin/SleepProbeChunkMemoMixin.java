@@ -8,10 +8,10 @@ import org.spongepowered.asm.mixin.Unique;
 /** Per chunk memo for the fast skip (see SleepProbeFastSkipMixin). Sleep engine only. */
 @Mixin(LevelChunk.class)
 public abstract class SleepProbeChunkMemoMixin implements ChunkTickMemo {
-    @Unique private long probe$memoTick = Long.MIN_VALUE;
-    @Unique private boolean probe$memoTicking;
+    @Unique private long sleep$memoTick = Long.MIN_VALUE;
+    @Unique private boolean sleep$memoTicking;
 
-    @Override public long probe$memoTick() { return probe$memoTick; }
-    @Override public boolean probe$memoTicking() { return probe$memoTicking; }
-    @Override public void probe$setMemo(long tick, boolean ticking) { probe$memoTick = tick; probe$memoTicking = ticking; }
+    @Override public long sleep$memoTick() { return sleep$memoTick; }
+    @Override public boolean sleep$memoTicking() { return sleep$memoTicking; }
+    @Override public void sleep$setMemo(long tick, boolean ticking) { sleep$memoTick = tick; sleep$memoTicking = ticking; }
 }

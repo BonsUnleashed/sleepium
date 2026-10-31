@@ -36,12 +36,12 @@ public final class CoalesceDecoder extends ByteToMessageDecoder {
                 out.add(in.readRetainedSlice(len[0] + n));   // a plain frame, its length prefix included
                 continue;
             }
-            if (n < 1) throw new CorruptedFrameException("probe coalesce: empty container");
+            if (n < 1) throw new CorruptedFrameException("sleep coalesce: empty container");
             in.skipBytes(len[0]);
             byte flag = in.readByte();
             if (flag == 0) out.add(in.readRetainedSlice(n - 1));
             else if (flag == 1) out.add(inflate(ctx, in, n - 1));
-            else throw new CorruptedFrameException("probe coalesce: container flag " + flag);
+            else throw new CorruptedFrameException("sleep coalesce: container flag " + flag);
         }
     }
 
@@ -60,13 +60,13 @@ public final class CoalesceDecoder extends ByteToMessageDecoder {
                 outBuf.writeBytes(scratch, 0, k);
                 if (outBuf.readableBytes() > MAX_OUT) {
                     outBuf.release();
-                    throw new CorruptedFrameException("probe coalesce: container over " + MAX_OUT + " bytes");
+                    throw new CorruptedFrameException("sleep coalesce: container over " + MAX_OUT + " bytes");
                 }
             }
             if (k < scratch.length && inflater.needsInput()) return outBuf;
             if (k == 0 && (inflater.needsDictionary() || inflater.finished())) {
                 outBuf.release();
-                throw new CorruptedFrameException("probe coalesce: bad deflate stream");
+                throw new CorruptedFrameException("sleep coalesce: bad deflate stream");
             }
         }
     }

@@ -16,7 +16,7 @@ public final class ServerReactor {
     public static synchronized LabRuntime pool() {
         if (pool == null) {
             pool = new LabRuntime(LabRuntime.Config.of("Server-Worker", THREADS).withPriority(OsThreads.NORMAL).withDaemon(true));
-            System.out.println("[probe/opt] server reactor: " + THREADS + " workers");
+            System.out.println("[sleep/opt] server reactor: " + THREADS + " workers");
         }
         return pool;
     }

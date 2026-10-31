@@ -11,5 +11,5 @@ import org.spongepowered.asm.mixin.gen.Accessor;
 public interface VoxelShapeAccessor extends CubeAt.ShapeAccess {
     @Override
     @Accessor("shape")
-    DiscreteVoxelShape probe$shape();
+    DiscreteVoxelShape sleep$shape();
 }

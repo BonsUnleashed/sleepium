@@ -13,15 +13,15 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
  */
 @Mixin(LevelLightEngine.class)
 public abstract class LightTimingMixin {
-    @Unique private static final ThreadLocal<long[]> probe$start = ThreadLocal.withInitial(() -> new long[1]);
+    @Unique private static final ThreadLocal<long[]> sleep$start = ThreadLocal.withInitial(() -> new long[1]);
 
     @Inject(method = "runLightUpdates", at = @At("HEAD"))
-    private void probe$start(CallbackInfoReturnable<Integer> cir) {
-        probe$start.get()[0] = System.nanoTime();
+    private void sleep$start(CallbackInfoReturnable<Integer> cir) {
+        sleep$start.get()[0] = System.nanoTime();
     }
 
     @Inject(method = "runLightUpdates", at = @At("RETURN"))
-    private void probe$end(CallbackInfoReturnable<Integer> cir) {
-        dev.sleep.optsupport.LightTiming.add(System.nanoTime() - probe$start.get()[0]);
+    private void sleep$end(CallbackInfoReturnable<Integer> cir) {
+        dev.sleep.optsupport.LightTiming.add(System.nanoTime() - sleep$start.get()[0]);
     }
 }

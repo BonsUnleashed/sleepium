@@ -16,7 +16,7 @@ public abstract class WorldgenShareRegionBiomeMixin {
     @Shadow @Final private BiomeManager biomeManager;
 
     @Inject(method = "<init>", at = @At("RETURN"))
-    private void probe$confine(CallbackInfo ci) {
-        ((BiomeConfine) this.biomeManager).probe$confine();
+    private void sleep$confine(CallbackInfo ci) {
+        ((BiomeConfine) this.biomeManager).sleep$confine();
     }
 }

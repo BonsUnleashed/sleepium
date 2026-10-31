@@ -8,8 +8,8 @@ import org.spongepowered.asm.mixin.gen.Accessor;
 @Mixin(EntityRenderer.class)
 public interface EntityRendererAccessor {
     @Accessor("shadowStrength")
-    float probe$shadowStrength();
+    float sleep$shadowStrength();
 
     @org.spongepowered.asm.mixin.gen.Invoker("getShadowRadius")
-    float probe$shadowRadius(net.minecraft.world.entity.Entity entity);
+    float sleep$shadowRadius(net.minecraft.world.entity.Entity entity);
 }

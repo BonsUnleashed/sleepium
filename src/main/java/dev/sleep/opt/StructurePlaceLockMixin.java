@@ -21,7 +21,7 @@ import org.spongepowered.asm.mixin.Mixin;
 @Mixin(StructureStart.class)
 public abstract class StructurePlaceLockMixin {
     @WrapMethod(method = "placeInChunk")
-    private void probe$serialise(WorldGenLevel level, StructureManager structureManager, ChunkGenerator generator, RandomSource random,
+    private void sleep$serialise(WorldGenLevel level, StructureManager structureManager, ChunkGenerator generator, RandomSource random,
                                  BoundingBox box, ChunkPos chunkPos, Operation<Void> original) {
         synchronized (this) {
             original.call(level, structureManager, generator, random, box, chunkPos);

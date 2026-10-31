@@ -39,77 +39,77 @@ public abstract class WorldgenSkipBeardMixin implements dev.sleep.optsupport.Cel
         throw new AssertionError();
     }
 
-    @Unique private Beardifier.Rigid[] probe$rigids;
-    @Unique private JigsawJunction[] probe$junctions;
-    @Unique private int[] probe$rSel, probe$jSel;
-    @Unique private int probe$rn, probe$jn;
-    @Unique private int probe$tx = Integer.MIN_VALUE, probe$ty, probe$tz;
+    @Unique private Beardifier.Rigid[] sleep$rigids;
+    @Unique private JigsawJunction[] sleep$junctions;
+    @Unique private int[] sleep$rSel, sleep$jSel;
+    @Unique private int sleep$rn, sleep$jn;
+    @Unique private int sleep$tx = Integer.MIN_VALUE, sleep$ty, sleep$tz;
 
     @Unique
-    private void probe$init() {
+    private void sleep$init() {
         java.util.ArrayList<Beardifier.Rigid> r = new java.util.ArrayList<>();
         while (pieceIterator.hasNext()) r.add(pieceIterator.next());
         pieceIterator.back(Integer.MAX_VALUE);
         java.util.ArrayList<JigsawJunction> j = new java.util.ArrayList<>();
         while (junctionIterator.hasNext()) j.add(junctionIterator.next());
         junctionIterator.back(Integer.MAX_VALUE);
-        probe$rigids = r.toArray(new Beardifier.Rigid[0]);
-        probe$junctions = j.toArray(new JigsawJunction[0]);
-        probe$rSel = new int[probe$rigids.length];
-        probe$jSel = new int[probe$junctions.length];
+        sleep$rigids = r.toArray(new Beardifier.Rigid[0]);
+        sleep$junctions = j.toArray(new JigsawJunction[0]);
+        sleep$rSel = new int[sleep$rigids.length];
+        sleep$jSel = new int[sleep$junctions.length];
     }
 
     /** distance from [a0, a1] to [b0, b1], 0 if they overlap (the min over the tile of vanilla's max(0, max(min - x, x - max))) */
     @Unique
-    private static int probe$gap(int a0, int a1, int b0, int b1) {
+    private static int sleep$gap(int a0, int a1, int b0, int b1) {
         return Math.max(0, Math.max(b0 - a1, a0 - b1));
     }
 
     /** true if some integer in [lo, hi] lies in the kernel's offset range [-12, 11] */
     @Unique
-    private static boolean probe$inKernel(int lo, int hi) {
+    private static boolean sleep$inKernel(int lo, int hi) {
         return hi >= -12 && lo <= 11;
     }
 
     @Unique
-    private static boolean probe$keepRigid(Beardifier.Rigid rg, int x0, int x1, int y0, int y1, int z0, int z1) {
+    private static boolean sleep$keepRigid(Beardifier.Rigid rg, int x0, int x1, int y0, int y1, int z0, int z1) {
         BoundingBox b = rg.box();
-        int gx = probe$gap(x0, x1, b.minX(), b.maxX()), gz = probe$gap(z0, z1, b.minZ(), b.maxZ());
+        int gx = sleep$gap(x0, x1, b.minX(), b.maxX()), gz = sleep$gap(z0, z1, b.minZ(), b.maxZ());
         int k1 = b.minY() + rg.groundLevelDelta();
         TerrainAdjustment ta = rg.terrainAdjustment();
         // BURY uses i2 / 2.0 with i2 = y - k1: zero once |i2| >= 12 for the whole box, or a horizontal distance
         // >= 6 (length >= 6 → clampedMap gives exactly 0.0); ENCAPSULATE: halved distances, zero once one >= 12
         if (ta == TerrainAdjustment.BURY) return gx < 6 && gz < 6 && (y1 - k1) > -12 && (y0 - k1) < 12;
-        if (ta == TerrainAdjustment.BEARD_THIN) return gx <= 11 && gz <= 11 && probe$inKernel(y0 - k1, y1 - k1);
-        if (ta == TerrainAdjustment.BEARD_BOX) return gx <= 11 && gz <= 11 && probe$gap(y0, y1, k1, b.maxY()) <= 11;
-        if (ta == TerrainAdjustment.ENCAPSULATE) return gx < 12 && gz < 12 && probe$gap(y0, y1, b.minY(), b.maxY()) < 12;
+        if (ta == TerrainAdjustment.BEARD_THIN) return gx <= 11 && gz <= 11 && sleep$inKernel(y0 - k1, y1 - k1);
+        if (ta == TerrainAdjustment.BEARD_BOX) return gx <= 11 && gz <= 11 && sleep$gap(y0, y1, k1, b.maxY()) <= 11;
+        if (ta == TerrainAdjustment.ENCAPSULATE) return gx < 12 && gz < 12 && sleep$gap(y0, y1, b.minY(), b.maxY()) < 12;
         return false;   // NONE contributes 0.0
     }
 
     @Unique
-    private static boolean probe$keepJunction(JigsawJunction jj, int x0, int x1, int y0, int y1, int z0, int z1) {
+    private static boolean sleep$keepJunction(JigsawJunction jj, int x0, int x1, int y0, int y1, int z0, int z1) {
         int sx = jj.getSourceX(), sy = jj.getSourceGroundY(), sz = jj.getSourceZ();
-        return probe$inKernel(x0 - sx, x1 - sx) && probe$inKernel(y0 - sy, y1 - sy) && probe$inKernel(z0 - sz, z1 - sz);
+        return sleep$inKernel(x0 - sx, x1 - sx) && sleep$inKernel(y0 - sy, y1 - sy) && sleep$inKernel(z0 - sz, z1 - sz);
     }
 
     @Unique
-    private void probe$select(int x0, int y0, int z0) {
+    private void sleep$select(int x0, int y0, int z0) {
         int x1 = x0 + 3, y1 = y0 + 7, z1 = z0 + 3;
         int n = 0;
-        for (int idx = 0; idx < probe$rigids.length; idx++)
-            if (probe$keepRigid(probe$rigids[idx], x0, x1, y0, y1, z0, z1)) probe$rSel[n++] = idx;
-        probe$rn = n;
+        for (int idx = 0; idx < sleep$rigids.length; idx++)
+            if (sleep$keepRigid(sleep$rigids[idx], x0, x1, y0, y1, z0, z1)) sleep$rSel[n++] = idx;
+        sleep$rn = n;
         n = 0;
-        for (int idx = 0; idx < probe$junctions.length; idx++)
-            if (probe$keepJunction(probe$junctions[idx], x0, x1, y0, y1, z0, z1)) probe$jSel[n++] = idx;
-        probe$jn = n;
+        for (int idx = 0; idx < sleep$junctions.length; idx++)
+            if (sleep$keepJunction(sleep$junctions[idx], x0, x1, y0, y1, z0, z1)) sleep$jSel[n++] = idx;
+        sleep$jn = n;
     }
 
     @Override
-    public boolean probe$zeroOver(int x0, int y0, int z0, int x1, int y1, int z1) {
-        if (probe$rigids == null) probe$init();
-        for (Beardifier.Rigid r : probe$rigids) if (probe$keepRigid(r, x0, x1, y0, y1, z0, z1)) return false;
-        for (JigsawJunction j : probe$junctions) if (probe$keepJunction(j, x0, x1, y0, y1, z0, z1)) return false;
+    public boolean sleep$zeroOver(int x0, int y0, int z0, int x1, int y1, int z1) {
+        if (sleep$rigids == null) sleep$init();
+        for (Beardifier.Rigid r : sleep$rigids) if (sleep$keepRigid(r, x0, x1, y0, y1, z0, z1)) return false;
+        for (JigsawJunction j : sleep$junctions) if (sleep$keepJunction(j, x0, x1, y0, y1, z0, z1)) return false;
         return true;
     }
 
@@ -119,21 +119,21 @@ public abstract class WorldgenSkipBeardMixin implements dev.sleep.optsupport.Cel
      */
     @Overwrite
     public double compute(DensityFunction.FunctionContext context) {
-        if (probe$rigids == null) probe$init();
+        if (sleep$rigids == null) sleep$init();
         int i = context.blockX();
         int j = context.blockY();
         int k = context.blockZ();
         int tx = i >> 2, ty = j >> 3, tz = k >> 2;
-        if (tx != probe$tx || ty != probe$ty || tz != probe$tz) {
-            probe$select(tx << 2, ty << 3, tz << 2);
-            probe$tx = tx;
-            probe$ty = ty;
-            probe$tz = tz;
+        if (tx != sleep$tx || ty != sleep$ty || tz != sleep$tz) {
+            sleep$select(tx << 2, ty << 3, tz << 2);
+            sleep$tx = tx;
+            sleep$ty = ty;
+            sleep$tz = tz;
         }
         double d0 = 0.0;
 
-        for (int s = 0; s < probe$rn; s++) {
-            Beardifier.Rigid beardifier$rigid = probe$rigids[probe$rSel[s]];
+        for (int s = 0; s < sleep$rn; s++) {
+            Beardifier.Rigid beardifier$rigid = sleep$rigids[sleep$rSel[s]];
             BoundingBox boundingbox = beardifier$rigid.box();
             int l = beardifier$rigid.groundLevelDelta();
             int i1 = Math.max(0, Math.max(boundingbox.minX() - i, i - boundingbox.maxX()));
@@ -155,8 +155,8 @@ public abstract class WorldgenSkipBeardMixin implements dev.sleep.optsupport.Cel
             else d0 += 0.0;   // NONE
         }
 
-        for (int s = 0; s < probe$jn; s++) {
-            JigsawJunction jigsawjunction = probe$junctions[probe$jSel[s]];
+        for (int s = 0; s < sleep$jn; s++) {
+            JigsawJunction jigsawjunction = sleep$junctions[sleep$jSel[s]];
             int j2 = i - jigsawjunction.getSourceX();
             int k2 = j - jigsawjunction.getSourceGroundY();
             int l2 = k - jigsawjunction.getSourceZ();

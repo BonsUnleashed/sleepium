@@ -12,7 +12,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(Connection.class)
 public abstract class NetLagMixin {
     @Inject(method = "channelActive", at = @At("TAIL"))
-    private void probe$lag(ChannelHandlerContext ctx, CallbackInfo ci) {
+    private void sleep$lag(ChannelHandlerContext ctx, CallbackInfo ci) {
         NetLag.install(ctx.channel(), (Connection) (Object) this);
     }
 }

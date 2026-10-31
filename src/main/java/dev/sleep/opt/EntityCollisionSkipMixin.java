@@ -42,8 +42,8 @@ public abstract class EntityCollisionSkipMixin {
         if (dev.sleep.optsupport.sleep.SleepEngine.HOOKS) dev.sleep.optsupport.sleep.SleepEngine.readBox('C', collisionBox);
         if (collisionBox.getSize() < 1.0E-7) return List.of();
         AABB area = collisionBox.inflate(1.0E-7);
-        if (EntityCollide.ENTITY_UNTOUCHED && (entity == null || EntityCollide.DEFAULT_COLLIDE.get(entity.getClass())) && probe$none(area)) {
-            if (CHECK) probe$check(entity, area);
+        if (EntityCollide.ENTITY_UNTOUCHED && (entity == null || EntityCollide.DEFAULT_COLLIDE.get(entity.getClass())) && sleep$none(area)) {
+            if (CHECK) sleep$check(entity, area);
             this.getProfiler().incrementCounter("getEntities");   // what vanilla's getEntities would have counted
             return List.of();
         }
@@ -56,19 +56,19 @@ public abstract class EntityCollisionSkipMixin {
     }
 
     @Unique
-    private boolean probe$none(AABB area) {
+    private boolean sleep$none(AABB area) {
         LevelEntityGetter<Entity> getter = this.getEntities();
         if (!(getter instanceof LevelEntityGetterAdapter<?>)) return false;
         for (var part : ((net.neoforged.neoforge.common.extensions.ILevelExtension) (Object) this).getPartEntities())
             if (EntityCollide.CAPABLE.get(part.getClass())) return false;
-        return !((CollidableCount.Storage) ((LevelEntityGetterAdapterAccessor) getter).probe$sectionStorage()).probe$anyCollidable(area);
+        return !((CollidableCount.Storage) ((LevelEntityGetterAdapterAccessor) getter).sleep$sectionStorage()).sleep$anyCollidable(area);
     }
 
     @Unique
-    private void probe$check(@Nullable Entity entity, AABB area) {
+    private void sleep$check(@Nullable Entity entity, AABB area) {
         Predicate<Entity> predicate = entity == null ? EntitySelector.CAN_BE_COLLIDED_WITH : EntitySelector.NO_SPECTATORS.and(entity::canCollideWith);
         OptCounters.COLLIDE_CHECKED.incrementAndGet();
         if (!this.getEntities(entity, area, predicate).isEmpty() && OptCounters.COLLIDE_MISMATCHES.incrementAndGet() <= 5)
-            System.out.println("[probe/opt] entity collision skip MISMATCH for " + entity + " at " + area);
+            System.out.println("[sleep/opt] entity collision skip MISMATCH for " + entity + " at " + area);
     }
 }

@@ -26,16 +26,16 @@ public abstract class EntSleepDataMixin implements EntityFp.DataEpoch {
     @Shadow @Final private SyncedDataHolder entity;
     @Shadow @Final private SynchedEntityData.DataItem<?>[] itemsById;
     @Shadow private boolean isDirty;
-    @Unique private int probe$epoch;
-    @Unique private int probe$mutable = -1;   // values that can change in place (-1: not counted yet)
+    @Unique private int sleep$epoch;
+    @Unique private int sleep$mutable = -1;   // values that can change in place (-1: not counted yet)
 
     @ModifyVariable(method = "set(Lnet/minecraft/network/syncher/EntityDataAccessor;Ljava/lang/Object;Z)V", at = @At("HEAD"), argsOnly = true)
-    private Object probe$set(Object value, EntityDataAccessor<?> key, Object same, boolean force) {
+    private Object sleep$set(Object value, EntityDataAccessor<?> key, Object same, boolean force) {
         if (EntitySleep.ON) {
             Object old = itemsById[key.id()].getValue();
             if (force || !java.util.Objects.equals(old, value)) {
-                probe$epoch++;
-                if (probe$mutable >= 0 && old != value) probe$mutable += (EntityFp.immutableValue(value) ? 0 : 1) - (EntityFp.immutableValue(old) ? 0 : 1);
+                sleep$epoch++;
+                if (sleep$mutable >= 0 && old != value) sleep$mutable += (EntityFp.immutableValue(value) ? 0 : 1) - (EntityFp.immutableValue(old) ? 0 : 1);
             }
             if (entity instanceof Entity e) EntitySleep.onDataSet(e, key, value);
         }
@@ -43,22 +43,22 @@ public abstract class EntSleepDataMixin implements EntityFp.DataEpoch {
     }
 
     @Inject(method = "packDirty", at = @At("HEAD"))
-    private void probe$packDirty(CallbackInfoReturnable<?> cir) {
-        if (isDirty) probe$epoch++;   // the dirty flags are cleared
+    private void sleep$packDirty(CallbackInfoReturnable<?> cir) {
+        if (isDirty) sleep$epoch++;   // the dirty flags are cleared
     }
 
     @Override
-    public int probe$dataEpoch() {
-        return probe$epoch;
+    public int sleep$dataEpoch() {
+        return sleep$epoch;
     }
 
     @Override
-    public boolean probe$mutableValues() {
-        if (probe$mutable < 0) {
+    public boolean sleep$mutableValues() {
+        if (sleep$mutable < 0) {
             int m = 0;
             for (SynchedEntityData.DataItem<?> it : itemsById) if (it != null && !EntityFp.immutableValue(it.getValue())) m++;
-            probe$mutable = m;
+            sleep$mutable = m;
         }
-        return probe$mutable > 0;
+        return sleep$mutable > 0;
     }
 }

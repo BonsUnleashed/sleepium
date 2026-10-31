@@ -12,7 +12,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(EntitySectionStorage.class)
 public abstract class ScoutMiscMixin {
     @Inject(method = "forEachAccessibleNonEmptySection", at = @At("HEAD"))
-    private void probe$query(AABB box, net.minecraft.util.AbortableIterationConsumer<?> consumer, CallbackInfo ci) {
+    private void sleep$query(AABB box, net.minecraft.util.AbortableIterationConsumer<?> consumer, CallbackInfo ci) {
         ParallelTickScout.readBox(box);
     }
 }

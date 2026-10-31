@@ -10,5 +10,5 @@ import org.spongepowered.asm.mixin.gen.Invoker;
 @Mixin(IOWorker.class)
 public interface ReactorIOWorkerInvoker {
     @Invoker("getOrCreateOldDataForRegion")
-    CompletableFuture<BitSet> probe$oldData(int regionX, int regionZ);
+    CompletableFuture<BitSet> sleep$oldData(int regionX, int regionZ);
 }

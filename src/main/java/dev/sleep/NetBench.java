@@ -4,9 +4,9 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
 
 /**
- * {@code /probe net <seconds> <label>}: what networking costs over a window — server-thread send time and socket bytes
- * (NetStats, with -Dprobe.net.stats=true), NetReactor batching, MSPT and CPU by thread group (netty IO threads
- * included). One line "probe: net '<label>': ..." in the log.
+ * {@code /sleep net <seconds> <label>}: what networking costs over a window — server-thread send time and socket bytes
+ * (NetStats, with -Dsleep.net.stats=true), NetReactor batching, MSPT and CPU by thread group (netty IO threads
+ * included). One line "sleep: net '<label>': ..." in the log.
  */
 final class NetBench {
     private static long endNanos = -1, startNanos;
@@ -52,7 +52,7 @@ final class NetBench {
         String line = "net '" + label + "': " + String.format(java.util.Locale.ROOT, "%.1f s, tick mean %.2f ms max %.2f ms; ", secs,
                 ticks == 0 ? 0 : tickNanos / 1e6 / ticks, maxTick / 1e6)
                 + NetStats.report(secs, players) + " | " + dev.sleep.net.NetReactor.report() + " | " + dev.sleep.net.Bulk.report() + " | " + dev.sleep.net.Coalesce.report() + " | " + cpu.report(secs, 8);
-        SleepMod.LOGGER.info("probe: {}", line);
-        server.getPlayerList().broadcastSystemMessage(Component.literal("probe: net '" + label + "' done"), false);
+        SleepMod.LOGGER.info("sleep: {}", line);
+        server.getPlayerList().broadcastSystemMessage(Component.literal("sleep: net '" + label + "' done"), false);
     }
 }

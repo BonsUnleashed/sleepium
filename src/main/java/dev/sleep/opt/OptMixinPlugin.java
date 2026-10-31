@@ -138,7 +138,7 @@ public final class OptMixinPlugin implements IMixinConfigPlugin {
         // A/B of the client-side ones with the server-side ones on: -Dlab.opt.noClient=true
         if (on && Boolean.getBoolean("lab.opt.noClient") && (simple.startsWith("Section") && simple.contains("Layer") || simple.startsWith("Ambient") || simple.startsWith("Shader") || simple.startsWith("ClientEventSite") || simple.startsWith("Pose") || simple.startsWith("BulkData") || simple.startsWith("VertexSort") || simple.startsWith("EntityBatch") || simple.startsWith("RenderCache") || simple.startsWith("Parallel") || simple.startsWith("Part") || simple.startsWith("ShaderStateShard") || simple.startsWith("MeshData") || simple.startsWith("SectionLists") || simple.startsWith("ClientBiome") || simple.startsWith("UniformDedupe") || simple.startsWith("SamplerUnit") || simple.startsWith("ModelPartQuat") || simple.startsWith("ModelPartIter") || simple.startsWith("CubicSampler") || simple.startsWith("OverworldFog") || simple.startsWith("EntityCullNoAlloc") || simple.startsWith("FrustumInvoker") || simple.startsWith("ItemFrameOffset") || simple.startsWith("ClientLight") || simple.startsWith("BlockMesh") || simple.startsWith("ClientLevelLightQueue") || simple.startsWith("EntityLightNoAlloc") || simple.startsWith("BlockEntityCullNoAlloc") || simple.startsWith("ClientChunkCacheBiome") || simple.startsWith("LevelRendererVisible") || simple.startsWith("EntityRender") || simple.startsWith("LevelRendererInvoker") || simple.startsWith("BufferBuilder") || simple.startsWith("BufferSource") || simple.startsWith("Composite") || simple.startsWith("Chunk") && !simple.startsWith("ChunkCache"))) on = false;
         if (on) {
-            System.out.println("[probe/opt] applying " + simple + " -> " + targetClassName);
+            System.out.println("[sleep/opt] applying " + simple + " -> " + targetClassName);
         }
         return on;
     }
@@ -168,13 +168,13 @@ public final class OptMixinPlugin implements IMixinConfigPlugin {
             // -Dlab.opt.except=A,B: universal without those (A/B of one part)
             java.util.Set<String> except = new java.util.HashSet<>(java.util.Arrays.asList(System.getProperty("lab.opt.except", "").split(",")));
             for (String f : UNIVERSAL) if (!except.contains(f)) System.setProperty("lab.opt." + f, "true");
-            System.out.println("[probe/opt] lab.opt.universal: " + String.join(", ", UNIVERSAL));
+            System.out.println("[sleep/opt] lab.opt.universal: " + String.join(", ", UNIVERSAL));
         }
         // the worldgen reactor removes the worldgen actor; FEATURES of neighbouring chunks are then kept apart only by
         // ParallelGen's 3x3 claims (ParallelWorldgenMixin): without them two chunks' features write one section at once
         if (Boolean.getBoolean("lab.opt.WorldgenReactor") && !Boolean.getBoolean("lab.opt.ParallelWorldgenMixin") && !Boolean.getBoolean("lab.opt.all")) {
             System.setProperty("lab.opt.ParallelWorldgenMixin", "true");
-            System.out.println("[probe/opt] lab.opt.WorldgenReactor needs ParallelWorldgenMixin (its FEATURES claims): turned on");
+            System.out.println("[sleep/opt] lab.opt.WorldgenReactor needs ParallelWorldgenMixin (its FEATURES claims): turned on");
         }
     }
     @Override public String getRefMapperConfig() { return null; }

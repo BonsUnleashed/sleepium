@@ -10,29 +10,29 @@ import org.spongepowered.asm.mixin.gen.Accessor;
 @Mixin(BufferBuilder.class)
 public interface BufferBuilderAccessor {
     @Accessor("buffer")
-    ByteBufferBuilder probe$buffer();
+    ByteBufferBuilder sleep$buffer();
 
     @Accessor("vertices")
-    int probe$vertices();
+    int sleep$vertices();
 
     @Accessor("vertices")
-    void probe$setVertices(int v);
+    void sleep$setVertices(int v);
 
     @Accessor("vertexPointer")
-    void probe$setVertexPointer(long p);
+    void sleep$setVertexPointer(long p);
 
     @Accessor("vertexPointer")
-    long probe$vertexPointer();
+    long sleep$vertexPointer();
 
     @Accessor("elementsToFill")
-    int probe$elementsToFill();
+    int sleep$elementsToFill();
 
     @Accessor("format")
-    VertexFormat probe$format();
+    VertexFormat sleep$format();
 
     @Accessor("mode")
-    VertexFormat.Mode probe$mode();
+    VertexFormat.Mode sleep$mode();
 
     @Accessor("building")
-    boolean probe$building();
+    boolean sleep$building();
 }

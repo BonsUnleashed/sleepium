@@ -32,32 +32,32 @@ public abstract class WorldgenSkipCellsMixin implements CellProof.Host {
     @Shadow @Final int cellWidth;
     @Shadow @Final int cellHeight;
 
-    @Unique private DensityFunction probe$final;
-    @Unique private net.minecraft.world.level.levelgen.NoiseRouter probe$router;
+    @Unique private DensityFunction sleep$final;
+    @Unique private net.minecraft.world.level.levelgen.NoiseRouter sleep$router;
     /** 0: filler list not vanilla; 1: aquifer only; 2: aquifer + ore veins */
-    @Unique private int probe$fillers;
-    @Unique private CellProof probe$vein;
+    @Unique private int sleep$fillers;
+    @Unique private CellProof sleep$vein;
     @Unique private static int[] PROBE$VEIN_RANGES;
-    @Unique private CellProof probe$proofValue;
-    @Unique private boolean probe$built;
+    @Unique private CellProof sleep$proofValue;
+    @Unique private boolean sleep$built;
 
     @ModifyExpressionValue(method = "<init>", at = @At(value = "INVOKE",
             target = "Lnet/minecraft/world/level/levelgen/DensityFunction;mapAll(Lnet/minecraft/world/level/levelgen/DensityFunction$Visitor;)Lnet/minecraft/world/level/levelgen/DensityFunction;"))
-    private DensityFunction probe$capture(DensityFunction f) {
-        probe$final = f;
+    private DensityFunction sleep$capture(DensityFunction f) {
+        sleep$final = f;
         return f;
     }
 
     @ModifyExpressionValue(method = "<init>", at = @At(value = "INVOKE",
             target = "Lnet/minecraft/world/level/levelgen/NoiseRouter;mapAll(Lnet/minecraft/world/level/levelgen/DensityFunction$Visitor;)Lnet/minecraft/world/level/levelgen/NoiseRouter;"))
-    private net.minecraft.world.level.levelgen.NoiseRouter probe$captureRouter(net.minecraft.world.level.levelgen.NoiseRouter r) {
-        probe$router = r;
+    private net.minecraft.world.level.levelgen.NoiseRouter sleep$captureRouter(net.minecraft.world.level.levelgen.NoiseRouter r) {
+        sleep$router = r;
         return r;
     }
 
     /** OreVeinifier.VeinType's [minY, maxY] pairs (a vein is only possible inside one) */
     @Unique
-    private static int[] probe$veinRanges() {
+    private static int[] sleep$veinRanges() {
         int[] r = PROBE$VEIN_RANGES;
         if (r == null) {
             try {
@@ -80,41 +80,41 @@ public abstract class WorldgenSkipCellsMixin implements CellProof.Host {
     }
 
     @Override
-    public boolean probe$solidIsDefault(CellProof.Cell c) {
-        if (probe$fillers == 1) return true;
-        if (probe$fillers != 2) return false;
-        int[] r = probe$veinRanges();
+    public boolean sleep$solidIsDefault(CellProof.Cell c) {
+        if (sleep$fillers == 1) return true;
+        if (sleep$fillers != 2) return false;
+        int[] r = sleep$veinRanges();
         boolean inRange = false;
         for (int i = 0; i < r.length; i += 2) inRange |= c.y1 >= r[i] && c.y0 <= r[i + 1];
         if (!inRange) return true;   // OreVeinifier: a block outside every vein's [minY, maxY] gets null
-        if (probe$vein == null) return false;
+        if (sleep$vein == null) return false;
         // inside: null unless |veinToggle| + edge (<= 0) >= 0.4F
-        probe$vein.allNegative(c);
-        return probe$vein.lastMaxAbs() < 0.4 - 1e-9;
+        sleep$vein.allNegative(c);
+        return sleep$vein.lastMaxAbs() < 0.4 - 1e-9;
     }
 
     @Override
-    public CellProof probe$proof() {
-        if (!probe$built) {
-            probe$built = true;
-            if (blender == Blender.empty() && probe$final != null && blockStateRule instanceof MaterialRuleList m
+    public CellProof sleep$proof() {
+        if (!sleep$built) {
+            sleep$built = true;
+            if (blender == Blender.empty() && sleep$final != null && blockStateRule instanceof MaterialRuleList m
                     && !m.materialRuleList().isEmpty() && m.materialRuleList().get(0).getClass().getNestHost() == NoiseChunk.class) {
-                probe$proofValue = CellProof.build(probe$final);
+                sleep$proofValue = CellProof.build(sleep$final);
                 java.util.List<NoiseChunk.BlockStateFiller> l = m.materialRuleList();
-                if (l.size() == 1) probe$fillers = 1;
-                else if (l.size() == 2 && l.get(1).getClass().getNestHost() == net.minecraft.world.level.levelgen.OreVeinifier.class && probe$router != null) {
-                    probe$fillers = 2;
-                    probe$vein = CellProof.build(probe$router.veinToggle());
+                if (l.size() == 1) sleep$fillers = 1;
+                else if (l.size() == 2 && l.get(1).getClass().getNestHost() == net.minecraft.world.level.levelgen.OreVeinifier.class && sleep$router != null) {
+                    sleep$fillers = 2;
+                    sleep$vein = CellProof.build(sleep$router.veinToggle());
                 }
             }
-            if (probe$proofValue != null && Boolean.getBoolean("lab.genscout")) probe$measureCeiling();
+            if (sleep$proofValue != null && Boolean.getBoolean("lab.genscout")) sleep$measureCeiling();
         }
-        return probe$proofValue;
+        return sleep$proofValue;
     }
 
     /** measurement (lab.genscout): rows of corner columns provably negative above a ceiling, best interpolator */
     @Unique
-    private void probe$measureCeiling() {
+    private void sleep$measureCeiling() {
         long best = -1, rows = 0;
         for (NoiseChunk.NoiseInterpolator it : interpolators) {
             DensityFunction inner;

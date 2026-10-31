@@ -23,12 +23,12 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 @Mixin(Util.class)
 public abstract class PersistentPoolsMixin {
     @Inject(method = "makeIoExecutor", at = @At("HEAD"), cancellable = true)
-    private static void probe$persistentIo(String name, boolean daemon, CallbackInfoReturnable<ExecutorService> cir) {
+    private static void sleep$persistentIo(String name, boolean daemon, CallbackInfoReturnable<ExecutorService> cir) {
         cir.setReturnValue(PersistentPools.io(name, daemon));
     }
 
     @Inject(method = "makeExecutor", at = @At("HEAD"), cancellable = true)
-    private static void probe$persistentBackground(String serviceName, CallbackInfoReturnable<ExecutorService> cir) {
+    private static void sleep$persistentBackground(String serviceName, CallbackInfoReturnable<ExecutorService> cir) {
         ExecutorService pool = PersistentPools.background(serviceName);
         if (pool != null) cir.setReturnValue(pool);
     }

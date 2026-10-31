@@ -107,7 +107,7 @@ public final class ShapePurity {
         }
         if (why == null) accepted++;
         else rejected++;
-        if (LOG) System.out.println("[probe/opt] shape " + c.getName() + ": " + (why == null ? "STATIC" : "vanilla (" + why + ")"));
+        if (LOG) System.out.println("[sleep/opt] shape " + c.getName() + ": " + (why == null ? "STATIC" : "vanilla (" + why + ")"));
         return why == null;
     }
 

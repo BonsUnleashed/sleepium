@@ -66,10 +66,10 @@ public final class BlockCollisionMemo {
                         for (int x = ax; x <= bx; x++)
                             for (int y = ay; y <= by; y++)
                                 for (int z = az; z <= bz; z++)
-                                    if (!((StaticShape) s.getBlockState(x & 15, y & 15, z & 15)).probe$staticShape()) return false;
+                                    if (!((StaticShape) s.getBlockState(x & 15, y & 15, z & 15)).sleep$staticShape()) return false;
                     }
                     m.sections[k] = s;
-                    m.mods[k] = ((Counted) s).probe$mod();
+                    m.mods[k] = ((Counted) s).sleep$mod();
                     k++;
                 }
             }
@@ -108,7 +108,7 @@ public final class BlockCollisionMemo {
                     if (idx < 0 || idx >= chunk.getSections().length) continue;
                     if (k == m.n) return false;
                     LevelChunkSection s = chunk.getSection(idx);
-                    if (m.sections[k] != s || m.mods[k] != ((Counted) s).probe$mod()) return false;
+                    if (m.sections[k] != s || m.mods[k] != ((Counted) s).sleep$mod()) return false;
                     k++;
                 }
             }
@@ -140,26 +140,26 @@ public final class BlockCollisionMemo {
 
     /** Implemented on Entity: one slot per memoized query. */
     public interface Holder {
-        BlockCollisionMemo probe$collisionMemo();
+        BlockCollisionMemo sleep$collisionMemo();
 
-        void probe$setCollisionMemo(BlockCollisionMemo m);
+        void sleep$setCollisionMemo(BlockCollisionMemo m);
 
-        BlockCollisionMemo probe$collideMemo();
+        BlockCollisionMemo sleep$collideMemo();
 
-        void probe$setCollideMemo(BlockCollisionMemo m);
+        void sleep$setCollideMemo(BlockCollisionMemo m);
 
-        BlockCollisionMemo probe$supportMemo();
+        BlockCollisionMemo sleep$supportMemo();
 
-        void probe$setSupportMemo(BlockCollisionMemo m);
+        void sleep$setSupportMemo(BlockCollisionMemo m);
     }
 
     /** Implemented on LevelChunkSection: bumped on every block-state write. */
     public interface Counted {
-        int probe$mod();
+        int sleep$mod();
     }
 
     /** Implemented on BlockState (ShapeCacheMixin): collision shape proven to depend on the state alone. */
     public interface StaticShape {
-        boolean probe$staticShape();
+        boolean sleep$staticShape();
     }
 }

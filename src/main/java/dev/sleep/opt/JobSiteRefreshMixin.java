@@ -13,7 +13,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(Villager.class)
 public abstract class JobSiteRefreshMixin {
     @Inject(method = "refreshBrain", at = @At("HEAD"))
-    private void probe$refresh(ServerLevel level, CallbackInfo ci) {
-        ((JobSiteBrainAccess) ((Villager) (Object) this).getBrain()).probe$release();
+    private void sleep$refresh(ServerLevel level, CallbackInfo ci) {
+        ((JobSiteBrainAccess) ((Villager) (Object) this).getBrain()).sleep$release();
     }
 }

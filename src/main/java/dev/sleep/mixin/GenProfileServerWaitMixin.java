@@ -10,7 +10,7 @@ import org.spongepowered.asm.mixin.Mixin;
 @Mixin(MinecraftServer.class)
 public abstract class GenProfileServerWaitMixin {
     @WrapMethod(method = "waitForTasks")
-    private void probe$wait(Operation<Void> original) {
+    private void sleep$wait(Operation<Void> original) {
         if (!GenProfile.active()) { original.call(); return; }
         long t = System.nanoTime();
         original.call();

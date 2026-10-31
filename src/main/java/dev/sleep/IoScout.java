@@ -6,13 +6,13 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.LongAdder;
 
 /**
- * Measurement only (-Dprobe.ioScout=true): how the IOWorker mailboxes drain their write queues. Per storage type
+ * Measurement only (-Dsleep.ioScout=true): how the IOWorker mailboxes drain their write queues. Per storage type
  * (chunk / entities / poi): stores posted (producer), chunks written (consumer), time per write split into the whole
  * runStore (NBT + compression + disk), RegionFile.write (disk) and its header write, the pendingWrites size seen by the
- * writer. Logged every 5 s as "[probe/io]".
+ * writer. Logged every 5 s as "[sleep/io]".
  */
 public final class IoScout {
-    public static final boolean ON = Boolean.getBoolean("probe.ioScout");
+    public static final boolean ON = Boolean.getBoolean("sleep.ioScout");
 
     public static final class Kind {
         final LongAdder stores = new LongAdder(), loads = new LongAdder(), reads = new LongAdder(), readNs = new LongAdder();
@@ -86,7 +86,7 @@ public final class IoScout {
             Thread t = new Thread(() -> {
                 while (true) {
                     try { Thread.sleep(5000); } catch (InterruptedException e) { return; }
-                    StringBuilder sb = new StringBuilder("[probe/io] 5 s:");
+                    StringBuilder sb = new StringBuilder("[sleep/io] 5 s:");
                     KINDS.forEach((type, k) -> {
                         long st = k.stores.sumThenReset(), ld = k.loads.sumThenReset(), w = k.writes.sumThenReset(), rd = k.reads.sumThenReset(), rn = k.readNs.sumThenReset();
                         long wn = k.writeNs.sumThenReset(), dn = k.diskNs.sumThenReset(), hn = k.headerNs.sumThenReset();
@@ -99,7 +99,7 @@ public final class IoScout {
                     });
                     SleepMod.LOGGER.info(sb.toString());
                 }
-            }, "probe-io-scout");
+            }, "sleep-io-scout");
             t.setDaemon(true);
             t.start();
         }

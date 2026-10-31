@@ -22,12 +22,12 @@ public abstract class PartBatchMixin implements PartBatch.PartCompiler {
 
     @Redirect(method = "render(Lcom/mojang/blaze3d/vertex/PoseStack;Lcom/mojang/blaze3d/vertex/VertexConsumer;III)V", at = @At(value = "INVOKE",
             target = "Lnet/minecraft/client/model/geom/ModelPart;compile(Lcom/mojang/blaze3d/vertex/PoseStack$Pose;Lcom/mojang/blaze3d/vertex/VertexConsumer;III)V"))
-    private void probe$compile(ModelPart self, PoseStack.Pose pose, VertexConsumer buffer, int light, int overlay, int color) {
+    private void sleep$compile(ModelPart self, PoseStack.Pose pose, VertexConsumer buffer, int light, int overlay, int color) {
         if (!PartBatch.capture(self, pose, buffer, light, overlay, color, this)) compile(pose, buffer, light, overlay, color);
     }
 
     @Override
-    public void probe$geometry(PoseStack.Pose pose, VertexConsumer consumer) {
+    public void sleep$geometry(PoseStack.Pose pose, VertexConsumer consumer) {
         compile(pose, consumer, 0, 0, -1);
     }
 }

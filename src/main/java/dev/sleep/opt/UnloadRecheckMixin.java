@@ -24,9 +24,9 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
  */
 @Mixin(ChunkMap.class)
 public abstract class UnloadRecheckMixin {
-    @Unique private final Long2ObjectLinkedOpenHashMap<ChunkHolder> probe$recheck = new Long2ObjectLinkedOpenHashMap<>();
-    @Unique private long probe$lastLog;
-    @Unique private int probe$deferred;
+    @Unique private final Long2ObjectLinkedOpenHashMap<ChunkHolder> sleep$recheck = new Long2ObjectLinkedOpenHashMap<>();
+    @Unique private long sleep$lastLog;
+    @Unique private int sleep$deferred;
 
     @Shadow @org.spongepowered.asm.mixin.Final net.minecraft.server.level.ServerLevel level;
 
@@ -37,22 +37,22 @@ public abstract class UnloadRecheckMixin {
 
     @Redirect(method = "lambda$scheduleUnload$12", at = @At(value = "INVOKE",
             target = "Lnet/minecraft/server/level/ChunkMap;scheduleUnload(JLnet/minecraft/server/level/ChunkHolder;)V"))
-    private void probe$later(ChunkMap self, long chunkPos, ChunkHolder holder) {
-        probe$recheck.put(chunkPos, holder);   // main thread (the unload queue runs there)
-        probe$deferred++;
+    private void sleep$later(ChunkMap self, long chunkPos, ChunkHolder holder) {
+        sleep$recheck.put(chunkPos, holder);   // main thread (the unload queue runs there)
+        sleep$deferred++;
     }
 
     @Inject(method = "processUnloads", at = @At("HEAD"))
-    private void probe$recheckNow(BooleanSupplier hasMoreTime, CallbackInfo ci) {
-        if (probe$recheck.isEmpty()) return;
+    private void sleep$recheckNow(BooleanSupplier hasMoreTime, CallbackInfo ci) {
+        if (sleep$recheck.isEmpty()) return;
         long now = System.nanoTime();
-        if (!level.getServer().isRunning() && now - probe$lastLog > 2_000_000_000L) {
-            probe$lastLog = now;
-            System.out.println("[probe/opt] unload recheck while stopping: " + probe$recheck.size() + " chunks wait for their generation ("
-                    + probe$deferred + " deferrals so far); " + dev.sleep.optsupport.FullRing.debug());
+        if (!level.getServer().isRunning() && now - sleep$lastLog > 2_000_000_000L) {
+            sleep$lastLog = now;
+            System.out.println("[sleep/opt] unload recheck while stopping: " + sleep$recheck.size() + " chunks wait for their generation ("
+                    + sleep$deferred + " deferrals so far); " + dev.sleep.optsupport.FullRing.debug());
         }
-        Long2ObjectLinkedOpenHashMap<ChunkHolder> due = probe$recheck.clone();
-        probe$recheck.clear();
+        Long2ObjectLinkedOpenHashMap<ChunkHolder> due = sleep$recheck.clone();
+        sleep$recheck.clear();
         for (var e : due.long2ObjectEntrySet()) scheduleUnload(e.getLongKey(), e.getValue());
     }
 }

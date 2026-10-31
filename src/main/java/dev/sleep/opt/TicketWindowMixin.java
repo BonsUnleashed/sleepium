@@ -10,7 +10,7 @@ import org.spongepowered.asm.mixin.injection.ModifyArg;
 public abstract class TicketWindowMixin {
     @ModifyArg(method = "<init>", at = @At(value = "INVOKE",
             target = "Lnet/minecraft/server/level/ChunkTaskPriorityQueueSorter;<init>(Ljava/util/List;Ljava/util/concurrent/Executor;I)V"), index = 2)
-    private int probe$window(int vanilla) {
+    private int sleep$window(int vanilla) {
         return Integer.getInteger("lab.ticketWindow", vanilla);
     }
 }

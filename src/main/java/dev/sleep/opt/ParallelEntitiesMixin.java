@@ -19,12 +19,12 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 public abstract class ParallelEntitiesMixin {
     @Redirect(method = "renderLevel", at = @At(value = "INVOKE",
             target = "Lnet/minecraft/client/renderer/LevelRenderer;renderEntity(Lnet/minecraft/world/entity/Entity;DDDFLcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/MultiBufferSource;)V"))
-    private void probe$queue(LevelRenderer self, Entity e, double camX, double camY, double camZ, float pt, PoseStack pose, MultiBufferSource buffers) {
+    private void sleep$queue(LevelRenderer self, Entity e, double camX, double camY, double camZ, float pt, PoseStack pose, MultiBufferSource buffers) {
         ParallelRender.enqueue(self, e, camX, camY, camZ, pt, pose, buffers);
     }
 
     @Inject(method = "renderLevel", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/MultiBufferSource$BufferSource;endLastBatch()V", ordinal = 0))
-    private void probe$drain(CallbackInfo ci) {
+    private void sleep$drain(CallbackInfo ci) {
         ParallelRender.drain((LevelRenderer) (Object) this);
     }
 }

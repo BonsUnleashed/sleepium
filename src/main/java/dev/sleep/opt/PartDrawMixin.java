@@ -13,7 +13,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(VertexBuffer.class)
 public abstract class PartDrawMixin {
     @Inject(method = "_drawWithShader", at = @At(value = "INVOKE", target = "Lcom/mojang/blaze3d/vertex/VertexBuffer;draw()V", shift = At.Shift.AFTER))
-    private void probe$parts(Matrix4f modelView, Matrix4f projection, ShaderInstance shader, CallbackInfo ci) {
+    private void sleep$parts(Matrix4f modelView, Matrix4f projection, ShaderInstance shader, CallbackInfo ci) {
         PartBatch.afterDraw(shader);
     }
 }

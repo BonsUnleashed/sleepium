@@ -20,7 +20,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 @Mixin(ChunkMap.class)
 public abstract class ParallelWorldgenMixin {
     @Inject(method = "applyStep", at = @At("HEAD"), cancellable = true)
-    private void probe$offload(GenerationChunkHolder chunk, ChunkStep step, StaticCache2D<GenerationChunkHolder> cache,
+    private void sleep$offload(GenerationChunkHolder chunk, ChunkStep step, StaticCache2D<GenerationChunkHolder> cache,
                                CallbackInfoReturnable<CompletableFuture<ChunkAccess>> cir) {
         if (ParallelGen.shouldOffload(step)) {
             ChunkMap self = (ChunkMap) (Object) this;

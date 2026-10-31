@@ -16,12 +16,12 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 @Mixin(LivingEntity.class)
 public abstract class MoveMemoHurtMixin {
     @Inject(method = "hurt", at = @At("HEAD"))
-    private void probe$hurtIn(DamageSource src, float amount, CallbackInfoReturnable<Boolean> cir) {
+    private void sleep$hurtIn(DamageSource src, float amount, CallbackInfoReturnable<Boolean> cir) {
         MoveMemo.readerRan((LivingEntity) (Object) this);
     }
 
     @Inject(method = "setLastHurtByMob", at = @At("HEAD"))
-    private void probe$hurt(LivingEntity by, CallbackInfo ci) {
+    private void sleep$hurt(LivingEntity by, CallbackInfo ci) {
         MoveMemo.readerRan((LivingEntity) (Object) this);
     }
 }

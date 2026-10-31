@@ -12,12 +12,12 @@ import software.bernie.geckolib.loading.object.BakedAnimations;
 @Mixin(targets = "software.bernie.geckolib.loading.FileLoader", remap = false)
 public abstract class AnimStreamMixin {
     @Inject(method = "loadAnimationsFile", at = @At("HEAD"), cancellable = true)
-    private static void probe$stream(ResourceLocation location, ResourceManager manager, CallbackInfoReturnable<BakedAnimations> cir) {
+    private static void sleep$stream(ResourceLocation location, ResourceManager manager, CallbackInfoReturnable<BakedAnimations> cir) {
         if (!location.getPath().endsWith(".animation.json")) return;   // (GeckoLib's own checks and messages for the rest)
         try {
             cir.setReturnValue(dev.sleep.optsupport.AnimStream.load(location, manager));
         } catch (Exception e) {
-            System.out.println("[probe/opt] animation stream " + location + ": " + e + " - GeckoLib's own load");
+            System.out.println("[sleep/opt] animation stream " + location + ": " + e + " - GeckoLib's own load");
         }
     }
 }

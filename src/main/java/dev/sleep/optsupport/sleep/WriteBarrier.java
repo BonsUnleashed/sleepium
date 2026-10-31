@@ -19,7 +19,7 @@ import org.spongepowered.asm.mixin.transformer.ClassInfo;
  * hierarchy (the entity, its goals, controls, navigation, ...) outside constructors gets a call {@code WB.w<root>(obj,
  * id)} in front of it. The call is a static method the JIT inlines into a load of the object's watcher (constant
  * offset) and a null check; the watcher (a sleeping or observed mob's part) hears the write only when it is set.
- * The roots get the watcher as a new field {@code probe$w}. No branches or locals are added to the method, so its stack
+ * The roots get the watcher as a new field {@code sleep$w}. No branches or locals are added to the method, so its stack
  * map frames stay valid; only the stack grows by two.
  * Run from OptMixinPlugin.postApply for WriteBarrierMixin's targets (applied last, so other mixins' merged handlers
  * are covered too).
@@ -41,7 +41,7 @@ public final class WriteBarrier {
             "net/minecraft/world/entity/ai/sensing/Sensing",
             "net/minecraft/world/entity/WalkAnimationState",
             "net/minecraft/world/entity/ItemBasedSteering"};
-    public static final String FIELD = "probe$w";
+    public static final String FIELD = "sleep$w";
     private static final Map<String, Integer> ROOT_OF = new HashMap<>();
     public static int sites, classes, draws;
     /** -Dlab.wb.drawSites=false: no draw site numbers (MobSleep.draw walks the stack) */
@@ -162,6 +162,6 @@ public final class WriteBarrier {
         sites += n;
         classes++;
         if (DRAW_SITES) drawSites(cn);
-        if (WBIds.VERBOSE) System.out.println("[probe/wb] " + cn.name + ": " + n + " write sites");
+        if (WBIds.VERBOSE) System.out.println("[sleep/wb] " + cn.name + ": " + n + " write sites");
     }
 }

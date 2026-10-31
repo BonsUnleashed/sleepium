@@ -13,14 +13,14 @@ import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.ai.goal.WrappedGoal;
 
 /**
- * Measurement only (-Dprobe.componentShadow=true, ComponentShadowMixin): which fields of a mob's owned components change
+ * Measurement only (-Dsleep.componentShadow=true, ComponentShadowMixin): which fields of a mob's owned components change
  * from one tick to the next - the look / move / jump / body rotation controls, the navigation, the sensing, both goal
  * selectors and every goal in them. The state a whole-tick mob sleep would have to watch or model beyond the entity's
  * own fields. Per mob class and component field: the share of ticks it changed, all ticks and quiet ticks (the
  * entity's position, rotations and motion unchanged). Printed every 600 game ticks.
  */
 public final class ComponentShadow {
-    public static final boolean ON = Boolean.getBoolean("probe.componentShadow");
+    public static final boolean ON = Boolean.getBoolean("sleep.componentShadow");
     private static final String[] COMPONENTS = {"lookControl", "moveControl", "jumpControl", "bodyRotationControl", "navigation", "sensing", "goalSelector", "targetSelector"};
     private static final Map<Class<?>, List<Field>> FIELDS = new HashMap<>();
     private static final Map<Integer, Map<String, Long>> LAST = new HashMap<>();
@@ -36,7 +36,7 @@ public final class ComponentShadow {
             List<Field> l = new ArrayList<>();
             for (Class<?> x = k; x != null && x != Object.class; x = x.getSuperclass())
                 for (Field f : x.getDeclaredFields()) {
-                    if (f.getName().equals("probe$w")) continue;   // the write barrier's watcher (WriteBarrier), not state
+                    if (f.getName().equals("sleep$w")) continue;   // the write barrier's watcher (WriteBarrier), not state
                     if (Modifier.isStatic(f.getModifiers())) continue;
                     try {
                         f.setAccessible(true);
@@ -113,7 +113,7 @@ public final class ComponentShadow {
     }
 
     private static void print() {
-        StringBuilder sb = new StringBuilder("[probe/components] component fields changing between ticks (all ticks % / quiet ticks %), per class:");
+        StringBuilder sb = new StringBuilder("[sleep/components] component fields changing between ticks (all ticks % / quiet ticks %), per class:");
         String cur = null;
         List<Map.Entry<String, long[]>> l = new ArrayList<>(CHANGES.entrySet());
         l.sort((a, b) -> {

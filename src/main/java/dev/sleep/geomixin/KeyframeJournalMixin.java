@@ -18,19 +18,19 @@ import software.bernie.geckolib.animation.keyframe.event.SoundKeyframeEvent;
 public abstract class KeyframeJournalMixin {
     @Redirect(method = "processCurrentAnimation", at = @At(value = "INVOKE",
             target = "Lsoftware/bernie/geckolib/animation/AnimationController$SoundKeyframeHandler;handle(Lsoftware/bernie/geckolib/animation/keyframe/event/SoundKeyframeEvent;)V"))
-    private void probe$sound(AnimationController.SoundKeyframeHandler h, SoundKeyframeEvent e) {
+    private void sleep$sound(AnimationController.SoundKeyframeHandler h, SoundKeyframeEvent e) {
         if (!ParallelRender.journal(() -> h.handle(e))) h.handle(e);
     }
 
     @Redirect(method = "processCurrentAnimation", at = @At(value = "INVOKE",
             target = "Lsoftware/bernie/geckolib/animation/AnimationController$ParticleKeyframeHandler;handle(Lsoftware/bernie/geckolib/animation/keyframe/event/ParticleKeyframeEvent;)V"))
-    private void probe$particle(AnimationController.ParticleKeyframeHandler h, ParticleKeyframeEvent e) {
+    private void sleep$particle(AnimationController.ParticleKeyframeHandler h, ParticleKeyframeEvent e) {
         if (!ParallelRender.journal(() -> h.handle(e))) h.handle(e);
     }
 
     @Redirect(method = "processCurrentAnimation", at = @At(value = "INVOKE",
             target = "Lsoftware/bernie/geckolib/animation/AnimationController$CustomKeyframeHandler;handle(Lsoftware/bernie/geckolib/animation/keyframe/event/CustomInstructionKeyframeEvent;)V"))
-    private void probe$custom(AnimationController.CustomKeyframeHandler h, CustomInstructionKeyframeEvent e) {
+    private void sleep$custom(AnimationController.CustomKeyframeHandler h, CustomInstructionKeyframeEvent e) {
         if (!ParallelRender.journal(() -> h.handle(e))) h.handle(e);
     }
 }

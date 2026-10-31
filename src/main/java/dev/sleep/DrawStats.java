@@ -7,12 +7,12 @@ import java.util.Locale;
 import java.util.Map;
 
 /**
- * -Dprobe.drawStats=true (client, measured window only): immediate-mode draws per frame by render type (draw calls,
+ * -Dsleep.drawStats=true (client, measured window only): immediate-mode draws per frame by render type (draw calls,
  * vertices, vertex bytes re-uploaded) and render-thread time per object by entity / block entity class. The answer to
  * "why does looking at a few hundred objects cost more than the whole terrain".
  */
 public final class DrawStats {
-    public static final boolean ON = Boolean.getBoolean("probe.drawStats");
+    public static final boolean ON = Boolean.getBoolean("sleep.drawStats");
     static boolean active;
     static long frames;
     private static final Map<String, long[]> TYPES = new HashMap<>();     // draws, vertices, bytes
