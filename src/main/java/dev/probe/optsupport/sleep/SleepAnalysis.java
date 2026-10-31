@@ -1454,19 +1454,16 @@ final class SleepAnalysis {
                         }
                 return false;
             }
-            for (Class<?> c = at.getClass(); c != null && c != Object.class; c = c.getSuperclass())
-                try {
-                    Field f = c.getDeclaredField(name);
-                    f.setAccessible(true);
-                    Object v = f.get(at);
-                    if (g.startsWith("null:")) return v == null;
-                    if (g.startsWith("empty:")) return v instanceof java.util.Collection<?> cc ? cc.isEmpty() : v instanceof java.util.Map<?, ?> mm && mm.isEmpty();
-                    if (g.startsWith("le0:")) return v instanceof Number n && n.longValue() <= 0;
-                    if (g.startsWith("ge0:")) return v instanceof Number n && n.longValue() >= 0;
-                    return v instanceof Boolean b ? !b : v instanceof Number n && n.longValue() == 0;
-                } catch (NoSuchFieldException e) {
-                    // the superclass
-                }
+            Field gf = fieldIn(at.getClass(), name);
+            if (gf != null) {
+                gf.setAccessible(true);
+                Object v = gf.get(at);
+                if (g.startsWith("null:")) return v == null;
+                if (g.startsWith("empty:")) return v instanceof java.util.Collection<?> cc ? cc.isEmpty() : v instanceof java.util.Map<?, ?> mm && mm.isEmpty();
+                if (g.startsWith("le0:")) return v instanceof Number n && n.longValue() <= 0;
+                if (g.startsWith("ge0:")) return v instanceof Number n && n.longValue() >= 0;
+                return v instanceof Boolean b ? !b : v instanceof Number n && n.longValue() == 0;
+            }
         } catch (ReflectiveOperationException | RuntimeException e) {
             return false;
         }
@@ -1778,13 +1775,7 @@ final class SleepAnalysis {
      * state - its value now is a moment of the sample, never a context.
      */
     private boolean effectivelyFinal(Class<?> holder, String name) {
-        Field fd = null;
-        for (Class<?> c = holder; c != null && c != Object.class && fd == null; c = c.getSuperclass())
-            try {
-                fd = c.getDeclaredField(name);
-            } catch (NoSuchFieldException e) {
-                // the superclass
-            }
+        Field fd = fieldIn(holder, name);
         if (fd == null) return false;
         if (java.lang.reflect.Modifier.isFinal(fd.getModifiers())) return true;
         return !writtenAny.contains(internal(fd.getDeclaringClass()) + "." + name);
@@ -1798,13 +1789,7 @@ final class SleepAnalysis {
     private boolean ctorOwned(Class<?> holder, String name, Object v) {
         if (v == null || v instanceof net.minecraft.world.entity.Entity || v instanceof java.util.Collection<?> || v instanceof java.util.Map<?, ?>
                 || v.getClass().isHidden() || v.getClass().isArray() || v.getClass().isEnum()) return false;
-        Field fd = null;
-        for (Class<?> c = holder; c != null && c != Object.class && fd == null; c = c.getSuperclass())
-            try {
-                fd = c.getDeclaredField(name);
-            } catch (NoSuchFieldException e) {
-                // the superclass
-            }
+        Field fd = fieldIn(holder, name);
         if (fd == null || !java.lang.reflect.Modifier.isFinal(fd.getModifiers()) || java.lang.reflect.Modifier.isStatic(fd.getModifiers())) return false;
         String decl = internal(fd.getDeclaringClass());
         return ctorOwnedCache.computeIfAbsent(decl + "." + name, k -> {
@@ -1845,29 +1830,53 @@ final class SleepAnalysis {
     }
 
     private static boolean finalField(Object o, String name) {
-        for (Class<?> c = o.getClass(); c != null && c != Object.class; c = c.getSuperclass())
-            try {
-                return java.lang.reflect.Modifier.isFinal(c.getDeclaredField(name).getModifiers());
-            } catch (NoSuchFieldException e) {
-                // the superclass
-            }
-        return false;
+        Field f = fieldIn(o.getClass(), name);
+        return f != null && java.lang.reflect.Modifier.isFinal(f.getModifiers());
     }
 
     private static Object fieldValue(Object o, String name) {
-        for (Class<?> c = o.getClass(); c != null && c != Object.class; c = c.getSuperclass()) {
+        Field f = fieldIn(o.getClass(), name);
+        if (f == null || java.lang.reflect.Modifier.isStatic(f.getModifiers())) return null;
+        try {
+            f.setAccessible(true);
+            return f.get(o);
+        } catch (ReflectiveOperationException | RuntimeException e) {
+            return null;
+        }
+    }
+
+    /**
+     * Per class: each field name to the field a lookup from that class finds (declared there or in the nearest
+     * superclass, Object excluded) - getDeclaredField copies the class's fields on every call and throws (a stack
+     * trace) for each superclass it is not in: the analysis allocated ~20 GB that way.
+     */
+    private static final ClassValue<Map<String, Field>> FIELDS_IN = new ClassValue<>() {
+        @Override
+        protected Map<String, Field> computeValue(Class<?> c) {
+            Map<String, Field> m = c.getSuperclass() == null || c.getSuperclass() == Object.class ? new HashMap<>() : new HashMap<>(FIELDS_IN.get(c.getSuperclass()));
+            for (Field f : declaredFields(c)) m.put(f.getName(), f);
+            return m;
+        }
+    };
+    private static final ClassValue<Field[]> DECLARED = new ClassValue<>() {
+        @Override
+        protected Field[] computeValue(Class<?> c) {
             try {
-                Field f = c.getDeclaredField(name);
-                if (java.lang.reflect.Modifier.isStatic(f.getModifiers())) return null;
-                f.setAccessible(true);
-                return f.get(o);
-            } catch (NoSuchFieldException e) {
-                // the superclass
-            } catch (ReflectiveOperationException | RuntimeException e) {
-                return null;
+                return c.getDeclaredFields();
+            } catch (Throwable e) {   // a field type that does not load
+                return new Field[0];
             }
         }
-        return null;
+    };
+
+    /** the field a lookup of {@code name} from class c finds, or null */
+    static Field fieldIn(Class<?> c, String name) {
+        return c == Object.class ? null : FIELDS_IN.get(c).get(name);
+    }
+
+    /** c.getDeclaredFields(), once per class (the array is shared: not to be changed) */
+    static Field[] declaredFields(Class<?> c) {
+        return DECLARED.get(c);
     }
 
     private static Set<String> chainOf(Class<?> c) {
@@ -1907,7 +1916,7 @@ final class SleepAnalysis {
                 return false;
             }
             for (Class<?> c = ctxObj.getClass(); c != null && c != Object.class; c = c.getSuperclass())
-                for (Field f : c.getDeclaredFields()) {
+                for (Field f : declaredFields(c)) {
                     if (f.getName().equals("probe$w")) continue;   // the write barrier's watcher (WriteBarrier), not state
                     if (java.lang.reflect.Modifier.isStatic(f.getModifiers()) || !java.util.Collection.class.isAssignableFrom(f.getType())
                             || !effectivelyFinal(ctxObj.getClass(), f.getName())) continue;
@@ -2456,16 +2465,10 @@ final class SleepAnalysis {
     }
 
     private static Field field(Class<?> c, String name) {
-        for (Class<?> x = c; x != null; x = x.getSuperclass()) {
-            try {
-                Field f = x.getDeclaredField(name);
-                if (Modifier.isStatic(f.getModifiers())) return null;
-                f.setAccessible(true);
-                return f;
-            } catch (NoSuchFieldException ignored) {
-            }
-        }
-        return null;
+        Field f = fieldIn(c, name);
+        if (f == null || Modifier.isStatic(f.getModifiers())) return null;
+        f.setAccessible(true);
+        return f;
     }
 
     static String internal(Class<?> c) {
