@@ -152,14 +152,12 @@ public final class WB {
     private static long reportAt = 400;
 
     static void hit(Object o, int id, Object w) {
-        if (w instanceof EntitySleep.PartWatch pw) {
-            EntitySleep.onWrite(pw, id);
-            return;
-        }
-        if (w instanceof EntitySleep.SharedWatch sw) {
-            EntitySleep.onWrite(sw, id);
-            return;
-        }
+        if (w instanceof EntitySleep.PartWatch pw) pw.write(id);
+        else if (w instanceof EntitySleep.SharedWatch sw) EntitySleep.onWrite(sw, id);
+        else sampleHit(o, id);
+    }
+
+    private static void sampleHit(Object o, int id) {
         if (cur == null) {
             hitsOut++;
             outBy = grow(outBy, id);

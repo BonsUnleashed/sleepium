@@ -80,7 +80,7 @@ final class MobSleep {
      * last class seen at that step (an immutable pair, swapped whole: the analysis resolves paths on its own thread).
      */
     private static final class Path {
-        private record Hop(Class<?> cls, Field f) {}
+        private record Hop(Class<?> cls, Field f, long off) {}   // off: the reference field's offset (-1: through f)
 
         final String[] names;
         final int[] index;
@@ -98,30 +98,52 @@ final class MobSleep {
             }
         }
 
+        // resolveAll's paths share their collections (goalSelector.availableGoals[0..n]): each one is walked once per
+        // call (server thread: the only caller of resolveAll; single paths elsewhere walk the collection)
+        private static final Object[] MEMO_COL = new Object[4];
+        private static final Object[][] MEMO_ELS = new Object[4][];
+        private static int memoN;
+        static boolean memoOn;
+
+        static void memoClear() {
+            for (int i = 0; i < memoN; i++) {
+                MEMO_COL[i] = null;
+                MEMO_ELS[i] = null;
+            }
+            memoN = 0;
+        }
+
+        private static Object[] memo(java.util.Collection<?> col) {
+            if (!memoOn) return col.toArray();
+            for (int i = 0; i < memoN; i++) if (MEMO_COL[i] == col) return MEMO_ELS[i];
+            Object[] els = col.toArray();
+            if (memoN < MEMO_COL.length) {
+                MEMO_COL[memoN] = col;
+                MEMO_ELS[memoN++] = els;
+            }
+            return els;
+        }
+
         Object get(Object root) {
             Object o = root;
             for (int i = 0; i < names.length; i++) {
                 if (o == null) return null;
                 Hop h = hops[i];
                 Class<?> c = o.getClass();
-                if (h == null || h.cls != c) hops[i] = h = new Hop(c, field(c, names[i]));
+                if (h == null || h.cls != c) {
+                    Field f = field(c, names[i]);
+                    hops[i] = h = new Hop(c, f, f != null && !f.getType().isPrimitive() && SnapCompiler.U != null ? SnapCompiler.U.objectFieldOffset(f) : -1);
+                }
                 try {
-                    o = h.f == null ? null : h.f.get(o);
+                    o = h.f == null ? null : h.off >= 0 ? SnapCompiler.U.getObject(o, h.off) : h.f.get(o);
                 } catch (IllegalAccessException e) {
                     return null;
                 }
                 int k = index[i];
                 if (k >= 0) {
                     if (!(o instanceof java.util.Collection<?> col)) return null;
-                    Object el = null;
-                    int j = 0;
-                    for (Object x : col) {
-                        if (j++ == k) {
-                            el = x;
-                            break;
-                        }
-                    }
-                    o = el;
+                    Object[] els = memo(col);
+                    o = k < els.length ? els[k] : null;
                 }
             }
             return o;
@@ -184,9 +206,30 @@ final class MobSleep {
         final SnapCompiler.Snapper all;
         final boolean[] prim, special;
         final int[] refAll;   // every reference slot
+        final int[] order, parentPart;   // resolution: parts by depth, each from its nearest part ancestor
+        final Path[] rel;                // ... by the path from that ancestor (one hop for most)
 
         Composite(Part[] parts, List<Field> fields, boolean[] special) {
             this.parts = parts;
+            int np = parts.length;
+            parentPart = new int[np];
+            rel = new Path[np];
+            Integer[] ord = new Integer[np];
+            for (int k = 0; k < np; k++) {
+                ord[k] = k;
+                String pk = parts[k].path;
+                int best = -1;
+                for (int j = 0; j < np; j++) {
+                    String pj = parts[j].path;
+                    if (j == k || pj.length() >= pk.length() || !(pj.isEmpty() || pk.startsWith(pj + "."))) continue;
+                    if (best < 0 || pj.length() > parts[best].path.length()) best = j;
+                }
+                parentPart[k] = best;
+                if (!pk.isEmpty()) rel[k] = new Path(best < 0 || parts[best].path.isEmpty() ? pk : pk.substring(parts[best].path.length() + 1));
+            }
+            java.util.Arrays.sort(ord, java.util.Comparator.comparingInt(k -> parts[k].path.isEmpty() ? 0 : (int) parts[k].path.chars().filter(ch -> ch == '.').count() + 1));
+            order = new int[np];
+            for (int k = 0; k < np; k++) order[k] = ord[k];
             Part last = parts[parts.length - 1];
             n = last.off + last.f.length;
             partOf = new int[n];
@@ -368,9 +411,21 @@ final class MobSleep {
         /** the parts' objects for an entity, or null if one is missing or of another class than the plan's */
         Object[] resolveAll(Entity e) {
             Object[] o = new Object[parts.length];
-            for (int k = 0; k < parts.length; k++) {
-                o[k] = resolve(e, parts[k].path);
-                if (o[k] == null || o[k].getClass() != parts[k].cls) return null;
+            Path.memoOn = true;
+            try {
+                for (int k : order) {
+                    if (parts[k].path.isEmpty()) {
+                        o[k] = e;
+                    } else {
+                        int pk = parentPart[k];
+                        Object base = pk < 0 ? e : o[pk];
+                        o[k] = base == null ? null : rel[k].get(base);
+                    }
+                    if (o[k] == null || o[k].getClass() != parts[k].cls) return null;
+                }
+            } finally {
+                Path.memoOn = false;
+                Path.memoClear();
             }
             return o;
         }
@@ -387,11 +442,16 @@ final class MobSleep {
 
     /** null when every assumption of the plan holds on the entity now, else the first that does not */
     /** the plan's assumptions, each with its kind and, where the key is a slot of the composite, that slot (-1: by reflection) */
-    record Assumptions(String[] keys, byte[] kinds, int[] slots, Class<?>[] types) {}
+    /**
+     * The plan's assumptions against the composite: a key that is a slot reads the snapshot; otherwise its holder (the
+     * key's path without its last step) is taken from the parts when it is one ({@code holderPart}), else resolved, and
+     * the last step ({@code names}) read or called on it ({@code calls}: the method found per key, by holder class).
+     */
+    record Assumptions(String[] keys, byte[] kinds, int[] slots, Class<?>[] types, int[] holderPart, String[] holderPath, String[] names, Called[] calls) {}
 
     static final byte A_NULL = 0, A_ZERO = 1, A_LE0 = 2, A_GE0 = 3, A_EMPTY = 4, A_FALSE = 5;
 
-    static Assumptions compileAssumptions(SleepAnalysis.MobPlan mp, Field[] f, String[] slotPath) {
+    static Assumptions compileAssumptions(SleepAnalysis.MobPlan mp, Field[] f, String[] slotPath, String[] partPaths) {
         List<String> keys = new ArrayList<>();
         List<Byte> kinds = new ArrayList<>();
         for (String k : mp.nulls()) { keys.add(k); kinds.add(A_NULL); }
@@ -402,15 +462,19 @@ final class MobSleep {
         for (String k : mp.falseCalls()) { keys.add(k); kinds.add(A_FALSE); }
         int m = keys.size();
         byte[] kd = new byte[m];
-        int[] slots = new int[m];
+        int[] slots = new int[m], holderPart = new int[m];
+        String[] holderPath = new String[m], names = new String[m];
         Class<?>[] types = new Class<?>[m];
         for (int j = 0; j < m; j++) {
             kd[j] = kinds.get(j);
             slots[j] = -1;
-            if (kd[j] == A_FALSE) continue;
             String key = keys.get(j);
             int dot = key.lastIndexOf('.');
             String hp = dot < 0 ? "" : key.substring(0, dot), fn = dot < 0 ? key : key.substring(dot + 1);
+            holderPath[j] = hp;
+            names[j] = fn;
+            holderPart[j] = partPaths == null ? -1 : java.util.Arrays.asList(partPaths).indexOf(hp);
+            if (kd[j] == A_FALSE) continue;
             int found = -1, count = 0;
             for (int i = 0; i < f.length; i++) {
                 if (f[i].getName().equals(fn) && slotPath[i].equals(hp)) {
@@ -423,28 +487,31 @@ final class MobSleep {
                 types[j] = f[found].getType();
             }
         }
-        return new Assumptions(keys.toArray(new String[0]), kd, slots, types);
+        return new Assumptions(keys.toArray(new String[0]), kd, slots, types, holderPart, holderPath, names, new Called[m]);
     }
 
     /**
      * assumptionsFail on a snapshot of the composite just taken ({@code v} primitives in the snapshot encoding,
      * {@code r} the objects): keys that are slots read from it, the rest (deeper paths, method calls) by reflection.
      */
-    static String assumptionsFail(Assumptions a, Entity e, long[] v, Object[] r) {
+    static String assumptionsFail(Assumptions a, Entity e, long[] v, Object[] r, Object[] ctx) {
         for (int j = 0; j < a.keys.length; j++) {
             int i = a.slots[j];
             byte kind = a.kinds[j];
             String key = a.keys[j];
             boolean bad;
             if (kind == A_FALSE) {
-                bad = call(e, key);
+                bad = callOn(a, j, holder(a, j, e, ctx));
             } else if (i < 0) {
+                Object h = a.names[j].indexOf('[') >= 0 ? null : holder(a, j, e, ctx);
+                Object x = a.names[j].indexOf('[') >= 0 ? value(e, key, false) : h == null ? null : fieldValue(h, a.names[j]);
+                long nx = x instanceof Boolean b ? (b ? 1 : 0) : x instanceof Number n ? n.longValue() : x instanceof Character ch ? ch : Long.MIN_VALUE;
                 bad = switch (kind) {
-                    case A_NULL -> value(e, key, true) != null;
-                    case A_ZERO -> number(e, key) != 0;
-                    case A_LE0 -> number(e, key) > 0;
-                    case A_GE0 -> number(e, key) < 0;
-                    default -> !empty(value(e, key, false));
+                    case A_NULL -> x != null;
+                    case A_ZERO -> nx != 0;
+                    case A_LE0 -> nx > 0;
+                    case A_GE0 -> nx < 0;
+                    default -> !empty(x);
                 };
             } else if (kind == A_NULL || kind == A_EMPTY) {
                 Object o = a.types[j].isPrimitive() ? Boolean.TRUE : r[i];
@@ -459,6 +526,40 @@ final class MobSleep {
                     : kind == A_EMPTY ? "needs empty " : "needs false ") + key;
         }
         return null;
+    }
+
+    /** the object an assumption's last step applies to: a part (no path walk) or the resolved holder path */
+    private static Object holder(Assumptions a, int j, Entity e, Object[] ctx) {
+        int k = a.holderPart[j];
+        if (k >= 0 && ctx != null) return ctx[k];
+        return a.holderPath[j].isEmpty() ? e : resolve(e, a.holderPath[j]);
+    }
+
+    /** call() with the holder given and the method cached per assumption */
+    private static boolean callOn(Assumptions a, int j, Object holder) {
+        if (holder == null) return true;
+        Called last = a.calls[j];
+        if (last == null || last.cls != holder.getClass()) {
+            String name = a.names[j];
+            int hash = name.indexOf('#');
+            String mn = hash < 0 ? name : name.substring(0, hash);
+            Method m = null;
+            for (Class<?> c = holder.getClass(); c != null && c != Object.class && m == null; c = c.getSuperclass())
+                for (Method x : c.getDeclaredMethods())
+                    if (x.getName().equals(mn) && x.getReturnType() == boolean.class
+                            && (hash < 0 ? x.getParameterCount() == 0 : x.getParameterCount() == 1 && x.getParameterTypes()[0] == int.class)) {
+                        x.setAccessible(true);
+                        m = x;
+                        break;
+                    }
+            a.calls[j] = last = new Called(holder.getClass(), m, hash < 0 ? -1 : Integer.parseInt(name.substring(hash + 1)));
+        }
+        if (last.m == null) return true;
+        try {
+            return (Boolean) (last.arg < 0 ? last.m.invoke(holder) : last.m.invoke(holder, last.arg));
+        } catch (ReflectiveOperationException | RuntimeException ex) {
+            return true;
+        }
     }
 
     /** number() of a primitive slot from its snapshot encoding */

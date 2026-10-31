@@ -92,31 +92,105 @@ public final class EntitySleep {
         long[][] inline;              // {N, r}: ticks with tickCount % N == r run for real while asleep (checked after)
         int[] stillClocks = new int[0];   // clocks tested by a modulus: they must stand still
         MobSleep.Assumptions assume;  // the plan's assumptions compiled against the slots (made on first use)
+        volatile long retryAt;        // refused for the sample's momentary state: analysed again from another one then (0 unset)
         int[] clockPart;              // composite with Unsafe: per clock, its part and field offset and kind (0 int, 1 long, 2 short, 3 byte)
         long[] clockOff;
         byte[] clockKind;
         // the write barrier (BARRIER): every part's class has a watcher field, so writes into the parts mark their slots
         boolean barrier;
         long[] slotOff;               // per slot: its field's offset in its part (Unsafe)
-        int[][] slotById;             // per part: barrier field id -> slot (-1 none, -2 not looked up yet)
-        int[] clockOf;                // per slot: its index in clocks (-1 not a clock)
+        // draw conditions, per class (made on first use): the condition of each draw site id, each condition's clock or
+        // the part holding its final field, the parts holding the assumed-empty collections
+        int[] siteCond = new int[0];  // per DrawSiteIds id: the condition (-1 none, -2 two on one line, -3 not looked up)
+        int[] condClock;              // per condition: index into clocks (-1: none)
+        int[] condHolder;             // per condition: the part holding its field (-1: resolve condHolderPath)
+        String[] condHolderPath;
+        int[] emptyHolder;            // per assumed-empty key: its holder part (-1: resolve)
+        String[] emptyHolderPath, emptyName;
+        List<String> emptyKeys;
 
-        /** the slot a write into part k's field (barrier id) lands in, -1 if none */
-        int slotOfId(int k, int id) {
-            int[] t = slotById[k];
-            if (t == null || id >= t.length) {
-                int m = Math.max(WBIds.count, id + 1) + 64;
-                int[] x = new int[m];
-                java.util.Arrays.fill(x, -2);
-                if (t != null) System.arraycopy(t, 0, x, 0, t.length);
-                slotById[k] = t = x;
+        int condOfSite(int site) {
+            if (site >= siteCond.length) {
+                int old = siteCond.length;
+                siteCond = java.util.Arrays.copyOf(siteCond, Math.max(site + 1, DrawSiteIds.SITES.size()) + 16);
+                java.util.Arrays.fill(siteCond, old, siteCond.length, -3);
             }
-            int i = t[id];
-            if (i == -2) t[id] = i = lookupSlot(k, id);
-            return i;
+            int ci = siteCond[site];
+            if (ci == -3) {
+                List<Integer> cs = drawSites.get(MobSleep.SITES.get(site));
+                siteCond[site] = ci = cs == null ? -1 : cs.size() != 1 ? -2 : cs.get(0);
+            }
+            return ci;
         }
 
-        private int lookupSlot(int k, int id) {
+        void prepDraws() {
+            if (condClock != null) return;
+            int nd = mob.draws().size();
+            String[] pp = new String[comp.parts.length];
+            for (int k = 0; k < pp.length; k++) pp[k] = comp.parts[k].path;
+            List<String> partPaths = java.util.Arrays.asList(pp);
+            int[] cc = new int[nd], ch = new int[nd];
+            String[] chp = new String[nd];
+            for (int ci = 0; ci < nd; ci++) {
+                SleepAnalysis.DrawCond d = mob.draws().get(ci);
+                cc[ci] = -1;
+                String path = d.path() == null ? "" : d.path();
+                int dot = path.lastIndexOf('.');
+                String hp = dot < 0 ? "" : path.substring(0, dot);
+                chp[ci] = hp;
+                ch[ci] = partPaths.indexOf(hp);
+                if (d.other() != SleepAnalysis.DrawCond.CONST && d.other() != SleepAnalysis.DrawCond.FINAL && d.field() != null) {
+                    int slot = slot(hp, d.field());
+                    for (int q = 0; q < clocks.length; q++) if (clocks[q] == slot) cc[ci] = q;
+                }
+            }
+            List<String> em = new ArrayList<>(mob.empty());
+            int[] eh = new int[em.size()];
+            String[] ehp = new String[em.size()], en = new String[em.size()];
+            for (int q = 0; q < eh.length; q++) {
+                String k = em.get(q);
+                int dot = k.lastIndexOf('.');
+                ehp[q] = dot < 0 ? "" : k.substring(0, dot);
+                en[q] = dot < 0 ? k : k.substring(dot + 1);
+                eh[q] = partPaths.indexOf(ehp[q]);
+            }
+            condHolder = ch;
+            condHolderPath = chp;
+            emptyHolder = eh;
+            emptyHolderPath = ehp;
+            emptyName = en;
+            emptyKeys = em;
+            condClock = cc;
+        }
+
+        /** the object at a holder path: the part when it is one, else resolved from the entity */
+        Object holderOf(ES s, int part, String path) {
+            if (part >= 0 && s.ctx != null) return s.ctx[part];
+            return path.isEmpty() ? s.e : MobSleep.resolve(s.e, path);
+        }
+
+        PartSlots[] partSlots;        // per part: barrier field id -> slot
+        byte[] slotKind;              // per primitive slot: Z B C S I F J D as 0..7
+
+        /** a primitive slot's bits as the snapshots give them (SnapCompiler.toBits), straight from its part */
+        long slotBits(Object[] o, int i) {
+            Object x = o[comp.partOf[i]];
+            long off = slotOff[i];
+            sun.misc.Unsafe u = SnapCompiler.U;
+            return switch (slotKind[i]) {
+                case 0 -> u.getBoolean(x, off) ? 1 : 0;
+                case 1 -> u.getByte(x, off);
+                case 2 -> u.getChar(x, off);
+                case 3 -> u.getShort(x, off);
+                case 4 -> u.getInt(x, off);
+                case 5 -> Float.floatToRawIntBits(u.getFloat(x, off));
+                case 6 -> u.getLong(x, off);
+                default -> Double.doubleToRawLongBits(u.getDouble(x, off));
+            };
+        }
+        int[] clockOf;                // per slot: its index in clocks (-1 not a clock)
+
+        int lookupSlot(int k, int id) {
             MobSleep.Part pt = comp.parts[k];
             String name = WBIds.name[id];
             Class<?> owner;
@@ -350,8 +424,15 @@ public final class EntitySleep {
                 }
                 if (barrier) {
                     slotOff = new long[n];
-                    for (int i = 0; i < n; i++) slotOff[i] = SnapCompiler.U.objectFieldOffset(f[i]);
-                    slotById = new int[comp.parts.length][];
+                    slotKind = new byte[n];
+                    for (int i = 0; i < n; i++) {
+                        slotOff[i] = SnapCompiler.U.objectFieldOffset(f[i]);
+                        Class<?> t = f[i].getType();
+                        slotKind[i] = (byte) (t == boolean.class ? 0 : t == byte.class ? 1 : t == char.class ? 2 : t == short.class ? 3 : t == int.class ? 4
+                                : t == float.class ? 5 : t == long.class ? 6 : 7);
+                    }
+                    partSlots = new PartSlots[comp.parts.length];
+                    for (int k = 0; k < partSlots.length; k++) partSlots[k] = new PartSlots(this, k);
                     clockOf = new int[n];
                     java.util.Arrays.fill(clockOf, -1);
                     for (int j = 0; j < clocks.length; j++) clockOf[clocks[j]] = j;
@@ -369,14 +450,78 @@ public final class EntitySleep {
      */
     static final boolean BARRIER = Boolean.getBoolean("lab.opt.WriteBarrier") && !"false".equals(System.getProperty("lab.entsleep.barrier"));
 
+    /**
+     * A part's barrier field ids -> slots, shared by the class's entities: a small open-addressing table (the ids a part
+     * is written through are a few dozen; a table indexed by id spread over ~1000 ids cost a cache miss per write).
+     */
+    static final class PartSlots {
+        final EClass c;
+        final int k;
+        int[] keys = new int[64], vals = new int[64];
+        int size;
+
+        PartSlots(EClass c, int k) {
+            this.c = c;
+            this.k = k;
+            java.util.Arrays.fill(keys, -1);
+        }
+
+        int get(int id) {
+            int[] ks = keys;
+            int m = ks.length - 1;
+            for (int p = (id * 0x9E3779B1) >>> 16 & m; ; p = p + 1 & m) {
+                int x = ks[p];
+                if (x == id) return vals[p];
+                if (x == -1) return miss(id);
+            }
+        }
+
+        private int miss(int id) {
+            int slot = c.lookupSlot(k, id);
+            if (size * 2 >= keys.length) {
+                int[] ok = keys, ov = vals;
+                keys = new int[ok.length * 2];
+                vals = new int[ok.length * 2];
+                java.util.Arrays.fill(keys, -1);
+                size = 0;
+                for (int i = 0; i < ok.length; i++) if (ok[i] != -1) put(ok[i], ov[i]);
+            }
+            put(id, slot);
+            return slot;
+        }
+
+        private void put(int id, int slot) {
+            int m = keys.length - 1;
+            int p = (id * 0x9E3779B1) >>> 16 & m;
+            while (keys[p] != -1) p = p + 1 & m;
+            keys[p] = id;
+            vals[p] = slot;
+            size++;
+        }
+    }
+
     /** a mob part's watcher (WB): writes into the part mark their slots dirty */
     static final class PartWatch {
         final ES s;
         final int k;
+        final PartSlots slots;
+        final long[] vd, md;
 
         PartWatch(ES s, int k) {
             this.s = s;
             this.k = k;
+            slots = s.c.partSlots[k];
+            vd = s.vdirty;
+            md = s.mdirty;
+        }
+
+        void write(int id) {
+            int i = slots.get(id);
+            if (i >= 0) {
+                long bit = 1L << i;
+                vd[i >>> 6] |= bit;
+                md[i >>> 6] |= bit;
+            }
         }
     }
 
@@ -411,17 +556,7 @@ public final class EntitySleep {
     static long barrierHits, barrierChecked, barrierSyncs, barrierFull, barrierReread, barrierShared;
 
     static void onWrite(SharedWatch sw, int id) {
-        for (int i = 0; i < sw.n; i++) onWrite(sw.w[i], id);
-    }
-
-    static void onWrite(PartWatch pw, int id) {
-        ES s = pw.s;
-        int i = s.c.slotOfId(pw.k, id);
-        barrierHits++;
-        if (i < 0) return;
-        long bit = 1L << i;
-        s.vdirty[i >>> 6] |= bit;
-        s.mdirty[i >>> 6] |= bit;
+        for (int i = 0; i < sw.n; i++) sw.w[i].write(id);
     }
 
     /** puts the ES's watchers on its parts (s.ctx); a part already watched by another entity: no barrier for this one */
@@ -429,10 +564,10 @@ public final class EntitySleep {
         Object[] o = s.ctx;
         int n = s.c.n;
         if (s.watches == null) {
-            s.watches = new PartWatch[o.length];
-            for (int k = 0; k < o.length; k++) s.watches[k] = new PartWatch(s, k);
             s.vdirty = new long[(n + 63) >>> 6];
             s.mdirty = new long[(n + 63) >>> 6];
+            s.watches = new PartWatch[o.length];
+            for (int k = 0; k < o.length; k++) s.watches[k] = new PartWatch(s, k);
             s.M = new long[n];
             s.MR = new Object[n];
         }
@@ -498,7 +633,7 @@ public final class EntitySleep {
                 bits &= bits - 1;
                 barrierReread++;
                 if (prim[i]) {
-                    long x = c.snap.bits(s.e, i);
+                    long x = c.slotBits(o, i);
                     if (x != m[i]) {
                         if (!special[i]) changed = true;
                         m[i] = x;
@@ -554,6 +689,8 @@ public final class EntitySleep {
     }
 
     private static final Map<Class<?>, EClass> CLASSES = new java.util.concurrent.ConcurrentHashMap<>();   // filled by AsyncAnalysis
+    private static final Map<Class<?>, Integer> RETRIED = new java.util.concurrent.ConcurrentHashMap<>();
+    private static final int ANALYSIS_RETRIES = Integer.getInteger("lab.entsleep.analysisRetries", 5);
 
     // ------------------------------------------------------------------ per entity
 
@@ -674,9 +811,10 @@ public final class EntitySleep {
     /** -Dlab.entsleep.timingFrom=<game time>: the per-mode times only from then on (the steady state) */
     private static final long TIMING_FROM = Long.getLong("lab.entsleep.timingFrom", 0);
     private static final Map<String, long[]> TIMES = new TreeMap<>();
+    private static long timedTick = -1, timedTicks, entityNs;   // all entity ticks timed, over how many server ticks
     private static long innerNs, innerN;
     private static final long[] RT = new long[11];
-    static final long[] OT = new long[20];
+    static final long[] OT = new long[24];
     static final long[] ST = new long[7];   // a mob snapshot: prims, refs, fingerprints (ns), count, slots fingerprinted again
     private static final Map<String, long[]> FPT = new HashMap<>();
     private static Object[] FPR = new Object[64];
@@ -744,6 +882,12 @@ public final class EntitySleep {
             long[] b = TIMES.computeIfAbsent(e.getClass().getSimpleName() + " " + mode, k -> new long[2]);
             b[0]++;
             b[1] += dt;
+            long gt = e.level().getGameTime();
+            if (gt != timedTick) {
+                timedTick = gt;
+                timedTicks++;
+            }
+            entityNs += dt;
             return;
         }
         if (TRACE < 0 || e.getId() != TRACE) {
@@ -801,6 +945,19 @@ public final class EntitySleep {
         long now = level.getGameTime();
         if (now != lastPoll) poll(now);
         ES s = es(e);
+        if (s != null && s.st == St.NEVER && s.c.retryAt > 0) {
+            // its class was refused for the sample's momentary state: analysed again from another entity, whose
+            // result replaces the refusal for all of them
+            EClass cur = CLASSES.get(e.getClass());
+            if (cur != null && cur != s.c) s = null;
+            else if (cur == s.c && s.c.retryAt != Long.MAX_VALUE && now >= s.c.retryAt) {
+                s.c.retryAt = Long.MAX_VALUE;
+                if (RETRIED.merge(e.getClass(), 1, Integer::sum) <= ANALYSIS_RETRIES) {
+                    CLASSES.remove(e.getClass(), s.c);
+                    s = null;
+                }
+            }
+        }
         if (s == null) {
             EClass c = AsyncAnalysis.get(CLASSES, e.getClass(), k -> {
                 EClass x = new EClass(k, e);
@@ -815,6 +972,8 @@ public final class EntitySleep {
                 e.tick();
                 return;
             }
+            if (c.refuse != null && c.mob == null && c.retryAt == 0 && COMPONENTS && c.refuse.contains("the sample"))
+                c.retryAt = now + 100;   // the sample's state (walking, a path) refused it: another one later
             s = new ES(e, c);
             if (c.refuse != null || e.getBlockX() < MIN_X || dev.probe.api.Compat.entitySleepExcluded(e)) s.st = St.NEVER;
             else if (c.comp != null && (s.ctx = c.comp.resolveAll(e)) == null) s.st = St.NEVER;
@@ -875,6 +1034,7 @@ public final class EntitySleep {
             wake(s, s.woken ? s.wakeReason : now >= s.wakeAt ? "deadline" : "state differs");
         }
         if (s.st == St.NEVER || e.tickCount < s.observeFrom || level.isClientSide) {
+            if (TIMING && s.st != St.NEVER) mode = "backoff";
             e.tick();
             return;
         }
@@ -883,6 +1043,7 @@ public final class EntitySleep {
             // several ticks); a window starts once a tick left them as they were - the entity is at a fixed point
             EClass c = s.c;
             if (e.tickCount < s.probeFrom) {   // the last probes failed: plain ticks in between
+                if (TIMING) mode = "probe wait";
                 e.tick();
                 return;
             }
@@ -950,19 +1111,23 @@ public final class EntitySleep {
         if (c.inline != null && !cont && !FIXED_STAT) {
             for (int t = 0; t <= c.period; t++)
                 if (c.special(e.tickCount + t)) {   // the window would hold a tick that runs for real while asleep: later
+                    if (TIMING) mode = "window later";
                     s.k = -1;
                     e.tick();
                     return;
                 }
         }
         long tw = TIMING && !cont ? System.nanoTime() : 0;
+        long tr = TIMING && !cont ? System.nanoTime() : 0;
         if (c.comp != null && !cont && (s.ctx = c.comp.resolveAll(e)) == null) {   // goals replaced: not this plan's mob now
             s.k = -1;
             e.tick();
             fail(s, "contexts changed");
             return;
         }
+        if (TIMING && !cont) OT[20] += System.nanoTime() - tr;
         if (s.barrierOn && !cont) watchParts(s);
+        if (TIMING && !cont) OT[21] += System.nanoTime() - tr;
         if (c.comp != null && !cont) {
             s.readsWeather = s.readsPlayers = false;
             s.attrObj = e instanceof net.minecraft.world.entity.LivingEntity le && le.getAttributes() instanceof MoveMemo.AttrEpoch ae ? ae : null;
@@ -1168,8 +1333,12 @@ public final class EntitySleep {
         long drawDeadline = Long.MAX_VALUE;
         long y0 = TIMING ? System.nanoTime() : 0, y1 = y0, y2 = y0;
         if (c.comp != null) {
-            if (c.assume == null) c.assume = MobSleep.compileAssumptions(c.mob, c.f, c.slotPath);
-            String why = MobSleep.assumptionsFail(c.assume, e, SA, RA);   // the after-state observe has just taken
+            if (c.assume == null) {
+                String[] pp = new String[c.comp.parts.length];
+                for (int k = 0; k < pp.length; k++) pp[k] = c.comp.parts[k].path;
+                c.assume = MobSleep.compileAssumptions(c.mob, c.f, c.slotPath, pp);
+            }
+            String why = MobSleep.assumptionsFail(c.assume, e, SA, RA, s.ctx);   // the after-state observe has just taken
             if (why != null) { fail(s, why); return; }
             for (int i : c.ctxEntityRefs) {
                 Object x = c.ref(i, s);
@@ -1266,7 +1435,7 @@ public final class EntitySleep {
         s.hashB = new long[L];
         for (int p = 0; p < L; p++) {
             for (int j = 0; j < nv; j++) if (c.prim[v[j]]) cur[v[j]] = bV[p][j];
-            s.hashB[p] = c.hashOf(cur);
+            if (!s.barrierOn) s.hashB[p] = c.hashOf(cur);
         }
         if (s.barrierOn) {
             s.expPrim = cur;   // slots outside v: the after-state observe took
@@ -1346,6 +1515,7 @@ public final class EntitySleep {
         EClass c = s.c;
         int L = c.period;
         if (!sameDraws(s.drawLog[0], s.drawLog[L])) return "draws not periodic";
+        c.prepDraws();
         s.dKind = new int[L][];
         s.dBound = new int[L][];
         s.dCond = new int[L][];
@@ -1359,36 +1529,34 @@ public final class EntitySleep {
             s.dOut[p] = new boolean[m];
             for (int j = 0; j < m; j++) {
                 long key = log.getLong(2 * j);
-                String site = MobSleep.SITES.get(MobSleep.siteOf(key));
-                List<Integer> cs = c.drawSites.get(site);
-                if (cs == null) return "draw outside the draw conditions: " + site;
-                if (cs.size() != 1) return "two draw conditions on one line: " + site;
-                SleepAnalysis.DrawCond d = c.mob.draws().get(cs.get(0));
+                int ci = c.condOfSite(MobSleep.siteOf(key));
+                if (ci == -1) return "draw outside the draw conditions: " + MobSleep.SITES.get(MobSleep.siteOf(key));
+                if (ci == -2) return "two draw conditions on one line: " + MobSleep.SITES.get(MobSleep.siteOf(key));
+                SleepAnalysis.DrawCond d = c.mob.draws().get(ci);
                 if (d.other() == SleepAnalysis.DrawCond.UNKNOWN) return "draw compared with an unknown value: " + d.text();
                 int kind = MobSleep.kindOf(key);
                 double v = MobSleep.asNumber(kind, log.getLong(2 * j + 1));
-                double[] o = otherSide(s, d, p, 0);
+                double[] o = otherSide(s, d, ci, p);
                 if (o == null) return "draw condition's other side not found: " + d.text();
                 boolean a = MobSleep.taken(d, v, o[0]), b = MobSleep.taken(d, v, o[1]);
                 if (a != b) return "draw at its clock's edge";
                 s.dKind[p][j] = kind;
                 s.dBound[p][j] = MobSleep.boundOf(key);
-                s.dCond[p][j] = cs.get(0);
+                s.dCond[p][j] = ci;
                 s.dOut[p][j] = a;
             }
         }
         s.random = (net.minecraft.util.RandomSource) get(c.randomField, s.e);
         s.seedRef = MobSleep.seedOf(s.random);
         if (s.seedRef == null) return "random of another kind";
-        List<Object> eo = new ArrayList<>();
-        for (String k : c.mob.empty()) {
-            int dot = k.lastIndexOf('.');
-            Object h = dot < 0 ? s.e : MobSleep.resolve(s.e, k.substring(0, dot));
-            Object v = h == null ? null : MobSleep.fieldValue(h, dot < 0 ? k : k.substring(dot + 1));
-            if (!(v instanceof java.util.Collection<?>) && !(v instanceof java.util.Map<?, ?>)) return "assumed-empty collection missing: " + k;
-            eo.add(v);
+        Object[] eo = new Object[c.emptyHolder.length];
+        for (int q = 0; q < eo.length; q++) {
+            Object h = c.holderOf(s, c.emptyHolder[q], c.emptyHolderPath[q]);
+            Object v = h == null ? null : MobSleep.fieldValue(h, c.emptyName[q]);
+            if (!(v instanceof java.util.Collection<?>) && !(v instanceof java.util.Map<?, ?>)) return "assumed-empty collection missing: " + c.emptyKeys.get(q);
+            eo[q] = v;
         }
-        s.emptyObjs = eo.toArray();
+        s.emptyObjs = eo;
         s.clockBase = new long[c.clocks.length];
         for (int j = 0; j < c.clocks.length; j++) s.clockBase[j] = narrow(c.f[c.clocks[j]].getType(), s.base[c.clocks[j]]);
         s.dConst = new double[L][];
@@ -1398,26 +1566,21 @@ public final class EntitySleep {
             s.dConst[p] = new double[m];
             s.dClock[p] = new int[m];
             for (int j = 0; j < m; j++) {
-                SleepAnalysis.DrawCond d = c.mob.draws().get(s.dCond[p][j]);
+                int ci = s.dCond[p][j];
+                SleepAnalysis.DrawCond d = c.mob.draws().get(ci);
                 s.dClock[p][j] = -1;
                 if (d.other() == SleepAnalysis.DrawCond.CONST) {
                     s.dConst[p][j] = d.constant();
+                } else if (d.other() == SleepAnalysis.DrawCond.FINAL) {
+                    Object h = c.holderOf(s, c.condHolder[ci], c.condHolderPath[ci]);
+                    Object fv = h == null ? null : get(d.field(), h);
+                    if (!(fv instanceof Number nb)) return "draw condition's field missing: " + d.text();
+                    s.dConst[p][j] = nb.doubleValue();
                 } else {
-                    int dot = d.path().lastIndexOf('.');
-                    String hp = dot < 0 ? "" : d.path().substring(0, dot);
-                    if (d.other() == SleepAnalysis.DrawCond.FINAL) {
-                        Object h = MobSleep.resolve(s.e, hp);
-                        Object fv = h == null ? null : get(d.field(), h);
-                        if (!(fv instanceof Number nb)) return "draw condition's field missing: " + d.text();
-                        s.dConst[p][j] = nb.doubleValue();
-                    } else {
-                        int slot = c.slot(hp, d.field());
-                        int jj = -1;
-                        for (int q = 0; q < c.clocks.length; q++) if (c.clocks[q] == slot) jj = q;
-                        if (jj < 0) return "draw condition's clock not found: " + d.text();
-                        s.dClock[p][j] = jj;
-                        s.dConst[p][j] = d.constant();
-                    }
+                    int jj = c.condClock[ci];
+                    if (jj < 0) return "draw condition's clock not found: " + d.text();
+                    s.dClock[p][j] = jj;
+                    s.dConst[p][j] = d.constant();
                 }
             }
         }
@@ -1434,22 +1597,18 @@ public final class EntitySleep {
      * The other side of a draw condition at window tick k (t ticks after the window's start): a constant, a final
      * field, or a clock + constant - both readings of the clock: its value at the tick's start and after its change.
      */
-    private static double[] otherSide(ES s, SleepAnalysis.DrawCond d, long k, long dummy) {
+    private static double[] otherSide(ES s, SleepAnalysis.DrawCond d, int ci, long k) {
         EClass c = s.c;
         if (d.other() == SleepAnalysis.DrawCond.CONST) return new double[] {d.constant(), d.constant()};
-        int dot = d.path().lastIndexOf('.');
-        String holderPath = dot < 0 ? "" : d.path().substring(0, dot);
         if (d.other() == SleepAnalysis.DrawCond.FINAL) {
-            Object h = MobSleep.resolve(s.e, holderPath);
+            Object h = c.holderOf(s, c.condHolder[ci], c.condHolderPath[ci]);
             Object v = h == null ? null : get(d.field(), h);
             if (!(v instanceof Number n)) return null;
             return new double[] {n.doubleValue(), n.doubleValue()};
         }
-        int slot = c.slot(holderPath, d.field());
-        if (slot < 0) return null;
-        int j = -1;
-        for (int q = 0; q < c.clocks.length; q++) if (c.clocks[q] == slot) j = q;
+        int j = c.condClock[ci];
         if (j < 0) return null;
+        int slot = c.clocks[j];
         long r = s.rates[j];
         long start = narrow(c.f[slot].getType(), s.base[slot] + r * k);
         return new double[] {start + d.constant(), narrow(c.f[slot].getType(), start + r) + d.constant()};
@@ -1752,8 +1911,13 @@ public final class EntitySleep {
         int p = (int) Math.floorMod((long) e.tickCount - s.startTick, (long) L);
         SnapCompiler.Snapper sn = c.snap;
         int[] cl = c.clocks;
-        if (sn.hashPrims(e) != s.hashB[p] || !sn.sameRefs(e, s.expR)) return inlineFail(s, "changed: " + firstDiff(s, p));
-        for (int j = 0; j < cl.length; j++) if (sn.bits(e, cl[j]) != s.expClock[j]) return inlineFail(s, "changed: clock " + slotName(c, cl[j]));
+        if (s.barrierOn) {   // the slots written since the last replay (clocks are written only by it and the tick)
+            String bad = dirtyCheck(s, p);
+            if (bad != null) return inlineFail(s, "changed: " + bad);
+        } else {
+            if (sn.hashPrims(e) != s.hashB[p] || !sn.sameRefs(e, s.expR)) return inlineFail(s, "changed: " + firstDiff(s, p));
+            for (int j = 0; j < cl.length; j++) if (sn.bits(e, cl[j]) != s.expClock[j]) return inlineFail(s, "changed: clock " + slotName(c, cl[j]));
+        }
         if (!stillEmpty(s) || attrEpoch(e) != s.attrEpoch || goalEpoch(e, true) != s.goalEpoch0 || goalEpoch(e, false) != s.goalEpoch1
                 || s.seedRef.get() != s.expSeed || s.readsWeather && !noWeather(level) || s.readsPlayers && !noPlayers(level))
             return inlineFail(s, "changed before an inline tick");
@@ -1773,6 +1937,7 @@ public final class EntitySleep {
             s.entityBox = eb0;
             return inlineFail(s, "inline tick read elsewhere");
         }
+        if (s.barrierOn) return inlineAfter(s, p);
         // the primitives it left: those the next tick expects (its before-state is this tick's after-state)
         if (sn.hashPrims(e) != s.hashB[(p + 1) % L]) {
             long[] now = SA.length >= c.n ? SA : (SA = new long[c.n * 2]);
@@ -1803,6 +1968,52 @@ public final class EntitySleep {
             if (EntityFp.fp(o) != exp[i]) return inlineFail(s, "inline tick left " + slotName(c, i));
             s.expR[k] = o;
         }
+        return true;
+    }
+
+    /**
+     * After an inline tick, with the write barrier: the slots it wrote (vdirty), the phase's varying slots and the
+     * clocks against the after-state the phase expects; the random by the phase's draws. The rest was not written.
+     */
+    private static boolean inlineAfter(ES s, int p) {
+        Entity e = s.e;
+        EClass c = s.c;
+        long[] exp = s.afterExp[p];
+        Object[] o = s.ctx;
+        long[] d = s.vdirty;
+        for (int j : s.v) markDirty(d, j);
+        for (int w = 0; w < d.length; w++) {
+            long bits = d[w];
+            if (bits == 0) continue;
+            d[w] = 0;
+            while (bits != 0) {
+                int i = (w << 6) + Long.numberOfTrailingZeros(bits);
+                bits &= bits - 1;
+                if (c.special[i]) continue;   // tick count, random, clocks: below
+                if (c.prim[i]) {
+                    if (c.snap.bits(e, i) != exp[i]) return inlineFail(s, "inline tick left " + slotName(c, i));
+                } else {
+                    int k = c.refOrd[i];
+                    if (k < 0) continue;
+                    Object x = SnapCompiler.U.getObject(o[c.comp.partOf[i]], c.slotOff[i]);
+                    if (x == s.expR[k]) continue;
+                    if (EntityFp.fp(x) != exp[i]) return inlineFail(s, "inline tick left " + slotName(c, i));
+                    s.expR[k] = x;
+                }
+            }
+        }
+        int[] cl = c.clocks;
+        long[] rates = s.rates;
+        for (int j = 0; j < cl.length; j++) {
+            long x = narrow(c.f[cl[j]].getType(), s.expClock[j] + rates[j]);
+            if (clockBits(s, j) != x) return inlineFail(s, "inline tick moved clock " + slotName(c, cl[j]));
+            s.expClock[j] = x;
+        }
+        MobSleep.Lcg g = new MobSleep.Lcg(s.expSeed);
+        int[] dk = s.dKind[p], db = s.dBound[p];
+        for (int j = 0; j < dk.length; j++) g.draw(dk[j], db[j]);
+        if (s.seedRef.get() != g.seed) return inlineFail(s, "inline tick drew otherwise");
+        s.expSeed = g.seed;
         return true;
     }
 
@@ -1971,34 +2182,77 @@ public final class EntitySleep {
     }
 
     /** Subscribers per section, with lazy removal (an entry is live while its sleeper is asleep with the same epoch). */
+    /**
+     * A section's subscribers, with each one's box in a flat array: an event tests the boxes first and touches only the
+     * sleepers it hits (an entity moving among a hundred sleepers cost a cache miss per sleeper, villagers ~8 us a tick
+     * on the N100); {@code u} is the union of the boxes, for a whole list missed at once.
+     */
     static final class SubList {
         ES[] es = new ES[4];
         int[] ep = new int[4];
+        double[] bx = new double[24];
+        double u0 = Double.MAX_VALUE, u1 = Double.MAX_VALUE, u2 = Double.MAX_VALUE, u3 = -Double.MAX_VALUE, u4 = -Double.MAX_VALUE, u5 = -Double.MAX_VALUE;
         int n;
 
-        void add(ES s) {
+        void add(ES s, AABB b) {
             if (n == es.length) {
                 compact();
                 if (n == es.length) {
                     es = java.util.Arrays.copyOf(es, n * 2);
                     ep = java.util.Arrays.copyOf(ep, n * 2);
+                    bx = java.util.Arrays.copyOf(bx, n * 12);
                 }
             }
             es[n] = s;
-            ep[n++] = s.subEpoch;
+            ep[n] = s.subEpoch;
+            int o = n * 6;
+            bx[o] = b.minX;
+            bx[o + 1] = b.minY;
+            bx[o + 2] = b.minZ;
+            bx[o + 3] = b.maxX;
+            bx[o + 4] = b.maxY;
+            bx[o + 5] = b.maxZ;
+            n++;
+            widen(o);
+        }
+
+        private void widen(int o) {
+            u0 = Math.min(u0, bx[o]);
+            u1 = Math.min(u1, bx[o + 1]);
+            u2 = Math.min(u2, bx[o + 2]);
+            u3 = Math.max(u3, bx[o + 3]);
+            u4 = Math.max(u4, bx[o + 4]);
+            u5 = Math.max(u5, bx[o + 5]);
         }
 
         void compact() {
             int m = 0;
+            u0 = u1 = u2 = Double.MAX_VALUE;
+            u3 = u4 = u5 = -Double.MAX_VALUE;
             for (int i = 0; i < n; i++) {
                 ES s = es[i];
                 if (s.st == St.ASLEEP && ep[i] == s.subEpoch && !s.e.isRemoved()) {
                     es[m] = s;
-                    ep[m++] = ep[i];
+                    ep[m] = ep[i];
+                    System.arraycopy(bx, i * 6, bx, m * 6, 6);
+                    widen(m * 6);
+                    m++;
                 }
             }
             for (int i = m; i < n; i++) es[i] = null;
             n = m;
+        }
+
+        /** whether box i holds the point (containment, like AABB's bounds inclusive) */
+        boolean holds(int i, double x, double y, double z) {
+            int o = i * 6;
+            return x >= bx[o] && x <= bx[o + 3] && y >= bx[o + 1] && y <= bx[o + 4] && z >= bx[o + 2] && z <= bx[o + 5];
+        }
+
+        /** whether box i intersects b (AABB.intersects: strict) */
+        boolean meets(int i, AABB b) {
+            int o = i * 6;
+            return bx[o] < b.maxX && bx[o + 3] > b.minX && bx[o + 1] < b.maxY && bx[o + 4] > b.minY && bx[o + 2] < b.maxZ && bx[o + 5] > b.minZ;
         }
     }
 
@@ -2016,7 +2270,7 @@ public final class EntitySleep {
         for (int x = x0; x <= x1; x++) for (int y = y0; y <= y1; y++) for (int z = z0; z <= z1; z++) {
             SubList l = map.get(SectionPos.asLong(x, y, z));
             if (l == null) map.put(SectionPos.asLong(x, y, z), l = new SubList());
-            l.add(s);
+            l.add(s, b);
         }
     }
 
@@ -2026,11 +2280,12 @@ public final class EntitySleep {
         SubList l = BLOCK_SUBS.get(SectionPos.asLong(pos));
         if (l == null) return;
         double x = pos.getX() + 0.5, y = pos.getY() + 0.5, z = pos.getZ() + 0.5;
+        if (x < l.u0 || x > l.u3 || y < l.u1 || y > l.u4 || z < l.u2 || z > l.u5) return;
         for (int i = 0; i < l.n; i++) {
+            if (!l.holds(i, x, y, z)) continue;   // the box the entry was subscribed with: the ES only when it is hit
             ES s = l.es[i];
             if (s.st != St.ASLEEP || l.ep[i] != s.subEpoch || s.e.level() != level) continue;
-            AABB b = s.blockBox;
-            if (x >= b.minX && x <= b.maxX && y >= b.minY && y <= b.maxY && z >= b.minZ && z <= b.maxZ) request(s, "block");
+            request(s, "block");
         }
     }
 
@@ -2047,11 +2302,12 @@ public final class EntitySleep {
         int z0 = SectionPos.posToSectionCoord(bb.minZ), z1 = SectionPos.posToSectionCoord(bb.maxZ);
         for (int sx = x0; sx <= x1; sx++) for (int sy = y0; sy <= y1; sy++) for (int sz = z0; sz <= z1; sz++) {
             SubList l = ENTITY_SUBS.get(SectionPos.asLong(sx, sy, sz));
-            if (l == null) continue;
+            if (l == null || l.u0 >= bb.maxX || l.u3 <= bb.minX || l.u1 >= bb.maxY || l.u4 <= bb.minY || l.u2 >= bb.maxZ || l.u5 <= bb.minZ) continue;
             for (int i = 0; i < l.n; i++) {
+                if (!l.meets(i, bb)) continue;
                 ES s = l.es[i];
                 if (s == self || s.st != St.ASLEEP || l.ep[i] != s.subEpoch || s.e.level() != level) continue;
-                if (s.entityBox.intersects(bb)) request(s, reason);
+                request(s, reason);
             }
         }
     }
@@ -2128,7 +2384,7 @@ public final class EntitySleep {
         sb.append("  wakes: ").append(WAKES).append(System.lineSeparator());
         sb.append("  refused: ").append(REFUSED).append(System.lineSeparator());
         if (BARRIER)
-            sb.append(String.format(Locale.ROOT, "  write barrier: %d writes into watched parts, %d dirty slots checked asleep, %d mirror syncs (%d full), %d slots read again, %d shared parts; draw sites numbered %d, walked %d%n",
+            sb.append(String.format(Locale.ROOT, "  write barrier: %d writes (not counted), %d dirty slots checked asleep, %d mirror syncs (%d full), %d slots read again, %d shared parts; draw sites numbered %d, walked %d%n",
                     barrierHits, barrierChecked, barrierSyncs, barrierFull, barrierReread, barrierShared, MobSleep.sitesGiven, MobSleep.sitesWalked));
         if (FIXED_STAT) {
             sb.append(String.format(Locale.ROOT, "  fixed point: %d of %d observed mob ticks (%.1f %%); ticks in runs of 1 / 2-3 / 4-7 / 8-15 / 16-31 / 32-63 / 64-127 / 128+: %s%n",
@@ -2138,6 +2394,7 @@ public final class EntitySleep {
             sb.append("  fixed point broken by: ").append(top.subList(0, Math.min(20, top.size()))).append(System.lineSeparator());
         }
         if (TIMING) {
+            sb.append(String.format(Locale.ROOT, "  time all entity ticks: %.3f ms per server tick over %d ticks%n", entityNs / 1e6 / Math.max(1, timedTicks), timedTicks));
             TIMES.forEach((k, v) -> sb.append(String.format(Locale.ROOT, "  time %-28s ticks %8d  total %8.1f ms  per tick %7.2f us%n", k, v[0], v[1] / 1e6, v[1] / 1e3 / Math.max(1, v[0]))));
             long rn = Math.max(1, RT[4]);
             sb.append(String.format(Locale.ROOT, "  time replay parts (us per replay): verify %.2f (hash %.2f, again warm %.2f, refs %.2f, clocks %.2f), checks %.2f, writes %.2f, draws %.2f; varying fields %.1f, draws %.1f per replay%n",
@@ -2156,8 +2413,8 @@ public final class EntitySleep {
             for (int i = 0; i < Math.min(15, fl.size()); i++)
                 sb.append(String.format(Locale.ROOT, " %s %.2f;", fl.get(i).getKey(), fl.get(i).getValue()[1] / 1e3 / Math.max(1, fl.get(i).getValue()[0])));
             sb.append(System.lineSeparator());
-            sb.append(String.format(Locale.ROOT, "  time windows: %d started (contexts and epochs %.2f us each), %d complete (trySleep %.2f us each: assumptions %.2f, draw tables %.2f, look-ahead %.2f)%n",
-                    OT[10], OT[9] / 1e3 / Math.max(1, OT[10]), OT[8], OT[7] / 1e3 / Math.max(1, OT[8]), OT[11] / 1e3 / Math.max(1, OT[14]),
+            sb.append(String.format(Locale.ROOT, "  time windows: %d started (contexts and epochs %.2f us each: resolve %.2f, with watch %.2f), %d complete (trySleep %.2f us each: assumptions %.2f, draw tables %.2f, look-ahead %.2f)%n",
+                    OT[10], OT[9] / 1e3 / Math.max(1, OT[10]), OT[20] / 1e3 / Math.max(1, OT[10]), OT[21] / 1e3 / Math.max(1, OT[10]), OT[8], OT[7] / 1e3 / Math.max(1, OT[8]), OT[11] / 1e3 / Math.max(1, OT[14]),
                     OT[12] / 1e3 / Math.max(1, OT[14]), OT[13] / 1e3 / Math.max(1, OT[14])));
             long sn = Math.max(1, ST[3]);
             sb.append(String.format(Locale.ROOT, "  time mob snapshots %d: primitives %.2f us (again warm %.2f), references %.2f (again warm %.2f), fingerprints %.2f (%.1f slots again)%n",
