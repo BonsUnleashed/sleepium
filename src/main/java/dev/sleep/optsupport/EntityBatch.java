@@ -26,7 +26,9 @@ public final class EntityBatch {
         Boolean c = COMMUTES.get(t);
         if (c == null) {
             c = false;
-            if (t instanceof CompositeRenderTypeAccessor a && !t.sortOnUpload() && t.canConsolidateConsecutiveGeometry() && !t.isOutline()) {
+            // (with the residents' experiment: a type sorted on upload counts when it is opaque - Create's chains - the
+            // nearest fragment wins whatever the order; only coplanar fragments of equal depth could differ)
+            if (t instanceof CompositeRenderTypeAccessor a && (!t.sortOnUpload() || PartBatch.PERSIST_ON) && t.canConsolidateConsecutiveGeometry() && !t.isOutline()) {
                 CompositeStateAccessor s = (CompositeStateAccessor) (Object) a.sleep$state();
                 c = s.sleep$transparency() == RenderStateShard.NO_TRANSPARENCY
                         && s.sleep$depthTest() == RenderStateShard.LEQUAL_DEPTH_TEST

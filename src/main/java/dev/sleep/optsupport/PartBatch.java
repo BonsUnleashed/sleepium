@@ -448,6 +448,17 @@ public final class PartBatch {
         return true;
     }
 
+    /** A key's geometry in the arena (render thread), built once from {@code src.sleep$emit(a, b, ...)}; null if it cannot be. */
+    public static int[] geometryOf(Object key, GeometrySource src, Object a, Object b) {
+        int[] g = GEOMETRY.get(key);
+        if (g == null) {
+            GEOM.reset();
+            if (src.sleep$emit(a, b, GEOM)) g = upload(key);
+            else GEOMETRY.put(key, g = new int[] {-1, 0});
+        }
+        return g[0] < 0 ? null : g;
+    }
+
     /** Emits a key's geometry (local space, identity pose) into the consumer; false if it cannot be drawn this way. */
     public interface GeometrySource {
         boolean sleep$emit(Object a, Object b, VertexConsumer consumer);

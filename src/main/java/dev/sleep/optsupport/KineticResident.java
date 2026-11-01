@@ -39,7 +39,9 @@ public final class KineticResident implements NoAllocChecks.Resident {
     public static final KineticResident INSTANCE = new KineticResident();
     public static long made, dropped, drawnBe, notMade, relit;
     /** drops by cause: removed / debugger, state, speed, overstress tint, data read, other section, section dirtied */
-    public static final long[] DROP = new long[7];
+    public static final long[] DROP = new long[8];
+    /** offers refused by cause: pose / section, renderer, light section, type not batched */
+    public static final long[] NOT_MADE = new long[4];
 
     private KineticResident() {}
 
@@ -57,6 +59,12 @@ public final class KineticResident implements NoAllocChecks.Resident {
         double cx, cy, cz, vd2;
         RenderType[] types;
         Object[] queues;
+        /** per part: level of detail (KineticMemo.Part.lod) and the point its distance is taken to */
+        byte[] lod;
+        double[] mid;
+        /** sections whose light is in the geometry besides the block entity's own, and their epochs */
+        Object[] xSections;
+        int[] xEpochs;
         int[] first, quads, recs;
         int idx;   // in all
     }
@@ -110,6 +118,12 @@ public final class KineticResident implements NoAllocChecks.Resident {
         INSTANCE.section = s;
     }
 
+    /** The view area's section at a position (null if none). */
+    private Object sectionAt(BlockPos p) {
+        Object va = viewArea;
+        return va == null ? null : ((dev.sleep.catmixin.ViewAreaInvoker) va).sleep$sectionAt(p);
+    }
+
     /** The loop's section when it holds the block entity, else (a global block entity) the view area's. */
     private Object sectionOf(BlockEntity be) {
         BlockPos p = be.getBlockPos();
@@ -138,7 +152,7 @@ public final class KineticResident implements NoAllocChecks.Resident {
         }
         int why = KineticDebugger.isActive() || k.isRemoved() ? 0 : k.getBlockState() != r.state ? 1 : k.getSpeed() != r.speed ? 2
                 : ((KineticMemo.Effects) k).sleep$overStressed() != r.effect ? 3 : ((KineticMemo.Effects) k).sleep$version() != r.version ? 4
-                : r.section != sec ? 5 : epoch(sec) != r.epoch ? 6 : -1;
+                : r.section != sec ? 5 : epoch(sec) != r.epoch ? 6 : xChanged(r) ? 7 : -1;
         if (why == 6 && net.minecraft.client.renderer.LevelRenderer.getLightColor(k.getLevel(), k.getBlockPos()) == r.light) {
             r.epoch = epoch(sec);   // the section changed, the light the memo is valid for did not (the state was compared)
             relit++;
@@ -159,9 +173,23 @@ public final class KineticResident implements NoAllocChecks.Resident {
         return true;
     }
 
+    private static boolean xChanged(Res r) {
+        if (r.xSections == null) return false;
+        for (int i = 0; i < r.xSections.length; i++) if (epoch(r.xSections[i]) != r.xEpochs[i]) return true;
+        return false;
+    }
+
+    private static final double MIP2 = 48.0 * 48.0;   // ChainConveyorRenderer.MIP_DISTANCE
+
     /** The resident's draw commands into its types' queues for this frame. */
     private static void emit(Res r) {
+        KineticResident k = INSTANCE;
         for (int i = 0; i < r.recs.length; i++) {
+            if (r.lod != null && r.lod[i] != 0) {   // near (closerThan the middle by MIP_DISTANCE) or far
+                double dx = r.mid[3 * i] - k.camX, dy = r.mid[3 * i + 1] - k.camY, dz = r.mid[3 * i + 2] - k.camZ;
+                boolean near = dx * dx + dy * dy + dz * dz < MIP2;
+                if (near != (r.lod[i] == 1)) continue;
+            }
             Object q = r.queues[i];
             if (PartBatch.persistFirst(q)) {   // the type's batch so far has no command: it must be drawn
                 BufferBuilder bb = PartBatch.sbbBuilder(Minecraft.getInstance().renderBuffers().bufferSource(), r.types[i]);
@@ -205,11 +233,13 @@ public final class KineticResident implements NoAllocChecks.Resident {
                 || Math.abs(d.m30() - (float) (pos.getX() - k.camX)) > 1e-3f || Math.abs(d.m31() - (float) (pos.getY() - k.camY)) > 1e-3f
                 || Math.abs(d.m32() - (float) (pos.getZ() - k.camZ)) > 1e-3f || !PLAIN_SHOULD_RENDER.get(rendererClass)) {
             notMade++;
+            NOT_MADE[0]++;
             return false;
         }
         BlockEntityRenderer<?> renderer = Minecraft.getInstance().getBlockEntityRenderDispatcher().getRenderer(be);
         if (renderer == null || renderer.getClass() != rendererClass) {
             notMade++;
+            NOT_MADE[1]++;
             return false;
         }
         k.anchored = true;
@@ -230,6 +260,40 @@ public final class KineticResident implements NoAllocChecks.Resident {
         r.vd2 = vd * vd;
         r.types = new RenderType[n];
         r.queues = new Object[n];
+        java.util.ArrayList<Object> xs = null;
+        for (int i = 0; i < n; i++) {
+            KineticMemo.Part p = m.parts.get(i);
+            if (p.lod != 0) {
+                if (r.lod == null) {
+                    r.lod = new byte[n];
+                    r.mid = new double[3 * n];
+                }
+                r.lod[i] = p.lod;
+                r.mid[3 * i] = p.mx;
+                r.mid[3 * i + 1] = p.my;
+                r.mid[3 * i + 2] = p.mz;
+            }
+            if (p.lightAt != null) {
+                Object s = k.sectionAt(p.lightAt);
+                if (!(s instanceof ChunkMultiDraw.ChunkEntries)) {
+                    notMade++;
+            NOT_MADE[2]++;
+                    return false;
+                }
+                if (xs == null) xs = new java.util.ArrayList<>();
+                if (!xs.contains(s)) xs.add(s);
+            }
+            if (PartBatch.sbbBuilder(Minecraft.getInstance().renderBuffers().bufferSource(), p.type) == null) {   // drawn after a batch of its type
+                notMade++;
+            NOT_MADE[3]++;
+                return false;
+            }
+        }
+        if (xs != null) {
+            r.xSections = xs.toArray();
+            r.xEpochs = new int[r.xSections.length];
+            for (int i = 0; i < r.xEpochs.length; i++) r.xEpochs[i] = epoch(r.xSections[i]);
+        }
         r.first = new int[n];
         r.quads = new int[n];
         r.recs = new int[n];
@@ -273,8 +337,8 @@ public final class KineticResident implements NoAllocChecks.Resident {
     }
 
     public static String report() {
-        return String.format(java.util.Locale.ROOT, "kinetic residents: %d (made %d, dropped %d %s, not made %d, kept after a section change %d), drawn %d", INSTANCE.all.size(), made, dropped,
-                java.util.Arrays.toString(DROP), notMade, relit, drawnBe);
+        return String.format(java.util.Locale.ROOT, "kinetic residents: %d (made %d, dropped %d %s, not made %d %s, kept after a section change %d), drawn %d", INSTANCE.all.size(), made, dropped,
+                java.util.Arrays.toString(DROP), notMade, java.util.Arrays.toString(NOT_MADE), relit, drawnBe);
     }
 
     /** renderLevel's destructionProgress (a block being broken draws its crumbling overlay through the usual path). */

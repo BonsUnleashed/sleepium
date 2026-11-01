@@ -11,6 +11,7 @@
     "KineticRotationMixin",
     "KineticBeMixin",
     "OverStressAccessor",
+    "ChainConveyorMemoMixin",
     "KineticLevelMixin",
     "ViewAreaInvoker",
     "CreateTimeTestMixin"

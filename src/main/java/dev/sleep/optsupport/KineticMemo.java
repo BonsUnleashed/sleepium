@@ -71,6 +71,11 @@ public final class KineticMemo implements BeMemo, PartBatch.SbbRecorder {
         /** a scrolling sprite shift (resident draws only): original u0, target u0, original v0, target v0 */
         float[] sprites;
         float scrollU, scrollSpeed, scrollPhase, scrollScale;
+        /** chain conveyors' level of detail: 0 always drawn, 1 near only, 2 far only (by the distance to mx, my, mz) */
+        byte lod;
+        double mx, my, mz;
+        /** another position whose light is in the geometry (a chain's far end): its section is watched */
+        net.minecraft.core.BlockPos lightAt;
     }
 
     static final class Memo {
@@ -293,6 +298,79 @@ public final class KineticMemo implements BeMemo, PartBatch.SbbRecorder {
         scroll = scroll - Math.floor(scroll);
         scroll = scroll * size * mult;
         return (float) scroll;
+    }
+
+    // ------------------------------------------------------------------ chain conveyors (ChainConveyorMemoMixin)
+
+    /** a chain mesh: its length, the lights of its ends, near or far (ChainConveyorRenderer.renderChain's arguments) */
+    private record ChainKey(float length, int light1, int light2, boolean far) {}
+
+    private final java.util.HashMap<ChainKey, ChainKey> chainKeys = new java.util.HashMap<>();
+
+    /** Our own chain mesh: Create's renderChain with no animation (minV 0), into PartBatch's geometry recorder. */
+    private static final PartBatch.GeometrySource CHAIN_MESH = (a, unused, consumer) -> {
+        ChainKey k = (ChainKey) a;
+        com.simibubi.create.content.kinetics.chainConveyor.ChainConveyorRenderer.renderChain(new PoseStack(), t -> consumer, 0f, k.length(), k.light1(), k.light2(), k.far());
+        return true;
+    };
+
+    private int[] chainGeometry(float length, int l1, int l2, boolean far) {
+        ChainKey k = chainKeys.computeIfAbsent(new ChainKey(length, l1, l2, far), x -> x);
+        return PartBatch.geometryOf(k, CHAIN_MESH, k, null);
+    }
+
+    /**
+     * A chain drawn while a chain conveyor is recorded (drawn the usual way this frame: its vertices expected): kept as
+     * two parts, the near mesh scrolled on the GPU as Create animates it - frac(time x |speed| / 360) - 0.5, checked
+     * against the animation it was drawn with - and the far one, chosen per frame by the distance to the chain's middle.
+     */
+    public void chain(PoseStack.Pose pose, float animation, float length, int light1, int light2,
+            com.simibubi.create.content.kinetics.chainConveyor.ChainConveyorBlockEntity be, net.minecraft.core.BlockPos offset, long vertices) {
+        Memo m = rec;
+        if (m == null || !m.ok) return;
+        float time = AnimationTickHolder.getRenderTime(be.getLevel()), speed = Math.abs(be.getSpeed());
+        float t = time / (360f / speed);
+        t %= 1;
+        if (t < 0) t += 1;
+        double x = (double) speed * (504f / 360f) * time / 504.0;
+        if (Math.abs((t - 0.5f) - animation) > 1e-4f || Math.abs((x - Math.floor(x)) - t) > 1e-3) {   // not the animation we can reproduce
+            m.ok = false;
+            if (why < 0) why = 4;
+            return;
+        }
+        int[] near = chainGeometry(length, light1, light2, false), far = chainGeometry(length, light1, light2, true);
+        net.minecraft.client.renderer.RenderType type = com.simibubi.create.foundation.render.RenderTypes.chain(
+                com.simibubi.create.content.kinetics.chainConveyor.ChainConveyorRenderer.CHAIN_LOCATION);
+        if (near == null || far == null) {
+            m.ok = false;
+            return;
+        }
+        net.minecraft.core.BlockPos tile = be.getBlockPos();
+        double mx = tile.getX() + 0.5 + offset.getX() / 2f, my = tile.getY() + 0.5 + offset.getY() / 2f, mz = tile.getZ() + 0.5 + offset.getZ() / 2f;
+        for (int v = 0; v < 2; v++) {
+            Part p = new Part();
+            p.type = type;
+            p.geo = v == 0 ? near : far;
+            p.rel.set(dispInv).mul(pose.pose());
+            p.nRel.set(dispNInv).mul(pose.normal());
+            p.r = p.g = p.b = p.a = 1f;
+            p.diffuse = false;
+            p.fakeY = 1f;
+            p.overlay = net.minecraft.client.renderer.texture.OverlayTexture.NO_OVERLAY;
+            p.lod = (byte) (v + 1);
+            p.mx = mx;
+            p.my = my;
+            p.mz = mz;
+            p.lightAt = tile.offset(offset);
+            if (v == 0) {   // v' = v - 0.5 + frac(|speed| x 1.4 x time / 504)
+                p.sprites = new float[] {0f, 0f, 0.5f, 0f};
+                p.scrollSpeed = speed * (504f / 360f);
+                p.scrollScale = 1f;
+            }
+            m.parts.add(p);
+        }
+        m.scrolls = true;   // resident only
+        m.shiftedVertices += vertices;
     }
 
     // ------------------------------------------------------------------ replay
