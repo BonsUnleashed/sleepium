@@ -70,6 +70,8 @@ public final class ClientAuto {
     private static final String SCENE = System.getProperty("sleep.clientAuto.scene");
     /** -Dsleep.clientAuto.server=host:port: join that server instead of creating a world (commands go as chat commands; op the player) */
     private static final String SERVER = System.getProperty("sleep.clientAuto.server");
+    /** -Dsleep.clientAuto.world=NAME: open this existing save (its folder in saves/) instead of a fresh world */
+    private static final String OPEN = System.getProperty("sleep.clientAuto.world");
     /** -Dsleep.clientAuto.tp="x y z yaw pitch": where the scene is looked at from (default: the sky platform's view) */
     private static final String SCENE_TP = "tp @s " + System.getProperty("sleep.clientAuto.tp", "24 258 4 0 25").replace(',', ' ');   // commas allowed (JVM flags split on spaces)
     /** -Dsleep.clientAuto.sceneWait=S: the scene is measured no earlier than S seconds after it was built (scenes that change for a while) */
@@ -395,6 +397,11 @@ public final class ClientAuto {
                                 new net.minecraft.client.multiplayer.ServerData("sleep", SERVER, net.minecraft.client.multiplayer.ServerData.Type.OTHER), false, null);
                         return;
                     }
+                    if (OPEN != null) {
+                        enter(Phase.JOIN);
+                        mc.createWorldOpenFlows().openWorld(OPEN, () -> mc.setScreen(new TitleScreen()));
+                        return;
+                    }
                     Path dir = mc.getLevelSource().getBaseDir().resolve(WORLD);
                     deleteTree(dir);
                     LevelSettings settings = new LevelSettings(WORLD, GameType.CREATIVE, false, Difficulty.PEACEFUL, true,
@@ -410,6 +417,7 @@ public final class ClientAuto {
                     joinedAt = System.nanoTime();
                     log(String.format(Locale.ROOT, "joined: %.1f s after world creation started, %.1f s since JVM start", since(phaseStart), sinceJvm()));
                     if (SCENE != null) command(mc, SCENE_TP);   // go there first: the scene's chunks must be loaded before it is built
+                    else if (OPEN != null && System.getProperty("sleep.clientAuto.tp") != null) command(mc, SCENE_TP);   // a saved world: the view to measure
                     enter(Phase.SETTLE);
                 }
             }

@@ -2,6 +2,7 @@
 on (its default flags) or off (the same build, no flags: vanilla behaviour).
 
     python tools/client_bench.py on client_entities [--label L] [--settle 40] [--secs 30] [--heap 3G] [--flags "..."]
+    python tools/client_bench.py on - --world "path/to/save" [--tp "x y z yaw pitch"]   (a saved world, copied to run/saves)
 
 ClientAuto (-Dsleep.clientAuto) makes a singleplayer world (fixed seed), waits --settle seconds for the terrain, builds
 the scene, measures --secs seconds at a fixed position (vsync off, unlimited fps) and quits. Window 1280x720, heap
@@ -11,6 +12,7 @@ label,scene,fps,frame p50 ms,frame p99 ms,KiB per frame,process cores
 import argparse
 import os
 import re
+import shutil
 import subprocess
 import sys
 
@@ -25,10 +27,22 @@ ap.add_argument('--settle', type=int, default=40)
 ap.add_argument('--secs', type=int, default=30)
 ap.add_argument('--heap', default='3G')
 ap.add_argument('--flags', default='')
+ap.add_argument('--world', help='a saved world to open (copied to run/saves) instead of a scene in a fresh world')
+ap.add_argument('--tp', help='where to look from in the saved world: "x y z yaw pitch"')
 a = ap.parse_args()
-label = a.label or '%s-%s' % (a.scene, a.mode)
-jvm = ['-Xms' + a.heap, '-Xmx' + a.heap, '-XX:+AlwaysPreTouch', '-Dsleep.clientAuto=' + label, '-Dsleep.clientAuto.scene=' + a.scene,
+name = os.path.basename(os.path.normpath(a.world)).replace(' ', '_') if a.world else None   # JVM flags split on spaces
+label = a.label or '%s-%s' % ((name or a.scene).replace(' ', '_'), a.mode)
+jvm = ['-Xms' + a.heap, '-Xmx' + a.heap, '-XX:+AlwaysPreTouch', '-Dsleep.clientAuto=' + label,
        '-Dsleep.clientAuto.steady=true', '-Dsleep.clientAuto.steadySeconds=%d' % a.secs, '-Dsleep.clientAuto.settle=%d' % a.settle]
+if a.world:
+    saves = os.path.join(ROOT, 'run', 'saves')
+    shutil.rmtree(os.path.join(saves, name), ignore_errors=True)
+    shutil.copytree(a.world, os.path.join(saves, name), ignore=shutil.ignore_patterns('session.lock'))
+    jvm.append('-Dsleep.clientAuto.world=' + name)
+    if a.tp:
+        jvm.append('-Dsleep.clientAuto.tp=' + a.tp.replace(' ', ','))
+else:
+    jvm.append('-Dsleep.clientAuto.scene=' + a.scene)
 jvm += (['-Dlab.opt.defaults=true'] if a.mode == 'on' else []) + a.flags.split()
 p = subprocess.run([GRADLEW, 'runClient', '--console=plain', '-q', '-PrunJvmArgs=' + ' '.join(jvm), '-PrunArgs=--width 1280 --height 720'],
                    cwd=ROOT, capture_output=True, text=True, encoding='utf-8', errors='replace')
@@ -37,7 +51,7 @@ m = re.search(r"sleepclient '%s': (\d+) fps, frame p50 ([\d.]+) / p99 ([\d.]+) m
 if not m:
     print('no result; the end of the log:\n' + '\n'.join(out.splitlines()[-30:]))
     sys.exit(1)
-row = ','.join([label, a.scene] + list(m.groups()))
+row = ','.join([label, name or a.scene] + list(m.groups()))
 print(row)
 with open(os.path.join(ROOT, 'run', 'client-bench.csv'), 'a') as f:
     f.write(row + '\n')

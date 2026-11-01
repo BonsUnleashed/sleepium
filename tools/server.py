@@ -38,8 +38,9 @@ KNOWN = re.compile(r"No key layers|lag_create|Unknown block type 'create:")
 
 
 class Server:
-    def __init__(self, jvm_args, props=None, log=None):
+    def __init__(self, jvm_args, props=None, log=None, world=None):
         self.jvm_args = jvm_args
+        self.world = world   # a saved world to start from (copied to run/world) instead of a fresh flat one
         self.props = dict(PROPS, **(props or {}))
         self.log = log
         self.lines = []
@@ -48,6 +49,8 @@ class Server:
     def __enter__(self):
         os.makedirs(RUN, exist_ok=True)
         shutil.rmtree(os.path.join(RUN, 'world'), ignore_errors=True)
+        if self.world:
+            shutil.copytree(self.world, os.path.join(RUN, 'world'), ignore=shutil.ignore_patterns('session.lock'))
         with open(os.path.join(RUN, 'eula.txt'), 'w') as f:
             f.write('eula=true\n')
         with open(os.path.join(RUN, 'server.properties'), 'w') as f:
