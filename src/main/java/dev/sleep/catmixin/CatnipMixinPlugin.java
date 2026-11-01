@@ -20,6 +20,10 @@ public final class CatnipMixinPlugin implements IMixinConfigPlugin {
      *  {@code -Dlab.opt.KineticMemoMixin=true} with SbbPartsMixin; Create must be loaded */
     private static final boolean MEMO = PARTS && (Boolean.getBoolean("lab.opt.all") || Boolean.getBoolean("lab.opt.KineticMemoMixin"));
 
+    /** KineticLevelMixin: resident kinetic parts turned on the GPU, {@code -Dlab.opt.KineticResidentMixin=true} with
+     *  KineticMemoMixin (and ChunkSectionMixin, BlockEntityCullNoAllocMixin: the section epoch, the loop's hook) */
+    private static final boolean RESIDENT = MEMO && (Boolean.getBoolean("lab.opt.all") || Boolean.getBoolean("lab.opt.KineticResidentMixin"));
+
     static boolean create() {
         var mods = net.neoforged.fml.loading.LoadingModList.get();
         return mods != null && mods.getModFileById("create") != null;
@@ -36,7 +40,13 @@ public final class CatnipMixinPlugin implements IMixinConfigPlugin {
     @Override
     public boolean shouldApplyMixin(String targetClassName, String mixinClassName) {
         boolean kinetic = mixinClassName.endsWith(".KineticRotationMixin") || mixinClassName.endsWith(".KineticBeMixin") || mixinClassName.endsWith(".OverStressAccessor");
-        boolean on = kinetic ? MEMO && create() : PARTS && ponder();
+        if (mixinClassName.endsWith(".SbbCacheWorkerMixin")) {   // a safety of the parallel render, whatever else is on
+            boolean on = ponder() && (Boolean.getBoolean("lab.opt.all") || Boolean.getBoolean("lab.opt.ParallelEntitiesMixin"));
+            if (on) System.out.println("[sleep/opt] applying SbbCacheWorkerMixin -> " + targetClassName);
+            return on;
+        }
+        if (mixinClassName.endsWith(".CreateTimeTestMixin")) return System.getProperty("sleep.test.createTime") != null && ponder();
+        boolean on = (mixinClassName.endsWith(".KineticLevelMixin") || mixinClassName.endsWith(".ViewAreaInvoker")) ? RESIDENT && create() : kinetic ? MEMO && create() : PARTS && ponder();
         if (on) System.out.println("[sleep/opt] applying " + mixinClassName.substring(mixinClassName.lastIndexOf('.') + 1) + " -> " + targetClassName);
         return on;
     }

@@ -84,9 +84,19 @@ public final class NoAllocChecks {
         return LightTexture.pack(block, sky);
     }
 
+    /** Block entities whose draw lives in VRAM (KineticResident): asked first in renderLevel's section loop. */
+    public interface Resident {
+        /** true: be's parts are queued for this frame (the dispatcher is skipped) */
+        boolean drawn(BlockEntity be);
+    }
+
+    public static volatile Resident RESIDENT;
+
     /** ClientHooks.isBlockEntityRendererVisible, the default box as coordinates. */
     @SuppressWarnings({"unchecked", "rawtypes"})
     public static boolean blockEntityVisible(BlockEntityRenderDispatcher dispatcher, BlockEntity be, Frustum frustum) {
+        Resident res = RESIDENT;
+        if (res != null && res.drawn(be)) return false;   // drawn from VRAM already: not through the dispatcher
         BlockEntityRenderer renderer = dispatcher.getRenderer(be);
         if (renderer == null) return false;
         if (!BOX_DEFAULT.get(renderer.getClass())) {

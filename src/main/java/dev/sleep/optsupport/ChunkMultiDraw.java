@@ -514,6 +514,9 @@ public final class ChunkMultiDraw {
         int sleep$dirtyBuild();
 
         void sleep$setDirtyBuild(int b);
+
+        /** Bumped by every setDirty and reset (blocks or light of the section changed, or it moved): KineticResident. */
+        int sleep$epoch();
     }
 
     // ------------------------------------------------------------------ drawing

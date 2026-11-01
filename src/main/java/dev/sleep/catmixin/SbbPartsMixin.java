@@ -41,6 +41,23 @@ public abstract class SbbPartsMixin implements PartBatch.GeometrySource, dev.sle
     @Shadow
     public abstract SuperByteBuffer reset();
 
+    /** the arguments of the last shiftUVScrolling (null: no shift, or one of another kind) */
+    @org.spongepowered.asm.mixin.Unique private Object sleep$shift;
+    @org.spongepowered.asm.mixin.Unique private float sleep$shiftU, sleep$shiftV;
+
+    @Inject(method = "shiftUVScrolling(Lnet/createmod/catnip/render/SpriteShiftEntry;FF)Lnet/createmod/catnip/render/SuperByteBuffer;", at = @At("HEAD"))
+    private void sleep$scrolling(net.createmod.catnip.render.SpriteShiftEntry entry, float scrollU, float scrollV,
+            org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable<SuperByteBuffer> cir) {
+        sleep$shift = entry;
+        sleep$shiftU = scrollU;
+        sleep$shiftV = scrollV;
+    }
+
+    @Inject(method = {"shiftUV", "shiftUVtoSheet", "reset"}, at = @At("HEAD"))
+    private void sleep$otherShift(org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable<SuperByteBuffer> cir) {
+        sleep$shift = null;
+    }
+
     @Override
     public PoseStack.Pose sleep$local() {
         return transforms.last();
@@ -68,7 +85,18 @@ public abstract class SbbPartsMixin implements PartBatch.GeometrySource, dev.sle
         if (template.isEmpty()) return;
         if (spriteShiftFunc != null) {
             PartBatch.sbbShift++;
-            if (rcd != null) rcd.cpu();
+            if (rcd == null || !rcd.recording()) return;
+            // a scrolling shift while a memo records: drawn on the CPU path now, kept as a part with its shift
+            if (sleep$shift == null || useLevelLight || dev.sleep.optsupport.RenderCache.recording() || !PartBatch.sbbTarget(template, this, null, builder)) {
+                rcd.cpu();
+                return;
+            }
+            if (PartBatch.lightDirections == null) PartBatch.lightDirections = RenderSystemLightAccessor::sleep$lightDirections;
+            boolean diffuse = !disableDiffuse && !dev.engine_room.flywheel.lib.util.ShadersModHelper.isShaderPackInUse();
+            int light = hasCustomLight ? packedLight : 0;
+            int ov = hasCustomOverlay ? overlay : net.minecraft.client.renderer.texture.OverlayTexture.NO_OVERLAY;
+            rcd.capturedShifted(this, input.last(), transforms.last(), r, g, b, a, diffuse, invertFakeDiffuseNormal ? -1.0F : 1.0F, light, ov,
+                    PartBatch.lastSbbType, PartBatch.lastSbbGeo, sleep$shift, sleep$shiftU, sleep$shiftV, template.vertexCount());
             return;
         }
         if (useLevelLight) {

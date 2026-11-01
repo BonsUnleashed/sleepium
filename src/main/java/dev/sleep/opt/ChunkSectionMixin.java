@@ -18,7 +18,12 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 public abstract class ChunkSectionMixin implements ChunkMultiDraw.ChunkEntries {
     @Shadow @Final private Map<RenderType, VertexBuffer> buffers;
     @org.spongepowered.asm.mixin.Unique private final Object[] sleep$md = new Object[16];
-    @org.spongepowered.asm.mixin.Unique private int sleep$visIdx = -1, sleep$visBuild = -1, sleep$dirtyBuild = -1;
+    @org.spongepowered.asm.mixin.Unique private int sleep$visIdx = -1, sleep$visBuild = -1, sleep$dirtyBuild = -1, sleep$epoch;
+
+    @Override
+    public int sleep$epoch() {
+        return sleep$epoch;
+    }
 
     @Override
     public Object[] sleep$md() {
@@ -48,6 +53,7 @@ public abstract class ChunkSectionMixin implements ChunkMultiDraw.ChunkEntries {
 
     @Inject(method = "setDirty", at = @At("HEAD"))
     private void sleep$dirty(boolean playerChanged, CallbackInfo ci) {
+        sleep$epoch++;
         dev.sleep.optsupport.SectionLists.dirtied((SectionRenderDispatcher.RenderSection) (Object) this);
     }
 
@@ -63,6 +69,7 @@ public abstract class ChunkSectionMixin implements ChunkMultiDraw.ChunkEntries {
 
     @Inject(method = "reset", at = @At("HEAD"))
     private void sleep$reset(CallbackInfo ci) {
+        sleep$epoch++;
         dev.sleep.optsupport.SectionLists.changed();
         dev.sleep.optsupport.SectionLists.dirtied((SectionRenderDispatcher.RenderSection) (Object) this);   // reset sets dirty
         ChunkMultiDraw.release((SectionRenderDispatcher.RenderSection) (Object) this);

@@ -44,7 +44,9 @@ import org.lwjgl.system.MemoryUtil;
  * The GPU computes the transform: differences in float rounding (the render cache's allowance).
  */
 public final class PartBatch {
-    private static final int SSBO_BINDING = 6;
+    private static final int SSBO_BINDING = 6, SPIN_BINDING = 5;
+    /** -Dlab.opt.KineticResidentMixin: shaders get mode 5 (persistent records turned on the GPU, KineticResident) */
+    public static final boolean PERSIST_ON = Boolean.getBoolean("lab.opt.all") || Boolean.getBoolean("lab.opt.KineticResidentMixin");
     public static final Set<String> PATCHED = java.util.concurrent.ConcurrentHashMap.newKeySet();
     public static long parts, draws, fallbacks, geometries;
 
@@ -80,25 +82,65 @@ public final class PartBatch {
         String uv1 = types.get("UV1"), uv2 = types.get("UV2");
         if (uv1 != null && !uv1.equals("ivec2") && !uv1.equals("vec2")) return src;
         if (uv2 != null && !uv2.equals("ivec2")) return src;
+        boolean uv0 = PERSIST_ON && Pattern.compile("\\bin\\s+vec2\\s+UV0\\s*;").matcher(src).find();
         int at = src.indexOf("void main() {");
         String head = src.substring(0, at), body = src.substring(at + "void main() {".length());
         for (String v : new String[] {"Position", "Color", "Normal", "UV1", "UV2"}) body = body.replaceAll("\\b" + v + "\\b", "probe_" + v);
+        if (uv0) body = body.replaceAll("\\bUV0\\b", "probe_UV0");
         StringBuilder pre = new StringBuilder();
         pre.append("struct ProbePart { mat4 pose; vec4 n0; vec4 n1; vec4 n2; vec4 color; ivec4 lo; };\n");
         pre.append("layout(std430) buffer ProbeParts { ProbePart probeParts[]; };\n");
         pre.append("uniform int ProbePartMode;\n");
         pre.append("uniform vec3 ProbeLight0;\nuniform vec3 ProbeLight1;\n");   // mode 4: the level's light directions (block shaders have none)
+        if (PERSIST_ON) {   // mode 5: persistent records (by base instance), their turn about an axis computed from the time
+            pre.append("struct ProbeSpin { vec4 turn; vec4 sprites; vec4 scroll; };\n");
+            pre.append("layout(std430) buffer ProbeSpins { ProbeSpin probeSpins[]; };\n");
+            pre.append("uniform vec3 ProbeCam;\nuniform float ProbeTime;\n");
+        }
         pre.append("layout(location = 15) in float ProbeFlags;\n\n");   // part geometry's 4th normal byte (GeckoLib flat cubes)
         pre.append("void main() {\n");
         pre.append("    vec3 probe_Position = Position;\n    vec4 probe_Color = Color;\n    vec3 probe_Normal = Normal;\n");
         if (uv1 != null) pre.append("    ").append(uv1).append(" probe_UV1 = UV1;\n");
         if (uv2 != null) pre.append("    ivec2 probe_UV2 = UV2;\n");
+        if (uv0) pre.append("    vec2 probe_UV0 = UV0;\n");
         pre.append("    if (ProbePartMode == 2) {\n");
         pre.append("        probe_Position = (probeParts[gl_DrawIDARB].pose * vec4(Position, 1.0)).xyz;\n");
         pre.append("    } else if (ProbePartMode != 0) {\n");
-        pre.append("        ProbePart probe_d = probeParts[gl_DrawIDARB];\n");
-        pre.append("        probe_Position = (probe_d.pose * vec4(Position, 1.0)).xyz;\n");
-        pre.append("        vec3 probe_n = mat3(probe_d.n0.xyz, probe_d.n1.xyz, probe_d.n2.xyz) * Normal;\n");
+        if (PERSIST_ON) {
+            pre.append("        int probe_i = ProbePartMode == 5 ? gl_BaseInstanceARB : gl_DrawIDARB;\n");
+            pre.append("        ProbePart probe_d = probeParts[probe_i];\n");
+            pre.append("        vec3 probe_p = Position, probe_nin = Normal;\n");
+            // Create's angle: ((time x speed x 3 / 10 + offset) % 360) degrees (Java's %: truncated), about the block's centre
+            pre.append("        if (ProbePartMode == 5) {\n");
+            pre.append("            ProbeSpin probe_sp = probeSpins[probe_i];\n");
+            pre.append("            vec4 probe_s = probe_sp.turn;\n");
+            pre.append("            if (probe_s.x > 0.5) {\n");
+            pre.append("                float probe_a = ProbeTime * probe_s.y * 3.0 / 10.0 + probe_s.z;\n");
+            pre.append("                probe_a = (probe_a - 360.0 * trunc(probe_a / 360.0)) / 180.0 * 3.14159265358979;\n");
+            pre.append("                vec3 probe_k = probe_s.x < 1.5 ? vec3(1.0, 0.0, 0.0) : probe_s.x < 2.5 ? vec3(0.0, 1.0, 0.0) : vec3(0.0, 0.0, 1.0);\n");
+            pre.append("                float probe_c = cos(probe_a), probe_sn = sin(probe_a);\n");
+            pre.append("                mat3 probe_r = probe_c * mat3(1.0) + probe_sn * mat3(0.0, probe_k.z, -probe_k.y, -probe_k.z, 0.0, probe_k.x, probe_k.y, -probe_k.x, 0.0)"
+                    + " + (1.0 - probe_c) * outerProduct(probe_k, probe_k);\n");
+            pre.append("                probe_p = probe_r * (Position - 0.5) + 0.5;\n");
+            pre.append("                probe_nin = probe_r * Normal;\n");
+            pre.append("            }\n");
+            if (uv0) {   // a sprite shift (catnip's shiftUVScrolling): ((uv - original) + target) + scroll, V scrolled for the time as Create's belts
+                pre.append("            vec4 probe_sc = probe_sp.scroll;\n");
+                pre.append("            if (probe_sc.w > 0.5) {\n");
+                pre.append("                float probe_x = probe_sc.y * ProbeTime / 504.0 + probe_s.w;\n");
+                pre.append("                probe_x = (probe_x - floor(probe_x)) * probe_sc.z;\n");
+                pre.append("                probe_UV0 = vec2(UV0.x - probe_sp.sprites.x + probe_sp.sprites.y + probe_sc.x, UV0.y - probe_sp.sprites.z + probe_sp.sprites.w + probe_x);\n");
+                pre.append("            }\n");
+            }
+            pre.append("        }\n");
+            pre.append("        probe_Position = (probe_d.pose * vec4(probe_p, 1.0)).xyz;\n");
+            pre.append("        if (ProbePartMode == 5) probe_Position += ProbeCam;\n");
+            pre.append("        vec3 probe_n = mat3(probe_d.n0.xyz, probe_d.n1.xyz, probe_d.n2.xyz) * probe_nin;\n");
+        } else {
+            pre.append("        ProbePart probe_d = probeParts[gl_DrawIDARB];\n");
+            pre.append("        probe_Position = (probe_d.pose * vec4(Position, 1.0)).xyz;\n");
+            pre.append("        vec3 probe_n = mat3(probe_d.n0.xyz, probe_d.n1.xyz, probe_d.n2.xyz) * Normal;\n");
+        }
         pre.append("        if (ProbePartMode == 1) probe_n = normalize(probe_n);\n");   // mode 3 (GeckoLib bones): as emitted, not normalised
         // GeckoLib's fixInvertedFlatCube: on a flat cube's axes a negative (posed) component is flipped: abs()
         pre.append("        if (ProbePartMode == 3) { int probe_f = int(ProbeFlags + 0.5); if ((probe_f & 1) != 0) probe_n.x = abs(probe_n.x); if ((probe_f & 2) != 0) probe_n.y = abs(probe_n.y); if ((probe_f & 4) != 0) probe_n.z = abs(probe_n.z); }\n");
@@ -106,7 +148,7 @@ public final class PartBatch {
         pre.append("        probe_Color = probe_d.color;\n");
         // mode 4 (Create's SuperByteBuffer): the diffuse it computes on the CPU - min(1, (max(0, L0.n) + max(0, L1.n)) * 0.6 + 0.4)
         // with the posed, not normalised normal; unshaded vertices (flag 8) use the fake normal (0, +-1, 0); n0.w: diffuse on
-        pre.append("        if (ProbePartMode == 4) {\n");
+        pre.append("        if (ProbePartMode >= 4) {\n");
         pre.append("            float probe_df = 1.0;\n");
         pre.append("            if (probe_d.n0.w > 0.5) {\n");
         pre.append("                vec3 probe_ln = (int(ProbeFlags + 0.5) & 8) != 0 ? vec3(0.0, probe_d.n1.w, 0.0) : probe_n;\n");
@@ -413,6 +455,18 @@ public final class PartBatch {
      */
     public static boolean captureSbb(Object key, GeometrySource src, Object a, PoseStack.Pose input, PoseStack.Pose local, float r, float g, float b,
             float alpha, boolean diffuse, float fakeNormalY, int light, int overlay, VertexConsumer buffer) {
+        if (!sbbTarget(key, src, a, buffer)) return false;
+        SBB_M.set(input.pose()).mul(local.pose());
+        SBB_N.set(input.normal()).mul(local.normal());
+        queueSbb((BufferBuilder) buffer, lastSbbType, lastSbbGeo, SBB_M, SBB_N, r, g, b, alpha, diffuse, fakeNormalY, light, overlay);
+        return true;
+    }
+
+    /**
+     * Whether a SuperByteBuffer template into this buffer can be a part (the checks of captureSbb, its geometry uploaded
+     * once): then lastSbbType / lastSbbGeo are its type and geometry. Nothing is queued.
+     */
+    public static boolean sbbTarget(Object key, GeometrySource src, Object a, VertexConsumer buffer) {
         int why = !(buffer instanceof BufferBuilder) ? 0 : !RenderSystem.isOnRenderThread() ? 1 : -1;
         RenderType type = why < 0 ? EntityBatch.typeOf((BufferBuilder) buffer) : null;
         if (why < 0) why = type == null ? 2 : type.format() != DefaultVertexFormat.BLOCK || type.mode() != VertexFormat.Mode.QUADS ? 3 : !typeOk(type) ? 4 : !capable() ? 5 : -1;
@@ -423,7 +477,6 @@ public final class PartBatch {
             if ((why == 3 || why == 4) && SBB_TYPES.size() < 8) SBB_TYPES.add(type.toString());
             return false;
         }
-        BufferBuilder bb = (BufferBuilder) buffer;
         int[] geo = GEOMETRY.get(key);
         if (geo == null) {
             GEOM.reset();
@@ -434,11 +487,8 @@ public final class PartBatch {
             sbbRefused++;
             return false;
         }
-        SBB_M.set(input.pose()).mul(local.pose());
-        SBB_N.set(input.normal()).mul(local.normal());
         lastSbbType = type;
         lastSbbGeo = geo;
-        queueSbb(bb, type, geo, SBB_M, SBB_N, r, g, b, alpha, diffuse, fakeNormalY, light, overlay);
         return true;
     }
 
@@ -451,6 +501,15 @@ public final class PartBatch {
 
         /** the draw made something that is not a part */
         void cpu();
+
+        /**
+         * A part with a scrolling sprite shift (drawn on the CPU path now: its vertexCount vertices are expected), kept with
+         * the shift's sprites and scroll for a resident draw; recorders that cannot keep it call cpu().
+         */
+        default void capturedShifted(Object sbb, PoseStack.Pose input, PoseStack.Pose local, float r, float g, float b, float a, boolean diffuse,
+                float fakeY, int light, int overlay, RenderType type, int[] geo, Object spriteShift, float scrollU, float scrollV, int vertexCount) {
+            cpu();
+        }
 
         default String report() {
             return "";
@@ -504,6 +563,173 @@ public final class PartBatch {
         return vc instanceof BufferBuilder bb && EntityBatch.typeOf(bb) == type ? bb : null;
     }
 
+    // ------------------------------------------------------------------ persistent records (mode 5, KineticResident)
+
+    /**
+     * Records that stay in VRAM while their owner does not change (144 bytes as above, the pose relative to an anchor
+     * the frame's ProbeCam moves to the camera), with a spin each (axis 1..3 or 0, speed, angle offset in degrees: the
+     * shader turns the part for ProbeTime as Create does). A frame sends only the commands of the ones it draws.
+     */
+    private static long pMem = MemoryUtil.nmemAlloc(144L * 1024), pSpin = MemoryUtil.nmemAlloc(48L * 1024);   // SPIN_BYTES each
+    private static int pCap = 1024, pUsed, pFreeN, pLo = Integer.MAX_VALUE, pHi = -1, pSsbo, pSpinSsbo, pGpuCap;
+    private static int[] pFree = new int[256];
+    /** a record's spin: turn (axis, speed, angle offset, scroll phase), sprites (original u0, target u0, original v0,
+     *  target v0), scroll (u shift, V speed, V scale, on) */
+    private static final long SPIN_BYTES = 48;
+    /** the frame's anchor-to-camera offset and Create's render time (set before the level's block entities) */
+    public static float persistCamX, persistCamY, persistCamZ, persistTime;
+    public static long persistDraws, persistUploads;
+
+    static final class PQueue {
+        long cmds = MemoryUtil.nmemAlloc(20L * 256);
+        int cap = 256, n, maxIndices;
+    }
+
+    private static final Map<RenderType, PQueue> PERSIST = new IdentityHashMap<>();
+
+    public static int persistAlloc() {
+        if (pFreeN > 0) return pFree[--pFreeN];
+        if (pUsed == pCap) {
+            pCap *= 2;
+            pMem = MemoryUtil.nmemRealloc(pMem, 144L * pCap);
+            pSpin = MemoryUtil.nmemRealloc(pSpin, SPIN_BYTES * pCap);
+        }
+        return pUsed++;
+    }
+
+    public static void persistFree(int i) {
+        if (pFreeN == pFree.length) pFree = java.util.Arrays.copyOf(pFree, pFreeN * 2);
+        pFree[pFreeN++] = i;
+    }
+
+    /** Record i: as queueSbb writes it, and its spin (axis 0: not turned; sprites null: no UV shift). */
+    public static void persistWrite(int i, Matrix4f m, Matrix3f nm, float r, float g, float b, float alpha, boolean diffuse, float fakeNormalY,
+            int light, int overlay, int axis, float speed, float offsetDeg, float[] sprites, float scrollU, float scrollSpeed, float scrollPhase,
+            float scrollScale) {
+        long rec = pMem + 144L * i;
+        m.getToAddress(rec);
+        MemoryUtil.memPutFloat(rec + 64, nm.m00());
+        MemoryUtil.memPutFloat(rec + 68, nm.m01());
+        MemoryUtil.memPutFloat(rec + 72, nm.m02());
+        MemoryUtil.memPutFloat(rec + 76, diffuse ? 1.0F : 0.0F);
+        MemoryUtil.memPutFloat(rec + 80, nm.m10());
+        MemoryUtil.memPutFloat(rec + 84, nm.m11());
+        MemoryUtil.memPutFloat(rec + 88, nm.m12());
+        MemoryUtil.memPutFloat(rec + 92, fakeNormalY);
+        MemoryUtil.memPutFloat(rec + 96, nm.m20());
+        MemoryUtil.memPutFloat(rec + 100, nm.m21());
+        MemoryUtil.memPutFloat(rec + 104, nm.m22());
+        MemoryUtil.memPutFloat(rec + 108, 0.0F);
+        MemoryUtil.memPutFloat(rec + 112, r);
+        MemoryUtil.memPutFloat(rec + 116, g);
+        MemoryUtil.memPutFloat(rec + 120, b);
+        MemoryUtil.memPutFloat(rec + 124, alpha);
+        MemoryUtil.memPutInt(rec + 128, light & 0xFFFF);
+        MemoryUtil.memPutInt(rec + 132, light >>> 16 & 0xFFFF);
+        MemoryUtil.memPutInt(rec + 136, overlay & 0xFFFF);
+        MemoryUtil.memPutInt(rec + 140, overlay >>> 16 & 0xFFFF);
+        long s = pSpin + SPIN_BYTES * i;
+        MemoryUtil.memPutFloat(s, axis);
+        MemoryUtil.memPutFloat(s + 4, speed);
+        MemoryUtil.memPutFloat(s + 8, offsetDeg);
+        MemoryUtil.memPutFloat(s + 12, scrollPhase);
+        for (int k = 0; k < 4; k++) MemoryUtil.memPutFloat(s + 16 + 4 * k, sprites != null ? sprites[k] : 0.0F);
+        MemoryUtil.memPutFloat(s + 32, scrollU);
+        MemoryUtil.memPutFloat(s + 36, scrollSpeed);
+        MemoryUtil.memPutFloat(s + 40, scrollScale);
+        MemoryUtil.memPutFloat(s + 44, sprites != null ? 1.0F : 0.0F);
+        if (i < pLo) pLo = i;
+        if (i > pHi) pHi = i;
+    }
+
+    /** The command queue of a type's persistent records (kept by their owner: no lookup per draw). */
+    public static Object persistQueue(RenderType type) {
+        PQueue q = PERSIST.get(type);
+        if (q == null) PERSIST.put(type, q = new PQueue());
+        return q;
+    }
+
+    /** True when the queue has no command yet in its type's current batch (then the batch needs persistBatch first). */
+    public static boolean persistFirst(Object queue) {
+        return ((PQueue) queue).n == 0;
+    }
+
+    /** The type's batch gets its empty quad so it is drawn (and with it the queue: afterDraw). */
+    public static void persistBatch(BufferBuilder bb) {
+        emptyQuad(bb);
+    }
+
+    /** Draws persistent record rec (geometry first, quads) with its type's batch this frame. */
+    public static void queuePersistent(Object queue, int first, int quads, int rec) {
+        PQueue q = (PQueue) queue;
+        if (q.n == q.cap) {
+            q.cap *= 2;
+            q.cmds = MemoryUtil.nmemRealloc(q.cmds, 20L * q.cap);
+        }
+        long c = q.cmds + 20L * q.n++;
+        int idx = quads * 6;
+        MemoryUtil.memPutInt(c, idx);
+        MemoryUtil.memPutInt(c + 4, 1);
+        MemoryUtil.memPutInt(c + 8, 0);
+        MemoryUtil.memPutInt(c + 12, first);
+        MemoryUtil.memPutInt(c + 16, rec);
+        if (idx > q.maxIndices) q.maxIndices = idx;
+        persistDraws++;
+    }
+
+    /** The records written since the last frame to VRAM (all of them when the store grew). */
+    private static void persistUpload() {
+        if (pGpuCap < pCap) {
+            if (pSsbo == 0) {
+                pSsbo = GL15C.glGenBuffers();
+                pSpinSsbo = GL15C.glGenBuffers();
+            }
+            GL15C.glBindBuffer(GL43C.GL_SHADER_STORAGE_BUFFER, pSsbo);
+            GL15C.nglBufferData(GL43C.GL_SHADER_STORAGE_BUFFER, 144L * pCap, pMem, GL15C.GL_DYNAMIC_DRAW);
+            GL15C.glBindBuffer(GL43C.GL_SHADER_STORAGE_BUFFER, pSpinSsbo);
+            GL15C.nglBufferData(GL43C.GL_SHADER_STORAGE_BUFFER, SPIN_BYTES * pCap, pSpin, GL15C.GL_DYNAMIC_DRAW);
+            pGpuCap = pCap;
+            persistUploads++;
+        } else if (pHi >= pLo) {
+            int n = pHi - pLo + 1;
+            GL15C.glBindBuffer(GL43C.GL_SHADER_STORAGE_BUFFER, pSsbo);
+            GL15C.nglBufferSubData(GL43C.GL_SHADER_STORAGE_BUFFER, 144L * pLo, 144L * n, pMem + 144L * pLo);
+            GL15C.glBindBuffer(GL43C.GL_SHADER_STORAGE_BUFFER, pSpinSsbo);
+            GL15C.nglBufferSubData(GL43C.GL_SHADER_STORAGE_BUFFER, SPIN_BYTES * pLo, SPIN_BYTES * n, pSpin + SPIN_BYTES * pLo);
+            persistUploads++;
+        }
+        pLo = Integer.MAX_VALUE;
+        pHi = -1;
+    }
+
+    private static void drawPersistent(ShaderInstance shader, PQueue q) {
+        int[] st = programState(shader);
+        if (st[0] < 0 || st[1] == GL31C.GL_INVALID_INDEX || st[4] < 0) {
+            fallbacks += q.n;
+            q.n = 0;
+            return;
+        }
+        persistUpload();
+        GL30C.glBindBufferBase(GL43C.GL_SHADER_STORAGE_BUFFER, SSBO_BINDING, pSsbo);
+        GL30C.glBindBufferBase(GL43C.GL_SHADER_STORAGE_BUFFER, SPIN_BINDING, pSpinSsbo);
+        if (vaoStale || blockVao == 0) setupVao();
+        GL30C.glBindVertexArray(blockVao);
+        lightUniforms(st);
+        GL20C.glUniform3f(st[4], persistCamX, persistCamY, persistCamZ);
+        GL20C.glUniform1f(st[5], persistTime);
+        RenderSystem.AutoStorageIndexBuffer seq = RenderSystem.getSequentialBuffer(VertexFormat.Mode.QUADS);
+        seq.bind(q.maxIndices);
+        GL20C.glUniform1i(st[0], 5);
+        long cmdAt = COMMANDS.upload(q.cmds, 20L * q.n);
+        GL43C.glMultiDrawElementsIndirect(GL11C.GL_TRIANGLES, seq.type().asGLType, cmdAt, q.n, 20);
+        if (IndirectDiag.ON) IndirectDiag.after("parts 5", seq.type().asGLType, cmdAt, q.n, 20);
+        GL15C.glBindBuffer(org.lwjgl.opengl.GL40C.GL_DRAW_INDIRECT_BUFFER, 0);
+        GL20C.glUniform1i(st[0], 0);
+        draws++;
+        q.n = 0;
+        q.maxIndices = 0;
+    }
+
     /** The buffer's render type when it is a batch (EntityBatch) PartBatch can draw from VRAM, on the render thread. */
     private static RenderType batchedType(VertexConsumer buffer) {
         if (!(buffer instanceof BufferBuilder bb) || !RenderSystem.isOnRenderThread()) return null;
@@ -520,14 +746,18 @@ public final class PartBatch {
 
     /** The type's queue with room for one more record (the batch gets its empty quad if it has no vertices yet). */
     private static Queue slot(Map<RenderType, Queue> queues, RenderType type, BufferBuilder bb) {
-        dev.sleep.opt.BufferBuilderAccessor a = (dev.sleep.opt.BufferBuilderAccessor) bb;
-        if (a.sleep$vertices() == 0) {   // the batch must be drawn even if every part of it is queued: one empty quad
-            for (int i = 0; i < 4; i++) bb.addVertex(0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0);
-            emptyQuadVertices += 4;
-        }
+        emptyQuad(bb);
         Queue q = queues.computeIfAbsent(type, t -> new Queue());
         q.ensure();
         return q;
+    }
+
+    /** The batch must be drawn even if every part of it is queued: one empty quad if it has no vertices yet. */
+    private static void emptyQuad(BufferBuilder bb) {
+        if (((dev.sleep.opt.BufferBuilderAccessor) bb).sleep$vertices() == 0) {
+            for (int i = 0; i < 4; i++) bb.addVertex(0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0);
+            emptyQuadVertices += 4;
+        }
     }
 
     private static void commit(Queue q, int first, int quads) {
@@ -727,11 +957,13 @@ public final class PartBatch {
         RenderType t = current;
         if (t == null) return;
         Queue q = QUEUES.get(t), r = RESIDENT.get(t), gq = GEO_QUEUES.get(t), sq = SBB_QUEUES.get(t);
-        boolean parts = q != null && q.n > 0, res = r != null && r.n > 0, geo = gq != null && gq.n > 0, sbb = sq != null && sq.n > 0;
-        if (!parts && !res && !geo && !sbb) return;
+        PQueue pq = PERSIST.isEmpty() ? null : PERSIST.get(t);
+        boolean parts = q != null && q.n > 0, res = r != null && r.n > 0, geo = gq != null && gq.n > 0, sbb = sq != null && sq.n > 0, per = pq != null && pq.n > 0;
+        if (!parts && !res && !geo && !sbb && !per) return;
         if (parts) drawQueue(shader, q, 1);
         if (geo) drawQueue(shader, gq, 3);
         if (sbb) drawQueue(shader, sq, 4);
+        if (per) drawPersistent(shader, pq);
         if (res) {
             if (t.sortOnUpload()) sortBackToFront(r);
             drawQueue(shader, r, 2);
@@ -760,14 +992,38 @@ public final class PartBatch {
         MemoryUtil.nmemFree(bas);
     }
 
-    private static void drawQueue(ShaderInstance shader, Queue q, int mode) {
-        // looked up once per program: a query each draw makes the render thread wait for the driver's thread
-        int[] st = PROGRAMS.computeIfAbsent(shader.getId(), id -> {
+    /** {mode, ProbeParts block, ProbeLight0, ProbeLight1, ProbeCam, ProbeTime}: looked up once per program (a query each
+     *  draw makes the render thread wait for the driver's thread). */
+    private static int[] programState(ShaderInstance shader) {
+        return PROGRAMS.computeIfAbsent(shader.getId(), id -> {
             int f = GL20C.glGetUniformLocation(id, "ProbePartMode");
             int b = GL43C.glGetProgramResourceIndex(id, GL43C.GL_SHADER_STORAGE_BLOCK, "ProbeParts");
             if (f >= 0 && b != GL31C.GL_INVALID_INDEX) GL43C.glShaderStorageBlockBinding(id, b, SSBO_BINDING);
-            return new int[] {f, b, GL20C.glGetUniformLocation(id, "ProbeLight0"), GL20C.glGetUniformLocation(id, "ProbeLight1")};
+            int cam = -1, time = -1;
+            if (PERSIST_ON) {
+                int s = GL43C.glGetProgramResourceIndex(id, GL43C.GL_SHADER_STORAGE_BLOCK, "ProbeSpins");
+                if (s != GL31C.GL_INVALID_INDEX) {
+                    GL43C.glShaderStorageBlockBinding(id, s, SPIN_BINDING);
+                    cam = GL20C.glGetUniformLocation(id, "ProbeCam");
+                    time = GL20C.glGetUniformLocation(id, "ProbeTime");
+                }
+            }
+            return new int[] {f, b, GL20C.glGetUniformLocation(id, "ProbeLight0"), GL20C.glGetUniformLocation(id, "ProbeLight1"), cam, time};
         });
+    }
+
+    private static void lightUniforms(int[] st) {
+        org.joml.Vector3f[] ld = lightDirections != null ? lightDirections.get() : null;
+        if (ld != null && st[2] >= 0) {
+            L0.set(ld[0]).normalize();
+            L1.set(ld[1]).normalize();
+            GL20C.glUniform3f(st[2], L0.x, L0.y, L0.z);
+            GL20C.glUniform3f(st[3], L1.x, L1.y, L1.z);
+        }
+    }
+
+    private static void drawQueue(ShaderInstance shader, Queue q, int mode) {
+        int[] st = programState(shader);
         int flag = st[0];
         if (flag < 0 || st[1] == GL31C.GL_INVALID_INDEX) {
             fallbacks += q.n;   // should not happen (typeOk): the parts are lost for this frame
@@ -782,13 +1038,7 @@ public final class PartBatch {
         if (mode == 4) {   // SuperByteBuffer templates into a BLOCK-format type: its attribute order, the light directions
             if (vaoStale || blockVao == 0) setupVao();
             GL30C.glBindVertexArray(blockVao);
-            org.joml.Vector3f[] ld = lightDirections != null ? lightDirections.get() : null;
-            if (ld != null && st[2] >= 0) {
-                L0.set(ld[0]).normalize();
-                L1.set(ld[1]).normalize();
-                GL20C.glUniform3f(st[2], L0.x, L0.y, L0.z);
-                GL20C.glUniform3f(st[3], L1.x, L1.y, L1.z);
-            }
+            lightUniforms(st);
         } else if (mode != 2) {   // part geometry (modes 1, 3); mode 2 draws resident recordings
             if (vaoStale || vao == 0) setupVao();
             GL30C.glBindVertexArray(vao);
@@ -881,12 +1131,17 @@ public final class PartBatch {
                 q.maxIndices = 0;
             }
         }
+        for (PQueue q : PERSIST.values()) {
+            if (q.n > 0) fallbacks += q.n;
+            q.n = 0;
+            q.maxIndices = 0;
+        }
     }
 
     public static String report() {
         SbbRecorder rcd = sbbRecorder;
-        return (rcd != null ? rcd.report() + "; " : "") + String.format(java.util.Locale.ROOT, "part batch: SuperByteBuffer calls %d, parts %d (not taken %d %s %s %s, UV shift %d, level light %d); shaders patched %s, parts %d, GeckoLib bones %d (from workers %d, jobs refused at merge %d), multi-draws %d, geometries %d (%.1f MB), lost %d; resident draws %d, uploads %d (arena %.1f MB)",
+        return (rcd != null ? rcd.report() + "; " : "") + String.format(java.util.Locale.ROOT, "part batch: SuperByteBuffer calls %d, parts %d (not taken %d %s %s %s, UV shift %d, level light %d); shaders patched %s, parts %d, GeckoLib bones %d (from workers %d, jobs refused at merge %d), multi-draws %d, geometries %d (%.1f MB), lost %d; resident draws %d, uploads %d (arena %.1f MB); persistent records %d, draws %d, uploads %d",
                 sbbCalls, sbbParts, sbbRefused, java.util.Arrays.toString(SBB_WHY), SBB_CONSUMERS, SBB_TYPES, sbbShift, sbbLevelLight, PATCHED, parts, geoParts, jobMerged, jobRefused, draws, geometries, (double) used * STRIDE / 1048576.0, fallbacks, residentDraws, residentUploads,
-                (double) RES_ARENA.capacity * RES_ARENA.stride / 1048576.0);
+                (double) RES_ARENA.capacity * RES_ARENA.stride / 1048576.0, pUsed - pFreeN, persistDraws, persistUploads);
     }
 }
