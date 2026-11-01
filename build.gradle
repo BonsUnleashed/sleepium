@@ -31,10 +31,16 @@ repositories {
         url = 'https://dl.cloudsmith.io/public/geckolib3/geckolib/maven/'
         content { includeGroup 'software.bernie.geckolib' }
     }
+    // Flywheel (Create bundles it), for the engine's Flywheel mixin (applied only when Flywheel is installed)
+    maven {
+        url = 'https://maven.createmod.net'
+        content { includeGroup 'dev.engine-room.flywheel' }
+    }
 }
 
 dependencies {
     compileOnly "software.bernie.geckolib:geckolib-neoforge-${minecraft_version}:${geckolib_version}"
+    compileOnly "dev.engine-room.flywheel:flywheel-neoforge-${minecraft_version}:${flywheel_version}"
 }
 
 neoForge {
@@ -136,7 +142,7 @@ def checkEngine = tasks.register('checkEngineIndependent') {
     inputs.files(engineSources)
     doLast {
         def bad = engineSources.files.findAll { f ->
-            f.name.endsWith('.java') && f.text.find(/(?m)^\s*import\s+(static\s+)?dev\.(?!sleep\.|lab\.)/)
+            f.name.endsWith('.java') && f.text.find(/(?m)^\s*import\s+(static\s+)?dev\.(?!sleep\.|lab\.|engine_room\.flywheel\.)/)
         }
         if (!bad.isEmpty()) throw new GradleException("the engine imports another mod's package: " + bad*.name)
     }

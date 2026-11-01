@@ -1,0 +1,13 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "dev.sleep.flwmixin",
+  "plugin": "dev.sleep.flwmixin.FlwMixinPlugin",
+  "compatibilityLevel": "JAVA_21",
+  "client": [
+    "FlwExecutorMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}
