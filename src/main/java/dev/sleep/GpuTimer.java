@@ -13,12 +13,34 @@ public final class GpuTimer {
     private static final int[] BEGIN = new int[RING], END = new int[RING];
     private static int slot;
     private static long written, frames, gpuNanos;
+    /** per frame slot: timestamps at renderLevel's section changes (DrawStats.section) and the sections' names */
+    private static final int MAXS = 40;
+    private static final int[][] SQ = new int[RING][];
+    private static final String[][] SN = new String[RING][MAXS];
+    private static final int[] SC = new int[RING];
+    private static final java.util.Map<String, long[]> GPU_SECTIONS = new java.util.LinkedHashMap<>();
+
+    /** a timestamp where renderLevel enters section {@code name} (null: renderLevel ended) */
+    static void section(String name) {
+        if (!DrawStats.active || BEGIN[0] == 0) return;
+        int c = SC[slot];
+        if (c >= MAXS) return;
+        if (SQ[slot] == null) {
+            SQ[slot] = new int[MAXS];
+            GL15C.glGenQueries(SQ[slot]);
+        }
+        GL33C.glQueryCounter(SQ[slot][c], GL33C.GL_TIMESTAMP);
+        SN[slot][c] = name == null ? "(after renderLevel)" : name;
+        SC[slot] = c + 1;
+    }
 
     private GpuTimer() {}
 
     static void reset() {
         frames = 0;
         gpuNanos = 0;
+        GPU_SECTIONS.clear();
+        java.util.Arrays.fill(SC, 0);
         written = 0;
         slot = 0;
     }
@@ -30,6 +52,7 @@ public final class GpuTimer {
             GL15C.glGenQueries(END);
         }
         GL33C.glQueryCounter(BEGIN[slot], GL33C.GL_TIMESTAMP);
+        SC[slot] = 0;
     }
 
     public static void end() {
@@ -44,12 +67,26 @@ public final class GpuTimer {
                 long b = GL33C.glGetQueryObjecti64(BEGIN[i], GL15C.GL_QUERY_RESULT), e = GL33C.glGetQueryObjecti64(END[i], GL15C.GL_QUERY_RESULT);
                 gpuNanos += e - b;
                 frames++;
+                int n = SC[i];   // the sections: from each timestamp to the next (the last to the frame's end)
+                long prev = b;
+                String prevName = "(before renderLevel)";
+                for (int k = 0; k < n; k++) {
+                    long t = GL33C.glGetQueryObjecti64(SQ[i][k], GL15C.GL_QUERY_RESULT);
+                    GPU_SECTIONS.computeIfAbsent(prevName, x -> new long[1])[0] += t - prev;
+                    prev = t;
+                    prevName = SN[i][k];
+                }
+                GPU_SECTIONS.computeIfAbsent(prevName, x -> new long[1])[0] += e - prev;
             }
         }
     }
 
     static String report() {
-        return frames == 0 ? "gpu time: no samples" : String.format(java.util.Locale.ROOT, "gpu time (render start -> end on the GPU clock): %.3f ms per frame (%d frames)",
-                gpuNanos / 1e6 / frames, frames);
+        if (frames == 0) return "gpu time: no samples";
+        StringBuilder sb = new StringBuilder(String.format(java.util.Locale.ROOT, "gpu time (render start -> end on the GPU clock): %.3f ms per frame (%d frames)",
+                gpuNanos / 1e6 / frames, frames));
+        sb.append("\n  gpu time by renderLevel section (ms per frame):");
+        GPU_SECTIONS.forEach((k, t) -> sb.append(String.format(java.util.Locale.ROOT, " %s %.3f;", k, t[0] / 1e6 / frames)));
+        return sb.toString();
     }
 }

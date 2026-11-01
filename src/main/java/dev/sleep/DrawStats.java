@@ -30,12 +30,28 @@ public final class DrawStats {
         if (active && PHASE_START[i] != 0) PHASE[i] += System.nanoTime() - PHASE_START[i];
     }
     private static Class<?> current;
+    /** renderLevel's profiler sections (DrawStatsPhasesMixin): nanos per section name, in first-seen order */
+    private static final Map<String, long[]> SECTIONS = new java.util.LinkedHashMap<>();
+    private static String section;
+    private static long sectionAt;
+
+    /** renderLevel entered a profiler section (null: renderLevel ended) */
+    public static void section(String name) {
+        if (!active) return;
+        GpuTimer.section(name);
+        long now = System.nanoTime();
+        if (section != null) SECTIONS.computeIfAbsent(section, k -> new long[1])[0] += now - sectionAt;
+        section = name;
+        sectionAt = now;
+    }
 
     private DrawStats() {}
 
     static void start() {
         TYPES.clear();
         OBJECTS.clear();
+        SECTIONS.clear();
+        section = null;
         java.util.Arrays.fill(PHASE, 0);
         java.util.Arrays.fill(PHASE_START, 0);
         GpuTimer.reset();
@@ -85,6 +101,8 @@ public final class DrawStats {
         }
         sb.append("\n  ").append(GpuTimer.report());
         for (int i = 0; i < PHASE.length; i++) sb.append(String.format(Locale.ROOT, "\n  %s: %.3f ms per frame", PHASE_NAMES[i], PHASE[i] / 1e6 / frames));
+        sb.append("\n  renderLevel sections (ms per frame):");
+        SECTIONS.forEach((k, t) -> sb.append(String.format(Locale.ROOT, " %s %.3f;", k, t[0] / 1e6 / frames)));
         sb.append(String.format(Locale.ROOT, "\n  immediate draws %.1f, vertices %.0f, uploaded %.0f KiB", d / (double) frames, v / (double) frames, b / 1024.0 / frames));
         List<Map.Entry<String, long[]>> ts = new ArrayList<>(TYPES.entrySet());
         ts.sort((x, y) -> Long.compare(y.getValue()[1], x.getValue()[1]));

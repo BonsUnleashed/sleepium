@@ -65,6 +65,8 @@ public final class RenderCache {
         long tick, key, state, stateNow, hashTick = Long.MIN_VALUE, refreshAt, probedAt = Long.MIN_VALUE / 2;
         boolean recorded;
         long[] fields;
+        /** learnFields: the per-field hashes the recording was made with */
+        long[] fieldsAt;
         long keyNow, keyTick = Long.MIN_VALUE;
         int light, overlay;
         float yaw;
@@ -351,6 +353,20 @@ public final class RenderCache {
             return;
         }
         boolean changed = !rec.recorded || rec.state != rec.stateNow || rec.key != key;
+        if (StateHash.LEARN && rec.recorded && rec.fieldsAt != null && rec.state != rec.stateNow && rec.key == key && rec.light == light
+                && rec.overlay == overlay && rec.yaw == yaw && tick < rec.refreshAt) {
+            // only the state changed: is the output another one? (learning which fields do not matter)
+            long[] now = StateHash.fields(obj);
+            if (record(d, pt, CHECK) == OK && CHECK.sameAs(rec)) {
+                StateHash.unchanged(obj, rec.fieldsAt, now);
+                rec.fieldsAt = now;
+                rec.state = rec.stateNow;
+                sameAfterChange++;
+                replay(rec, buffers, pose);
+                return;
+            }
+            StateHash.changedOutput(obj, rec.fieldsAt, now);
+        }
         rec.recorded = false;
         int r = record(d, pt, rec);
         if (r != OK) {
@@ -408,6 +424,7 @@ public final class RenderCache {
         }
         rec.recorded = true;
         rec.state = rec.stateNow;
+        if (StateHash.LEARN) rec.fieldsAt = StateHash.fields(obj);
         rec.light = light;
         rec.overlay = overlay;
         rec.yaw = yaw;
@@ -418,6 +435,9 @@ public final class RenderCache {
     }
 
     private static final boolean WHY = Boolean.getBoolean("lab.rcache.why");
+    /** learnFields: a re-recording after a state change, compared with the recording it would replace */
+    private static final Rec CHECK = new Rec();
+    public static long sameAfterChange;
     private static final Map<String, long[]> WHY_COUNTS = new HashMap<>();
 
     /** Which fields changed since the last tick's hash, counted by class and field name. */
@@ -585,8 +605,9 @@ public final class RenderCache {
                 .forEach(e -> w.append("\n    changed ").append(e.getValue()[0]).append("x ").append(e.getKey()));
         StringBuilder sb = new StringBuilder(w.length() > 0 ? "render cache field changes:" + w + "\n" : "");
         sb.append(String.format(java.util.Locale.ROOT,
-                "render cache: hits %d, records %d, animated %d, unsupported %d, vanilla %d, replayed vertices %d%s", hits, records, animated, unsupported, vanilla,
-                replayedVertices, VERIFY ? ", verified " + verified + ", mismatches " + mismatches : ""));
+                "render cache: hits %d, records %d, animated %d, unsupported %d, vanilla %d, replayed vertices %d%s%s", hits, records, animated, unsupported, vanilla,
+                replayedVertices, VERIFY ? ", verified " + verified + ", mismatches " + mismatches : "",
+                StateHash.LEARN ? ", same after a state change " + sameAfterChange + ", fields left out " + StateHash.learned : ""));
         BY_CLASS.forEach((c, v) -> sb.append(String.format(java.util.Locale.ROOT, "\n    %s: hits %d, records %d, animated %d, unsupported %d%s", c.getSimpleName(),
                 v[0], v[1], v[2], v[3], (v[5] != 0 ? ", learned: animated" : "") + (VERIFY ? ", mismatches " + v[4] : ""))));
         return sb.toString();

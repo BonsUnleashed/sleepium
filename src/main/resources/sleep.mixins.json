@@ -96,6 +96,7 @@
     "DrawStatsEntitiesMixin",
     "DrawStatsFrameMixin",
     "DrawStatsLevelMixin",
+    "DrawStatsPhasesMixin",
     "ClientAutoMouseMixin",
     "ClientAutoFlickerMixin",
     "TextureMipsFlagMixin",
