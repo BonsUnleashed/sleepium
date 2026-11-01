@@ -390,6 +390,7 @@ public final class LightVolumes {
      * with a volume gets its volume refreshed instead; any other one is re-meshed, from now on with recipes.
      */
     public static void lightChanged(int x, int y, int z) {
+        if (PartBatch.LIT_ON) LightBoxes.sectionChanged(x, y, z);
         long k = SectionPos.asLong(x, y, z);
         Sec sec = SECS.get(k);
         if (sec != null && sec.vol >= 0 && sec.ready && sec.info != null && sec.info.complete) {

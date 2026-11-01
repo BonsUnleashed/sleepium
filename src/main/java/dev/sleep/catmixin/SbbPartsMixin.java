@@ -36,6 +36,8 @@ public abstract class SbbPartsMixin implements PartBatch.GeometrySource, dev.sle
     @Shadow private boolean hasCustomLight;
     @Shadow private int packedLight;
     @Shadow private boolean useLevelLight;
+    @Shadow private net.minecraft.world.level.BlockAndTintGetter levelWithLight;
+    @Shadow private org.joml.Matrix4f lightTransform;
     @Shadow @Final private boolean invertFakeDiffuseNormal;
 
     @Shadow
@@ -101,7 +103,20 @@ public abstract class SbbPartsMixin implements PartBatch.GeometrySource, dev.sle
         }
         if (useLevelLight) {
             PartBatch.sbbLevelLight++;
-            if (rcd != null) rcd.cpu();
+            if (rcd != null && rcd.recording()) {
+                rcd.cpu();
+                return;
+            }
+            // lit by the level (contraptions, actors): the light looked up on the GPU from a light box
+            if (!PartBatch.LIT_ON || dev.sleep.optsupport.RenderCache.recording()) return;
+            if (PartBatch.lightDirections == null) PartBatch.lightDirections = RenderSystemLightAccessor::sleep$lightDirections;
+            boolean diffuse = !disableDiffuse && !dev.engine_room.flywheel.lib.util.ShadersModHelper.isShaderPackInUse();
+            int light = hasCustomLight ? packedLight : 0;
+            if (PartBatch.captureLit(template, this, input.last(), transforms.last(), lightTransform, levelWithLight, r, g, b, a, diffuse,
+                    invertFakeDiffuseNormal ? -1.0F : 1.0F, light, 0, builder)) {
+                reset();
+                ci.cancel();
+            }
             return;
         }
         if (dev.sleep.optsupport.RenderCache.recording()) {   // the render cache records it: a part draws it cheaper - directly
@@ -123,14 +138,13 @@ public abstract class SbbPartsMixin implements PartBatch.GeometrySource, dev.sle
         }
     }
 
-    /** The template in local space for PartBatch's geometry (with its per-vertex colour): false when a vertex has its own light. */
+    /** The template in local space for PartBatch's geometry (with its per-vertex colour and own light). */
     @Override
     public boolean sleep$emit(Object unusedA, Object unusedB, VertexConsumer consumer) {
         int n = template.vertexCount();
         boolean shaded = true;
         int swap = 0, next = shadeSwapVertices.length > 0 ? shadeSwapVertices[0] : -1;
         for (int i = 0; i < n; i++) {
-            if (template.light(i) != 0) return false;   // its own light (an emissive quad): the CPU path
             if (i == next) {
                 shaded = !shaded;
                 swap++;
@@ -140,7 +154,8 @@ public abstract class SbbPartsMixin implements PartBatch.GeometrySource, dev.sle
             int pn = template.normal(i);
             consumer.addVertex(template.x(i), template.y(i), template.z(i));
             if (consumer instanceof PartBatch.Flagged f) f.sleep$rawColor(template.color(i));   // bytes R, G, B, A as renderInto reads them
-            consumer.setUv(template.u(i), template.v(i))
+            int tl = template.light(i);   // its own light (catnip takes the max with the custom / level light)
+            consumer.setUv(template.u(i), template.v(i)).setUv2(tl & 0xFFFF, tl >>> 16)
                     .setNormal((byte) (pn & 0xFF) / 127.0F, (byte) (pn >>> 8 & 0xFF) / 127.0F, (byte) (pn >>> 16 & 0xFF) / 127.0F);
         }
         return true;

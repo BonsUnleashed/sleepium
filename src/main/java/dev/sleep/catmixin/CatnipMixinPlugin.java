@@ -24,6 +24,9 @@ public final class CatnipMixinPlugin implements IMixinConfigPlugin {
      *  KineticMemoMixin (and ChunkSectionMixin, BlockEntityCullNoAllocMixin: the section epoch, the loop's hook) */
     private static final boolean RESIDENT = MEMO && (Boolean.getBoolean("lab.opt.all") || Boolean.getBoolean("lab.opt.KineticResidentMixin"));
 
+    /** level-lit SuperByteBuffers on the GPU (contraptions, actors), {@code -Dlab.opt.LevelLitPartsMixin=true} with SbbPartsMixin */
+    private static final boolean LIT = PARTS && (Boolean.getBoolean("lab.opt.all") || Boolean.getBoolean("lab.opt.LevelLitPartsMixin"));
+
     static boolean create() {
         var mods = net.neoforged.fml.loading.LoadingModList.get();
         return mods != null && mods.getModFileById("create") != null;
@@ -46,7 +49,8 @@ public final class CatnipMixinPlugin implements IMixinConfigPlugin {
             return on;
         }
         if (mixinClassName.endsWith(".CreateTimeTestMixin")) return System.getProperty("sleep.test.createTime") != null && ponder();
-        boolean on = (mixinClassName.endsWith(".KineticLevelMixin") || mixinClassName.endsWith(".ViewAreaInvoker")) ? RESIDENT && create() : kinetic ? MEMO && create() : PARTS && ponder();
+        boolean on = mixinClassName.endsWith(".KineticLevelMixin") ? (RESIDENT && create() || LIT && ponder())
+                : mixinClassName.endsWith(".ViewAreaInvoker") ? RESIDENT && create() : kinetic ? MEMO && create() : PARTS && ponder();
         if (on) System.out.println("[sleep/opt] applying " + mixinClassName.substring(mixinClassName.lastIndexOf('.') + 1) + " -> " + targetClassName);
         return on;
     }

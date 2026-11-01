@@ -54,6 +54,10 @@ public abstract class ChunkSectionMixin implements ChunkMultiDraw.ChunkEntries {
     @Inject(method = "setDirty", at = @At("HEAD"))
     private void sleep$dirty(boolean playerChanged, CallbackInfo ci) {
         sleep$epoch++;
+        if (dev.sleep.optsupport.PartBatch.LIT_ON) {
+            var o = ((SectionRenderDispatcher.RenderSection) (Object) this).getOrigin();
+            dev.sleep.optsupport.LightBoxes.sectionChanged(o.getX() >> 4, o.getY() >> 4, o.getZ() >> 4);
+        }
         dev.sleep.optsupport.SectionLists.dirtied((SectionRenderDispatcher.RenderSection) (Object) this);
     }
 

@@ -47,6 +47,9 @@ public final class PartBatch {
     private static final int SSBO_BINDING = 6, SPIN_BINDING = 5;
     /** -Dlab.opt.KineticResidentMixin: shaders get mode 5 (persistent records turned on the GPU, KineticResident) */
     public static final boolean PERSIST_ON = Boolean.getBoolean("lab.opt.all") || Boolean.getBoolean("lab.opt.KineticResidentMixin");
+    /** -Dlab.opt.LevelLitPartsMixin: shaders get mode 6 (SuperByteBuffers lit by the level: light boxes, LightBoxes) */
+    public static final boolean LIT_ON = Boolean.getBoolean("lab.opt.all") || Boolean.getBoolean("lab.opt.LevelLitPartsMixin");
+    private static final boolean EXTRA = PERSIST_ON || LIT_ON;
     public static final Set<String> PATCHED = java.util.concurrent.ConcurrentHashMap.newKeySet();
     public static long parts, draws, fallbacks, geometries;
 
@@ -82,7 +85,7 @@ public final class PartBatch {
         String uv1 = types.get("UV1"), uv2 = types.get("UV2");
         if (uv1 != null && !uv1.equals("ivec2") && !uv1.equals("vec2")) return src;
         if (uv2 != null && !uv2.equals("ivec2")) return src;
-        boolean uv0 = PERSIST_ON && Pattern.compile("\\bin\\s+vec2\\s+UV0\\s*;").matcher(src).find();
+        boolean uv0 = EXTRA && Pattern.compile("\\bin\\s+vec2\\s+UV0\\s*;").matcher(src).find();
         int at = src.indexOf("void main() {");
         String head = src.substring(0, at), body = src.substring(at + "void main() {".length());
         for (String v : new String[] {"Position", "Color", "Normal", "UV1", "UV2"}) body = body.replaceAll("\\b" + v + "\\b", "probe_" + v);
@@ -92,10 +95,11 @@ public final class PartBatch {
         pre.append("layout(std430) buffer ProbeParts { ProbePart probeParts[]; };\n");
         pre.append("uniform int ProbePartMode;\n");
         pre.append("uniform vec3 ProbeLight0;\nuniform vec3 ProbeLight1;\n");   // mode 4: the level's light directions (block shaders have none)
-        if (PERSIST_ON) {   // mode 5: persistent records (by base instance), their turn about an axis computed from the time
+        if (EXTRA) {   // mode 5: persistent records (by base instance), their turn about an axis computed from the time; mode 6: light transform
             pre.append("struct ProbeSpin { vec4 turn; vec4 sprites; vec4 scroll; };\n");
             pre.append("layout(std430) buffer ProbeSpins { ProbeSpin probeSpins[]; };\n");
             pre.append("uniform vec3 ProbeCam;\nuniform float ProbeTime;\n");
+            if (LIT_ON) pre.append(LightBoxes.GLSL);
         }
         pre.append("layout(location = 15) in float ProbeFlags;\n\n");   // part geometry's 4th normal byte (GeckoLib flat cubes)
         pre.append("void main() {\n");
@@ -106,7 +110,7 @@ public final class PartBatch {
         pre.append("    if (ProbePartMode == 2) {\n");
         pre.append("        probe_Position = (probeParts[gl_DrawIDARB].pose * vec4(Position, 1.0)).xyz;\n");
         pre.append("    } else if (ProbePartMode != 0) {\n");
-        if (PERSIST_ON) {
+        if (EXTRA) {
             pre.append("        int probe_i = ProbePartMode == 5 ? gl_BaseInstanceARB : gl_DrawIDARB;\n");
             pre.append("        ProbePart probe_d = probeParts[probe_i];\n");
             pre.append("        vec3 probe_p = Position, probe_nin = Normal;\n");
@@ -157,7 +161,20 @@ public final class PartBatch {
         pre.append("            probe_Color = vec4(probe_d.color.rgb * Color.rgb * probe_df, probe_d.color.a * Color.a);\n");   // the template's colour
         pre.append("        }\n");
         if (uv1 != null) pre.append("        probe_UV1 = ").append(uv1).append("(probe_d.lo.zw);\n");
-        if (uv2 != null) pre.append("        probe_UV2 = probe_d.lo.xy;\n");
+        if (uv2 != null) {
+            pre.append("        probe_UV2 = probe_d.lo.xy;\n");
+            // SuperByteBuffer parts (BLOCK format, geometry with the template's own light as UV2): catnip's maxLight per component
+            if (EXTRA) pre.append("        if (ProbePartMode >= 4) probe_UV2 = max(UV2, probe_d.lo.xy);\n");
+            if (LIT_ON) {   // mode 6: the level's light where catnip looks it up - the vertex pulled 1/16 toward its block's centre, by the light transform
+                pre.append("        if (ProbePartMode == 6) {\n");
+                pre.append("            ProbeSpin probe_lt = probeSpins[gl_DrawIDARB];\n");
+                pre.append("            vec3 probe_q = (Position - 0.5) * 15.0 / 16.0 + 0.5;\n");
+                pre.append("            vec3 probe_w = vec3(dot(probe_lt.turn.xyz, probe_q) + probe_lt.turn.w, dot(probe_lt.sprites.xyz, probe_q) + probe_lt.sprites.w,"
+                        + " dot(probe_lt.scroll.xyz, probe_q) + probe_lt.scroll.w);\n");
+                pre.append("            probe_UV2 = max(probe_UV2, probeBoxLight(probe_d.lo.z, ivec3(floor(probe_w))));\n");
+                pre.append("        }\n");
+            }
+        }
         pre.append("    }");
         String out = head.replaceFirst("#version 150", "#version 150\n#extension GL_ARB_shader_draw_parameters : require\n#extension GL_ARB_shader_storage_buffer_object : require\n#extension GL_ARB_explicit_attrib_location : require")
                 + pre + body;
@@ -165,13 +182,14 @@ public final class PartBatch {
         return out;
     }
 
-    // ------------------------------------------------------------------ geometry arena (position 3f, uv 2f, normal 3b+flags, colour 4b: 28 bytes)
+    // ------------------------------------------------------------------ geometry arena (position 3f, uv 2f, normal 3b+flags, colour 4b, light 2s: 32 bytes)
 
-    static final int STRIDE = 28;
+    static final int STRIDE = 32;
     private static int vbo, vao, capacity, used;   // in vertices
     private static boolean vaoStale = true;
     private static final Map<Object, int[]> GEOMETRY = new IdentityHashMap<>();   // part / bone key -> {first vertex, quads}; {-1, 0}: not supported
     private static ByteBuffer geomScratch = MemoryUtil.memAlloc(1 << 16);
+    private static final Map<Object, float[]> BOUNDS = new IdentityHashMap<>();   // key -> local min xyz, max xyz (LIT_ON)
 
     /** A consumer that keeps position, UV and normal of what a part's compile emits (identity pose: local space). */
     /** A geometry consumer that takes per-cube flags (GeckoLib flat cubes) for the vertices that follow. */
@@ -213,6 +231,7 @@ public final class PartBatch {
             MemoryUtil.memPutFloat(v + 4, y);
             MemoryUtil.memPutFloat(v + 8, z);
             MemoryUtil.memPutInt(v + 24, -1);
+            MemoryUtil.memPutInt(v + 28, 0);
             n++;
             return this;
         }
@@ -233,7 +252,10 @@ public final class PartBatch {
             return this;
         }
         @Override public VertexConsumer setUv1(int u, int v) { return this; }
-        @Override public VertexConsumer setUv2(int u, int v) { return this; }
+        @Override public VertexConsumer setUv2(int u, int v) {   // a template's own light (SuperByteBuffer)
+            MemoryUtil.memPutInt(last() + 28, (u & 0xFFFF) | v << 16);
+            return this;
+        }
         @Override public VertexConsumer setNormal(float x, float y, float z) {
             long p = last() + 20;
             MemoryUtil.memPutByte(p, normalByte(x));
@@ -275,6 +297,17 @@ public final class PartBatch {
         g = new int[] {used, GEOM.n / 4};
         used += GEOM.n;
         GEOMETRY.put(key, g);
+        if (LIT_ON) {   // the local box of the positions (a level-lit part's light box)
+            float[] bd = {Float.MAX_VALUE, Float.MAX_VALUE, Float.MAX_VALUE, -Float.MAX_VALUE, -Float.MAX_VALUE, -Float.MAX_VALUE};
+            long base = MemoryUtil.memAddress(geomScratch);
+            for (int i = 0; i < GEOM.n; i++)
+                for (int c = 0; c < 3; c++) {
+                    float f = MemoryUtil.memGetFloat(base + (long) i * STRIDE + 4L * c);
+                    bd[c] = Math.min(bd[c], f);
+                    bd[3 + c] = Math.max(bd[3 + c], f);
+                }
+            BOUNDS.put(key, bd);
+        }
         geometries++;
         return g;
     }
@@ -308,11 +341,14 @@ public final class PartBatch {
         long counts = MemoryUtil.nmemAlloc(4L * 256), bases = MemoryUtil.nmemAlloc(4L * 256), indices = MemoryUtil.nmemCalloc(256, 8);
         int maxIndices;
         float[] keys = new float[64];
+        /** mode 6: a light transform (3 rows) per record, or 0 */
+        long aux;
 
         void ensure() {
             if (n < cap) return;
             cap *= 2;
             mem = MemoryUtil.nmemRealloc(mem, 144L * cap);
+            if (aux != 0) aux = MemoryUtil.nmemRealloc(aux, 48L * cap);
             counts = MemoryUtil.nmemRealloc(counts, 4L * cap);
             bases = MemoryUtil.nmemRealloc(bases, 4L * cap);
             long ni = MemoryUtil.nmemCalloc(cap, 8);
@@ -322,7 +358,7 @@ public final class PartBatch {
     }
 
     private static final Map<RenderType, Queue> QUEUES = new IdentityHashMap<>(), GEO_QUEUES = new IdentityHashMap<>(), RESIDENT = new IdentityHashMap<>(),
-            SBB_QUEUES = new IdentityHashMap<>();
+            SBB_QUEUES = new IdentityHashMap<>(), LIT_QUEUES = new IdentityHashMap<>();
 
     // ------------------------------------------------------------------ resident recordings (render cache in VRAM)
 
@@ -492,6 +528,91 @@ public final class PartBatch {
         return true;
     }
 
+    public static long litParts, litRefused;
+    private static final Matrix4f LIT_M = new Matrix4f();
+    private static final org.joml.Vector3f LIT_V = new org.joml.Vector3f();
+
+    /**
+     * A SuperByteBuffer lit by the level (catnip's useLevelLight: contraptions, their actors) as a part: the record as
+     * captureSbb's, plus its light transform ({@code lightTransform} x local; null: local) and a light box of the level
+     * around where its vertices fall (LightBoxes); the shader looks the light up as catnip does (mode 6).
+     */
+    public static boolean captureLit(Object key, GeometrySource src, PoseStack.Pose input, PoseStack.Pose local, Matrix4f lightTransform,
+            net.minecraft.world.level.BlockAndTintGetter level, float r, float g, float b, float alpha, boolean diffuse, float fakeNormalY, int light,
+            int overlay, VertexConsumer buffer) {
+        if (!sbbTarget(key, src, null, buffer)) return false;
+        float[] bd = BOUNDS.get(key);
+        if (bd == null) return false;
+        if (lightTransform != null) LIT_M.set(lightTransform).mul(local.pose());
+        else LIT_M.set(local.pose());
+        // the box of where the pulled-in vertices fall in the level: the local box's corners through the light transform
+        float x0 = Float.MAX_VALUE, y0 = Float.MAX_VALUE, z0 = Float.MAX_VALUE, x1 = -Float.MAX_VALUE, y1 = -Float.MAX_VALUE, z1 = -Float.MAX_VALUE;
+        for (int c = 0; c < 8; c++) {
+            LIT_V.set(((c & 1) == 0 ? bd[0] : bd[3]) - 0.5f, ((c & 2) == 0 ? bd[1] : bd[4]) - 0.5f, ((c & 4) == 0 ? bd[2] : bd[5]) - 0.5f)
+                    .mul(15f / 16f).add(0.5f, 0.5f, 0.5f);
+            LIT_M.transformPosition(LIT_V);
+            x0 = Math.min(x0, LIT_V.x);
+            y0 = Math.min(y0, LIT_V.y);
+            z0 = Math.min(z0, LIT_V.z);
+            x1 = Math.max(x1, LIT_V.x);
+            y1 = Math.max(y1, LIT_V.y);
+            z1 = Math.max(z1, LIT_V.z);
+        }
+        int box = LightBoxes.boxFor(level, (int) Math.floor(x0), (int) Math.floor(y0), (int) Math.floor(z0), (int) Math.floor(x1), (int) Math.floor(y1),
+                (int) Math.floor(z1));
+        if (box < 0) {
+            litRefused++;
+            return false;
+        }
+        SBB_M.set(input.pose()).mul(local.pose());
+        SBB_N.set(input.normal()).mul(local.normal());
+        Queue q = slot(LIT_QUEUES, lastSbbType, (BufferBuilder) buffer);
+        if (q.aux == 0) q.aux = MemoryUtil.nmemAlloc(48L * q.cap);
+        long a = q.aux + 48L * q.n;
+        MemoryUtil.memPutFloat(a, LIT_M.m00());   // rows: world = M x p
+        MemoryUtil.memPutFloat(a + 4, LIT_M.m10());
+        MemoryUtil.memPutFloat(a + 8, LIT_M.m20());
+        MemoryUtil.memPutFloat(a + 12, LIT_M.m30());
+        MemoryUtil.memPutFloat(a + 16, LIT_M.m01());
+        MemoryUtil.memPutFloat(a + 20, LIT_M.m11());
+        MemoryUtil.memPutFloat(a + 24, LIT_M.m21());
+        MemoryUtil.memPutFloat(a + 28, LIT_M.m31());
+        MemoryUtil.memPutFloat(a + 32, LIT_M.m02());
+        MemoryUtil.memPutFloat(a + 36, LIT_M.m12());
+        MemoryUtil.memPutFloat(a + 40, LIT_M.m22());
+        MemoryUtil.memPutFloat(a + 44, LIT_M.m32());
+        writeSbbRecord(q.mem + 144L * q.n, SBB_M, SBB_N, r, g, b, alpha, diffuse, fakeNormalY, light, box);   // BLOCK shaders read no overlay: lo.z = the box
+        commit(q, lastSbbGeo[0], lastSbbGeo[1]);
+        litParts++;
+        return true;
+    }
+
+    /** A SuperByteBuffer record (queueSbb's layout); lo.z / lo.w hold the overlay's halves (or, mode 6, lo.z the light box). */
+    private static void writeSbbRecord(long rec, Matrix4f m, Matrix3f nm, float r, float g, float b, float alpha, boolean diffuse, float fakeNormalY,
+            int light, int overlay) {
+        m.getToAddress(rec);
+        MemoryUtil.memPutFloat(rec + 64, nm.m00());
+        MemoryUtil.memPutFloat(rec + 68, nm.m01());
+        MemoryUtil.memPutFloat(rec + 72, nm.m02());
+        MemoryUtil.memPutFloat(rec + 76, diffuse ? 1.0F : 0.0F);
+        MemoryUtil.memPutFloat(rec + 80, nm.m10());
+        MemoryUtil.memPutFloat(rec + 84, nm.m11());
+        MemoryUtil.memPutFloat(rec + 88, nm.m12());
+        MemoryUtil.memPutFloat(rec + 92, fakeNormalY);
+        MemoryUtil.memPutFloat(rec + 96, nm.m20());
+        MemoryUtil.memPutFloat(rec + 100, nm.m21());
+        MemoryUtil.memPutFloat(rec + 104, nm.m22());
+        MemoryUtil.memPutFloat(rec + 108, 0.0F);
+        MemoryUtil.memPutFloat(rec + 112, r);
+        MemoryUtil.memPutFloat(rec + 116, g);
+        MemoryUtil.memPutFloat(rec + 120, b);
+        MemoryUtil.memPutFloat(rec + 124, alpha);
+        MemoryUtil.memPutInt(rec + 128, light & 0xFFFF);
+        MemoryUtil.memPutInt(rec + 132, light >>> 16 & 0xFFFF);
+        MemoryUtil.memPutInt(rec + 136, overlay & 0xFFFF);
+        MemoryUtil.memPutInt(rec + 140, overlay >>> 16 & 0xFFFF);
+    }
+
     /** A recorder of the SuperByteBuffer parts a block entity's draw makes (KineticMemo), asked by SbbPartsMixin. */
     public interface SbbRecorder {
         boolean recording();
@@ -530,29 +651,7 @@ public final class PartBatch {
             float alpha, boolean diffuse, float fakeNormalY, int light, int overlay) {
         Queue q = slot(SBB_QUEUES, type, bb);
         long rec = q.mem + 144L * q.n;
-        m.getToAddress(rec);
-        org.joml.Matrix3f SBB_N = nm;
-        MemoryUtil.memPutFloat(rec + 64, SBB_N.m00());
-        MemoryUtil.memPutFloat(rec + 68, SBB_N.m01());
-        MemoryUtil.memPutFloat(rec + 72, SBB_N.m02());
-        MemoryUtil.memPutFloat(rec + 76, diffuse ? 1.0F : 0.0F);
-        MemoryUtil.memPutFloat(rec + 80, SBB_N.m10());
-        MemoryUtil.memPutFloat(rec + 84, SBB_N.m11());
-        MemoryUtil.memPutFloat(rec + 88, SBB_N.m12());
-        MemoryUtil.memPutFloat(rec + 92, fakeNormalY);
-        MemoryUtil.memPutFloat(rec + 96, SBB_N.m20());
-        MemoryUtil.memPutFloat(rec + 100, SBB_N.m21());
-        MemoryUtil.memPutFloat(rec + 104, SBB_N.m22());
-        MemoryUtil.memPutFloat(rec + 108, 0.0F);
-        // colour as set (the diffuse multiplies it on the GPU; the CPU path truncates the product to bytes: rounding)
-        MemoryUtil.memPutFloat(rec + 112, r);
-        MemoryUtil.memPutFloat(rec + 116, g);
-        MemoryUtil.memPutFloat(rec + 120, b);
-        MemoryUtil.memPutFloat(rec + 124, alpha);
-        MemoryUtil.memPutInt(rec + 128, light & 0xFFFF);
-        MemoryUtil.memPutInt(rec + 132, light >>> 16 & 0xFFFF);
-        MemoryUtil.memPutInt(rec + 136, overlay & 0xFFFF);
-        MemoryUtil.memPutInt(rec + 140, overlay >>> 16 & 0xFFFF);
+        writeSbbRecord(rec, m, nm, r, g, b, alpha, diffuse, fakeNormalY, light, overlay);
         commit(q, geo[0], geo[1]);
         sbbParts++;
     }
@@ -958,8 +1057,11 @@ public final class PartBatch {
         if (t == null) return;
         Queue q = QUEUES.get(t), r = RESIDENT.get(t), gq = GEO_QUEUES.get(t), sq = SBB_QUEUES.get(t);
         PQueue pq = PERSIST.isEmpty() ? null : PERSIST.get(t);
-        boolean parts = q != null && q.n > 0, res = r != null && r.n > 0, geo = gq != null && gq.n > 0, sbb = sq != null && sq.n > 0, per = pq != null && pq.n > 0;
-        if (!parts && !res && !geo && !sbb && !per) return;
+        Queue lq = LIT_QUEUES.isEmpty() ? null : LIT_QUEUES.get(t);
+        boolean parts = q != null && q.n > 0, res = r != null && r.n > 0, geo = gq != null && gq.n > 0, sbb = sq != null && sq.n > 0, per = pq != null && pq.n > 0,
+                lit = lq != null && lq.n > 0;
+        if (!parts && !res && !geo && !sbb && !per && !lit) return;
+        if (lit) drawQueue(shader, lq, 6);
         if (parts) drawQueue(shader, q, 1);
         if (geo) drawQueue(shader, gq, 3);
         if (sbb) drawQueue(shader, sq, 4);
@@ -999,7 +1101,15 @@ public final class PartBatch {
             int f = GL20C.glGetUniformLocation(id, "ProbePartMode");
             int b = GL43C.glGetProgramResourceIndex(id, GL43C.GL_SHADER_STORAGE_BLOCK, "ProbeParts");
             if (f >= 0 && b != GL31C.GL_INVALID_INDEX) GL43C.glShaderStorageBlockBinding(id, b, SSBO_BINDING);
-            int cam = -1, time = -1;
+            int cam = -1, time = -1, boxes = GL31C.GL_INVALID_INDEX;
+            if (LIT_ON) {
+                boxes = GL43C.glGetProgramResourceIndex(id, GL43C.GL_SHADER_STORAGE_BLOCK, "ProbeBoxes");
+                int sp = GL43C.glGetProgramResourceIndex(id, GL43C.GL_SHADER_STORAGE_BLOCK, "ProbeSpins");
+                if (boxes != GL31C.GL_INVALID_INDEX && sp != GL31C.GL_INVALID_INDEX) {
+                    GL43C.glShaderStorageBlockBinding(id, boxes, LightBoxes.BINDING);
+                    GL43C.glShaderStorageBlockBinding(id, sp, SPIN_BINDING);
+                } else boxes = GL31C.GL_INVALID_INDEX;
+            }
             if (PERSIST_ON) {
                 int s = GL43C.glGetProgramResourceIndex(id, GL43C.GL_SHADER_STORAGE_BLOCK, "ProbeSpins");
                 if (s != GL31C.GL_INVALID_INDEX) {
@@ -1008,7 +1118,7 @@ public final class PartBatch {
                     time = GL20C.glGetUniformLocation(id, "ProbeTime");
                 }
             }
-            return new int[] {f, b, GL20C.glGetUniformLocation(id, "ProbeLight0"), GL20C.glGetUniformLocation(id, "ProbeLight1"), cam, time};
+            return new int[] {f, b, GL20C.glGetUniformLocation(id, "ProbeLight0"), GL20C.glGetUniformLocation(id, "ProbeLight1"), cam, time, boxes};
         });
     }
 
@@ -1035,7 +1145,19 @@ public final class PartBatch {
         long bytes = 144L * q.n;
         GL15C.nglBufferData(GL43C.GL_SHADER_STORAGE_BUFFER, bytes, q.mem, GL15C.GL_STREAM_DRAW);
         GL30C.glBindBufferBase(GL43C.GL_SHADER_STORAGE_BUFFER, SSBO_BINDING, ssbo);
-        if (mode == 4) {   // SuperByteBuffer templates into a BLOCK-format type: its attribute order, the light directions
+        if (mode == 6) {   // level-lit SuperByteBuffers: their light transforms (spin binding) and the light boxes
+            if (st[6] == GL31C.GL_INVALID_INDEX) {
+                fallbacks += q.n;
+                q.n = 0;
+                return;
+            }
+            if (auxSsbo == 0) auxSsbo = GL15C.glGenBuffers();
+            GL15C.glBindBuffer(GL43C.GL_SHADER_STORAGE_BUFFER, auxSsbo);
+            GL15C.nglBufferData(GL43C.GL_SHADER_STORAGE_BUFFER, 48L * q.n, q.aux, GL15C.GL_STREAM_DRAW);
+            GL30C.glBindBufferBase(GL43C.GL_SHADER_STORAGE_BUFFER, SPIN_BINDING, auxSsbo);
+            GL30C.glBindBufferBase(GL43C.GL_SHADER_STORAGE_BUFFER, LightBoxes.BINDING, LightBoxes.buffer());
+        }
+        if (mode == 4 || mode == 6) {   // SuperByteBuffer templates into a BLOCK-format type: its attribute order, the light directions
             if (vaoStale || blockVao == 0) setupVao();
             GL30C.glBindVertexArray(blockVao);
             lightUniforms(st);
@@ -1082,7 +1204,7 @@ public final class PartBatch {
         q.maxIndices = 0;
     }
 
-    private static int blockVao;
+    private static int blockVao, auxSsbo;
     private static final org.joml.Vector3f L0 = new org.joml.Vector3f(), L1 = new org.joml.Vector3f();
 
     /** Attribute indices as the entity shaders bind them (NEW_ENTITY order): Position 0, UV0 2, Normal 5; and for BLOCK
@@ -1101,6 +1223,8 @@ public final class PartBatch {
         GL20C.glVertexAttribPointer(1, 4, GL11C.GL_UNSIGNED_BYTE, true, STRIDE, 24);
         GL20C.glEnableVertexAttribArray(15);
         GL20C.glVertexAttribPointer(15, 1, GL11C.GL_UNSIGNED_BYTE, false, STRIDE, 23);
+        GL20C.glEnableVertexAttribArray(3);   // UV2: the template's own light (max with the record's on the GPU)
+        GL30C.glVertexAttribIPointer(3, 2, GL11C.GL_SHORT, STRIDE, 28);
         if (vao == 0) vao = GL30C.glGenVertexArrays();
         GL30C.glBindVertexArray(vao);
         GL15C.glBindBuffer(GL15C.GL_ARRAY_BUFFER, vbo);
@@ -1124,7 +1248,7 @@ public final class PartBatch {
             q.n = 0;
             q.maxIndices = 0;
         }
-        for (Map<RenderType, Queue> m : java.util.List.of(QUEUES, GEO_QUEUES, SBB_QUEUES)) {
+        for (Map<RenderType, Queue> m : java.util.List.of(QUEUES, GEO_QUEUES, SBB_QUEUES, LIT_QUEUES)) {
             for (Queue q : m.values()) {
                 if (q.n > 0) fallbacks += q.n;
                 q.n = 0;
@@ -1140,8 +1264,9 @@ public final class PartBatch {
 
     public static String report() {
         SbbRecorder rcd = sbbRecorder;
-        return (rcd != null ? rcd.report() + "; " : "") + String.format(java.util.Locale.ROOT, "part batch: SuperByteBuffer calls %d, parts %d (not taken %d %s %s %s, UV shift %d, level light %d); shaders patched %s, parts %d, GeckoLib bones %d (from workers %d, jobs refused at merge %d), multi-draws %d, geometries %d (%.1f MB), lost %d; resident draws %d, uploads %d (arena %.1f MB); persistent records %d, draws %d, uploads %d",
+        return (rcd != null ? rcd.report() + "; " : "") + String.format(java.util.Locale.ROOT, "part batch: SuperByteBuffer calls %d, parts %d (not taken %d %s %s %s, UV shift %d, level light %d); shaders patched %s, parts %d, GeckoLib bones %d (from workers %d, jobs refused at merge %d), multi-draws %d, geometries %d (%.1f MB), lost %d; resident draws %d, uploads %d (arena %.1f MB); persistent records %d, draws %d, uploads %d; level-lit parts %d (refused %d); %s",
                 sbbCalls, sbbParts, sbbRefused, java.util.Arrays.toString(SBB_WHY), SBB_CONSUMERS, SBB_TYPES, sbbShift, sbbLevelLight, PATCHED, parts, geoParts, jobMerged, jobRefused, draws, geometries, (double) used * STRIDE / 1048576.0, fallbacks, residentDraws, residentUploads,
-                (double) RES_ARENA.capacity * RES_ARENA.stride / 1048576.0, pUsed - pFreeN, persistDraws, persistUploads);
+                (double) RES_ARENA.capacity * RES_ARENA.stride / 1048576.0, pUsed - pFreeN, persistDraws, persistUploads, litParts, litRefused,
+                LightBoxes.report());
     }
 }

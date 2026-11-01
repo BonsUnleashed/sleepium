@@ -19,7 +19,7 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.Redirect;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-/** KineticResident: the frame's camera before the level is drawn, and the section renderLevel's block entity loop is in. */
+/** KineticResident: the frame's camera before the level is drawn, and the section renderLevel's block entity loop is in; LightBoxes: their frame. */
 @Mixin(LevelRenderer.class)
 public abstract class KineticLevelMixin {
     @Shadow @Final private Long2ObjectMap<SortedSet<BlockDestructionProgress>> destructionProgress;
@@ -28,6 +28,8 @@ public abstract class KineticLevelMixin {
     @Inject(method = "renderLevel", at = @At("HEAD"))
     private void sleep$frame(DeltaTracker delta, boolean outline, Camera camera, GameRenderer gameRenderer, LightTexture lightTexture,
             Matrix4f frustum, Matrix4f projection, CallbackInfo ci) {
+        if (dev.sleep.optsupport.PartBatch.LIT_ON) dev.sleep.optsupport.LightBoxes.frame();
+        if (!KineticResident.ON) return;
         KineticResident.Crumbling.progress = destructionProgress;
         KineticResident.beginFrame(camera, viewArea);
     }
@@ -35,7 +37,7 @@ public abstract class KineticLevelMixin {
     @Redirect(method = "renderLevel", at = @At(value = "INVOKE",
             target = "Lnet/minecraft/client/renderer/chunk/SectionRenderDispatcher$RenderSection;getCompiled()Lnet/minecraft/client/renderer/chunk/SectionRenderDispatcher$CompiledSection;"))
     private SectionRenderDispatcher.CompiledSection sleep$section(SectionRenderDispatcher.RenderSection s) {
-        KineticResident.section(s);
+        if (KineticResident.ON) KineticResident.section(s);
         return s.getCompiled();
     }
 }
