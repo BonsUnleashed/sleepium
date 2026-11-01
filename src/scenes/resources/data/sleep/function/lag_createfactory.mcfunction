@@ -20,7 +20,7 @@ fill 1600 -61 100 1660 -61 204 minecraft:stone
 fill 1600 -62 100 1660 -62 204 minecraft:dirt
 setblock 1602 -60 103 create:shaft[axis=z]
 setblock 1617 -60 103 create:shaft[axis=z]
-probe createbelt 1602 -60 103 1617 -60 103
+sleep createbelt 1602 -60 103 1617 -60 103
 setblock 1602 -60 104 create:creative_motor[facing=north]
 setblock 1602 -59 103 create:chute
 setblock 1602 -58 103 minecraft:hopper[facing=down]
@@ -34,7 +34,7 @@ setblock 1618 -61 103 minecraft:hopper[facing=down]
 setblock 1618 -62 103 minecraft:chest
 setblock 1602 -60 109 create:shaft[axis=z]
 setblock 1617 -60 109 create:shaft[axis=z]
-probe createbelt 1602 -60 109 1617 -60 109
+sleep createbelt 1602 -60 109 1617 -60 109
 setblock 1602 -60 110 create:creative_motor[facing=north]
 setblock 1602 -59 109 create:chute
 setblock 1602 -58 109 minecraft:hopper[facing=down]
@@ -48,7 +48,7 @@ setblock 1618 -61 109 minecraft:hopper[facing=down]
 setblock 1618 -62 109 minecraft:chest
 setblock 1602 -60 115 create:shaft[axis=z]
 setblock 1617 -60 115 create:shaft[axis=z]
-probe createbelt 1602 -60 115 1617 -60 115
+sleep createbelt 1602 -60 115 1617 -60 115
 setblock 1602 -60 116 create:creative_motor[facing=north]
 setblock 1602 -59 115 create:chute
 setblock 1602 -58 115 minecraft:hopper[facing=down]
@@ -62,7 +62,7 @@ setblock 1618 -61 115 minecraft:hopper[facing=down]
 setblock 1618 -62 115 minecraft:chest
 setblock 1602 -60 121 create:shaft[axis=z]
 setblock 1617 -60 121 create:shaft[axis=z]
-probe createbelt 1602 -60 121 1617 -60 121
+sleep createbelt 1602 -60 121 1617 -60 121
 setblock 1602 -60 122 create:creative_motor[facing=north]
 setblock 1602 -59 121 create:chute
 setblock 1602 -58 121 minecraft:hopper[facing=down]
@@ -76,7 +76,7 @@ setblock 1618 -61 121 minecraft:hopper[facing=down]
 setblock 1618 -62 121 minecraft:chest
 setblock 1602 -60 127 create:shaft[axis=z]
 setblock 1617 -60 127 create:shaft[axis=z]
-probe createbelt 1602 -60 127 1617 -60 127
+sleep createbelt 1602 -60 127 1617 -60 127
 setblock 1602 -60 128 create:creative_motor[facing=north]
 setblock 1602 -59 127 create:chute
 setblock 1602 -58 127 minecraft:hopper[facing=down]
@@ -90,7 +90,7 @@ setblock 1618 -61 127 minecraft:hopper[facing=down]
 setblock 1618 -62 127 minecraft:chest
 setblock 1602 -60 133 create:shaft[axis=z]
 setblock 1617 -60 133 create:shaft[axis=z]
-probe createbelt 1602 -60 133 1617 -60 133
+sleep createbelt 1602 -60 133 1617 -60 133
 setblock 1602 -60 134 create:creative_motor[facing=north]
 setblock 1602 -59 133 create:chute
 setblock 1602 -58 133 minecraft:hopper[facing=down]
@@ -104,7 +104,7 @@ setblock 1618 -61 133 minecraft:hopper[facing=down]
 setblock 1618 -62 133 minecraft:chest
 setblock 1602 -60 139 create:shaft[axis=z]
 setblock 1617 -60 139 create:shaft[axis=z]
-probe createbelt 1602 -60 139 1617 -60 139
+sleep createbelt 1602 -60 139 1617 -60 139
 setblock 1602 -60 140 create:creative_motor[facing=north]
 setblock 1602 -59 139 create:chute
 setblock 1602 -58 139 minecraft:hopper[facing=down]
@@ -118,7 +118,7 @@ setblock 1618 -61 139 minecraft:hopper[facing=down]
 setblock 1618 -62 139 minecraft:chest
 setblock 1602 -60 145 create:shaft[axis=z]
 setblock 1617 -60 145 create:shaft[axis=z]
-probe createbelt 1602 -60 145 1617 -60 145
+sleep createbelt 1602 -60 145 1617 -60 145
 setblock 1602 -60 146 create:creative_motor[facing=north]
 setblock 1602 -59 145 create:chute
 setblock 1602 -58 145 minecraft:hopper[facing=down]
@@ -132,7 +132,7 @@ setblock 1618 -61 145 minecraft:hopper[facing=down]
 setblock 1618 -62 145 minecraft:chest
 setblock 1602 -60 151 create:shaft[axis=z]
 setblock 1617 -60 151 create:shaft[axis=z]
-probe createbelt 1602 -60 151 1617 -60 151
+sleep createbelt 1602 -60 151 1617 -60 151
 setblock 1602 -60 152 create:creative_motor[facing=north]
 setblock 1602 -59 151 create:chute
 setblock 1602 -58 151 minecraft:hopper[facing=down]
@@ -146,7 +146,7 @@ setblock 1618 -61 151 minecraft:hopper[facing=down]
 setblock 1618 -62 151 minecraft:chest
 setblock 1602 -60 157 create:shaft[axis=z]
 setblock 1617 -60 157 create:shaft[axis=z]
-probe createbelt 1602 -60 157 1617 -60 157
+sleep createbelt 1602 -60 157 1617 -60 157
 setblock 1602 -60 158 create:creative_motor[facing=north]
 setblock 1602 -59 157 create:chute
 setblock 1602 -58 157 minecraft:hopper[facing=down]
@@ -160,7 +160,7 @@ setblock 1618 -61 157 minecraft:hopper[facing=down]
 setblock 1618 -62 157 minecraft:chest
 setblock 1602 -60 163 create:shaft[axis=z]
 setblock 1617 -60 163 create:shaft[axis=z]
-probe createbelt 1602 -60 163 1617 -60 163
+sleep createbelt 1602 -60 163 1617 -60 163
 setblock 1602 -60 164 create:creative_motor[facing=north]
 setblock 1602 -59 163 create:chute
 setblock 1602 -58 163 minecraft:hopper[facing=down]
@@ -174,7 +174,7 @@ setblock 1618 -61 163 minecraft:hopper[facing=down]
 setblock 1618 -62 163 minecraft:chest
 setblock 1602 -60 169 create:shaft[axis=z]
 setblock 1617 -60 169 create:shaft[axis=z]
-probe createbelt 1602 -60 169 1617 -60 169
+sleep createbelt 1602 -60 169 1617 -60 169
 setblock 1602 -60 170 create:creative_motor[facing=north]
 setblock 1602 -59 169 create:chute
 setblock 1602 -58 169 minecraft:hopper[facing=down]
@@ -188,7 +188,7 @@ setblock 1618 -61 169 minecraft:hopper[facing=down]
 setblock 1618 -62 169 minecraft:chest
 setblock 1602 -60 175 create:shaft[axis=z]
 setblock 1617 -60 175 create:shaft[axis=z]
-probe createbelt 1602 -60 175 1617 -60 175
+sleep createbelt 1602 -60 175 1617 -60 175
 setblock 1602 -60 176 create:creative_motor[facing=north]
 setblock 1602 -59 175 create:chute
 setblock 1602 -58 175 minecraft:hopper[facing=down]
@@ -202,7 +202,7 @@ setblock 1618 -61 175 minecraft:hopper[facing=down]
 setblock 1618 -62 175 minecraft:chest
 setblock 1602 -60 181 create:shaft[axis=z]
 setblock 1617 -60 181 create:shaft[axis=z]
-probe createbelt 1602 -60 181 1617 -60 181
+sleep createbelt 1602 -60 181 1617 -60 181
 setblock 1602 -60 182 create:creative_motor[facing=north]
 setblock 1602 -59 181 create:chute
 setblock 1602 -58 181 minecraft:hopper[facing=down]
@@ -216,7 +216,7 @@ setblock 1618 -61 181 minecraft:hopper[facing=down]
 setblock 1618 -62 181 minecraft:chest
 setblock 1602 -60 187 create:shaft[axis=z]
 setblock 1617 -60 187 create:shaft[axis=z]
-probe createbelt 1602 -60 187 1617 -60 187
+sleep createbelt 1602 -60 187 1617 -60 187
 setblock 1602 -60 188 create:creative_motor[facing=north]
 setblock 1602 -59 187 create:chute
 setblock 1602 -58 187 minecraft:hopper[facing=down]
@@ -230,7 +230,7 @@ setblock 1618 -61 187 minecraft:hopper[facing=down]
 setblock 1618 -62 187 minecraft:chest
 setblock 1602 -60 193 create:shaft[axis=z]
 setblock 1617 -60 193 create:shaft[axis=z]
-probe createbelt 1602 -60 193 1617 -60 193
+sleep createbelt 1602 -60 193 1617 -60 193
 setblock 1602 -60 194 create:creative_motor[facing=north]
 setblock 1602 -59 193 create:chute
 setblock 1602 -58 193 minecraft:hopper[facing=down]

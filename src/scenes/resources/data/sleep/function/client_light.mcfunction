@@ -1,4 +1,4 @@
-# sleep:client_light - constant relighting (ClientAuto -Dprobe.clientAuto.scene=client_light): a grid of light
+# sleep:client_light - constant relighting (ClientAuto -Dsleep.clientAuto.scene=client_light): a grid of light
 # sources (196) switched between glowstone and stone every 2 ticks by two functions scheduling each other.
 gamerule doDaylightCycle false
 gamerule doWeatherCycle false

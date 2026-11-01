@@ -23,6 +23,8 @@ ap.add_argument('--ticks', type=int, default=2400)
 ap.add_argument('--flags', default='', help='more JVM flags for the "on" run')
 ap.add_argument('--exclude', default='', help='entity types left out of the row comparison (comma separated)')
 ap.add_argument('--monsters', action='store_true', help='keep summoned monsters (spawn-monsters=true)')
+ap.add_argument('--jvm', default='', help='JVM flags for both runs')
+ap.add_argument('--only', choices=('off', 'on'), help='one run only: print its hash (bisecting flags against a known hash)')
 ap.add_argument('--offoff', action='store_true', help='both runs without the optimisations: is the scene deterministic at all')
 a = ap.parse_args()
 x1, z1, x2, z2 = scene_area(a.scene)
@@ -39,9 +41,10 @@ def wait_time(s, target):
         time.sleep(1)
 
 
-for mode in ('off', 'on'):
+for mode in ((a.only,) if a.only else ('off', 'on')):
     rows = os.path.abspath(os.path.join(RUN, 'exactness-%s-%s-rows.txt' % (a.scene, mode)))
     jvm = ['-Dsleep.seedEntities=true', '-Dsleep.hashEntities=true', '-Dsleep.hashEntitiesDeep=true', '-Dsleep.hashRows=' + rows.replace('\\', '/')]
+    jvm += a.jvm.split()
     if mode == 'on' and not a.offoff:
         jvm += ['-Dlab.opt.defaults=true'] + a.flags.split()
     log = os.path.join(RUN, 'exactness-%s-%s.log' % (a.scene, mode))
@@ -64,6 +67,8 @@ for mode in ('off', 'on'):
     print('%-3s region hash %s  (block entities %d, entities %d)%s' % (mode, h.group(1), int(h.group(2)), int(h.group(3)),
                                                                       '  %d errors in the log' % len(errs) if errs else ''), flush=True)
 
+if a.only:
+    sys.exit(0)
 skip = {'minecraft:' + t.strip() for t in a.exclude.split(',') if t.strip()}
 
 

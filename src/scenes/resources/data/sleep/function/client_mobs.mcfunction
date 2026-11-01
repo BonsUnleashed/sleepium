@@ -1,4 +1,4 @@
-# sleep:client_mobs - animated rendering load (ClientAuto -Dprobe.clientAuto.scene=client_mobs): 300 mobs with AI
+# sleep:client_mobs - animated rendering load (ClientAuto -Dsleep.clientAuto.scene=client_mobs): 300 mobs with AI
 # in a fenced pen in the sky (cows, sheep, pigs, chickens, husks with swords): every one animated every frame.
 # Not for the frame hash (they move); for fps and the parallel render verify mode.
 gamerule doDaylightCycle false

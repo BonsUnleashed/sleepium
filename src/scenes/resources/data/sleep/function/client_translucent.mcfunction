@@ -1,4 +1,4 @@
-# sleep:client_translucent - overlapping translucent items (ClientAuto -Dprobe.clientAuto.scene=client_translucent):
+# sleep:client_translucent - overlapping translucent items (ClientAuto -Dsleep.clientAuto.scene=client_translucent):
 # invisible fixed item frames in a 3D grid holding semi-transparent items (bottles, potions, honey), several layers
 # deep in front of the camera, so translucent pixels of different objects overlap (per-object vs per-quad order).
 gamerule doDaylightCycle false

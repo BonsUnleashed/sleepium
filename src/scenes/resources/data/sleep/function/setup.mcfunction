@@ -443,4 +443,4 @@ setblock 76 -60 -20 minecraft:observer[facing=west]
 
 # Viewpoint
 tp @s 32 -54 -34 0 25
-tellraw @s {"text":"sleep: scene ready. Wait ~10 s for it to settle, then /probe start","color":"green"}
+tellraw @s {"text":"sleep: scene ready. Wait ~10 s for it to settle, then /sleep start","color":"green"}

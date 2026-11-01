@@ -176,9 +176,9 @@ final class SleepCommand {
                                     }
                                 }))))
                 .then(Commands.literal("reseed").executes(ctx -> {
-                    // exactness tests: every level's shared random to a fixed seed, right before a scene is built
-                    for (var lv : ctx.getSource().getServer().getAllLevels()) lv.random.setSeed(lv.dimension().location().toString().hashCode() * 31L + 777);
-                    say(ctx, "levels' randoms reseeded");
+                    // exactness tests: vanilla's clock-seeded randoms to fixed seeds, right before a scene is built
+                    TestSeeds.reseed(ctx.getSource().getServer());
+                    say(ctx, "randoms reseeded");
                     return 1;
                 }))
                 .then(Commands.literal("sleepents").executes(ctx -> {

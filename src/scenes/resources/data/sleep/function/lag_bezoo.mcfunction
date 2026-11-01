@@ -1,4 +1,4 @@
-# sleep:lag_bezoo - 16 of every ticking block entity type, for sleep-engine coverage (probe sleep lists who sleeps and why not)
+# sleep:lag_bezoo - 16 of every ticking block entity type, for sleep-engine coverage (/sleep sleep lists who sleeps and why not)
 # area x 1000..1052, z 100..132
 gamerule doMobSpawning false
 time set noon

@@ -2272,9 +2272,9 @@ public final class EntitySleep {
         }
 
         /** whether box i intersects b (AABB.intersects: strict) */
-        boolean meets(int i, AABB b) {
+        boolean meets(int i, double ax, double ay, double az, double cx, double cy, double cz) {
             int o = i * 6;
-            return bx[o] < b.maxX && bx[o + 3] > b.minX && bx[o + 1] < b.maxY && bx[o + 4] > b.minY && bx[o + 2] < b.maxZ && bx[o + 5] > b.minZ;
+            return bx[o] < cx && bx[o + 3] > ax && bx[o + 1] < cy && bx[o + 4] > ay && bx[o + 2] < cz && bx[o + 5] > az;
         }
     }
 
@@ -2313,20 +2313,25 @@ public final class EntitySleep {
 
     /** An entity moved, appeared, changed or was removed; or a neighbour woke. */
     static void onEntity(Entity x, String reason) {
+        AABB bb = x.getBoundingBox();
+        onEntity(x, reason, bb.minX, bb.minY, bb.minZ, bb.maxX, bb.maxY, bb.maxZ);
+    }
+
+    /** The same over the given bounds (an entity's old and new box together when it moves). */
+    static void onEntity(Entity x, String reason, double ax, double ay, double az, double bx, double by, double bz) {
         ES self = es(x);
         if (self != null && self.st == St.ASLEEP && !reason.equals("neighbour woke")) request(self, "self: " + reason);
         if (ENTITY_SUBS.isEmpty()) return;
         Level level = x.level();
         if (level == null || level.isClientSide) return;
-        AABB bb = x.getBoundingBox();
-        int x0 = SectionPos.posToSectionCoord(bb.minX), x1 = SectionPos.posToSectionCoord(bb.maxX);
-        int y0 = SectionPos.posToSectionCoord(bb.minY), y1 = SectionPos.posToSectionCoord(bb.maxY);
-        int z0 = SectionPos.posToSectionCoord(bb.minZ), z1 = SectionPos.posToSectionCoord(bb.maxZ);
+        int x0 = SectionPos.posToSectionCoord(ax), x1 = SectionPos.posToSectionCoord(bx);
+        int y0 = SectionPos.posToSectionCoord(ay), y1 = SectionPos.posToSectionCoord(by);
+        int z0 = SectionPos.posToSectionCoord(az), z1 = SectionPos.posToSectionCoord(bz);
         for (int sx = x0; sx <= x1; sx++) for (int sy = y0; sy <= y1; sy++) for (int sz = z0; sz <= z1; sz++) {
             SubList l = ENTITY_SUBS.get(SectionPos.asLong(sx, sy, sz));
-            if (l == null || l.u0 >= bb.maxX || l.u3 <= bb.minX || l.u1 >= bb.maxY || l.u4 <= bb.minY || l.u2 >= bb.maxZ || l.u5 <= bb.minZ) continue;
+            if (l == null || l.u0 >= bx || l.u3 <= ax || l.u1 >= by || l.u4 <= ay || l.u2 >= bz || l.u5 <= az) continue;
             for (int i = 0; i < l.n; i++) {
-                if (!l.meets(i, bb)) continue;
+                if (!l.meets(i, ax, ay, az, bx, by, bz)) continue;
                 ES s = l.es[i];
                 if (s == self || s.st != St.ASLEEP || l.ep[i] != s.subEpoch || s.e.level() != level) continue;
                 request(s, reason);
@@ -2465,23 +2470,51 @@ public final class EntitySleep {
     }
 
     /**
-     * Exactness checks ({@code probe hash} with -Dsleep.hashEntitiesDeep=true): every primitive field and every value
+     * Exactness checks ({@code sleep hash} with -Dsleep.hashEntitiesDeep=true): every primitive field and every value
      * object (vectors, boxes, positions, synched data, random seeds, boxed values, enums) of the entity, by value.
      * Identity-only references, ids and UUIDs are left out (they differ between runs without meaning anything).
      */
     /** Like EntityFp.fp but equal across runs: item stacks by registry id, count and components; synched values by content. */
     private static long stableFp(Object r) {
+        return stableFp(r, 0);
+    }
+
+    private static long stableFp(Object r, int depth) {
         if (r instanceof net.minecraft.world.item.ItemStack st)
             return st.isEmpty() ? 0 : BuiltInRegistries.ITEM.getKey(st.getItem()).hashCode() * 1_000_003L + st.getCount() * 7919L + st.getComponentsPatch().toString().hashCode();
         if (r instanceof SynchedEntityData d) {
             long h = d.isDirty() ? 1 : 0;
             for (SynchedEntityData.DataValue<?> dv : d.getNonDefaultValues() == null ? List.<SynchedEntityData.DataValue<?>>of() : d.getNonDefaultValues())
-                h = h * 31 + dv.id() * 7919L + stableFp(dv.value());
+                h = h * 31 + dv.id() * 7919L + stableFp(dv.value(), depth + 1);
             return h;
         }
         if (r instanceof Vec3 || r instanceof AABB || r instanceof BlockPos) return EntityFp.fp(r);
         if (r instanceof Enum<?> en) return en.getDeclaringClass().getName().hashCode() * 31L + en.ordinal();   // Enum.hashCode is per run
-        return r == null ? 0 : r.toString().hashCode();
+        if (r == null) return 0;
+        if (depth < 4 && r instanceof Iterable<?> it) {   // lists by their elements (a villager's offers)
+            long h = 1;
+            for (Object o : it) h = h * 31 + stableFp(o, depth + 1);
+            return h;
+        }
+        if (r instanceof java.util.Optional<?> o) return o.isEmpty() ? 2 : 3 * 31L + stableFp(o.get(), depth + 1);
+        String s = r.toString();
+        if (depth < 4 && s.startsWith(r.getClass().getName() + "@")) {
+            // Object's toString names the identity (per run): by the fields' values instead (VillagerData, MerchantOffer)
+            long h = r.getClass().getName().hashCode();
+            for (Field f : DFIELDS.computeIfAbsent(r.getClass(), EntitySleep::instanceFields)) {
+                try {
+                    Class<?> t = f.getType();
+                    long v = t == int.class ? f.getInt(r) : t == long.class ? f.getLong(r) : t == boolean.class ? (f.getBoolean(r) ? 1 : 0)
+                            : t == float.class ? Float.floatToRawIntBits(f.getFloat(r)) : t == double.class ? Double.doubleToRawLongBits(f.getDouble(r))
+                            : t.isPrimitive() ? String.valueOf(f.get(r)).hashCode() : stableFp(f.get(r), depth + 1);
+                    h = h * 1_000_003L + f.getName().hashCode() * 31L + v;
+                } catch (IllegalAccessException ex) {
+                    h = h * 31 + 1;
+                }
+            }
+            return h;
+        }
+        return s.hashCode();
     }
 
     public static String deepDump(Entity e) {

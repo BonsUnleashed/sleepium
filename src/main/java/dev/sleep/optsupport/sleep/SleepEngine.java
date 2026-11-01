@@ -578,21 +578,35 @@ public final class SleepEngine {
 
     /** An entity moved, appeared, changed its item or was removed: wake sleepers whose read boxes it touches. */
     public static void onEntity(Entity e, String reason) {
-        if (EntitySleep.ON) EntitySleep.onEntity(e, reason);
+        AABB bb = e.getBoundingBox();
+        onEntity(e, reason, bb.minX, bb.minY, bb.minZ, bb.maxX, bb.maxY, bb.maxZ);
+    }
+
+    /**
+     * An entity's bounding box changes from {@code from} to {@code to} (a move): one event over both, so a sleeper hears
+     * an entity leaving its box and one arriving (vanilla sets the new box after the position; a test of the box at the
+     * position change saw the old one, and a boat stopping in a sleeping item's box never woke it).
+     */
+    public static void onMove(Entity e, AABB from, AABB to) {
+        onEntity(e, "entity-moved", Math.min(from.minX, to.minX), Math.min(from.minY, to.minY), Math.min(from.minZ, to.minZ),
+                Math.max(from.maxX, to.maxX), Math.max(from.maxY, to.maxY), Math.max(from.maxZ, to.maxZ));
+    }
+
+    static void onEntity(Entity e, String reason, double ax, double ay, double az, double bx, double by, double bz) {
+        if (EntitySleep.ON) EntitySleep.onEntity(e, reason, ax, ay, az, bx, by, bz);
         if (BY_SECTION.isEmpty()) return;
         Level level = e.level();
         if (level == null || level.isClientSide) return;
-        AABB bb = e.getBoundingBox();
-        int x0 = SectionPos.posToSectionCoord(bb.minX), x1 = SectionPos.posToSectionCoord(bb.maxX);
-        int y0 = SectionPos.posToSectionCoord(bb.minY), y1 = SectionPos.posToSectionCoord(bb.maxY);
-        int z0 = SectionPos.posToSectionCoord(bb.minZ), z1 = SectionPos.posToSectionCoord(bb.maxZ);
+        int x0 = SectionPos.posToSectionCoord(ax), x1 = SectionPos.posToSectionCoord(bx);
+        int y0 = SectionPos.posToSectionCoord(ay), y1 = SectionPos.posToSectionCoord(by);
+        int z0 = SectionPos.posToSectionCoord(az), z1 = SectionPos.posToSectionCoord(bz);
         for (int x = x0; x <= x1; x++) for (int y = y0; y <= y1; y++) for (int z = z0; z <= z1; z++) {
             List<Sleeper> l = BY_SECTION.get(SectionPos.asLong(x, y, z));
             if (l == null) continue;
             for (int i = 0; i < l.size(); i++) {
                 Sleeper s = l.get(i);
                 if (s.be.getLevel() != level) continue;
-                for (AABB b : s.boxes) if (b.intersects(bb)) { request(s, reason); break; }
+                for (AABB b : s.boxes) if (b.intersects(ax, ay, az, bx, by, bz)) { request(s, reason); break; }
             }
         }
     }

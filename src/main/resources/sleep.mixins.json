@@ -6,6 +6,11 @@
   "mixins": [
     "SeedEntitiesMixin",
     "SeedLevelMixin",
+    "SeedLevelAccessor",
+    "SeedSensorAccessor",
+    "SeedMthAccessor",
+    "SeedShufflingMixin",
+    "SeedExplosionMixin",
     "KnockMixin",
     "KnockEntityMixin",
     "KnockGoalsMixin",

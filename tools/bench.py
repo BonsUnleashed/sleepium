@@ -36,7 +36,10 @@ def num(g):
     return float(g.replace(',', '.'))
 
 
-jvm = ['-Xms' + a.heap, '-Xmx' + a.heap] + (['-Dlab.opt.defaults=true'] if a.mode == 'on' else []) + a.flags.split()
+# the heap touched up front: a fresh JVM otherwise page-faults on every new eden page until its first collections,
+# which charges a run that allocates little (the engine) more than one that cycles eden fast (vanilla); a long-running
+# server reuses its touched pages
+jvm = ['-Xms' + a.heap, '-Xmx' + a.heap, '-XX:+AlwaysPreTouch'] + (['-Dlab.opt.defaults=true'] if a.mode == 'on' else []) + a.flags.split()
 rows = []
 with Server(jvm, log=os.path.join(RUN, 'bench-%s.log' % label)) as s:
     s.wait_for(r'Done \(')
