@@ -38,7 +38,10 @@ Intel N100 (4 cores, 6 W, Intel UHD Graphics, 16 GB): server milliseconds per ti
 
 All numbers are from one evening (the release jar on 2026-11-01, vanilla from the same session). Client on the same
 machine: an entity / block-entity scene **39 → 117 fps** (frame p50 25.6 → 7.7 ms, garbage
-3 952 → 113 KiB per frame). The host (Ryzen 7 5800X) numbers and the other client scenes are in [Results](#results).
+3 952 → 113 KiB per frame). On a desktop (Ryzen 7 5800X, RTX 4070 SUPER): the same scene **67 → 1 514–1 540 fps**,
+300 animated mobs 175 → 1 782 fps, items on the server 48.9 → 3.1 ms per tick. Against Horizon, a Rust rewrite of Minecraft, the client draws 13–32 %
+more frames on the N100, and the server is ahead on items, hoppers, furnaces and pistons
+([Against other projects](#against-other-projects)). All tables are in [Results](#results).
 
 The world after N ticks is the same as vanilla's in every scene where vanilla itself is reproducible (see
 [Exactness](#exactness)).
@@ -216,6 +219,38 @@ run first. Three more pairs with the order reversed came back level: previous bu
 release 10.62 / 9.65 / 9.65 (mean 9.97), p50 9.1–9.7 in both. The release uses about 100 MB less memory, because the
 animation framework built on the engine is no longer in the same jar.
 
+### Server, N100, other JVM flags (2026-11-01)
+
+Does the result depend on how the JVM is started? The same comparison was run twice more, with scene groups
+alternating which side goes first:
+
+- with the whole heap committed and touched up front: `-Xms2G -Xmx2G -XX:+AlwaysPreTouch`;
+- with the G1 settings most server hosts use ("Aikar's flags": `-Xms2G -Xmx2G -XX:+AlwaysPreTouch -XX:+UseG1GC
+  -XX:+ParallelRefProcEnabled -XX:MaxGCPauseMillis=200 -XX:+UnlockExperimentalVMOptions -XX:+DisableExplicitGC
+  -XX:G1NewSizePercent=30 -XX:G1MaxNewSizePercent=40 -XX:G1HeapRegionSize=8M -XX:G1ReservePercent=20
+  -XX:G1HeapWastePercent=5 -XX:G1MixedGCCountTarget=4 -XX:InitiatingHeapOccupancyPercent=15
+  -XX:G1MixedGCLiveThresholdPercent=90 -XX:G1RSetUpdatingPauseTimePercent=5 -XX:SurvivorRatio=32
+  -XX:+PerfDisableSharedMem -XX:MaxTenuringThreshold=1`).
+
+| scene | pre-touched: vanilla | sleep | | Aikar's flags: vanilla | sleep | |
+|---|---:|---:|---:|---:|---:|---:|
+| items | 143.93 | 8.97 | ×16.0 | 115.12 | 8.95 | ×12.9 |
+| hoppers | 3.20 | 0.77 | ×4.2 | 3.00 | 0.70 | ×4.3 |
+| carts | 35.67 | 10.33 | ×3.5 | 36.53 | 10.90 | ×3.4 |
+| furnaces | 1.77 | 0.70 | ×2.5 | 1.55 | 0.90 | ×1.7 |
+| fluids | 9.70 | 5.18 | ×1.9 | 10.27 | 5.38 | ×1.9 |
+| cramming | 13.43 | 6.58 | ×2.0 | 13.23 | 6.53 | ×2.0 |
+| pistons | 7.47 | 4.30 | ×1.7 | 7.70 | 4.45 | ×1.7 |
+| mobs | 18.80 | 10.38 | ×1.8 | 19.18 | 10.05 | ×1.9 |
+| villagers | 18.20 | 10.32 | ×1.8 | 17.08 | 10.40 | ×1.6 |
+| smelters | 4.40 | 2.93 | ×1.5 | 3.77 | 2.67 | ×1.4 |
+| crops | 0.90 | 0.55 | ×1.6 | 0.80 | 0.53 | ×1.5 |
+| redstone | 12.02 | 10.00 | ×1.2 | 12.30 | 9.93 | ×1.2 |
+
+The gains hold under both. With the defaults (`-Xmx2G` alone) G1 starts with a small heap and young generation, so a
+fresh JVM reuses its touched pages early; the first-touch effect seen on the host with a fixed 4 GB heap does not
+apply there.
+
 ### Server, host (2026-11-01)
 
 `tools/bench.py`, heap 4 GB pre-touched, 30 s warm-up, then 30 s of `/tick query` windows per scene. Values are ms per
@@ -265,6 +300,26 @@ engine 0.70–0.88 (mean 0.78, 8 runs). In the two pairs run back to back with i
 (0.77 / 0.71 against 0.72 / 0.78). The extra time is in the shared worker pool, which does light and section
 meshing. Vanilla uses 0.44 cores here: the engine runs that work on workers in parallel with the frame.
 
+### Client, host (2026-11-01)
+
+`tools/client_bench.py`: the same self-driving client from `./gradlew runClient` of this build, window 1280×720,
+vsync off, unlimited fps, heap 3 GB pre-touched, 40 s for the terrain, 30 s measured. NVIDIA RTX 4070 SUPER.
+
+| scene | | vanilla | sleep | |
+|---|---|---:|---:|---:|
+| entities | fps | 67 | 1 514 / 1 540 | ×23 |
+| | frame p50 / p99, ms | 14.7 / 18.3 | 0.58 / 1.54 | |
+| | garbage per frame | 3 953 KiB | 68–88 KiB | |
+| mobs | fps | 175 | 1 782 | ×10 |
+| | frame p50 / p99, ms | 5.5 / 7.8 | 0.50 / 2.76 | |
+| | garbage per frame | 841 KiB | 38 KiB | |
+| light | fps | 511 | 2 813 | ×5.5 |
+| | frame p50 / p99, ms | 1.8 / 8.5 | 0.33 / 0.80 | |
+| | garbage per frame | 187 KiB | 24 KiB | |
+
+Without a frame cap the engine uses more cores (mobs 1.9 → 3.8) because it draws ten times as many frames. Per frame
+it costs a fraction of vanilla's CPU.
+
 Measured earlier on the host, uncapped (RTX 4070 SUPER), vanilla → sleep: terrain 242–283 → ≈1 840 fps; 225 mobs
 167 → ≈1 775 fps; the entity / block-entity scene 64 → ≈690 fps (later 994). At a fixed 60 fps the whole client process
 used 0.74 → 0.28 cores.
@@ -298,8 +353,17 @@ chunk drops from 71.9 ms and 19.1 MB of garbage to 35.5 ms. On the N100, 12 → 
   | crops | 0.8 / 0.8 | 0.5 / 0.5 | 0.6 / 0.6 | 0.5 / 0.5 |
   | memory (RSS) | 0.7–0.9 GB | 0.7–0.9 GB | 0.6–0.8 GB | **0.37–0.45 GB** |
 
-  Client fps, vanilla / sleep / Horizon: entities 37 / 115 / 87, mobs 70 / 136 / 112, light 132 / 156 / 138. Horizon
-  keeps frame-time p99 lower (10–14 ms against 17–33 ms); sleep has the lower p50. Horizon is ahead on mobs and
+  **Client: sleep draws more frames than Horizon in every scene**, on the same N100, the same view and 1280×720 (the
+  same session, 2026-10-30):
+
+  | client scene | vanilla 1.21.1 | sleep | Horizon | sleep against Horizon |
+  |---|---:|---:|---:|---:|
+  | entities | 37 fps | **115 fps** | 87 fps | +32 % |
+  | mobs | 70 fps | **136 fps** | 112 fps | +21 % |
+  | light | 132 fps | **156 fps** | 138 fps | +13 % |
+
+  Horizon draws with Vulkan (wgpu) and keeps frame-time p99 lower (10–14 ms against 17–33 ms); sleep has the lower
+  p50. Horizon is ahead on mobs and
   villagers partly because of its data layout and partly because some of its shortcuts are not vanilla-exact. sleep
   keeps the vanilla game and its mods.
 - **Lithium, C2ME, Moonrise, ModernFix, FerriteCore**: no A/B has been run yet.

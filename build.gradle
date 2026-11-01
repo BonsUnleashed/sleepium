@@ -147,6 +147,11 @@ tasks.named('compileJava') { dependsOn checkEngine }
 tasks.named('runServer') { standardInput = System.in }
 
 // extra JVM arguments for the runs, from the tools: -PrunJvmArgs="-Dlab.opt.defaults=true -Dsleep.seedEntities=true"
+// -PrunArgs="--width 1280 --height 720": program arguments for the dev runs (tools/client_bench.py)
+if (project.hasProperty('runArgs')) {
+    def extra = project.property('runArgs').toString().trim()
+    if (!extra.isEmpty()) neoForge.runs.configureEach { programArguments.addAll(extra.split(/\s+/) as List) }
+}
 if (project.hasProperty('runJvmArgs')) {
     def extra = project.property('runJvmArgs').toString().trim()
     if (!extra.isEmpty()) neoForge.runs.configureEach { jvmArguments.addAll(extra.split(/\s+/) as List) }
