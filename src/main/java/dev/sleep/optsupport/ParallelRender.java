@@ -308,8 +308,8 @@ public final class ParallelRender {
         j.buffers = buffers;
         j.done = false;
         j.ok = false;
-        j.claimed.set(false);
         j.parallel = eligible(e, buffers);
+        j.claimed.set(!j.parallel);   // set last: a stale pool entry of this reused job may run it only when it is a complete parallel job
         jobs++;
         if (j.parallel) pool().execute(j);
     }
