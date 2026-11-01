@@ -14,6 +14,10 @@ public final class SleepMixinPlugin implements IMixinConfigPlugin {
 
     @Override
     public boolean shouldApplyMixin(String targetClassName, String mixinClassName) {
+        return sleep$decide(targetClassName, mixinClassName) && !dev.sleep.optsupport.MixinYield.yields(targetClassName, mixinClassName);
+    }
+
+    private boolean sleep$decide(String targetClassName, String mixinClassName) {
         String simple = mixinClassName.substring(mixinClassName.lastIndexOf('.') + 1);
         boolean sleep = Boolean.getBoolean("lab.opt.SleepMixin") || Boolean.getBoolean("lab.opt.EntitySleep");
         if (simple.startsWith("SleepProbeUnobserved")) return sleep && !Boolean.getBoolean("lab.sleep.noUnobserved");   // off only for measurements

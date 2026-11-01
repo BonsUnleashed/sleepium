@@ -19,6 +19,10 @@ public final class OptMixinPlugin implements IMixinConfigPlugin {
 
     @Override
     public boolean shouldApplyMixin(String targetClassName, String mixinClassName) {
+        return sleep$decide(targetClassName, mixinClassName) && !dev.sleep.optsupport.MixinYield.yields(targetClassName, mixinClassName);
+    }
+
+    private boolean sleep$decide(String targetClassName, String mixinClassName) {
         String simple = mixinClassName.substring(mixinClassName.lastIndexOf('.') + 1);
         boolean on = Boolean.getBoolean("lab.opt.all") || Boolean.getBoolean("lab.opt." + simple);
         // helpers that belong to a feature flag

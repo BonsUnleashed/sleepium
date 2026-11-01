@@ -42,6 +42,10 @@ public final class CatnipMixinPlugin implements IMixinConfigPlugin {
 
     @Override
     public boolean shouldApplyMixin(String targetClassName, String mixinClassName) {
+        return sleep$decide(targetClassName, mixinClassName) && !dev.sleep.optsupport.MixinYield.yields(targetClassName, mixinClassName);
+    }
+
+    private boolean sleep$decide(String targetClassName, String mixinClassName) {
         boolean kinetic = mixinClassName.endsWith(".KineticRotationMixin") || mixinClassName.endsWith(".KineticBeMixin") || mixinClassName.endsWith(".OverStressAccessor")
                 || mixinClassName.endsWith(".ChainConveyorMemoMixin");
         if (mixinClassName.endsWith(".SbbCacheWorkerMixin")) {   // a safety of the parallel render, whatever else is on

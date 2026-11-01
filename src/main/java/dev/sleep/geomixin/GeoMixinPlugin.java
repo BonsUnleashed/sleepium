@@ -46,6 +46,10 @@ public final class GeoMixinPlugin implements IMixinConfigPlugin {
 
     @Override
     public boolean shouldApplyMixin(String targetClassName, String mixinClassName) {
+        return sleep$decide(targetClassName, mixinClassName) && !dev.sleep.optsupport.MixinYield.yields(targetClassName, mixinClassName);
+    }
+
+    private boolean sleep$decide(String targetClassName, String mixinClassName) {
         boolean on = (mixinClassName.endsWith(".GeoMarkersMixin") || mixinClassName.endsWith(".GeoBlendMixin") ? true : mixinClassName.endsWith(".GeoCubesMixin") ? PARTS : mixinClassName.contains(".GeoAnim") ? ANIM
                 : mixinClassName.endsWith(".MolangJitMixin") ? JIT : mixinClassName.endsWith(".KeyframeInternMixin") ? INTERN : mixinClassName.endsWith(".AnimStreamMixin") ? STREAM : ON) && geckoLib();
         if (on && mixinClassName.endsWith(".GeoModelWorkerMixin")) System.setProperty("sleep.adapter.geckolib", "true");   // ParallelRender may take GeckoLib renderers

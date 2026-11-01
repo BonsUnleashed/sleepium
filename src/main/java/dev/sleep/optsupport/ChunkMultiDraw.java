@@ -449,8 +449,14 @@ public final class ChunkMultiDraw {
 
     /** The vanilla buffer is not filled for arena layers (no duplicate VRAM) while the layer's shader is patched. */
     public static boolean replacesVanilla(RenderType layer) {
-        return !KEEP_VANILLA && PATCHED.size() == SUPPORTED.size();
+        return ACTIVE && !KEEP_VANILLA && PATCHED.size() == SUPPORTED.size();
     }
+
+    /**
+     * Multi-draw replaces renderSectionLayer's body, so it gives way when another mod's mixin changes that method
+     * (Sable / Aeronautics draw ships there, Veil hooks it): then the layers, and the uploads, stay vanilla's.
+     */
+    public static final boolean ACTIVE = !MixinTouch.touched("net/minecraft/client/renderer/LevelRenderer", "renderSectionLayer");
 
     private static final boolean KEEP_VANILLA = Boolean.getBoolean("lab.chunkmd.keepVanilla");
 

@@ -25,6 +25,10 @@ public final class FlwMixinPlugin implements IMixinConfigPlugin {
 
     @Override
     public boolean shouldApplyMixin(String targetClassName, String mixinClassName) {
+        return sleep$decide(targetClassName, mixinClassName) && !dev.sleep.optsupport.MixinYield.yields(targetClassName, mixinClassName);
+    }
+
+    private boolean sleep$decide(String targetClassName, String mixinClassName) {
         boolean on = mixinClassName.endsWith(".FlwExecutorMixin") && EXECUTOR && flywheel();
         if (on) System.out.println("[sleep/opt] applying " + mixinClassName.substring(mixinClassName.lastIndexOf('.') + 1) + " -> " + targetClassName);
         return on;

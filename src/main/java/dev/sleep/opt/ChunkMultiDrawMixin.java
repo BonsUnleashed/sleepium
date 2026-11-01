@@ -32,7 +32,7 @@ public abstract class ChunkMultiDrawMixin {
     @Shadow private int ticks;
     @Shadow public abstract net.minecraft.client.renderer.culling.Frustum getFrustum();
 
-    @Unique private static final boolean ACTIVE = !dev.sleep.optsupport.MixinTouch.touched("net/minecraft/client/renderer/LevelRenderer", "renderSectionLayer");
+    @Unique private static final boolean ACTIVE = ChunkMultiDraw.ACTIVE;
 
     @Inject(method = "renderSectionLayer", at = @At("HEAD"), cancellable = true)
     private void sleep$multi(RenderType renderType, double x, double y, double z, Matrix4f frustumMatrix, Matrix4f projectionMatrix, CallbackInfo ci) {

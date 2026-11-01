@@ -46,11 +46,173 @@ public final class MixinTouch {
         return !TOUCHED.computeIfAbsent(internalName, MixinTouch::compute).isEmpty();
     }
 
+    private static volatile Map<String, Set<String>> INDEX;
+    /** foreign @Redirects by target class: "method|invoked name" (filled with the index) */
+    private static final Map<String, Set<String>> REDIRECTS = new java.util.HashMap<>();
+
+    /** Does a foreign mixin @Redirect the call to {@code invoked} inside {@code method} of this class? */
+    public static boolean redirected(String internalName, String method, String invoked) {
+        index();
+        Set<String> r = REDIRECTS.get(internalName);
+        return r != null && (r.contains(method + "|" + invoked) || r.contains(ALL + "|" + invoked));
+    }
+
+    /** "method|invoked name" of every @Redirect of a mixin class (the invoked name from its @At target). */
+    static List<String> redirectKeys(ClassNode cn) {
+        List<String> out = new java.util.ArrayList<>();
+        for (MethodNode m : cn.methods)
+            for (AnnotationNode a : annotations(m)) {
+                if (!"Lorg/spongepowered/asm/mixin/injection/Redirect;".equals(a.desc) || a.values == null) continue;
+                List<String> methods = new java.util.ArrayList<>();
+                String invoked = null;
+                for (int i = 0; i + 1 < a.values.size(); i += 2) {
+                    Object v = a.values.get(i + 1);
+                    if ("method".equals(a.values.get(i))) {
+                        if (v instanceof List<?> l) for (Object o : l) methods.add(nameOf(String.valueOf(o)));
+                        else methods.add(nameOf(String.valueOf(v)));
+                    } else if ("at".equals(a.values.get(i)) && v instanceof AnnotationNode at && at.values != null) {
+                        for (int k = 0; k + 1 < at.values.size(); k += 2)
+                            if ("target".equals(at.values.get(k))) invoked = invokedName(String.valueOf(at.values.get(k + 1)));
+                    }
+                }
+                if (invoked != null) for (String mm : methods) out.add(mm + "|" + invoked);
+            }
+        return out;
+    }
+
+    /** "Lowner;name(desc)ret" or "owner.name(...)" -> name */
+    static String invokedName(String target) {
+        String s = target.trim();
+        int paren = s.indexOf('(');
+        if (paren >= 0) s = s.substring(0, paren);
+        int colon = s.indexOf(':');   // a field: "Lowner;name:Ltype;"
+        if (colon >= 0) s = s.substring(0, colon);
+        int cut = Math.max(s.lastIndexOf(';'), s.lastIndexOf('.'));
+        return cut >= 0 ? s.substring(cut + 1) : s;
+    }
+
+    /**
+     * Every foreign mixin of every registered config, by target class, read from the configs' class lists and the
+     * mixins' bytecode: complete even while Mixin has not prepared the other mods' configs yet (ours are prepared first,
+     * and the plugins decide then).
+     */
+    private static synchronized Map<String, Set<String>> index() {
+        Map<String, Set<String>> idx = INDEX;
+        if (idx != null) return idx;
+        Map<String, Set<String>> m = new java.util.HashMap<>();
+        indexModFiles(m);
+        try {
+            var provider = org.spongepowered.asm.service.MixinService.getService().getBytecodeProvider();
+            for (org.spongepowered.asm.mixin.transformer.Config c : org.spongepowered.asm.mixin.Mixins.getConfigs()) {
+                org.spongepowered.asm.mixin.extensibility.IMixinConfig mc = c.getConfig();
+                if (mc == null) continue;
+                if (mc.getName().startsWith("sleep") || mc.getName().startsWith("probe")) continue;   // (the engine's and its framework's)
+                String pkg = mc.getMixinPackage();
+                if (pkg == null) continue;
+                if (!pkg.isEmpty() && !pkg.endsWith(".")) pkg += ".";
+                for (String field : new String[] {"mixinClasses", "mixinClassesClient", "mixinClassesServer"}) {
+                    Field f = mc.getClass().getDeclaredField(field);
+                    f.setAccessible(true);
+                    Object list = f.get(mc);
+                    if (!(list instanceof List<?> names)) continue;
+                    for (Object n : names) {
+                        String cls = pkg + n;
+                        if (cls.startsWith("dev.sleep.") || cls.startsWith("dev.probe.")) continue;
+                        ClassNode cn;
+                        try {
+                            cn = provider.getClassNode(cls);
+                        } catch (Throwable t) {
+                            continue;
+                        }
+                        Set<String> methods = new HashSet<>();
+                        collect(cn, methods);
+                        List<String> reds = redirectKeys(cn);
+                        for (String target : targets(cn)) {
+                            m.computeIfAbsent(target, k -> new HashSet<>()).addAll(methods);
+                            if (!reds.isEmpty()) REDIRECTS.computeIfAbsent(target, k -> new HashSet<>()).addAll(reds);
+                        }
+                    }
+                }
+            }
+        } catch (Throwable t) {
+            System.out.println("[sleep/opt] foreign mixin index incomplete: " + t);
+        }
+        INDEX = m;
+        System.out.println("[sleep/opt] foreign mixin index: " + m.size() + " target classes; Block: " + m.get("net/minecraft/world/level/block/Block"));
+        return m;
+    }
+
+    /**
+     * Every mod file's mixin configs as FML lists them (jar-in-jar mods included), read from the files themselves: known
+     * before Mixin registers or prepares any of them.
+     */
+    private static void indexModFiles(Map<String, Set<String>> m) {
+        try {
+            var mods = net.neoforged.fml.loading.LoadingModList.get();
+            if (mods == null) return;
+            for (var info : mods.getModFiles()) {
+                var file = info.getFile();
+                for (var cfg : file.getMixinConfigs()) {
+                    String name = cfg.config();
+                    if (Boolean.getBoolean("sleep.mixinIndex.debug")) System.out.println("[sleep/opt] mixin index: " + info.moduleName() + " " + name + " -> " + file.findResource(name));
+                    if (name.startsWith("sleep") || name.startsWith("probe")) continue;
+                    java.nio.file.Path json = file.findResource(name);
+                    if (json == null || !java.nio.file.Files.exists(json)) continue;
+                    com.google.gson.JsonObject o = com.google.gson.JsonParser.parseString(java.nio.file.Files.readString(json)).getAsJsonObject();
+                    if (!o.has("package")) continue;
+                    String pkg = o.get("package").getAsString();
+                    for (String key : new String[] {"mixins", "client", "server"}) {
+                        if (!o.has(key) || !o.get(key).isJsonArray()) continue;
+                        for (var e : o.getAsJsonArray(key)) {
+                            String cls = pkg + "." + e.getAsString();
+                            if (cls.startsWith("dev.sleep.") || cls.startsWith("dev.probe.")) continue;
+                            java.nio.file.Path bytes = file.findResource(cls.replace('.', '/') + ".class");
+                            if (bytes == null || !java.nio.file.Files.exists(bytes)) continue;
+                            ClassNode cn = new ClassNode();
+                            new org.objectweb.asm.ClassReader(java.nio.file.Files.readAllBytes(bytes)).accept(cn, org.objectweb.asm.ClassReader.SKIP_CODE);
+                            Set<String> methods = new HashSet<>();
+                            collect(cn, methods);
+                            List<String> reds = redirectKeys(cn);
+                            for (String target : targets(cn)) {
+                                m.computeIfAbsent(target, k -> new HashSet<>()).addAll(methods);
+                                if (!reds.isEmpty()) REDIRECTS.computeIfAbsent(target, k -> new HashSet<>()).addAll(reds);
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (Throwable t) {
+            System.out.println("[sleep/opt] foreign mixin index (mod files) incomplete: " + t);
+        }
+    }
+
+    /** The target classes (internal names) of a mixin class: @Mixin's value and targets. */
+    private static List<String> targets(ClassNode cn) {
+        List<String> out = new java.util.ArrayList<>();
+        List<AnnotationNode> as = new java.util.ArrayList<>();
+        if (cn.visibleAnnotations != null) as.addAll(cn.visibleAnnotations);
+        if (cn.invisibleAnnotations != null) as.addAll(cn.invisibleAnnotations);
+        for (AnnotationNode a : as) {
+            if (!"Lorg/spongepowered/asm/mixin/Mixin;".equals(a.desc) || a.values == null) continue;
+            for (int i = 0; i + 1 < a.values.size(); i += 2) {
+                Object v = a.values.get(i + 1);
+                if (!(v instanceof List<?> l)) continue;
+                for (Object o : l) {
+                    if (o instanceof org.objectweb.asm.Type t) out.add(t.getInternalName());
+                    else if (o instanceof String str) out.add(str.replace('.', '/'));
+                }
+            }
+        }
+        return out;
+    }
+
     private static Set<String> compute(String internalName) {
         Set<String> out = new HashSet<>();
+        Set<String> indexed = index().get(internalName);
+        if (indexed != null) out.addAll(indexed);
         try {
             ClassInfo info = ClassInfo.fromCache(internalName);
-            if (info == null) return Set.of();
+            if (info == null) return out.isEmpty() ? Set.of() : Set.copyOf(out);   // not in Mixin's cache yet: the index alone
             Set<IMixinInfo> mixins = new HashSet<>(info.getAppliedMixins());
             if (PENDING != null) {
                 Object p = PENDING.get(info);
@@ -77,6 +239,10 @@ public final class MixinTouch {
             out.add(ALL);
             return;
         }
+        collect(cn, out);
+    }
+
+    private static void collect(ClassNode cn, Set<String> out) {
         for (MethodNode m : cn.methods) {
             if (m.name.equals("<clinit>")) continue;
             boolean injector = false, passive = false;
