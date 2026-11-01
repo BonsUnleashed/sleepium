@@ -68,6 +68,25 @@ public final class ClientAuto {
     private static final int SETTLE_S = Integer.getInteger("sleep.clientAuto.settle", 0);
     /** -Dsleep.clientAuto.scene=client_entities: run that probe function after the terrain is ready, then look at it */
     private static final String SCENE = System.getProperty("sleep.clientAuto.scene");
+    /** -Dsleep.clientAuto.structure=file.nbt: a structure (a schematic) placed as the scene, at -Dsleep.clientAuto.structureAt="x y z" */
+    private static final String STRUCTURE = System.getProperty("sleep.clientAuto.structure");
+    private static final String STRUCTURE_AT = System.getProperty("sleep.clientAuto.structureAt", "0 200 0").replace(',', ' ');
+    private static final boolean HAS_SCENE = SCENE != null || STRUCTURE != null;
+
+    /** The structure file copied into the world's generated structures; the command that places it. */
+    private static String placeStructure(Minecraft mc) {
+        java.nio.file.Path src = java.nio.file.Path.of(STRUCTURE);
+        String name = src.getFileName().toString().replaceFirst("[.]nbt$", "").toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9_.-]", "_");
+        try {
+            java.nio.file.Path dst = mc.getSingleplayerServer().getWorldPath(net.minecraft.world.level.storage.LevelResource.GENERATED_DIR)
+                    .resolve("sleep").resolve("structures").resolve(name + ".nbt");
+            java.nio.file.Files.createDirectories(dst.getParent());
+            java.nio.file.Files.copy(src, dst, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+        } catch (java.io.IOException e) {
+            log("structure copy failed: " + e);
+        }
+        return "place template sleep:" + name + " " + STRUCTURE_AT;
+    }
     /** -Dsleep.clientAuto.server=host:port: join that server instead of creating a world (commands go as chat commands; op the player) */
     private static final String SERVER = System.getProperty("sleep.clientAuto.server");
     /** -Dsleep.clientAuto.world=NAME: open this existing save (its folder in saves/) instead of a fresh world */
@@ -416,7 +435,7 @@ public final class ClientAuto {
                     for (Runnable r : READY) r.run();   // other mods' work once the world is up (the framework's bake)
                     joinedAt = System.nanoTime();
                     log(String.format(Locale.ROOT, "joined: %.1f s after world creation started, %.1f s since JVM start", since(phaseStart), sinceJvm()));
-                    if (SCENE != null) command(mc, SCENE_TP);   // go there first: the scene's chunks must be loaded before it is built
+                    if (HAS_SCENE) command(mc, SCENE_TP);   // go there first: the scene's chunks must be loaded before it is built
                     else if (OPEN != null && System.getProperty("sleep.clientAuto.tp") != null) command(mc, SCENE_TP);   // a saved world: the view to measure
                     enter(Phase.SETTLE);
                 }
@@ -430,9 +449,9 @@ public final class ClientAuto {
                     log(String.format(Locale.ROOT, "initial terrain meshed in %.1f s (%s)%s", since(phaseStart) - 2.0,
                             mc.levelRenderer.getSectionStatistics(), since(phaseStart) > 90 ? " TIMEOUT" : ""));
                     command(mc, "gamemode " + GAMEMODE);
-                    if (SCENE != null) {   // a rendering scene in the sky: build it now (chunks loaded), then wait for its meshes
+                    if (HAS_SCENE) {   // a rendering scene in the sky: build it now (chunks loaded), then wait for its meshes
                         command(mc, SCENE_TP);   // again: the join may still move the player after the first one
-                        command(mc, "function " + sceneFunction(mc, SCENE));
+                        command(mc, STRUCTURE != null ? placeStructure(mc) : "function " + sceneFunction(mc, SCENE));
                         sceneAt = ticks;
                         idleTicks = 0;
                         enter(Phase.SCENE_WAIT);
