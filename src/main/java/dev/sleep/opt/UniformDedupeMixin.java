@@ -16,7 +16,8 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
  * exp/uniform-dedupe (client): Uniform.upload sends the value only when it differs from the one this uniform last sent
  * to its location. Vanilla's dirty test is an empty if, and setDefaultUniforms sets the same matrices and fog values
  * on every apply, so every uniform of every shader went to the driver on every draw. A GL program keeps its uniform
- * values, and each Uniform belongs to one program: skipping an equal value (compared bit for bit) changes nothing.
+ * values, and each Uniform belongs to one program (its parent's current one: the cache is keyed by it, a program swapped
+ * in - Veil's recompile - starts empty): skipping an equal value (compared bit for bit) changes nothing.
  * Location -1 (not in the program) is a no-op for GL and is skipped too.
  */
 @Mixin(Uniform.class)
@@ -27,9 +28,10 @@ public abstract class UniformDedupeMixin {
     @Shadow @Final private IntBuffer intValues;
     @Shadow @Final private FloatBuffer floatValues;
     @Shadow private boolean dirty;
+    @Shadow @Final private com.mojang.blaze3d.shaders.Shader parent;
 
     @Unique private int[] sleep$last;
-    @Unique private int sleep$lastLocation = Integer.MIN_VALUE;
+    @Unique private int sleep$lastLocation = Integer.MIN_VALUE, sleep$lastProgram = Integer.MIN_VALUE;
 
     @Inject(method = "upload", at = @At("HEAD"), cancellable = true)
     private void sleep$dedupe(CallbackInfo ci) {
@@ -43,7 +45,8 @@ public abstract class UniformDedupeMixin {
         int n = this.count;
         int[] last = sleep$last;
         boolean ints = this.type <= 3;
-        if (last != null && last.length == n && sleep$lastLocation == this.location) {
+        int program = this.parent.getId();   // a program swapped in under the same ShaderInstance (Veil's recompile) starts with no values
+        if (last != null && last.length == n && sleep$lastLocation == this.location && sleep$lastProgram == program) {
             boolean same = true;
             for (int i = 0; i < n; i++) {
                 int v = ints ? this.intValues.get(i) : Float.floatToRawIntBits(this.floatValues.get(i));
@@ -62,6 +65,7 @@ public abstract class UniformDedupeMixin {
         if (last == null || last.length != n) sleep$last = last = new int[n];
         for (int i = 0; i < n; i++) last[i] = ints ? this.intValues.get(i) : Float.floatToRawIntBits(this.floatValues.get(i));
         sleep$lastLocation = this.location;
+        sleep$lastProgram = program;
         ClientCounters.uniformsSent++;
     }
 }
