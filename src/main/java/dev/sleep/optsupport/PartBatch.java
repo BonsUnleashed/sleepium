@@ -87,6 +87,7 @@ public final class PartBatch {
         pre.append("struct ProbePart { mat4 pose; vec4 n0; vec4 n1; vec4 n2; vec4 color; ivec4 lo; };\n");
         pre.append("layout(std430) buffer ProbeParts { ProbePart probeParts[]; };\n");
         pre.append("uniform int ProbePartMode;\n");
+        pre.append("uniform vec3 ProbeLight0;\nuniform vec3 ProbeLight1;\n");   // mode 4: the level's light directions (block shaders have none)
         pre.append("layout(location = 15) in float ProbeFlags;\n\n");   // part geometry's 4th normal byte (GeckoLib flat cubes)
         pre.append("void main() {\n");
         pre.append("    vec3 probe_Position = Position;\n    vec4 probe_Color = Color;\n    vec3 probe_Normal = Normal;\n");
@@ -103,6 +104,16 @@ public final class PartBatch {
         pre.append("        if (ProbePartMode == 3) { int probe_f = int(ProbeFlags + 0.5); if ((probe_f & 1) != 0) probe_n.x = abs(probe_n.x); if ((probe_f & 2) != 0) probe_n.y = abs(probe_n.y); if ((probe_f & 4) != 0) probe_n.z = abs(probe_n.z); }\n");
         pre.append("        probe_Normal = trunc(clamp(probe_n, -1.0, 1.0) * 127.0) / 127.0;\n");   // as BufferBuilder packs it
         pre.append("        probe_Color = probe_d.color;\n");
+        // mode 4 (Create's SuperByteBuffer): the diffuse it computes on the CPU - min(1, (max(0, L0.n) + max(0, L1.n)) * 0.6 + 0.4)
+        // with the posed, not normalised normal; unshaded vertices (flag 8) use the fake normal (0, +-1, 0); n0.w: diffuse on
+        pre.append("        if (ProbePartMode == 4) {\n");
+        pre.append("            float probe_df = 1.0;\n");
+        pre.append("            if (probe_d.n0.w > 0.5) {\n");
+        pre.append("                vec3 probe_ln = (int(ProbeFlags + 0.5) & 8) != 0 ? vec3(0.0, probe_d.n1.w, 0.0) : probe_n;\n");
+        pre.append("                probe_df = min(1.0, (max(0.0, dot(ProbeLight0, probe_ln)) + max(0.0, dot(ProbeLight1, probe_ln))) * 0.6 + 0.4);\n");
+        pre.append("            }\n");
+        pre.append("            probe_Color = vec4(probe_d.color.rgb * Color.rgb * probe_df, probe_d.color.a * Color.a);\n");   // the template's colour
+        pre.append("        }\n");
         if (uv1 != null) pre.append("        probe_UV1 = ").append(uv1).append("(probe_d.lo.zw);\n");
         if (uv2 != null) pre.append("        probe_UV2 = probe_d.lo.xy;\n");
         pre.append("    }");
@@ -112,9 +123,9 @@ public final class PartBatch {
         return out;
     }
 
-    // ------------------------------------------------------------------ geometry arena (position 3f, uv 2f, normal 3b+pad: 24 bytes)
+    // ------------------------------------------------------------------ geometry arena (position 3f, uv 2f, normal 3b+flags, colour 4b: 28 bytes)
 
-    static final int STRIDE = 24;
+    static final int STRIDE = 28;
     private static int vbo, vao, capacity, used;   // in vertices
     private static boolean vaoStale = true;
     private static final Map<Object, int[]> GEOMETRY = new IdentityHashMap<>();   // part / bone key -> {first vertex, quads}; {-1, 0}: not supported
@@ -124,6 +135,9 @@ public final class PartBatch {
     /** A geometry consumer that takes per-cube flags (GeckoLib flat cubes) for the vertices that follow. */
     public interface Flagged {
         void sleep$flags(int flags);
+
+        /** the last vertex's colour as packed bytes R, G, B, A (white unless given: SuperByteBuffer templates have their own) */
+        default void sleep$rawColor(int rgba) {}
     }
 
     static final class GeometryRecorder implements VertexConsumer, Flagged {
@@ -156,8 +170,14 @@ public final class PartBatch {
             MemoryUtil.memPutFloat(v, x);
             MemoryUtil.memPutFloat(v + 4, y);
             MemoryUtil.memPutFloat(v + 8, z);
+            MemoryUtil.memPutInt(v + 24, -1);
             n++;
             return this;
+        }
+
+        @Override
+        public void sleep$rawColor(int rgba) {
+            MemoryUtil.memPutInt(last() + 24, rgba);
         }
 
         private long last() {
@@ -259,7 +279,8 @@ public final class PartBatch {
         }
     }
 
-    private static final Map<RenderType, Queue> QUEUES = new IdentityHashMap<>(), GEO_QUEUES = new IdentityHashMap<>(), RESIDENT = new IdentityHashMap<>();
+    private static final Map<RenderType, Queue> QUEUES = new IdentityHashMap<>(), GEO_QUEUES = new IdentityHashMap<>(), RESIDENT = new IdentityHashMap<>(),
+            SBB_QUEUES = new IdentityHashMap<>();
 
     // ------------------------------------------------------------------ resident recordings (render cache in VRAM)
 
@@ -372,6 +393,74 @@ public final class PartBatch {
         if (g[0] < 0) return false;
         queue(GEO_QUEUES, type, (BufferBuilder) buffer, g, pose, light, overlay, color);
         geoParts++;
+        return true;
+    }
+
+    public static final long[] SBB_WHY = new long[6];
+    public static final java.util.Set<String> SBB_CONSUMERS = new java.util.HashSet<>(), SBB_TYPES = new java.util.HashSet<>();
+    public static long sbbImpure, sbbCalls, sbbParts, sbbRefused, sbbShift, sbbLevelLight;
+    /** The level's light directions as the frame set them (RenderSystem's, through an accessor the adapter sets). */
+    public static java.util.function.Supplier<org.joml.Vector3f[]> lightDirections;
+    private static final org.joml.Matrix4f SBB_M = new org.joml.Matrix4f();
+    private static final org.joml.Matrix3f SBB_N = new org.joml.Matrix3f();
+
+    /**
+     * Create's (catnip's) SuperByteBuffer.renderInto as a part: its template mesh under {@code key} in VRAM (built once
+     * through {@code src}: false when the template is not plain - per-vertex colour or light), and a record with the
+     * posed matrices (input x local, as renderInto multiplies them), its colour, light and overlay, the diffuse switch
+     * (n0.w) and the fake normal's y for unshaded vertices (n1.w); the shader computes the diffuse (mode 4). Only into a
+     * batched quad buffer of the BLOCK format whose shader is patched.
+     */
+    public static boolean captureSbb(Object key, GeometrySource src, Object a, PoseStack.Pose input, PoseStack.Pose local, float r, float g, float b,
+            float alpha, boolean diffuse, float fakeNormalY, int light, int overlay, VertexConsumer buffer) {
+        int why = !(buffer instanceof BufferBuilder) ? 0 : !RenderSystem.isOnRenderThread() ? 1 : -1;
+        RenderType type = why < 0 ? EntityBatch.typeOf((BufferBuilder) buffer) : null;
+        if (why < 0) why = type == null ? 2 : type.format() != DefaultVertexFormat.BLOCK || type.mode() != VertexFormat.Mode.QUADS ? 3 : !typeOk(type) ? 4 : !capable() ? 5 : -1;
+        if (why >= 0) {
+            sbbRefused++;
+            SBB_WHY[why]++;
+            if (why == 0 && SBB_CONSUMERS.size() < 8) SBB_CONSUMERS.add(buffer.getClass().getName());
+            if ((why == 3 || why == 4) && SBB_TYPES.size() < 8) SBB_TYPES.add(type.toString());
+            return false;
+        }
+        BufferBuilder bb = (BufferBuilder) buffer;
+        int[] geo = GEOMETRY.get(key);
+        if (geo == null) {
+            GEOM.reset();
+            if (src.sleep$emit(a, null, GEOM)) geo = upload(key);
+            else GEOMETRY.put(key, geo = new int[] {-1, 0});
+        }
+        if (geo[0] < 0) {
+            sbbRefused++;
+            return false;
+        }
+        Queue q = slot(SBB_QUEUES, type, bb);
+        long rec = q.mem + 144L * q.n;
+        SBB_M.set(input.pose()).mul(local.pose()).getToAddress(rec);
+        SBB_N.set(input.normal()).mul(local.normal());
+        MemoryUtil.memPutFloat(rec + 64, SBB_N.m00());
+        MemoryUtil.memPutFloat(rec + 68, SBB_N.m01());
+        MemoryUtil.memPutFloat(rec + 72, SBB_N.m02());
+        MemoryUtil.memPutFloat(rec + 76, diffuse ? 1.0F : 0.0F);
+        MemoryUtil.memPutFloat(rec + 80, SBB_N.m10());
+        MemoryUtil.memPutFloat(rec + 84, SBB_N.m11());
+        MemoryUtil.memPutFloat(rec + 88, SBB_N.m12());
+        MemoryUtil.memPutFloat(rec + 92, fakeNormalY);
+        MemoryUtil.memPutFloat(rec + 96, SBB_N.m20());
+        MemoryUtil.memPutFloat(rec + 100, SBB_N.m21());
+        MemoryUtil.memPutFloat(rec + 104, SBB_N.m22());
+        MemoryUtil.memPutFloat(rec + 108, 0.0F);
+        // colour as set (the diffuse multiplies it on the GPU; the CPU path truncates the product to bytes: rounding)
+        MemoryUtil.memPutFloat(rec + 112, r);
+        MemoryUtil.memPutFloat(rec + 116, g);
+        MemoryUtil.memPutFloat(rec + 120, b);
+        MemoryUtil.memPutFloat(rec + 124, alpha);
+        MemoryUtil.memPutInt(rec + 128, light & 0xFFFF);
+        MemoryUtil.memPutInt(rec + 132, light >>> 16 & 0xFFFF);
+        MemoryUtil.memPutInt(rec + 136, overlay & 0xFFFF);
+        MemoryUtil.memPutInt(rec + 140, overlay >>> 16 & 0xFFFF);
+        commit(q, geo[0], geo[1]);
+        sbbParts++;
         return true;
     }
 
@@ -596,11 +685,12 @@ public final class PartBatch {
     public static void afterDraw(ShaderInstance shader) {
         RenderType t = current;
         if (t == null) return;
-        Queue q = QUEUES.get(t), r = RESIDENT.get(t), gq = GEO_QUEUES.get(t);
-        boolean parts = q != null && q.n > 0, res = r != null && r.n > 0, geo = gq != null && gq.n > 0;
-        if (!parts && !res && !geo) return;
+        Queue q = QUEUES.get(t), r = RESIDENT.get(t), gq = GEO_QUEUES.get(t), sq = SBB_QUEUES.get(t);
+        boolean parts = q != null && q.n > 0, res = r != null && r.n > 0, geo = gq != null && gq.n > 0, sbb = sq != null && sq.n > 0;
+        if (!parts && !res && !geo && !sbb) return;
         if (parts) drawQueue(shader, q, 1);
         if (geo) drawQueue(shader, gq, 3);
+        if (sbb) drawQueue(shader, sq, 4);
         if (res) {
             if (t.sortOnUpload()) sortBackToFront(r);
             drawQueue(shader, r, 2);
@@ -635,7 +725,7 @@ public final class PartBatch {
             int f = GL20C.glGetUniformLocation(id, "ProbePartMode");
             int b = GL43C.glGetProgramResourceIndex(id, GL43C.GL_SHADER_STORAGE_BLOCK, "ProbeParts");
             if (f >= 0 && b != GL31C.GL_INVALID_INDEX) GL43C.glShaderStorageBlockBinding(id, b, SSBO_BINDING);
-            return new int[] {f, b};
+            return new int[] {f, b, GL20C.glGetUniformLocation(id, "ProbeLight0"), GL20C.glGetUniformLocation(id, "ProbeLight1")};
         });
         int flag = st[0];
         if (flag < 0 || st[1] == GL31C.GL_INVALID_INDEX) {
@@ -648,7 +738,17 @@ public final class PartBatch {
         long bytes = 144L * q.n;
         GL15C.nglBufferData(GL43C.GL_SHADER_STORAGE_BUFFER, bytes, q.mem, GL15C.GL_STREAM_DRAW);
         GL30C.glBindBufferBase(GL43C.GL_SHADER_STORAGE_BUFFER, SSBO_BINDING, ssbo);
-        if (mode != 2) {   // part geometry (modes 1, 3); mode 2 draws resident recordings
+        if (mode == 4) {   // SuperByteBuffer templates into a BLOCK-format type: its attribute order, the light directions
+            if (vaoStale || blockVao == 0) setupVao();
+            GL30C.glBindVertexArray(blockVao);
+            org.joml.Vector3f[] ld = lightDirections != null ? lightDirections.get() : null;
+            if (ld != null && st[2] >= 0) {
+                L0.set(ld[0]).normalize();
+                L1.set(ld[1]).normalize();
+                GL20C.glUniform3f(st[2], L0.x, L0.y, L0.z);
+                GL20C.glUniform3f(st[3], L1.x, L1.y, L1.z);
+            }
+        } else if (mode != 2) {   // part geometry (modes 1, 3); mode 2 draws resident recordings
             if (vaoStale || vao == 0) setupVao();
             GL30C.glBindVertexArray(vao);
         } else {
@@ -691,8 +791,25 @@ public final class PartBatch {
         q.maxIndices = 0;
     }
 
-    /** Attribute indices as the entity shaders bind them (NEW_ENTITY order): Position 0, UV0 2, Normal 5. */
+    private static int blockVao;
+    private static final org.joml.Vector3f L0 = new org.joml.Vector3f(), L1 = new org.joml.Vector3f();
+
+    /** Attribute indices as the entity shaders bind them (NEW_ENTITY order): Position 0, UV0 2, Normal 5; and for BLOCK
+     *  shaders (Position 0, UV0 2, Normal 4) a second array over the same geometry. */
     private static void setupVao() {
+        if (blockVao == 0) blockVao = GL30C.glGenVertexArrays();
+        GL30C.glBindVertexArray(blockVao);
+        GL15C.glBindBuffer(GL15C.GL_ARRAY_BUFFER, vbo);
+        GL20C.glEnableVertexAttribArray(0);
+        GL20C.glVertexAttribPointer(0, 3, GL11C.GL_FLOAT, false, STRIDE, 0);
+        GL20C.glEnableVertexAttribArray(2);
+        GL20C.glVertexAttribPointer(2, 2, GL11C.GL_FLOAT, false, STRIDE, 12);
+        GL20C.glEnableVertexAttribArray(4);
+        GL20C.glVertexAttribPointer(4, 3, GL11C.GL_BYTE, true, STRIDE, 20);
+        GL20C.glEnableVertexAttribArray(1);   // Color: the template's per-vertex colour (mode 4)
+        GL20C.glVertexAttribPointer(1, 4, GL11C.GL_UNSIGNED_BYTE, true, STRIDE, 24);
+        GL20C.glEnableVertexAttribArray(15);
+        GL20C.glVertexAttribPointer(15, 1, GL11C.GL_UNSIGNED_BYTE, false, STRIDE, 23);
         if (vao == 0) vao = GL30C.glGenVertexArrays();
         GL30C.glBindVertexArray(vao);
         GL15C.glBindBuffer(GL15C.GL_ARRAY_BUFFER, vbo);
@@ -716,7 +833,7 @@ public final class PartBatch {
             q.n = 0;
             q.maxIndices = 0;
         }
-        for (Map<RenderType, Queue> m : java.util.List.of(QUEUES, GEO_QUEUES)) {
+        for (Map<RenderType, Queue> m : java.util.List.of(QUEUES, GEO_QUEUES, SBB_QUEUES)) {
             for (Queue q : m.values()) {
                 if (q.n > 0) fallbacks += q.n;
                 q.n = 0;
@@ -726,8 +843,8 @@ public final class PartBatch {
     }
 
     public static String report() {
-        return String.format(java.util.Locale.ROOT, "part batch: shaders patched %s, parts %d, GeckoLib bones %d (from workers %d, jobs refused at merge %d), multi-draws %d, geometries %d (%.1f MB), lost %d; resident draws %d, uploads %d (arena %.1f MB)",
-                PATCHED, parts, geoParts, jobMerged, jobRefused, draws, geometries, (double) used * STRIDE / 1048576.0, fallbacks, residentDraws, residentUploads,
+        return String.format(java.util.Locale.ROOT, "part batch: SuperByteBuffer calls %d, parts %d (not taken %d %s %s %s, UV shift %d, level light %d); shaders patched %s, parts %d, GeckoLib bones %d (from workers %d, jobs refused at merge %d), multi-draws %d, geometries %d (%.1f MB), lost %d; resident draws %d, uploads %d (arena %.1f MB)",
+                sbbCalls, sbbParts, sbbRefused, java.util.Arrays.toString(SBB_WHY), SBB_CONSUMERS, SBB_TYPES, sbbShift, sbbLevelLight, PATCHED, parts, geoParts, jobMerged, jobRefused, draws, geometries, (double) used * STRIDE / 1048576.0, fallbacks, residentDraws, residentUploads,
                 (double) RES_ARENA.capacity * RES_ARENA.stride / 1048576.0);
     }
 }

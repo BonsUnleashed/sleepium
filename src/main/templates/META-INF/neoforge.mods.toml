@@ -39,3 +39,5 @@ config="sleep-foreign-test.mixins.json"
 config="sleep-geo.mixins.json"
 [[mixins]]
 config="sleep-flywheel.mixins.json"
+[[mixins]]
+config="sleep-catnip.mixins.json"

@@ -283,6 +283,11 @@ public final class RenderCache {
         return OK;
     }
 
+    /** A part path (SuperByteBuffer from VRAM) would draw this: the recording is not the way for it - drawn directly instead. */
+    public static void partsWanted() {
+        if (recordDepth > 0) RECORDER.unsupported = true;
+    }
+
     /** a recording or a probe of the cache is drawing now (its output not the frame's: a debug reading the bones skips it -
      *  10-20, the bone recorder: a probe's draw of the player, the shared bones still a foe's, had read as 143-degree snaps) */
     public static boolean recording() {
