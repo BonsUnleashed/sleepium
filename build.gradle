@@ -34,7 +34,7 @@ repositories {
     // Flywheel (Create bundles it), for the engine's Flywheel mixin (applied only when Flywheel is installed)
     maven {
         url = 'https://maven.createmod.net'
-        content { includeGroup 'dev.engine-room.flywheel'; includeGroup 'net.createmod.ponder' }
+        content { includeGroup 'dev.engine-room.flywheel'; includeGroup 'net.createmod.ponder'; includeGroup 'com.simibubi.create' }
     }
 }
 
@@ -42,6 +42,7 @@ dependencies {
     compileOnly "software.bernie.geckolib:geckolib-neoforge-${minecraft_version}:${geckolib_version}"
     compileOnly "dev.engine-room.flywheel:flywheel-neoforge-${minecraft_version}:${flywheel_version}"
     compileOnly "net.createmod.ponder:ponder-neoforge:${ponder_version}"
+    compileOnly("com.simibubi.create:create-${minecraft_version}:${create_version}:slim") { transitive = false }
 }
 
 neoForge {

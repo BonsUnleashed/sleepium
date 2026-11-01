@@ -21,7 +21,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
  * path as before. reset() as renderInto ends.
  */
 @Mixin(value = ShadeSeparatingSuperByteBuffer.class, remap = false)
-public abstract class SbbPartsMixin implements PartBatch.GeometrySource {
+public abstract class SbbPartsMixin implements PartBatch.GeometrySource, dev.sleep.optsupport.SbbLocal {
     @Shadow @Final private TemplateMesh template;
     @Shadow @Final private int[] shadeSwapVertices;
     @Shadow @Final private PoseStack transforms;
@@ -41,15 +41,41 @@ public abstract class SbbPartsMixin implements PartBatch.GeometrySource {
     @Shadow
     public abstract SuperByteBuffer reset();
 
+    @Override
+    public PoseStack.Pose sleep$local() {
+        return transforms.last();
+    }
+
+    private static boolean memoChecked;
+
+    /** KineticMemo (Create's rotating parts without their renderer), opt-in, installed once Create is known to be there. */
+    private static void sleep$memo() {
+        memoChecked = true;
+        var mods = net.neoforged.fml.loading.LoadingModList.get();
+        if (!Boolean.getBoolean("lab.opt.KineticMemoMixin") || mods == null || mods.getModFileById("create") == null) return;
+        try {
+            Class.forName("dev.sleep.optsupport.KineticMemo").getMethod("install").invoke(null);
+        } catch (ReflectiveOperationException | LinkageError e) {
+            System.out.println("[sleep/opt] kinetic memo not installed: " + e);
+        }
+    }
+
     @Inject(method = "renderInto", at = @At("HEAD"), cancellable = true)
     private void sleep$parts(PoseStack input, VertexConsumer builder, CallbackInfo ci) {
         PartBatch.sbbCalls++;
+        if (!memoChecked) sleep$memo();
+        PartBatch.SbbRecorder rcd = PartBatch.sbbRecorder;
         if (template.isEmpty()) return;
         if (spriteShiftFunc != null) {
             PartBatch.sbbShift++;
+            if (rcd != null) rcd.cpu();
             return;
         }
-        if (useLevelLight) { PartBatch.sbbLevelLight++; return; }
+        if (useLevelLight) {
+            PartBatch.sbbLevelLight++;
+            if (rcd != null) rcd.cpu();
+            return;
+        }
         if (dev.sleep.optsupport.RenderCache.recording()) {   // the render cache records it: a part draws it cheaper - directly
             dev.sleep.optsupport.RenderCache.partsWanted();
             return;
@@ -58,10 +84,14 @@ public abstract class SbbPartsMixin implements PartBatch.GeometrySource {
         boolean diffuse = !disableDiffuse && !dev.engine_room.flywheel.lib.util.ShadersModHelper.isShaderPackInUse();
         int light = hasCustomLight ? packedLight : 0;
         int ov = hasCustomOverlay ? overlay : net.minecraft.client.renderer.texture.OverlayTexture.NO_OVERLAY;
-        if (PartBatch.captureSbb(template, this, null, input.last(), transforms.last(), r, g, b, a, diffuse, invertFakeDiffuseNormal ? -1.0F : 1.0F,
-                light, ov, builder)) {
+        float fake = invertFakeDiffuseNormal ? -1.0F : 1.0F;
+        if (PartBatch.captureSbb(template, this, null, input.last(), transforms.last(), r, g, b, a, diffuse, fake, light, ov, builder)) {
+            if (rcd != null && rcd.recording())
+                rcd.captured(this, input.last(), transforms.last(), r, g, b, a, diffuse, fake, light, ov, PartBatch.lastSbbType, PartBatch.lastSbbGeo);
             reset();
             ci.cancel();
+        } else if (rcd != null) {
+            rcd.cpu();
         }
     }
 

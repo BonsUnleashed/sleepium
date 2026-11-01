@@ -283,6 +283,16 @@ public final class RenderCache {
         return OK;
     }
 
+    /** An adapter's parametric memo of renderer output (KineticMemo), asked before the cache. */
+    public static volatile BeMemo BE_MEMO;
+
+    /** Vertices started in a buffer source (a memo checks that a recording drew nothing but its parts). */
+    public static long vertices(MultiBufferSource.BufferSource source) {
+        long n = 0;
+        for (BufferBuilder b : ((dev.sleep.opt.BufferSourceAccessor) source).sleep$started().values()) n += ((BufferBuilderAccessor) b).sleep$vertices();
+        return n;
+    }
+
     /** A part path (SuperByteBuffer from VRAM) would draw this: the recording is not the way for it - drawn directly instead. */
     public static void partsWanted() {
         if (recordDepth > 0) RECORDER.unsupported = true;
@@ -303,6 +313,9 @@ public final class RenderCache {
     public static void render(Object obj, Class<?> rendererClass, Draw d, float pt, PoseStack pose, MultiBufferSource buffers, int light, int overlay,
             float yaw, long key, net.minecraft.client.renderer.entity.EntityRenderDispatcher camera) {
         var level = Minecraft.getInstance().level;
+        BeMemo memo = BE_MEMO;
+        if (memo != null && level != null && buffers instanceof MultiBufferSource.BufferSource && recordDepth == 0
+                && memo.render(obj, rendererClass, d, pt, pose, buffers, light, overlay)) return;
         if (level == null || !(buffers instanceof MultiBufferSource.BufferSource) || dev.sleep.api.Compat.renderCacheExcluded(obj)) {
             vanilla++;
             d.draw(pose, buffers, pt);

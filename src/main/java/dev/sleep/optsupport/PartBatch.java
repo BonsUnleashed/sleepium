@@ -434,10 +434,45 @@ public final class PartBatch {
             sbbRefused++;
             return false;
         }
+        SBB_M.set(input.pose()).mul(local.pose());
+        SBB_N.set(input.normal()).mul(local.normal());
+        lastSbbType = type;
+        lastSbbGeo = geo;
+        queueSbb(bb, type, geo, SBB_M, SBB_N, r, g, b, alpha, diffuse, fakeNormalY, light, overlay);
+        return true;
+    }
+
+    /** A recorder of the SuperByteBuffer parts a block entity's draw makes (KineticMemo), asked by SbbPartsMixin. */
+    public interface SbbRecorder {
+        boolean recording();
+
+        void captured(Object sbb, PoseStack.Pose input, PoseStack.Pose local, float r, float g, float b, float a, boolean diffuse, float fakeY,
+                int light, int overlay, RenderType type, int[] geo);
+
+        /** the draw made something that is not a part */
+        void cpu();
+
+        default String report() {
+            return "";
+        }
+    }
+
+    public static volatile SbbRecorder sbbRecorder;
+
+    /** Vertices of the empty quads slot() put into batches (a memo's "nothing else drawn" check discounts them). */
+    public static long emptyQuadVertices;
+
+    /** The type and geometry of the last captureSbb that succeeded (KineticMemo keeps them). */
+    public static RenderType lastSbbType;
+    public static int[] lastSbbGeo;
+
+    /** One SuperByteBuffer part record with its final matrices into a batched BLOCK-format builder of this type. */
+    public static void queueSbb(BufferBuilder bb, RenderType type, int[] geo, org.joml.Matrix4f m, org.joml.Matrix3f nm, float r, float g, float b,
+            float alpha, boolean diffuse, float fakeNormalY, int light, int overlay) {
         Queue q = slot(SBB_QUEUES, type, bb);
         long rec = q.mem + 144L * q.n;
-        SBB_M.set(input.pose()).mul(local.pose()).getToAddress(rec);
-        SBB_N.set(input.normal()).mul(local.normal());
+        m.getToAddress(rec);
+        org.joml.Matrix3f SBB_N = nm;
         MemoryUtil.memPutFloat(rec + 64, SBB_N.m00());
         MemoryUtil.memPutFloat(rec + 68, SBB_N.m01());
         MemoryUtil.memPutFloat(rec + 72, SBB_N.m02());
@@ -461,7 +496,12 @@ public final class PartBatch {
         MemoryUtil.memPutInt(rec + 140, overlay >>> 16 & 0xFFFF);
         commit(q, geo[0], geo[1]);
         sbbParts++;
-        return true;
+    }
+
+    /** The batched builder of a render type in this buffer source when PartBatch can draw SuperByteBuffer parts into it. */
+    public static BufferBuilder sbbBuilder(net.minecraft.client.renderer.MultiBufferSource buffers, RenderType type) {
+        VertexConsumer vc = buffers.getBuffer(type);
+        return vc instanceof BufferBuilder bb && EntityBatch.typeOf(bb) == type ? bb : null;
     }
 
     /** The buffer's render type when it is a batch (EntityBatch) PartBatch can draw from VRAM, on the render thread. */
@@ -483,6 +523,7 @@ public final class PartBatch {
         dev.sleep.opt.BufferBuilderAccessor a = (dev.sleep.opt.BufferBuilderAccessor) bb;
         if (a.sleep$vertices() == 0) {   // the batch must be drawn even if every part of it is queued: one empty quad
             for (int i = 0; i < 4; i++) bb.addVertex(0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0);
+            emptyQuadVertices += 4;
         }
         Queue q = queues.computeIfAbsent(type, t -> new Queue());
         q.ensure();
@@ -843,7 +884,8 @@ public final class PartBatch {
     }
 
     public static String report() {
-        return String.format(java.util.Locale.ROOT, "part batch: SuperByteBuffer calls %d, parts %d (not taken %d %s %s %s, UV shift %d, level light %d); shaders patched %s, parts %d, GeckoLib bones %d (from workers %d, jobs refused at merge %d), multi-draws %d, geometries %d (%.1f MB), lost %d; resident draws %d, uploads %d (arena %.1f MB)",
+        SbbRecorder rcd = sbbRecorder;
+        return (rcd != null ? rcd.report() + "; " : "") + String.format(java.util.Locale.ROOT, "part batch: SuperByteBuffer calls %d, parts %d (not taken %d %s %s %s, UV shift %d, level light %d); shaders patched %s, parts %d, GeckoLib bones %d (from workers %d, jobs refused at merge %d), multi-draws %d, geometries %d (%.1f MB), lost %d; resident draws %d, uploads %d (arena %.1f MB)",
                 sbbCalls, sbbParts, sbbRefused, java.util.Arrays.toString(SBB_WHY), SBB_CONSUMERS, SBB_TYPES, sbbShift, sbbLevelLight, PATCHED, parts, geoParts, jobMerged, jobRefused, draws, geometries, (double) used * STRIDE / 1048576.0, fallbacks, residentDraws, residentUploads,
                 (double) RES_ARENA.capacity * RES_ARENA.stride / 1048576.0);
     }

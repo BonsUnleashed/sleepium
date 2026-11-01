@@ -6,7 +6,10 @@
   "compatibilityLevel": "JAVA_21",
   "client": [
     "SbbPartsMixin",
-    "RenderSystemLightAccessor"
+    "RenderSystemLightAccessor",
+    "KineticRotationMixin",
+    "KineticBeMixin",
+    "OverStressAccessor"
   ],
   "injectors": {
     "defaultRequire": 1

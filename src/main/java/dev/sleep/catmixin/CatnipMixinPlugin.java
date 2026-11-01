@@ -16,6 +16,15 @@ public final class CatnipMixinPlugin implements IMixinConfigPlugin {
     private static final boolean PARTS = (Boolean.getBoolean("lab.opt.all") || Boolean.getBoolean("lab.opt.SbbPartsMixin"))
             && (Boolean.getBoolean("lab.opt.all") || Boolean.getBoolean("lab.opt.PartBatchMixin"));
 
+    /** KineticRotationMixin / KineticBeMixin / OverStressAccessor: Create's rotating parts without their renderer,
+     *  {@code -Dlab.opt.KineticMemoMixin=true} with SbbPartsMixin; Create must be loaded */
+    private static final boolean MEMO = PARTS && (Boolean.getBoolean("lab.opt.all") || Boolean.getBoolean("lab.opt.KineticMemoMixin"));
+
+    static boolean create() {
+        var mods = net.neoforged.fml.loading.LoadingModList.get();
+        return mods != null && mods.getModFileById("create") != null;
+    }
+
     static boolean ponder() {
         var mods = net.neoforged.fml.loading.LoadingModList.get();
         return mods != null && mods.getModFileById("ponder") != null;
@@ -26,7 +35,8 @@ public final class CatnipMixinPlugin implements IMixinConfigPlugin {
 
     @Override
     public boolean shouldApplyMixin(String targetClassName, String mixinClassName) {
-        boolean on = PARTS && ponder();
+        boolean kinetic = mixinClassName.endsWith(".KineticRotationMixin") || mixinClassName.endsWith(".KineticBeMixin") || mixinClassName.endsWith(".OverStressAccessor");
+        boolean on = kinetic ? MEMO && create() : PARTS && ponder();
         if (on) System.out.println("[sleep/opt] applying " + mixinClassName.substring(mixinClassName.lastIndexOf('.') + 1) + " -> " + targetClassName);
         return on;
     }
