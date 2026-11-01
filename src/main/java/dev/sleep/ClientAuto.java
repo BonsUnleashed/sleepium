@@ -72,6 +72,8 @@ public final class ClientAuto {
     private static final String STRUCTURE = System.getProperty("sleep.clientAuto.structure");
     private static final String STRUCTURE_AT = System.getProperty("sleep.clientAuto.structureAt", "0 200 0").replace(',', ' ');
     private static final boolean HAS_SCENE = SCENE != null || STRUCTURE != null;
+    /** -Dsleep.clientAuto.afterScene="cmd|cmd": server commands right after the scene is built, before it is measured (e.g. /sable assemble) */
+    private static final String AFTER_SCENE = System.getProperty("sleep.clientAuto.afterScene");
 
     /** The structure file copied into the world's generated structures; the command that places it. */
     private static String placeStructure(Minecraft mc) {
@@ -452,6 +454,7 @@ public final class ClientAuto {
                     if (HAS_SCENE) {   // a rendering scene in the sky: build it now (chunks loaded), then wait for its meshes
                         command(mc, SCENE_TP);   // again: the join may still move the player after the first one
                         command(mc, STRUCTURE != null ? placeStructure(mc) : "function " + sceneFunction(mc, SCENE));
+                        if (AFTER_SCENE != null) for (String c : AFTER_SCENE.split("[|]")) command(mc, c.trim().replace(',', ' '));
                         sceneAt = ticks;
                         idleTicks = 0;
                         enter(Phase.SCENE_WAIT);
