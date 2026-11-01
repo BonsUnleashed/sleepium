@@ -1,0 +1,13 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "dev.sleep.veilmixin",
+  "plugin": "dev.sleep.veilmixin.VeilMixinPlugin",
+  "compatibilityLevel": "JAVA_21",
+  "client": [
+    "VeilShaderPatchMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

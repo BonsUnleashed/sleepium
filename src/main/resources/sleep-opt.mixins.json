@@ -158,6 +158,7 @@
     "ChunkSectionMixin",
     "ChunkUploadMixin",
     "ChunkMultiDrawMixin",
+    "ChunkMultiDrawCompatMixin",
     "VertexSortRadixMixin",
     "EntityBatchMixin",
     "CompositeRenderTypeAccessor",

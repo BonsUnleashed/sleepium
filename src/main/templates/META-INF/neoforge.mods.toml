@@ -41,3 +41,5 @@ config="sleep-geo.mixins.json"
 config="sleep-flywheel.mixins.json"
 [[mixins]]
 config="sleep-catnip.mixins.json"
+[[mixins]]
+config="sleep-veil.mixins.json"

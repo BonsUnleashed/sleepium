@@ -86,8 +86,8 @@ public final class Materials {
                         vec3 probe_R = reflect(-probe_V, probe_N);
                         vec3 probe_sky = mix(vec3(0.13, 0.11, 0.10), mix(vec3(0.52, 0.55, 0.58), vec3(0.70, 0.78, 0.92), clamp(probe_R.y, 0.0, 1.0)), smoothstep(-0.3, 0.15, probe_R.y));
                         vec3 probe_tint = probe_metal ? probe_alb : vec3(1.0);
-                        vec3 probe_add = probe_tint * probe_f0 * (probe_spec * probe_s * 1.6 + probe_sky * probe_s * (probe_metal ? 0.95 : 0.25))
-                                + probe_sky * probe_fres * probe_s * (probe_metal ? 0.5 : 0.12);
+                        vec3 probe_add = probe_tint * probe_f0 * (probe_spec * probe_s * 1.6 + probe_sky * probe_s * mix(0.25, 0.95, float(probe_metal)))
+                                + probe_sky * probe_fres * probe_s * mix(0.12, 0.5, float(probe_metal));   // (no ternary inside an expression: Veil reprints sources and drops its parentheses)
                         int probe_bi = int(probe_m.b * 255.0 + 0.5);
                         float probe_pol = probe_bi < 128 ? float(probe_bi) / 127.0 : float(probe_bi - 128) / 127.0;
                         if (probe_pol > 0.0) {   // a polish: a sharp highlight, the horizon's bright line and the ground's glint sliding over it
@@ -123,7 +123,8 @@ public final class Materials {
                             }
                         }
                         if (probeDmg != 0) {   // the blows' marks (10-07): by where on the body - the head, the body, the legs
-                            float d = (probeCoatH > 0.82 ? float(probeDmg & 15) : probeCoatH >= 0.45 ? float((probeDmg >> 4) & 15) : float((probeDmg >> 8) & 15)) / 15.0;
+                            float d_q = probeCoatH > 0.82 ? float(probeDmg & 15) : probeCoatH >= 0.45 ? float((probeDmg >> 4) & 15) : float((probeDmg >> 8) & 15);
+                            float d = d_q / 15.0;
                             if (d > 0.0) {
                                 vec3 d_alb = texture(Sampler0, texCoord0).rgb;
                                 float d_mx = max(d_alb.r, max(d_alb.g, d_alb.b)), d_mn = min(d_alb.r, min(d_alb.g, d_alb.b));

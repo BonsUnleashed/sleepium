@@ -63,6 +63,7 @@ public abstract class ChunkSectionMixin implements ChunkMultiDraw.ChunkEntries {
 
     @Inject(method = "<init>", at = @At("RETURN"))
     private void sleep$tag(CallbackInfo ci) {
+        if (((SectionRenderDispatcher.RenderSection) (Object) this).index < 0) return;   // not the level's (Sable's ship sections: local origins)
         for (var e : buffers.entrySet()) ((ChunkBufferTag) e.getValue()).sleep$tag((SectionRenderDispatcher.RenderSection) (Object) this, e.getKey());
     }
 

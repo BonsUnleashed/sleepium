@@ -80,13 +80,14 @@ public final class ChunkMultiDraw {
                 .replace(decl, decl + "\nuniform int ProbeMultiDraw;\n" + (ssbo()
                         ? "layout(std430) buffer ProbeChunkOffsets { vec4 ProbeOffsets[]; };"
                         : "layout(std140) uniform ProbeChunkOffsets { vec4 ProbeOffsets[" + MAX_DRAWS + "]; };"))
-                .replace(use, "vec3 pos = (ProbeMultiDraw == 2 ? (Position - 2048.0) * 0.00390625 : Position) + (ProbeMultiDraw != 0 ? ProbeOffsets[gl_DrawIDARB].xyz : ChunkOffset);")
+                .replace(use, "vec3 pos = Position; if (ProbeMultiDraw == 2) pos = (Position - 2048.0) * 0.00390625; if (ProbeMultiDraw != 0) pos += ProbeOffsets[gl_DrawIDARB].xyz; else pos += ChunkOffset;")
+                // (statements, no ternary inside an expression: Veil reprints vanilla shader sources and drops their parentheses)
                 .replace(uv, "texCoord0 = ProbeMultiDraw == 2 ? UV0 * 0.0000152587890625 : UV0;");
         String light = "vertexColor = Color * minecraft_sample_lightmap(Sampler2, UV2);";
         if (LightVolumes.ON && ssbo() && out.contains(light)) {
             out = out.replaceFirst("#extension GL_ARB_shader_draw_parameters : require", "#extension GL_ARB_shader_draw_parameters : require\n#extension GL_ARB_explicit_attrib_location : require")
                     .replace("void main() {", LightVolumes.glsl() + "\nvoid main() {")
-                    .replace(light, "vertexColor = Color * minecraft_sample_lightmap(Sampler2, ProbeMultiDraw != 0 ? probeUV2(ProbeOffsets[gl_DrawIDARB].w) : UV2);");
+                    .replace(light, "ivec2 probe_uv2 = ProbeMultiDraw != 0 ? probeUV2(ProbeOffsets[gl_DrawIDARB].w) : UV2; vertexColor = Color * minecraft_sample_lightmap(Sampler2, probe_uv2);");
             LIGHT_PATCHED.add(name);
         }
         PATCHED.add(name);
