@@ -860,6 +860,7 @@ public final class ChunkMultiDraw {
                 if (sb && LightVolumes.ON) {
                     int lv = GL43C.glGetProgramResourceIndex(program, GL43C.GL_SHADER_STORAGE_BLOCK, "ProbeLightVolumes");
                     if (lv != GL31C.GL_INVALID_INDEX) GL43C.glShaderStorageBlockBinding(program, lv, LightVolumes.BINDING);
+                    if (lv != GL31C.GL_INVALID_INDEX && GL20C.glGetAttribLocation(program, "ProbeRecipe") < 0) LightVolumes.recipesIgnored("a chunk program");
                 }
                 s = new int[] {flag};
             }

@@ -175,6 +175,19 @@ public final class LightVolumes {
     // ---- the translucent layer (water, glass, ice…) stays on vanilla's per-section draws: its shader takes the
     // section's volume from a uniform set before each draw; its VAO exposes the recipe as attribute 7
     public static volatile boolean translucentPatched;
+
+    /**
+     * A drawing program dropped the recipe path (its ProbeRecipe attribute is inactive: another mod's shader processing
+     * replaced the line that used it - Sable rewrites every "x = y * minecraft_sample_lightmap(...)"): light-only
+     * updates no longer skip the re-mesh, so a section shows new light the vanilla way.
+     */
+    public static volatile boolean recipesIgnored;
+
+    public static void recipesIgnored(String where) {
+        if (recipesIgnored) return;
+        recipesIgnored = true;
+        System.out.println("[sleep/opt] shader light: " + where + " does not read the light recipes (another mod rewrote its light line): light changes re-mesh as vanilla");
+    }
     private static final it.unimi.dsi.fastutil.ints.Int2IntOpenHashMap VOLUME_UNIFORM = new it.unimi.dsi.fastutil.ints.Int2IntOpenHashMap();
     private static long boundFrame = -1;
 
@@ -204,6 +217,7 @@ public final class LightVolumes {
             loc = org.lwjgl.opengl.GL20C.glGetUniformLocation(program, "ProbeVolume");
             int block = org.lwjgl.opengl.GL43C.glGetProgramResourceIndex(program, org.lwjgl.opengl.GL43C.GL_SHADER_STORAGE_BLOCK, "ProbeLightVolumes");
             if (block != org.lwjgl.opengl.GL31C.GL_INVALID_INDEX) org.lwjgl.opengl.GL43C.glShaderStorageBlockBinding(program, block, BINDING);
+            if (loc >= 0 && org.lwjgl.opengl.GL20C.glGetAttribLocation(program, "ProbeRecipe") < 0) recipesIgnored("the translucent program");
             VOLUME_UNIFORM.put(program, loc);
         }
         if (loc < 0) return;
@@ -393,7 +407,7 @@ public final class LightVolumes {
         if (PartBatch.LIT_ON) LightBoxes.sectionChanged(x, y, z);
         long k = SectionPos.asLong(x, y, z);
         Sec sec = SECS.get(k);
-        if (sec != null && sec.vol >= 0 && sec.ready && sec.info != null && sec.info.complete) {
+        if (!recipesIgnored && sec != null && sec.vol >= 0 && sec.ready && sec.info != null && sec.info.complete) {
             if (!sec.dirty) {
                 sec.dirty = true;
                 DIRTY.add(k);

@@ -27,13 +27,23 @@ public abstract class VeilShaderPatchMixin {
         return original.call(pp, source);
     }
 
-    /** -Dsleep.veil.dump=dir: Veil's final source of each recompiled vanilla shader written there (diagnostics). */
+    private static boolean ours(String src) {
+        return src.contains("minecraft_sample_lightmap(Sampler2, probe_uv2)") || src.contains("minecraft_sample_lightmap(Sampler2, probeUV2(");
+    }
+
+    /**
+     * Veil's final source of each recompiled vanilla shader: checked for our light line, and with -Dsleep.veil.dump=dir
+     * written there (diagnostics).
+     */
     @WrapOperation(method = "compileShader", at = @At(value = "INVOKE",
             target = "Lfoundry/veil/impl/client/render/shader/processor/VanillaShaderProcessor;modify(Ljava/util/Map;Ljava/lang/String;Lnet/minecraft/resources/ResourceLocation;Lcom/mojang/blaze3d/vertex/VertexFormat;IILjava/lang/String;Lorg/lwjgl/opengl/GLCapabilities;)Ljava/lang/String;"),
             require = 0)
-    private String sleep$dump(java.util.Map<String, Object> data, String shaderInstance, ResourceLocation name, com.mojang.blaze3d.vertex.VertexFormat format,
+    private String sleep$processed(java.util.Map<String, Object> data, String shaderInstance, ResourceLocation name, com.mojang.blaze3d.vertex.VertexFormat format,
             int buffers, int type, String source, org.lwjgl.opengl.GLCapabilities caps, Operation<String> original) {
         String out = original.call(data, shaderInstance, name, format, buffers, type, source, caps);
+        // our light line (shader light's recipes) in, but not out: another processor rewrote it (Sable replaces every
+        // "x = y * minecraft_sample_lightmap(...)" line) - light changes must re-mesh again
+        if (out != null && source != null && ours(source) && !ours(out)) dev.sleep.optsupport.LightVolumes.recipesIgnored(shaderInstance + " after Veil's processing");
         String dir = System.getProperty("sleep.veil.dump");
         if (dir != null && out != null) {
             try {
