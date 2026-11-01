@@ -6,6 +6,7 @@ import java.io.InputStream;
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -587,24 +588,30 @@ final class SleepAnalysis {
         for (Class<?> c = beClass; c != null && c != Object.class; c = c.getSuperclass()) beChain.add(internal(c));
         this.chain = beChain;
         this.beCls = beClass;
-        // ticker candidates: lambdas producing a BlockEntityTicker in the block class chain whose 4th parameter fits this BE
+        // ticker candidates in the block's class chain and its interfaces (a default getTicker, as mods write it): lambdas
+        // producing a BlockEntityTicker whose 4th parameter fits this BE, and ticker objects made with NEW (a class
+        // implementing BlockEntityTicker: its tick(Level, BlockPos, BlockState, BE) is the ticker)
         List<String[]> tickers = new ArrayList<>();
-        for (Class<?> c = blockClass; c != null && c != Object.class; c = c.getSuperclass()) {
+        for (Class<?> c : blockTypes(blockClass)) {
             ClassNode cn = node(internal(c));
             if (cn == null) continue;
             if (MixinTouch.touched(internal(c), "getTicker"))
                 return new Plan(false, "mixin-changed " + c.getSimpleName() + ".getTicker", List.of(), List.of());
             for (MethodNode m : cn.methods) {
                 for (AbstractInsnNode in : m.instructions) {
-                    if (!(in instanceof InvokeDynamicInsnNode indy) || !indy.desc.endsWith(TICKER_RET) || indy.bsmArgs.length < 2
-                            || !(indy.bsmArgs[1] instanceof Handle h)) continue;
-                    Type[] args = Type.getArgumentTypes(h.getDesc());
-                    Type beArg = args.length == 4 ? args[3] : null;
-                    if (beArg != null && beChain.contains(beArg.getInternalName())) {
-                        if (MixinTouch.touched(internal(c), m.name))
-                            return new Plan(false, "mixin-changed " + c.getSimpleName() + "." + m.name, List.of(), List.of());
-                        tickers.add(new String[] {h.getOwner(), h.getName(), h.getDesc()});
+                    String[] t = null;
+                    if (in instanceof InvokeDynamicInsnNode indy && indy.desc.endsWith(TICKER_RET) && indy.bsmArgs.length >= 2
+                            && indy.bsmArgs[1] instanceof Handle h) {
+                        Type[] args = Type.getArgumentTypes(h.getDesc());
+                        if (args.length == 4 && beChain.contains(args[3].getInternalName())) t = new String[] {h.getOwner(), h.getName(), h.getDesc()};
+                    } else if (in.getOpcode() == Opcodes.NEW && in instanceof TypeInsnNode ti && m.desc.endsWith(TICKER_RET)) {
+                        t = tickerObject(ti.desc, beChain);
                     }
+                    if (t == null) continue;
+                    if (MixinTouch.touched(internal(c), m.name))
+                        return new Plan(false, "mixin-changed " + c.getSimpleName() + "." + m.name, List.of(), List.of());
+                    final String[] found = t;
+                    if (tickers.stream().noneMatch(x -> Arrays.equals(x, found))) tickers.add(found);
                 }
             }
         }
@@ -625,6 +632,31 @@ final class SleepAnalysis {
         for (Field c : clocks.values()) if (c != null) watch.putIfAbsent(c.getName(), c);
         return new Plan(true, "ok: " + tickers.size() + " ticker(s), watching " + watch.size() + " field(s)", List.copyOf(clocks.values()),
                 List.copyOf(conds), List.copyOf(watch.values()));
+    }
+
+    /** The block class, its superclasses and every interface they implement (a mod's getTicker may be a default method). */
+    private static List<Class<?>> blockTypes(Class<?> blockClass) {
+        List<Class<?>> out = new ArrayList<>();
+        for (Class<?> c = blockClass; c != null && c != Object.class; c = c.getSuperclass()) out.add(c);
+        for (int i = 0; i < out.size(); i++)
+            for (Class<?> f : out.get(i).getInterfaces()) if (!out.contains(f)) out.add(f);
+        return out;
+    }
+
+    /** A ticker made as an object: the class (or a superclass) implements BlockEntityTicker; its tick taking this BE. */
+    private String[] tickerObject(String type, Set<String> beChain) {
+        for (String c = type; c != null && !c.equals("java/lang/Object"); ) {
+            ClassNode cn = node(c);
+            if (cn == null) return null;
+            for (MethodNode m : cn.methods) {
+                if (!m.name.equals("tick") || (m.access & (Opcodes.ACC_STATIC | Opcodes.ACC_ABSTRACT | Opcodes.ACC_BRIDGE)) != 0) continue;
+                Type[] args = Type.getArgumentTypes(m.desc);
+                if (args.length == 4 && args[0].getInternalName().equals("net/minecraft/world/level/Level") && beChain.contains(args[3].getInternalName()))
+                    return new String[] {c, m.name, m.desc};
+            }
+            c = cn.superName;
+        }
+        return null;
     }
 
     // ---------------------------------------------------------------- pass 1: clocks and hidden state
