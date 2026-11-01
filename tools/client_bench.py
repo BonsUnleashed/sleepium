@@ -47,6 +47,8 @@ jvm += (['-Dlab.opt.defaults=true'] if a.mode == 'on' else []) + a.flags.split()
 p = subprocess.run([GRADLEW, 'runClient', '--console=plain', '-q', '-PrunJvmArgs=' + ' '.join(jvm), '-PrunArgs=--width 1280 --height 720'],
                    cwd=ROOT, capture_output=True, text=True, encoding='utf-8', errors='replace')
 out = p.stdout + p.stderr
+with open(os.path.join(ROOT, 'run', 'client-bench-%s.out' % label), 'w', encoding='utf-8') as f:   # the run's whole console
+    f.write(out)
 m = re.search(r"sleepclient '%s': (\d+) fps, frame p50 ([\d.]+) / p99 ([\d.]+) ms, (\d+) KiB/frame, CPU ([\d.]+) cores" % re.escape(label), out)
 if not m:
     print('no result; the end of the log:\n' + '\n'.join(out.splitlines()[-30:]))
