@@ -73,6 +73,8 @@ public final class OptMixinPlugin implements IMixinConfigPlugin {
             on = Boolean.getBoolean("lab.opt.all") || Boolean.getBoolean("lab.opt.EntityBatchMixin");
         if (simple.equals("RenderCacheBlockEntityMixin") || simple.equals("RenderCacheClockMixin") || simple.equals("BufferBuilderAccessor") || simple.equals("BufferSourceAccessor"))
             on = Boolean.getBoolean("lab.opt.all") || Boolean.getBoolean("lab.opt.RenderCacheMixin");
+        if (simple.equals("ShaderSamplerNamesMixin"))   // part of the sampler cache flag
+            on = Boolean.getBoolean("lab.opt.all") || Boolean.getBoolean("lab.opt.ShaderSamplerCacheMixin");
         if (simple.equals("ParallelReloadMixin") || simple.equals("RenderCallJournalMixin") || simple.equals("TextureIdWorkerMixin") || simple.equals("TextureRegisterWorkerMixin") || simple.equals("EntityRenderDispatcherInvoker") || simple.equals("EntityRendererAccessor") || simple.equals("LevelRendererInvoker"))
             on = Boolean.getBoolean("lab.opt.all") || Boolean.getBoolean("lab.opt.ParallelEntitiesMixin");
         if (simple.equals("BufferBuilderAccessor") || simple.equals("BufferSourceAccessor"))

@@ -149,6 +149,7 @@
     "AmbientChunksMixin",
     "AmbientParticleSkipMixin",
     "ShaderSamplerCacheMixin",
+    "ShaderSamplerNamesMixin",
     "ClientEventSiteMixin",
     "PoseAccessor",
     "PoseStackPoolMixin",
