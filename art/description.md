@@ -30,6 +30,18 @@ Client, entity / block-entity scene (armour stands, item frames, chests, signs, 
 - Intel N100: **39 → 117 fps**, garbage 3 952 → 113 KiB per frame
 - Ryzen 7 5800X + RTX 4070 SUPER: **67 → 1 514 fps**; 300 animated mobs 175 → 1 782 fps
 
+## With Create
+
+Client on real Create worlds (RTX 4070 SUPER, 1280×720, Flywheel on, default settings; vanilla = the same mods without Sleepium):
+
+| world | vanilla | Sleepium |
+|---|---:|---:|
+| Alpha Industries (12 880 Create block entities) | 48 fps | 176–207 fps |
+| Create Aeronautics: SS.Venator placed | 108 fps | 283–297 fps |
+| Create Aeronautics: SS.Venator assembled (Sable) | 101 fps | 254 fps |
+
+Experimental, off by default: Create's kinetic parts drawn by Sleepium instead of Flywheel - 2 181 fps against Flywheel's 1 523 on a scene of driven lines and belts.
+
 ## What it does
 
 - **Sleeping block entities and entities**: idle ticks skipped and woken at the exact tick vanilla would act.

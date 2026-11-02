@@ -79,3 +79,36 @@ for text, size, bold, color, y in lines:
     d.text((X, y), text, font=fit(text, size, bold), fill=color)
 img.save(os.path.join(OUT, 'social-preview.png'))
 print('written', OUT)
+
+# ---------------------------------------------------------------- Create (notes 48 / 50: host RTX 4070 SUPER, 1280x720,
+# the engine's defaults, Flywheel on; the lower end of each measured range)
+rows = [('Alpha Industries', '12 880 Create block entities', 48, 176), ('SS.Venator (Create Aeronautics)', 'ship placed', 108, 283),
+        ('SS.Venator (Create Aeronautics)', 'assembled into a Sable sub-level', 101, 254)]
+W, H = 1600, 760
+img = Image.new('RGB', (W, H), BG)
+d = ImageDraw.Draw(img)
+d.text((60, 40), 'Create worlds on the client (higher is better)', font=font(44, True), fill=INK)
+d.text((60, 100), 'fps, RTX 4070 SUPER, 1280x720, Flywheel on, Sleepium\'s default settings; vanilla = the same mods without Sleepium', font=font(26), fill=MUTED)
+lx = W - 420
+d.rectangle([lx, 156, lx + 26, 182], fill=VANILLA)
+d.text((lx + 36, 152), 'vanilla', font=font(26), fill=INK)
+d.rectangle([lx + 170, 156, lx + 196, 182], fill=SLEEPIUM)
+d.text((lx + 206, 152), 'Sleepium', font=font(26, True), fill=INK)
+left, right, top = 560, W - 200, 220
+row_h = (H - top - 70) // len(rows)
+scale = (right - left) / 300.0
+for x in range(0, 301, 50):
+    gx = left + x * scale
+    d.line([(gx, top - 10), (gx, H - 60)], fill=GRID, width=2)
+    d.text((gx - 14, H - 55), str(x), font=font(22), fill=MUTED)
+for i, (name, sub, van, sl) in enumerate(rows):
+    y = top + i * row_h
+    d.text((60, y + 8), name, font=font(28), fill=INK)
+    d.text((60, y + 46), sub, font=font(22), fill=MUTED)
+    bh = int(row_h * 0.3)
+    d.rectangle([left, y + 6, left + van * scale, y + 6 + bh], fill=VANILLA)
+    d.rectangle([left, y + 12 + bh, left + sl * scale, y + 12 + 2 * bh], fill=SLEEPIUM)
+    d.text((left + van * scale + 10, y + 2), '%d' % van, font=font(24), fill=MUTED)
+    d.text((left + sl * scale + 10, y + 8 + bh), '%d  x%.1f' % (sl, sl / van), font=font(24, True), fill=SLEEPIUM)
+img.save(os.path.join(OUT, 'create-client.png'))
+print('create chart written')

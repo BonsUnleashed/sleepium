@@ -20,6 +20,17 @@
 |---|---|
 | <img src="art/gallery/shaders-complementary.png" alt="Complementary Reimagined on Sleepium"> | <img src="art/gallery/settings-features.png" alt="Sleepium settings screen"> |
 
+### With Create
+
+Client on real Create worlds (RTX 4070 SUPER, 1280×720, Flywheel on, Sleepium's defaults; "vanilla" = the same mods
+without Sleepium): **Alpha Industries** (12 880 Create block entities) 48 → 176–207 fps; **Create Aeronautics**' ship
+SS.Venator placed 108 → 283–297 fps, assembled into a Sable sub-level 101 → 254 fps. Frames are vanilla's but for
+smoke and clouds (time-driven). Experimental and off by default (`-Dlab.opt.SbbPartsMixin`): Create's kinetic parts
+drawn by Sleepium instead of Flywheel, 2 181–2 189 fps against Flywheel's 1 523–1 570 on a scene of driven lines and
+belts.
+
+<p align="center"><img src="art/gallery/create-client.png" width="720" alt="Create worlds on the client, vanilla vs Sleepium"></p>
+
 A NeoForge mod for Minecraft 1.21.1 that makes servers and clients cheaper to run **without changing what the game
 computes**. A hopper with nothing to do, a resting item stack, a furnace waiting for fuel: in vanilla each of them runs
 its full tick 20 times a second only to find out that nothing happened. The engine proves from the class's own bytecode
