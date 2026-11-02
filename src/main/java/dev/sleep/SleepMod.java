@@ -53,7 +53,10 @@ public final class SleepMod {
         if (FMLEnvironment.dist.isClient()) {
             ClientMeter.register(gameBus);   // class is only loaded on the physical client
             gameBus.addListener(net.neoforged.bus.api.EventPriority.HIGHEST, net.neoforged.neoforge.client.event.RenderFrameEvent.Pre.class,
-                    e -> dev.sleep.optsupport.RenderCache.frame());
+                    e -> {
+                        dev.sleep.optsupport.RenderCache.frame();
+                        dev.sleep.shaders.ShaderPackCompileTest.maybeRun();
+                    });
         }
     }
 }
