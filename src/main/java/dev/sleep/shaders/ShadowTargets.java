@@ -94,8 +94,21 @@ public final class ShadowTargets {
     /** the start of the shadow pass: depth 1, shadowcolor to their clear colours (on the textures, no framebuffer) */
     public void clear() {
         for (int i = 0; i < 2; i++) if (clear[i]) RenderTargets.clearTexture(color[i], formats[i], clearColor[i]);
-        org.lwjgl.opengl.GL44.glClearTexImage(depth0, 0, GL11.GL_DEPTH_COMPONENT, GL11.GL_FLOAT, new float[] {1});
+        // depth through a framebuffer clear (the fast clear resets hierarchical-Z; a texture clear left early
+        // rejection off for the frame: 40 % more fragment shading on the camera's terrain, measured 11-02)
+        if (depthFbo == 0) {
+            depthFbo = GL30.glGenFramebuffers();
+            GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, depthFbo);
+            GL30.glFramebufferTexture2D(GL30.GL_FRAMEBUFFER, GL30.GL_DEPTH_ATTACHMENT, GL11.GL_TEXTURE_2D, depth0, 0);
+            GL11.glDrawBuffer(GL11.GL_NONE);
+        } else GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, depthFbo);
+        com.mojang.blaze3d.systems.RenderSystem.depthMask(true);
+        GL11.glDisable(GL11.GL_SCISSOR_TEST);
+        GL11.glClearDepth(1.0);
+        GL11.glClear(GL11.GL_DEPTH_BUFFER_BIT);
     }
+
+    private int depthFbo;
 
     /** shadowtex0 -> shadowtex1 (before the translucent casters) */
     public void copyOpaque() {
