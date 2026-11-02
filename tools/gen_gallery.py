@@ -152,3 +152,39 @@ for i, k in enumerate(order):
         d.text((left + sp * scale + 8, yy - 4), '%.1fx' % sp, font=font(19, j == 2), fill=col)
 img.save(os.path.join(OUT, 'vs-lithium-moonrise.png'))
 print('mods chart written')
+
+# ---------------------------------------------------------------- against Sodium (host RTX 4070 SUPER, 1280x720): no pack
+# (2026-09-28, same day, render distance 12) and with Complementary Reimagined (2026-11-02, Iris + Sodium vs Sleepium)
+SOD = (226, 120, 120)
+panels = [('Without shaders: Sodium 0.8.13', [('terrain', (1697, 1827), (1762, 1912)), ('entity scene', (146, 146), (1500, 1680))], 2000,
+           'Sodium'),
+          ('Complementary Reimagined: Iris + Sodium', [('538 entities, shadows', (68, 73), (484, 484)), ('terrain view', (477, 515), (452, 475))], 600,
+           'Iris + Sodium')]
+W, H = 1600, 900
+img = Image.new('RGB', (W, H), BG)
+d = ImageDraw.Draw(img)
+d.text((60, 40), 'Client fps against Sodium (higher is better)', font=font(44, True), fill=INK)
+d.text((60, 100), 'RTX 4070 SUPER, 1280x720, uncapped; each panel has its own scale; bars at the middle of each measured range', font=font(25), fill=MUTED)
+lx = W - 470
+d.rectangle([lx, 156, lx + 26, 182], fill=SOD)
+d.text((lx + 36, 152), 'Sodium (/ Iris)', font=font(26), fill=INK)
+d.rectangle([lx + 250, 156, lx + 276, 182], fill=SLEEPIUM)
+d.text((lx + 286, 152), 'Sleepium', font=font(26, True), fill=INK)
+left, right = 380, W - 260
+y0 = 230
+for title, rows, top_v, other in panels:
+    d.text((60, y0), title, font=font(30, True), fill=INK)
+    scale = (right - left) / top_v
+    base = y0 + 50
+    for i, (name, a, b) in enumerate(rows):
+        y = base + i * 130
+        d.text((60, y + 30), name, font=font(28), fill=INK)
+        for j, ((lo, hi), col) in enumerate(((a, SOD), (b, SLEEPIUM))):
+            mid = (lo + hi) / 2
+            yy = y + 8 + j * 52
+            d.rectangle([left, yy, left + mid * scale, yy + 44], fill=col)
+            label = ('%d' % lo) if lo == hi else ('%d–%d' % (lo, hi))
+            d.text((left + mid * scale + 12, yy + 6), label + ' fps', font=font(24, j == 1), fill=col)
+    y0 = base + len(rows) * 130 + 30
+img.save(os.path.join(OUT, 'vs-sodium.png'))
+print('sodium chart written')

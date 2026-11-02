@@ -56,7 +56,18 @@ Server, Intel N100, each mod alone, speed-up over vanilla (vanilla MSPT / the mo
 | minecarts | ×3.1 | **×4.2** | ×3.6 |
 | redstone clocks | **×1.5** | ×1.4 | ×1.2 |
 
-Sleepium leads in six of twelve scenes and is level in one; Moonrise is ahead on carts, pistons and crops, Lithium on fluids and redstone. Client: against Sodium 0.8.13 terrain is on par (1 762–1 912 vs 1 697–1 827 fps) and the entity scene about 10× faster (1 500–1 680 vs 146 fps). Running Sleepium together with these mods is not tested yet.
+Sleepium leads in six of twelve scenes and is level in one; Moonrise is ahead on carts, pistons and crops, Lithium on fluids and redstone. 
+
+Client against Sodium (RTX 4070 SUPER, 1280×720):
+
+| scene | Sodium | Sleepium |
+|---|---:|---:|
+| terrain, no shaders | 1 697–1 827 fps | 1 762–1 912 fps |
+| entity scene, no shaders | 146 fps | 1 500–1 680 fps |
+| 538 entities, Complementary + shadows (Iris + Sodium) | 68–73 fps | 484 fps |
+| terrain view, Complementary (Iris + Sodium) | 477–515 fps | 452–475 fps |
+
+Running Sleepium together with these mods is not tested yet.
 
 ## What it does
 

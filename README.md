@@ -364,7 +364,11 @@ chunk drops from 71.9 ms and 19.1 MB of garbage to 35.5 ms. On the N100, 12 → 
 
 - **Sodium 0.8.13** (host, same day, render distance 12). Terrain is on par: Sodium 1 697–1 827 fps against
   1 762–1 912. The entity scene is about 10× faster: Sodium 146 fps against 1 500–1 680. On terrain, Sleepium's process
-  used ~0.9 core more, all of it in the NVIDIA driver's own thread; that is not explained yet.
+  used ~0.9 core more, all of it in the NVIDIA driver's own thread; that is not explained yet. With a shaderpack
+  (Complementary Reimagined r5.9.3, 2026-11-02): 538 entities with shadows, Iris + Sodium 68–73 fps against Sleepium's
+  484; the terrain view, Iris + Sodium 477–515 against 452–475 (GPU-bound there; see the shaderpacks section).
+
+  <p align="center"><img src="art/gallery/vs-sodium.png" width="720" alt="Client fps against Sodium and Iris + Sodium"></p>
 - **Horizon** (a Rust rewrite of Minecraft 26.3, release 0.2.97), on the N100 on 2026-10-30. The versions differ, so
   each is shown next to its own vanilla. Values are ms per tick, two interleaved passes.
 
