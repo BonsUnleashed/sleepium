@@ -19,6 +19,29 @@ public final class GpuTimer {
     private static final String[][] SN = new String[RING][MAXS];
     private static final int[] SC = new int[RING];
     private static final java.util.Map<String, long[]> GPU_SECTIONS = new java.util.LinkedHashMap<>();
+    /**
+     * -Dsleep.drawStats.pipeline=true: per section also the GPU's pipeline statistics (GL 4.6 / ARB_pipeline_statistics_query)
+     * - vertex shader invocations, fragment shader invocations, primitives out of clipping: where a section's GPU time
+     * goes (more vertices, or more fragments - overdraw), comparable across renderers (it works under Iris too)
+     */
+    private static final boolean PIPELINE = Boolean.getBoolean("sleep.drawStats.pipeline");
+    private static final int[] STAT_TARGETS = {0x82F0, 0x82F4, 0x82F7};   // VERTEX_SHADER / FRAGMENT_SHADER_INVOCATIONS, CLIPPING_OUTPUT_PRIMITIVES
+    private static final int[][] PQ = new int[RING][];
+    private static boolean statOpen;
+    private static final java.util.Map<String, long[]> STAT_SECTIONS = new java.util.LinkedHashMap<>();
+
+    private static void statSwitch(int c) {
+        if (!PIPELINE) return;
+        if (statOpen) for (int t : STAT_TARGETS) org.lwjgl.opengl.GL15C.glEndQuery(t);
+        statOpen = false;
+        if (c < 0) return;
+        if (PQ[slot] == null) {
+            PQ[slot] = new int[MAXS * 3];
+            GL15C.glGenQueries(PQ[slot]);
+        }
+        for (int k = 0; k < 3; k++) org.lwjgl.opengl.GL15C.glBeginQuery(STAT_TARGETS[k], PQ[slot][c * 3 + k]);
+        statOpen = true;
+    }
 
     /** a timestamp where renderLevel enters section {@code name} (null: renderLevel ended) */
     static void section(String name) {
@@ -32,6 +55,7 @@ public final class GpuTimer {
         GL33C.glQueryCounter(SQ[slot][c], GL33C.GL_TIMESTAMP);
         SN[slot][c] = name == null ? "(after renderLevel)" : name;
         SC[slot] = c + 1;
+        statSwitch(c);
     }
 
     private GpuTimer() {}
@@ -40,6 +64,7 @@ public final class GpuTimer {
         frames = 0;
         gpuNanos = 0;
         GPU_SECTIONS.clear();
+        STAT_SECTIONS.clear();
         java.util.Arrays.fill(SC, 0);
         written = 0;
         slot = 0;
@@ -57,6 +82,7 @@ public final class GpuTimer {
 
     public static void end() {
         if (!DrawStats.active || BEGIN[0] == 0) return;
+        statSwitch(-1);
         GL33C.glQueryCounter(END[slot], GL33C.GL_TIMESTAMP);
         written++;
         slot = (slot + 1) % RING;
@@ -77,6 +103,11 @@ public final class GpuTimer {
                     prevName = SN[i][k];
                 }
                 GPU_SECTIONS.computeIfAbsent(prevName, x -> new long[1])[0] += e - prev;
+                if (PIPELINE && PQ[i] != null)
+                    for (int k = 0; k < n; k++) {
+                        long[] acc = STAT_SECTIONS.computeIfAbsent(SN[i][k], x -> new long[3]);
+                        for (int q = 0; q < 3; q++) acc[q] += GL33C.glGetQueryObjecti64(PQ[i][k * 3 + q], GL15C.GL_QUERY_RESULT);
+                    }
             }
         }
     }
@@ -87,6 +118,12 @@ public final class GpuTimer {
                 gpuNanos / 1e6 / frames, frames));
         sb.append("\n  gpu time by renderLevel section (ms per frame):");
         GPU_SECTIONS.forEach((k, t) -> sb.append(String.format(java.util.Locale.ROOT, " %s %.3f;", k, t[0] / 1e6 / frames)));
+        if (PIPELINE) {
+            sb.append("\n  pipeline statistics by section (thousands per frame: vertex invocations / fragment invocations / primitives):");
+            STAT_SECTIONS.forEach((k, t) -> {
+                if (t[0] + t[1] > 0) sb.append(String.format(java.util.Locale.ROOT, " %s %.0f / %.0f / %.0f;", k, t[0] / 1e3 / frames, t[1] / 1e3 / frames, t[2] / 1e3 / frames));
+            });
+        }
         return sb.toString();
     }
 }

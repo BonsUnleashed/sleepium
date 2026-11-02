@@ -316,6 +316,8 @@ public final class ShaderPipeline {
                 System.out.printf(java.util.Locale.ROOT, "[sleep/shaders] chunk multi-draw: flushes %.3f ms (%.0f draws), shadow list reuses %d%n",
                         dev.sleep.optsupport.ChunkMultiDraw.flushNanos / 1e6 / 300, dev.sleep.optsupport.ChunkMultiDraw.flushDraws / 300.0, dev.sleep.optsupport.ChunkMultiDraw.shadowReuses);
                 System.out.printf(java.util.Locale.ROOT, "[sleep/shaders]   flush: offsets upload %.3f, commands upload %.3f, multi-draw calls %.3f ms%n", dev.sleep.optsupport.ChunkMultiDraw.offNanos / 1e6 / 300, dev.sleep.optsupport.ChunkMultiDraw.cmdUpNanos / 1e6 / 300, dev.sleep.optsupport.ChunkMultiDraw.drawNanos / 1e6 / 300);
+                System.out.printf(java.util.Locale.ROOT, "[sleep/shaders]   light volumes bind %.3f, draw loop %.3f ms%n", dev.sleep.optsupport.ChunkMultiDraw.lvNanos / 1e6 / 300, dev.sleep.optsupport.ChunkMultiDraw.loopNanos / 1e6 / 300);
+                dev.sleep.optsupport.ChunkMultiDraw.lvNanos = dev.sleep.optsupport.ChunkMultiDraw.loopNanos = 0;
                 dev.sleep.optsupport.ChunkMultiDraw.offNanos = dev.sleep.optsupport.ChunkMultiDraw.cmdUpNanos = dev.sleep.optsupport.ChunkMultiDraw.drawNanos = 0;
                 dev.sleep.optsupport.ChunkMultiDraw.flushNanos = dev.sleep.optsupport.ChunkMultiDraw.flushDraws = dev.sleep.optsupport.ChunkMultiDraw.shadowReuses = 0;
                 shadow.collectNanos = shadow.opaqueNanos = shadow.entityNanos = shadow.translucentNanos = 0;

@@ -640,6 +640,7 @@ public final class ChunkMultiDraw {
             shadowReuses++;
             return true;
         }
+        if (SORT_NEAR && !allFaces) visible = sortedNearFirst(visible, x, y, z);
         for (SectionRenderDispatcher.RenderSection s : visible) {
             // the section's own entry slots: no emptiness test (an empty layer has no entry), no map lookups
             Object[] md = ((ChunkEntries) s).sleep$md();
@@ -726,7 +727,7 @@ public final class ChunkMultiDraw {
      * The layer's queued draws: every arena's offsets in one orphaning upload (each arena then reads its own range),
      * packed arenas first and full-format ones after, so the mode uniform is set at most twice per layer.
      */
-    public static long flushNanos, flushDraws, offNanos, cmdUpNanos, drawNanos;
+    public static long flushNanos, flushDraws, offNanos, cmdUpNanos, drawNanos, lvNanos, loopNanos;
 
     private static void flushAll(RenderType layer, int[] ps, boolean keep) {
         long t0 = System.nanoTime();
@@ -798,7 +799,10 @@ public final class ChunkMultiDraw {
             cmdUpNanos += System.nanoTime() - tUp;
         }
         RenderSystem.AutoStorageIndexBuffer seq = RenderSystem.getSequentialBuffer(VertexFormat.Mode.QUADS);
+        long tLv = System.nanoTime();
         if (LightVolumes.ON && sb) GL30C.glBindBufferBase(GL43C.GL_SHADER_STORAGE_BUFFER, LightVolumes.BINDING, LightVolumes.buffer());
+        lvNanos += System.nanoTime() - tLv;
+        long tLoop = System.nanoTime();
         int mode = -1;
         for (int pass = 0; pass < 2; pass++) {
             for (Arena a : LISTED) {
@@ -826,6 +830,7 @@ public final class ChunkMultiDraw {
                 }
             }
         }
+        loopNanos += System.nanoTime() - tLoop;
         GL20C.glUniform1i(ps[0], 0);
         if (indirect) GL15C.glBindBuffer(GL40C.GL_DRAW_INDIRECT_BUFFER, 0);
     }
@@ -895,6 +900,41 @@ public final class ChunkMultiDraw {
     private static final double EPS = 1.0 / 64;
     /** a shadow pass draws: every face bucket (seen from the light, not the camera), no reuse of the camera's lists */
     public static boolean allFaces;
+    /** -Dlab.chunkmd.sortNear: the camera's sections ordered nearest first (a reused array; experiment) */
+    private static final boolean SORT_NEAR = Boolean.getBoolean("lab.chunkmd.sortNear");
+    /** -Dlab.chunkmd.sortFar (with sortNear): farthest first - an overdraw probe */
+    private static final boolean SORT_FAR = Boolean.getBoolean("lab.chunkmd.sortFar");
+    private static SectionRenderDispatcher.RenderSection[] sortBuf = new SectionRenderDispatcher.RenderSection[1024];
+    private static double[] sortKey = new double[1024];
+
+    private static Iterable<SectionRenderDispatcher.RenderSection> sortedNearFirst(Iterable<SectionRenderDispatcher.RenderSection> in, double x, double y, double z) {
+        int n = 0;
+        for (SectionRenderDispatcher.RenderSection s : in) {
+            if (n == sortBuf.length) {
+                sortBuf = java.util.Arrays.copyOf(sortBuf, n * 2);
+                sortKey = java.util.Arrays.copyOf(sortKey, n * 2);
+            }
+            var o = s.getOrigin();
+            double dx = o.getX() + 8 - x, dy = o.getY() + 8 - y, dz = o.getZ() + 8 - z;
+            sortBuf[n] = s;
+            sortKey[n] = (SORT_FAR ? -1 : 1) * (dx * dx + dy * dy + dz * dz);
+            n++;
+        }
+        // insertion sort on nearly ordered input
+        for (int i = 1; i < n; i++) {
+            double k = sortKey[i];
+            SectionRenderDispatcher.RenderSection v = sortBuf[i];
+            int j = i - 1;
+            while (j >= 0 && sortKey[j] > k) {
+                sortKey[j + 1] = sortKey[j];
+                sortBuf[j + 1] = sortBuf[j];
+                j--;
+            }
+            sortKey[j + 1] = k;
+            sortBuf[j + 1] = v;
+        }
+        return java.util.Arrays.asList(sortBuf).subList(0, n);
+    }
     /** the shadow pass's section set (ShadowPass.collect: count and origins hashed) */
     public static long shadowSignature;
     public static long shadowReuses;
