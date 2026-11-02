@@ -12,4 +12,7 @@ import org.spongepowered.asm.mixin.gen.Accessor;
 public interface BufferSourceAccessor {
     @Accessor("startedBuilders")
     Map<RenderType, BufferBuilder> sleep$started();
+
+    @Accessor("fixedBuffers")
+    java.util.SequencedMap<RenderType, com.mojang.blaze3d.vertex.ByteBufferBuilder> sleep$fixed();
 }

@@ -388,6 +388,11 @@ public final class PartBatch {
     public static boolean residentOk(RenderType t, VertexConsumer vc, net.minecraft.client.renderer.MultiBufferSource buffers) {
         if (!RESIDENT_ON || !(vc instanceof BufferBuilder bb) || t.format() != DefaultVertexFormat.NEW_ENTITY || t.mode() != VertexFormat.Mode.QUADS) return false;
         if (EntityBatch.typeOf(bb) == t) return typeOk(t) && capable();
+        // a fixed buffer of the source (vanilla's Sheets: item frames' frames, chests, signs) of a type whose draws commute:
+        // drawn once per frame like a batch, the residents right after it
+        if (FIXED_RESIDENT && buffers instanceof net.minecraft.client.renderer.MultiBufferSource.BufferSource bs && EntityBatch.commutes(t)
+                && ((dev.lull.opt.BufferSourceAccessor) bs).sleep$fixed().containsKey(t) && ((dev.lull.opt.BufferSourceAccessor) bs).sleep$started().get(t) == bb)
+            return typeOk(t) && capable();
         // experiment (-Dlab.rcache.translucentResident): a sorted (translucent) type, drawn per object back to front
         return TRANSLUCENT_RESIDENT && t.sortOnUpload() && buffers instanceof net.minecraft.client.renderer.MultiBufferSource.BufferSource bs
                 && ((dev.lull.opt.BufferSourceAccessor) bs).sleep$started().get(t) == bb && typeOk(t) && capable();
@@ -398,6 +403,9 @@ public final class PartBatch {
      * types (items in frames) drawn from VRAM too, ordered per object (its origin's distance, farthest first) instead of
      * per quad across all objects; inside an object the recorded order.
      */
+    /** -Dlab.rcache.fixedResident=false: cached segments of fixed buffers (Sheets) copied on the CPU every frame as before */
+    public static final boolean FIXED_RESIDENT = !"false".equals(System.getProperty("lab.rcache.fixedResident"));
+
     public static final boolean TRANSLUCENT_RESIDENT = !"false".equals(System.getProperty("lab.rcache.translucentResident"));
 
     /** Uploads n vertices (NEW_ENTITY) once; returns the first vertex in the resident arena. */

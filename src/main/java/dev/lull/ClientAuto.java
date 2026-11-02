@@ -165,6 +165,7 @@ public final class ClientAuto {
     private static void startMeasuring() {
         log("measuring started");   // the marker external profilers wait for (uprof_run.sh)
         if (DrawStats.ON) DrawStats.start();
+        dev.lull.optsupport.RenderCache.timeReset();
         if (SERVER_PROBE) command(Minecraft.getInstance(), "sleep run 30 " + LABEL + "-srv");
         if (SERVER != null && !"false".equals(System.getProperty("sleep.clientAuto.netBench"))) command(Minecraft.getInstance(), "sleep net " + (STEADY ? Integer.getInteger("sleep.clientAuto.steadySeconds", 30) : 40) + " " + LABEL);
         if (JFR != null) {

@@ -347,6 +347,12 @@ public final class RenderCache {
         if (TIME) tFrames++;
     }
 
+    /** ClientAuto: the measured window starts (the times are per frame of it) */
+    public static void timeReset() {
+        tRender = tReplay = tResidentOk = tGetBuffer = tQueue = tCopy = tFrames = 0;
+        CPU_TYPES.clear();
+    }
+
     private static long realVerticesTimed() {
         if (!SPIKES) return realVertices();
         long t0 = System.nanoTime();
@@ -657,7 +663,12 @@ public final class RenderCache {
             if (TIME) tResidentOk += tc - tb;
             if (resident) {
                 PartBatch.queueResident(t, (BufferBuilder) vc, rec.resident(i), n, M);
-                if (TIME) tQueue += System.nanoTime() - tc;
+                if (TIME) {
+                    tQueue += System.nanoTime() - tc;
+                    long[] c = CPU_TYPES.computeIfAbsent(t, k -> new long[4]);
+                    c[2]++;
+                    c[3] += n;
+                }
                 replayedVertices += n;
                 residentSegments++;
                 continue;
@@ -674,7 +685,7 @@ public final class RenderCache {
                 a.sleep$setVertexPointer(dst + (long) (n - 1) * vs);
                 if (TIME) {
                     tCopy += System.nanoTime() - tc;
-                    long[] c = CPU_TYPES.computeIfAbsent(t, k -> new long[2]);
+                    long[] c = CPU_TYPES.computeIfAbsent(t, k -> new long[4]);
                     c[0]++;
                     c[1] += n;
                 }
@@ -773,7 +784,7 @@ public final class RenderCache {
             double f = tFrames;
             sb.append(String.format(java.util.Locale.ROOT, "%n  render cache time per frame: render %.3f ms, replay %.3f (getBuffer %.3f, resident check %.3f, resident queue %.3f, copy + transform %.3f)",
                     tRender / f / 1e6, tReplay / f / 1e6, tGetBuffer / f / 1e6, tResidentOk / f / 1e6, tQueue / f / 1e6, tCopy / f / 1e6));
-            CPU_TYPES.forEach((k, v) -> sb.append(String.format(java.util.Locale.ROOT, "%n    cpu path %s: %.1f segments, %.0f vertices per frame", k.toString().split("\\[")[0], v[0] / f, v[1] / f)));
+            CPU_TYPES.forEach((k, v) -> sb.append(String.format(java.util.Locale.ROOT, "%n    %s: cpu path %.1f segments, %.0f vertices; resident %.1f segments, %.0f vertices per frame", k.toString().substring(0, Math.min(60, k.toString().length())), v[0] / f, v[1] / f, v[2] / f, v[3] / f)));
         }
         BY_CLASS.forEach((c, v) -> sb.append(String.format(java.util.Locale.ROOT, "\n    %s: hits %d, records %d, animated %d, unsupported %d%s", c.getSimpleName(),
                 v[0], v[1], v[2], v[3], (v[5] != 0 ? ", learned: animated" : "") + (VERIFY ? ", mismatches " + v[4] : ""))));

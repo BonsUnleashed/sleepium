@@ -94,6 +94,7 @@
     "DrawStatsMixin",
     "DrawStatsObjectsMixin",
     "DrawStatsEntitiesMixin",
+    "DrawStatsDispatchMixin",
     "DrawStatsFrameMixin",
     "DrawStatsLevelMixin",
     "DrawStatsPhasesMixin",
