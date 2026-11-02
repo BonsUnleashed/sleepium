@@ -134,6 +134,8 @@ final class ShadowPass {
         if (dev.sleep.optsupport.ChunkMultiDraw.ACTIVE && dev.sleep.optsupport.ChunkMultiDraw.layerSupported(type)
                 && dev.sleep.optsupport.ChunkMultiDraw.replacesVanilla(type)) {
             dev.sleep.optsupport.ChunkMultiDraw.allFaces = true;
+            org.joml.Vector3f toLight = new Matrix4f(pl.uniforms.shadowModelView).invert().transformDirection(new org.joml.Vector3f(0, 0, 1));
+            dev.sleep.optsupport.ChunkMultiDraw.lightDirection(toLight.x, toLight.y, toLight.z);
             try {
                 multi = dev.sleep.optsupport.ChunkMultiDraw.draw(type, view, cam.x, cam.y, cam.z, sh);
             } finally {

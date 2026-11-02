@@ -766,13 +766,19 @@ public final class ChunkMultiDraw {
             // (a margin of 1/64 block keeps it conservative against float rounding: more faces drawn, never fewer)
             float[] pl = e.plane;
             double rx = x - o.getX(), ry = y - o.getY(), rz = z - o.getZ();
-            int vis = allFaces ? 0x7F : 1 << 3;   // other (allFaces: a shadow pass, the GPU culls by the light's view)
-            if (rx < pl[0] + EPS) vis |= 1;
-            if (ry < pl[1] + EPS) vis |= 1 << 1;
-            if (rz < pl[2] + EPS) vis |= 1 << 2;
-            if (rx > pl[4] - EPS) vis |= 1 << 4;
-            if (ry > pl[5] - EPS) vis |= 1 << 5;
-            if (rz > pl[6] - EPS) vis |= 1 << 6;
+            int vis = 1 << 3;   // other
+            if (allFaces) {
+                // a shadow pass (orthographic, from the light): an axis face is front-facing when its normal points
+                // toward the light - the others the GPU would cull anyway
+                vis |= lightFaces;
+            } else {
+                if (rx < pl[0] + EPS) vis |= 1;
+                if (ry < pl[1] + EPS) vis |= 1 << 1;
+                if (rz < pl[2] + EPS) vis |= 1 << 2;
+                if (rx > pl[4] - EPS) vis |= 1 << 4;
+                if (ry > pl[5] - EPS) vis |= 1 << 5;
+                if (rz > pl[6] - EPS) vis |= 1 << 6;
+            }
             int[] bq = e.bq;
             int runStart = -1, runEnd = -1;
             for (int k = 0; k <= 7; k++) {
@@ -793,6 +799,21 @@ public final class ChunkMultiDraw {
     private static final double EPS = 1.0 / 64;
     /** a shadow pass draws: every face bucket (seen from the light, not the camera), no reuse of the camera's lists */
     public static boolean allFaces;
+    /** allFaces: the axis buckets facing the light (bits as in queue: -X -Y -Z, other, +X +Y +Z) */
+    public static int lightFaces = 0x77;
+
+    /** the direction toward the light, world space: the buckets a shadow pass draws */
+    public static void lightDirection(float x, float y, float z) {
+        final float e = 1e-4f;
+        int v = 0;
+        if (x < e) v |= 1;
+        if (y < e) v |= 1 << 1;
+        if (z < e) v |= 1 << 2;
+        if (x > -e) v |= 1 << 4;
+        if (y > -e) v |= 1 << 5;
+        if (z > -e) v |= 1 << 6;
+        lightFaces = v;
+    }
     private static final boolean SECTION_LISTS = Boolean.getBoolean("lab.opt.SectionListsMixin");
 
     private static void addDraw(Arena a, int baseVertex, int indices, float ox, float oy, float oz, int vol) {
