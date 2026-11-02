@@ -20,7 +20,11 @@ public class ShaderVertexFetchMixin {
 
     @ModifyArg(method = "draw", at = @At(value = "INVOKE", target = "Lcom/mojang/blaze3d/systems/RenderSystem;drawElements(III)V"), index = 0)
     private int sleep$fetchBuffer(int mode) {
-        if (ShaderPipeline.active && ShaderPipeline.current().inLevel) GL30.glBindBufferBase(GL43.GL_SHADER_STORAGE_BUFFER, 9, vertexBufferId);
+        if (ShaderPipeline.active) {
+            ShaderPipeline p = ShaderPipeline.current();
+            // only for a program that reads it: a storage binding changed per draw makes the driver validate again
+            if (p.inLevel && p.fetch) GL30.glBindBufferBase(GL43.GL_SHADER_STORAGE_BUFFER, 9, vertexBufferId);
+        }
         return mode;
     }
 }

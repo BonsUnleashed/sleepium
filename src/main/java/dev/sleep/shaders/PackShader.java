@@ -28,9 +28,13 @@ public final class PackShader extends ShaderInstance {
     private final Matrix4f mv = new Matrix4f(), proj = new Matrix4f();
     private boolean haveMatrices;
 
-    private PackShader(ResourceProvider rp, String name, VertexFormat format, ProgramSet.Program program) throws IOException {
+    /** the vertex prologue reads the quad's vertices (the drawn buffer must be bound at binding 9) */
+    final boolean fetch;
+
+    private PackShader(ResourceProvider rp, String name, VertexFormat format, ProgramSet.Program program, boolean fetch) throws IOException {
         super(rp, name, format);
         this.program = program;
+        this.fetch = fetch;
         int prev = GL20.glGetInteger(GL20.GL_CURRENT_PROGRAM);
         GL20.glUseProgram(getId());
         this.binding = PackUniforms.bind(getId(), ShaderPipeline.samplerUnits());
@@ -85,7 +89,7 @@ public final class PackShader extends ShaderInstance {
             byte[] bytes = text.getBytes(StandardCharsets.UTF_8);
             return Optional.of(new Resource(vanillaPack, () -> new ByteArrayInputStream(bytes)));
         };
-        return new PackShader(rp, uniqueName, format, p);
+        return new PackShader(rp, uniqueName, format, p, vsh.contains("SlVertexData"));
     }
 
     private static final java.util.regex.Pattern MAIN = java.util.regex.Pattern.compile("\\bvoid\\s+main\\s*\\(\\s*(void)?\\s*\\)");
@@ -142,6 +146,7 @@ public final class PackShader extends ShaderInstance {
         super.apply();
         ShaderPipeline pl = ShaderPipeline.current();
         if (pl == null) return;
+        pl.fetch = fetch;
         if (pl.shadowPhase) {
             pl.shadow.framebuffer(program.drawBuffers);
             RenderSystem.disableBlend();   // shadow programs never blend (Iris)

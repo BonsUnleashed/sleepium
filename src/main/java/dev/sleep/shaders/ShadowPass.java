@@ -37,7 +37,7 @@ final class ShadowPass {
     private final PoseStack pose = new PoseStack();
     private final Matrix4f mvp = new Matrix4f();
     private final Vector4f tmp = new Vector4f();
-    long sections, draws, entities, blockEntities, nanos, multiLayers;
+    long sections, draws, entities, blockEntities, nanos, multiLayers, collectNanos, opaqueNanos, entityNanos, translucentNanos, drawCallNanos, setupNanos;
 
     /** the collected sections as an Iterable (one object, reused) */
     private final Iterable<SectionRenderDispatcher.RenderSection> view = () -> new java.util.Iterator<>() {
@@ -77,19 +77,27 @@ final class ShadowPass {
         GL11.glViewport(0, 0, targets.size, targets.size);
         pl.shadowPhase = true;
         try {
+            long c0 = System.nanoTime();
             collect(va, cam);
+            collectNanos += System.nanoTime() - c0;
             dev.sleep.optsupport.ChunkMultiDraw.beginOtherLists();   // the camera pass keeps its kept draw lists
             boolean terrain = pl.props.bool("shadowTerrain", true);
             if (terrain) {
+                long l0 = System.nanoTime();
                 layer(RenderType.solid(), cam);
                 layer(RenderType.cutoutMipped(), cam);
                 layer(RenderType.cutout(), cam);
+                opaqueNanos += System.nanoTime() - l0;
             }
+            long e0 = System.nanoTime();
             MultiBufferSource.BufferSource buffers = mc.renderBuffers().bufferSource();
             if (pl.props.bool("shadowEntities", true)) entities(mc, cam, pt, buffers);
             if (pl.props.bool("shadowBlockEntities", true)) blockEntities(mc, cam, pt, buffers);
             targets.copyOpaque();
+            long t1 = System.nanoTime();
+            entityNanos += t1 - e0;
             if (terrain && pl.props.bool("shadowTranslucent", true)) layer(RenderType.translucent(), cam);
+            translucentNanos += System.nanoTime() - t1;
         } finally {
             dev.sleep.optsupport.ChunkMultiDraw.endOtherLists();
             pl.shadowPhase = false;
@@ -122,6 +130,7 @@ final class ShadowPass {
 
     /** one terrain layer, the way LevelRenderer.renderSectionLayer draws it */
     private void layer(RenderType type, Vec3 cam) {
+        long s0 = System.nanoTime();
         type.setupRenderState();
         ShaderInstance sh = RenderSystem.getShader();
         if (sh == null) {
@@ -131,9 +140,10 @@ final class ShadowPass {
         sh.setDefaultUniforms(VertexFormat.Mode.QUADS, pl.uniforms.shadowModelView, pl.uniforms.shadowProjection, Minecraft.getInstance().getWindow());
         sh.apply();
         Uniform off = sh.CHUNK_OFFSET;
+        setupNanos += System.nanoTime() - s0;
         // the opaque layers: one multi-draw per arena (every face bucket: the GPU culls by the light's view)
         boolean multi = false;
-        if (dev.sleep.optsupport.ChunkMultiDraw.ACTIVE && dev.sleep.optsupport.ChunkMultiDraw.layerSupported(type)
+        if (dev.sleep.optsupport.ChunkMultiDraw.ACTIVE && dev.sleep.optsupport.ChunkMultiDraw.shadowLayer(type)
                 && dev.sleep.optsupport.ChunkMultiDraw.replacesVanilla(type)) {
             dev.sleep.optsupport.ChunkMultiDraw.allFaces = true;
             org.joml.Vector3f toLight = new Matrix4f(pl.uniforms.shadowModelView).invert().transformDirection(new org.joml.Vector3f(0, 0, 1));
@@ -154,8 +164,10 @@ final class ShadowPass {
                 off.set((float) (o.getX() - cam.x), (float) (o.getY() - cam.y), (float) (o.getZ() - cam.z));
                 off.upload();
             }
+            long d0 = System.nanoTime();
             vb.bind();
             vb.draw();
+            drawCallNanos += System.nanoTime() - d0;
             draws++;
         }
         if (off != null) off.set(0f, 0f, 0f);

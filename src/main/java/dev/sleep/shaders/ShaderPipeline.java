@@ -53,6 +53,8 @@ public final class ShaderPipeline {
     private static final Map<String, Integer> UNITS = new HashMap<>(RenderTargets.UNITS);
     private int generation;
     public boolean inLevel;
+    /** the program applied last reads its quad's vertices: each drawn vertex buffer bound for it (binding 9) */
+    public boolean fetch;
     /** the shadow pass runs (shadow programs, the shadow framebuffer); its block-entity part */
     boolean shadowPhase, shadowBlockEntitiesPhase;
     ShadowPass shadow;
@@ -301,6 +303,11 @@ public final class ShaderPipeline {
             if (STATS && ++statFrames % 300 == 0) {
                 System.out.printf(java.util.Locale.ROOT, "[sleep/shaders] shadow pass: %.2f ms per frame, sections %.0f, draws %.0f (multi-draw layers %.0f), entities %.0f, block entities %.0f%n",
                         shadow.nanos / 1e6 / 300, shadow.sections / 300.0, shadow.draws / 300.0, shadow.multiLayers / 300.0, shadow.entities / 300.0, shadow.blockEntities / 300.0);
+                System.out.printf(java.util.Locale.ROOT, "[sleep/shaders] shadow split: collect %.3f, opaque layers %.3f, entities + block entities %.3f, translucent %.3f ms%n",
+                        shadow.collectNanos / 1e6 / 300, shadow.opaqueNanos / 1e6 / 300, shadow.entityNanos / 1e6 / 300, shadow.translucentNanos / 1e6 / 300);
+                System.out.printf(java.util.Locale.ROOT, "[sleep/shaders] shadow layer setups %.3f ms, per-section draw calls %.3f ms%n", shadow.setupNanos / 1e6 / 300, shadow.drawCallNanos / 1e6 / 300);
+                shadow.setupNanos = shadow.drawCallNanos = 0;
+                shadow.collectNanos = shadow.opaqueNanos = shadow.entityNanos = shadow.translucentNanos = 0;
                 shadow.nanos = shadow.sections = shadow.draws = shadow.multiLayers = shadow.entities = shadow.blockEntities = 0;
                 System.out.printf(java.util.Locale.ROOT, "[sleep/shaders] frame start: uniforms %.3f ms, clears %.3f ms%n", beginUniformNanos / 1e6 / 300, beginClearNanos / 1e6 / 300);
                 beginUniformNanos = beginClearNanos = 0;

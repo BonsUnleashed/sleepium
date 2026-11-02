@@ -340,6 +340,10 @@ public final class ChunkMultiDraw {
     /** From VertexBuffer.upload of a section's layer buffer, before vanilla consumes the mesh (render thread). */
     public static boolean store(SectionRenderDispatcher.RenderSection section, RenderType layer, MeshData mesh) {
         MeshData.DrawState ds = mesh.drawState();
+        if (layer == RenderType.translucent() && dev.sleep.shaders.ShaderPipeline.active) {
+            storeShadowCopy(section, layer, mesh);
+            return false;   // vanilla's sorted buffer still draws the camera's pass
+        }
         if (!layerSupported(layer) || mesh.indexBuffer() != null || ds.mode() != VertexFormat.Mode.QUADS || !capable()) return false;
         release(section, layer);
         int li = layerIndex(layer);
@@ -384,6 +388,35 @@ public final class ChunkMultiDraw {
         }
         put(a, e, vb, verts, section);
         return true;
+    }
+
+    /**
+     * A shaderpack's shadow pass draws the translucent layer from the arenas too: a copy of the section's translucent
+     * vertices (its sorted order is in the index buffer; a resort only replaces that, so the copy stays right), drawn
+     * unsorted with sequential indices - the shadow programs do not blend.
+     */
+    private static void storeShadowCopy(SectionRenderDispatcher.RenderSection section, RenderType layer, MeshData mesh) {
+        MeshData.DrawState ds = mesh.drawState();
+        if (ds.mode() != VertexFormat.Mode.QUADS || ds.format() != DefaultVertexFormat.BLOCK || !capable()) return;
+        release(section, layer);
+        int li = layerIndex(layer);
+        if (li < 0) return;
+        Arena a = ARENAS[li].get(0L);
+        if (a == null) ARENAS[li].put(0L, a = new Arena(0L, layer, false));
+        int stride = ds.format().getVertexSize();
+        if (a.stride == 0) a.stride = stride;
+        int verts = ds.vertexCount();
+        if (verts % 4 != 0) return;
+        Entry e = new Entry();
+        ByteBuffer vb = bucketed(mesh.vertexBuffer(), verts / 4, stride, e.bq, e.plane);
+        e.origin = section.getOrigin().asLong();
+        uploads++;
+        put(a, e, vb, verts, section);
+    }
+
+    /** a shadow pass can draw this layer through the arenas */
+    public static boolean shadowLayer(RenderType t) {
+        return layerSupported(t) || t == RenderType.translucent() && dev.sleep.shaders.ShaderPipeline.active && capable() && ssbo();
     }
 
     private static void put(Arena a, Entry e, ByteBuffer data, int verts, SectionRenderDispatcher.RenderSection section) {
