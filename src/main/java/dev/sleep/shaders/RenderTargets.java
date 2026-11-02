@@ -26,6 +26,11 @@ public final class RenderTargets {
     final int[] mainIndex = new int[COLOR_TEX];
     final int[] internalFormat = new int[COLOR_TEX];
     final boolean[] clear = new boolean[COLOR_TEX];
+    /** -Dsleep.shaders.graphPoison: the clears FrameGraph skips fill the texture with 1000 magenta instead (any read shows) */
+    private static final boolean POISON = Boolean.getBoolean("sleep.shaders.graphPoison");
+    private static final float[] POISON_COLOR = {1000, 0, 1000, 1};
+    /** FrameGraph: which role of each buffer the frame start clears (null: both) */
+    boolean[][] clearRole;
     final float[][] clearColor = new float[COLOR_TEX][];
     final boolean[] mipmap = new boolean[COLOR_TEX];
     public final boolean[] used = new boolean[COLOR_TEX];
@@ -180,7 +185,11 @@ public final class RenderTargets {
             if (!used[i] || !clear[i]) continue;
             float[] c = clearColor[i] != null ? clearColor[i] : i == 0 ? new float[] {fogColor[0], fogColor[1], fogColor[2], 1} : i == 1 ? new float[] {1, 1, 1, 1}
                     : new float[] {0, 0, 0, 0};
-            for (int k = 0; k < 2; k++) clearTexture(tex[i][k], internalFormat[i], c);
+            // role 0: the texture main now, 1: the alt one (FrameGraph: a role written whole before any read is not cleared)
+            for (int k = 0; k < 2; k++) {
+                if (clearRole == null || clearRole[i][k]) clearTexture(k == 0 ? main(i) : alt(i), internalFormat[i], c);
+                else if (POISON) clearTexture(k == 0 ? main(i) : alt(i), internalFormat[i], POISON_COLOR);   // a probe: a read of it shows
+            }
         }
         if (TEX_CLEAR_DEPTH) org.lwjgl.opengl.GL44.glClearTexImage(depthTex0, 0, GL11.GL_DEPTH_COMPONENT, GL11.GL_FLOAT, new float[] {1});
         else {

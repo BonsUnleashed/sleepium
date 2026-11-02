@@ -169,6 +169,11 @@ public final class ShaderPipeline {
             }
         }
         finalPass = passes.get("final");
+        if (!Boolean.getBoolean("sleep.shaders.noGraph")) {
+            FrameGraph g = new FrameGraph(set, props, begin, prepare, deferred, composite, finalPass, targets.used, targets.clear);
+            targets.clearRole = g.clearRole;
+            System.out.println("[sleep/shaders] " + g.report);
+        }
         ProgramSet.Program sp = set.resolve("shadow");
         if (sp != null && sp.sources[0] != null && sp.sources[2] != null && props.bool("shadow.enabled", true)) shadow = new ShadowPass(this, new ShadowTargets(set.consts));
         generation++;
@@ -376,6 +381,7 @@ public final class ShaderPipeline {
             deferredDone = true;
             targets.copyDepth(targets.depthTex1);
             for (CompositeProgram cp : deferred) runPass(cp, "deferred", false);
+            if (dev.sleep.DrawStats.ON) dev.sleep.DrawStats.section("translucent");
             afterPasses();
             bindTextures("gbuffers");
             bindGbuffers(BUFFER0);
@@ -413,6 +419,7 @@ public final class ShaderPipeline {
         if (finalPass != null && finalPass.id != 0) runPass(finalPass, "composite", true);
         else blitToMain();
         restoreVanillaState();
+        if (dev.sleep.DrawStats.ON) dev.sleep.DrawStats.section("(after passes)");
     }
 
     /** -Dsleep.shaders.show=gbuffers|<pass> (+ showBuffer=N): colortex N as it is after that point, on the screen */
@@ -436,6 +443,7 @@ public final class ShaderPipeline {
     }
 
     private void runPass(CompositeProgram cp, String stage, boolean isFinal) {
+        if (dev.sleep.DrawStats.ON) dev.sleep.DrawStats.section("pass/" + cp.program.name);   // GPU time per pass (string only with drawStats)
         for (int i = 0; i < RenderTargets.COLOR_TEX; i++) if (cp.wantsMipmap[i]) targets.generateMipmap(i);
         bindTextures(stage, cp.wantsMipmap);
         int[] db = cp.program.drawBuffers;
