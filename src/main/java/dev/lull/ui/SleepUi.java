@@ -25,8 +25,20 @@ public final class SleepUi {
                     .bounds(6, 6, 64, 20).tooltip(Tooltip.create(Component.translatable("sleepium.ui.open.tooltip"))).build();
             e.addListener(b);
         });
+        // a shaderpack being prepared: its progress in the corner, on menus and in the game alike
+        gameBus.addListener(ScreenEvent.Render.Post.class, e -> preparing(e.getGuiGraphics()));
+        gameBus.addListener(net.neoforged.neoforge.client.event.RenderGuiEvent.Post.class, e -> {
+            if (Minecraft.getInstance().screen == null) preparing(e.getGuiGraphics());
+        });
         if (SHOT != null) gameBus.addListener(net.neoforged.neoforge.client.event.RenderFrameEvent.Post.class, e -> shots());
         if (SWITCH != null) gameBus.addListener(net.neoforged.neoforge.client.event.RenderFrameEvent.Post.class, e -> switchTest());
+    }
+
+    private static void preparing(net.minecraft.client.gui.GuiGraphics g) {
+        String p = dev.lull.shaders.ShaderPipeline.preparing();
+        if (p == null) return;
+        int sp = p.lastIndexOf(' ');
+        g.drawString(Minecraft.getInstance().font, Component.translatable("sleepium.shaders.preparing", p.substring(0, sp), p.substring(sp + 1)), 4, 4, 0xFFE08A, true);
     }
 
     /** -Dsleep.ui.shot=<dir>: a dev probe - opens the screen on the title screen, saves each tab to dir, quits */

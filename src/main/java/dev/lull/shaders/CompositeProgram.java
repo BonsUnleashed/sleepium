@@ -63,6 +63,12 @@ public final class CompositeProgram {
 
     private static int link(StringBuilder log, String name, int[] types, String[] sources, boolean quad) {
         int prog = GL20.glCreateProgram();
+        // a linked binary of the same sources on this driver: no compile (ProgramBinaryCache)
+        String key = ProgramBinaryCache.on() ? ProgramBinaryCache.key(String.join("\u0000", sources), quad ? "quad" : "") : null;
+        if (key != null && ProgramBinaryCache.has(key)) {
+            if (quad) for (int a = 0; a < GlslTranslator.ATTRIBUTES.length; a++) GL20.glBindAttribLocation(prog, a, GlslTranslator.ATTRIBUTES[a][0]);
+            if (ProgramBinaryCache.load(prog, key)) return prog;
+        }
         List<Integer> shaders = new ArrayList<>();
         boolean ok = true;
         for (int i = 0; i < types.length; i++) {
@@ -78,11 +84,12 @@ public final class CompositeProgram {
         }
         if (quad) for (int a = 0; a < GlslTranslator.ATTRIBUTES.length; a++) GL20.glBindAttribLocation(prog, a, GlslTranslator.ATTRIBUTES[a][0]);
         if (ok) {
+            if (key != null) ProgramBinaryCache.retrievable(prog);
             GL20.glLinkProgram(prog);
             if (GL20.glGetProgrami(prog, GL20.GL_LINK_STATUS) == 0) {
                 ok = false;
                 log.append(name).append(" link: ").append(GL20.glGetProgramInfoLog(prog, 8192)).append('\n');
-            }
+            } else if (key != null) ProgramBinaryCache.store(prog, key);
         }
         for (int sh : shaders) GL20.glDeleteShader(sh);
         if (!ok) {

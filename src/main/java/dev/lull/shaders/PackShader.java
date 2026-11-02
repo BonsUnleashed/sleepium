@@ -31,6 +31,14 @@ public final class PackShader extends ShaderInstance {
     /** the vertex prologue reads the quad's vertices (the drawn buffer must be bound at binding 9) */
     final boolean fetch;
 
+    /**
+     * The instance being built (read by ShaderBinaryCompileMixin / ShaderBinaryLinkMixin): its ProgramBinaryCache key,
+     * its sources, whether a binary of it is cached (then vanilla's compile is skipped and the binary loaded at link).
+     */
+    public static Building building;
+
+    public record Building(String key, String vsh, String fsh, boolean cached) {}
+
     private PackShader(ResourceProvider rp, String name, VertexFormat format, ProgramSet.Program program, boolean fetch) throws IOException {
         super(rp, name, format);
         this.program = program;
@@ -109,9 +117,14 @@ public final class PackShader extends ShaderInstance {
             return Optional.of(new Resource(vanillaPack, () -> new ByteArrayInputStream(bytes)));
         };
         long t1 = System.nanoTime();
+        if (ProgramBinaryCache.on()) {
+            String key = ProgramBinaryCache.key(vsh, fsh, String.join(",", format.getElementAttributeNames()));
+            building = new Building(key, vsh, fsh, ProgramBinaryCache.has(key));
+        }
         try {
             return new PackShader(rp, uniqueName, format, p, vsh.contains("SlVertexData"));
         } finally {
+            building = null;
             glNanos += System.nanoTime() - t1;
         }
     }

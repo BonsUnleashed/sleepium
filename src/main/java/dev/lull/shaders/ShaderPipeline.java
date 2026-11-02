@@ -128,12 +128,35 @@ public final class ShaderPipeline {
             if (name == null || name.isBlank()) System.clearProperty("sleep.shaders");
             else System.setProperty("sleep.shaders", name);
             load();
-            // the meshes carry the pack's ids (or not) and its translucent shadow copies: built again, as Iris does
-            if (Minecraft.getInstance().levelRenderer != null) Minecraft.getInstance().levelRenderer.allChanged();
-            System.out.println("[sleep/shaders] switched to " + (current == null ? "no pack" : current.src.name));
+            // no pack: the meshes built again without the pack's ids now (a new pack: once it is prepared, activate)
+            if (current == null && Minecraft.getInstance().levelRenderer != null) Minecraft.getInstance().levelRenderer.allChanged();
+            System.out.println("[sleep/shaders] switched to " + (current == null ? "no pack" : current.src.name + " (preparing)"));
             return;
         }
         if (current == null) load();
+        // a loaded pack not yet on: its programs built over frames, vanilla drawn meanwhile (more per frame on a screen)
+        ShaderPipeline p = current;
+        if (p != null && !active) {
+            var mc = Minecraft.getInstance();
+            if (p.stepPrewarm(mc.level == null || mc.screen != null ? 60_000_000L : 25_000_000L)) activate(p);
+        }
+    }
+
+    private static void activate(ShaderPipeline p) {
+        active = true;
+        dev.lull.optsupport.LightVolumes.recipesIgnored("a shaderpack's terrain program");
+        var mc = Minecraft.getInstance();
+        if (mc.options.graphicsMode().get() == net.minecraft.client.GraphicsStatus.FABULOUS) mc.options.graphicsMode().set(net.minecraft.client.GraphicsStatus.FANCY);
+        // the meshes carry the pack's ids and its translucent shadow copies: built again, as Iris does
+        if (mc.levelRenderer != null && mc.level != null) mc.levelRenderer.allChanged();
+        System.out.println("[sleep/shaders] " + p.src.name + " on");
+    }
+
+    /** "name built/total" while a pack is being prepared (the screen shows it), else null */
+    public static String preparing() {
+        ShaderPipeline p = current;
+        if (p == null || active) return null;
+        return p.src.name + " " + p.prewarmBuilt() + "/" + Math.max(p.prewarmTotal(), p.prewarmBuilt());
     }
 
     /** frees everything the pack made (render thread, between frames: the hooks see active = false first) */
@@ -163,11 +186,7 @@ public final class ShaderPipeline {
         String name = System.getProperty("sleep.shaders");
         if (name == null || name.isBlank() || current != null) return;
         try {
-            current = new ShaderPipeline(Minecraft.getInstance().gameDirectory.toPath(), name);
-            active = true;
-            dev.lull.optsupport.LightVolumes.recipesIgnored("a shaderpack's terrain program");
-            var opts = Minecraft.getInstance().options;
-            if (opts.graphicsMode().get() == net.minecraft.client.GraphicsStatus.FABULOUS) opts.graphicsMode().set(net.minecraft.client.GraphicsStatus.FANCY);
+            current = new ShaderPipeline(Minecraft.getInstance().gameDirectory.toPath(), name);   // on once prepared (loadConfigured)
         } catch (Exception e) {
             System.out.println("[sleep/shaders] could not load " + name + ": " + e);
             e.printStackTrace(System.out);
@@ -654,32 +673,40 @@ public final class ShaderPipeline {
             {"hand", true, false, false}, {"", false, true, false}, {"", false, true, true}};
 
     /**
-     * Before the first frame of a level (and again after a resource reload makes new vanilla instances): every
-     * program this pack can give each loaded vanilla shader, in every phase, compiled now - not at the moment a mob
-     * or an effect is first drawn (a 20-100 ms hitch each). The driver compiles on its own threads meanwhile
-     * (KHR_parallel_shader_compile).
+     * Every program this pack can give each loaded vanilla shader, in every phase, compiled before the pack draws -
+     * not at the moment a mob or an effect is first drawn (a 20-100 ms hitch each). A new pack is prepared over frames
+     * (stepPrewarm, a time budget per frame) while the game draws vanilla, with the progress on the screen, and is
+     * switched on when ready: a driver's first compile of a pack is long (Intel UHD, Complementary: 57 s; later starts
+     * 6 s from the driver's own cache), and the game no longer stops for it. After a resource reload (new vanilla
+     * instances) the rest is prepared at once (prewarm).
      */
     private void prewarm() {
-        prewarmed = true;
-        long t0 = System.nanoTime();
+        startPrewarm();
+        stepPrewarm(Long.MAX_VALUE);
+    }
+
+    /** what is left to build: {vanilla instance, phase row}; the sources made on other threads meanwhile */
+    private java.util.ArrayDeque<Object[]> prewarmQueue;
+    private java.util.concurrent.CompletableFuture<Void> prewarmSources;
+    private int prewarmTotal, prewarmBefore;
+    private long prewarmStart;
+
+    /** the work of a prewarm, planned (render thread: cheap); the sources start on the common pool */
+    private void startPrewarm() {
+        if (prewarmQueue != null) return;
+        prewarmStart = System.nanoTime();
         var caps = org.lwjgl.opengl.GL.getCapabilities();
         if (caps.GL_KHR_parallel_shader_compile) org.lwjgl.opengl.KHRParallelShaderCompile.glMaxShaderCompilerThreadsKHR(0xFFFFFFFF);
         Map<String, ShaderInstance> vanilla = ((dev.lull.shadermixin.ShaderGameRendererShadersAccessor) Minecraft.getInstance().gameRenderer).sleep$shaders();
-        String savedPhase = phase;
-        boolean savedHand = handPhase, savedShadow = shadowPhase, savedBe = shadowBlockEntitiesPhase, savedIn = inLevel;
-        int before = shared.size();
-        inLevel = true;
-        try {
-            // 1: what every vanilla shader / phase pair needs (render thread, cheap); 2: the sources made on every
-            // core (string work only); 3: the GL programs below, through shaderFor, one after another
-            Map<String, Object[]> specs = new HashMap<>();
+        prewarmBefore = shared.size();
+        prewarmQueue = new java.util.ArrayDeque<>();
+        Map<String, Object[]> specs = new HashMap<>();
+        withPhase(null, () -> {
             for (ShaderInstance v : vanilla.values()) {
                 for (Object[] ph : PHASES) {
-                    phase = (String) ph[0];
-                    handPhase = (Boolean) ph[1];
-                    shadowPhase = (Boolean) ph[2];
-                    shadowBlockEntitiesPhase = (Boolean) ph[3];
+                    setPhase(ph);
                     if (shadowPhase && shadow == null) continue;
+                    prewarmQueue.add(new Object[] {v, ph});
                     String program = programFor(v.getName());
                     if (program == null) continue;
                     ProgramSet.Program p = set.resolve(program);
@@ -690,27 +717,78 @@ public final class ShaderPipeline {
                     if (!shared.containsKey(key)) specs.putIfAbsent(key, new Object[] {p, v.getVertexFormat(), alpha, program});
                 }
             }
+        });
+        prewarmTotal = specs.size();
+        // the sources: string work only, on every core, while the render thread goes on
+        prewarmSources = java.util.concurrent.CompletableFuture.runAsync(() -> {
             long tp = System.nanoTime();
             specs.entrySet().parallelStream().forEach(e -> {
                 Object[] sp = e.getValue();
                 ProgramSet.Program p = (ProgramSet.Program) sp[0];
                 try {
-                    prepared.put(e.getKey(), PackShader.prepare(uniqueName(p, e.getKey()), p, (com.mojang.blaze3d.vertex.VertexFormat) sp[1], (String) sp[2], (String) sp[3]));
+                    prepared.put(e.getKey(), PackShader.prepare(uniqueName(p, e.getKey()), p, (com.mojang.blaze3d.vertex.VertexFormat) sp[1], (String) sp[2],
+                            (String) sp[3]));
                 } catch (Exception ex) {
                     System.out.println("[sleep/shaders] preparing " + p.name + ": " + ex);
                 }
             });
             PackShader.prepNanos += System.nanoTime() - tp;
-            for (ShaderInstance v : vanilla.values()) {
-                for (Object[] ph : PHASES) {
-                    phase = (String) ph[0];
-                    handPhase = (Boolean) ph[1];
-                    shadowPhase = (Boolean) ph[2];
-                    shadowBlockEntitiesPhase = (Boolean) ph[3];
-                    if (shadowPhase && shadow == null) continue;
-                    shaderFor(v);
-                }
+        });
+    }
+
+    /**
+     * Builds programs until budgetNanos is spent (at least one); true when every one is built. Waits for the sources
+     * only with an unlimited budget.
+     */
+    private boolean stepPrewarm(long budgetNanos) {
+        startPrewarm();
+        if (prewarmed) return true;
+        if (budgetNanos == Long.MAX_VALUE) prewarmSources.join();
+        else if (!prewarmSources.isDone()) return false;
+        long end = System.nanoTime() + budgetNanos;
+        withPhase(null, () -> {
+            while (!prewarmQueue.isEmpty()) {
+                Object[] item = prewarmQueue.poll();
+                setPhase((Object[]) item[1]);
+                shaderFor((ShaderInstance) item[0]);
+                if (budgetNanos != Long.MAX_VALUE && System.nanoTime() > end) break;
             }
+        });
+        if (!prewarmQueue.isEmpty()) return false;
+        prewarmed = true;
+        prewarmQueue = null;
+        ShaderPipelineHooks.resetProgramCache();
+        System.out.printf("[sleep/shaders] prepared %d program instances (%d vanilla shader / phase pairs) in %.0f ms"
+                + " (sources %.0f ms, compile + link %.0f ms; binary cache: %d loaded, %d compiled, %d refused)%n", shared.size() - prewarmBefore, countShaders(),
+                (System.nanoTime() - prewarmStart) / 1e6, PackShader.prepNanos / 1e6, PackShader.glNanos / 1e6, ProgramBinaryCache.hits, ProgramBinaryCache.misses,
+                ProgramBinaryCache.rejected);
+        return true;
+    }
+
+    /** programs built so far / to build (the progress shown while a pack is prepared) */
+    public int prewarmBuilt() {
+        return shared.size() - prewarmBefore;
+    }
+
+    public int prewarmTotal() {
+        return prewarmTotal;
+    }
+
+    private void setPhase(Object[] ph) {
+        phase = (String) ph[0];
+        handPhase = (Boolean) ph[1];
+        shadowPhase = (Boolean) ph[2];
+        shadowBlockEntitiesPhase = (Boolean) ph[3];
+    }
+
+    /** runs r with inLevel on and the phase fields restored after */
+    private void withPhase(Object[] ph, Runnable r) {
+        String savedPhase = phase;
+        boolean savedHand = handPhase, savedShadow = shadowPhase, savedBe = shadowBlockEntitiesPhase, savedIn = inLevel;
+        inLevel = true;
+        try {
+            if (ph != null) setPhase(ph);
+            r.run();
         } finally {
             phase = savedPhase;
             handPhase = savedHand;
@@ -718,13 +796,6 @@ public final class ShaderPipeline {
             shadowBlockEntitiesPhase = savedBe;
             inLevel = savedIn;
         }
-        ShaderPipelineHooks.resetProgramCache();
-        System.out.printf("[sleep/shaders] prepared %d program instances (%d vanilla shader / phase pairs) for %d vanilla shaders in %.0f ms"
-                + " (sources %.0f ms, compile + link %.0f ms)%n", shared.size() - before, countShaders(), vanilla.size(), (System.nanoTime() - t0) / 1e6,
-                PackShader.prepNanos / 1e6, PackShader.glNanos / 1e6);
-        if (false) System.out.printf("%d%d%d%f", shared.size() - before,
-                countShaders(), vanilla.size(),
-                (System.nanoTime() - t0) / 1e6);
     }
 
     private int countShaders() {
@@ -736,6 +807,7 @@ public final class ShaderPipeline {
     /** a resource reload made new vanilla instances: prepare again */
     public void reloaded() {
         prewarmed = false;
+        prewarmQueue = null;
     }
 
     /** the pack's program for a vanilla shader in the current phase, or vanilla's own */
