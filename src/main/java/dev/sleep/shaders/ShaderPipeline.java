@@ -34,6 +34,8 @@ public final class ShaderPipeline {
     private static ShaderPipeline current;
     /** a pack is loaded (the hooks check this first) */
     public static volatile boolean active;
+    /** colortex0 alone (one shared array: framebuffers are cached by the array) */
+    public static final int[] BUFFER0 = {0};
 
     public static ShaderPipeline current() {
         return current;
@@ -47,7 +49,7 @@ public final class ShaderPipeline {
     private final Map<String, CompositeProgram> passes = new HashMap<>();
     private final List<CompositeProgram> deferred = new ArrayList<>(), composite = new ArrayList<>(), begin = new ArrayList<>(), prepare = new ArrayList<>();
     private CompositeProgram finalPass;
-    private final Map<String, PackShader> shaders = new HashMap<>();
+    private final Map<ShaderInstance, Map<String, PackShader>> shaders = new java.util.IdentityHashMap<>();
     private final Map<String, Integer> stageTextures = new HashMap<>();   // "<stage>.<sampler>" -> texture id
     private int noiseTex, normalsTex, specularTex, shadowDepthTex, shadowColorTex;
     private static final Map<String, Integer> UNITS = new HashMap<>(RenderTargets.UNITS);
@@ -297,7 +299,7 @@ public final class ShaderPipeline {
         for (CompositeProgram cp : begin) runPass(cp, "begin", false);
         for (CompositeProgram cp : prepare) runPass(cp, "prepare", false);
         bindTextures("gbuffers");
-        bindGbuffers(new int[] {0});
+        bindGbuffers(BUFFER0);
     }
 
     /** a profiler section of renderLevel starts */
@@ -330,7 +332,7 @@ public final class ShaderPipeline {
                 PackUniforms.frameUploadNanos = PackUniforms.frameUploads = PackUniforms.drawUploadNanos = PackUniforms.applies = 0;
             }
             bindTextures("gbuffers");
-            bindGbuffers(new int[] {0});
+            bindGbuffers(BUFFER0);
         }
         phase = name;
         uniforms.renderStage = switch (name) {
@@ -353,7 +355,7 @@ public final class ShaderPipeline {
             for (CompositeProgram cp : deferred) runPass(cp, "deferred", false);
             afterPasses();
             bindTextures("gbuffers");
-            bindGbuffers(new int[] {0});
+            bindGbuffers(BUFFER0);
         }
     }
 
@@ -365,7 +367,7 @@ public final class ShaderPipeline {
         handPhase = true;
         phase = "hand";
         uniforms.renderStage = 16;
-        bindGbuffers(new int[] {0});
+        bindGbuffers(BUFFER0);
     }
 
     /** GameRenderer.renderLevel's end: composite, final into the window */
@@ -393,10 +395,11 @@ public final class ShaderPipeline {
     /** -Dsleep.shaders.show=gbuffers|<pass> (+ showBuffer=N): colortex N as it is after that point, on the screen */
     private static final String SHOW = System.getProperty("sleep.shaders.show");
     private static final int SHOW_BUFFER = Integer.getInteger("sleep.shaders.showBuffer", 0);
+    private static final int[] SHOW_BUFFERS = {SHOW_BUFFER};
 
     private void show() {
         var main = Minecraft.getInstance().getMainRenderTarget();
-        int read = targets.framebuffer(new int[] {SHOW_BUFFER}, false, false);
+        int read = targets.framebuffer(SHOW_BUFFERS, false, false);
         GL30.glBindFramebuffer(GL30.GL_READ_FRAMEBUFFER, read);
         GL30.glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, main.frameBufferId);
         GL30.glBlitFramebuffer(0, 0, targets.width, targets.height, 0, 0, main.width, main.height, GL11.GL_COLOR_BUFFER_BIT, GL11.GL_NEAREST);
@@ -459,7 +462,7 @@ public final class ShaderPipeline {
     /** no final program: colortex0 to the window as it is */
     private void blitToMain() {
         var main = Minecraft.getInstance().getMainRenderTarget();
-        int read = targets.framebuffer(new int[] {0}, false, false);
+        int read = targets.framebuffer(BUFFER0, false, false);
         GL30.glBindFramebuffer(GL30.GL_READ_FRAMEBUFFER, read);
         GL30.glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, main.frameBufferId);
         GL30.glBlitFramebuffer(0, 0, targets.width, targets.height, 0, 0, main.width, main.height, GL11.GL_COLOR_BUFFER_BIT, GL11.GL_NEAREST);
@@ -478,12 +481,12 @@ public final class ShaderPipeline {
      */
     void bindTextures(String stage, boolean[] mipmapped) {
         int active = com.mojang.blaze3d.platform.GlStateManager._getActiveTexture();
+        int[] over = stageColor(stage);
         for (int i = 0; i < RenderTargets.COLOR_TEX; i++) {
-            Integer custom = stageTextures.get(stage + ".colortex" + i);
-            if (custom == null && i >= 4 && i < 8) custom = stageTextures.get(stage + ".gaux" + (i - 3));
-            int tex = custom != null ? custom : targets.used[i] ? targets.main(i) : 0;
+            int custom = over[i];
+            int tex = custom != 0 ? custom : targets.used[i] ? targets.main(i) : 0;
             bind(12 + i, tex);
-            if (custom == null && tex != 0 && targets.mipmapped(i) && !RenderTargets.isInteger(targets.internalFormat[i]))
+            if (custom == 0 && tex != 0 && targets.mipmapped(i) && !RenderTargets.isInteger(targets.internalFormat[i]))
                 GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MIN_FILTER, mipmapped[i] ? GL11.GL_LINEAR_MIPMAP_LINEAR : GL11.GL_LINEAR);
         }
         bind(28, targets.depthTex0);
@@ -497,12 +500,38 @@ public final class ShaderPipeline {
         bind(35, noiseTex);
         bind(36, normalsTex);
         bind(37, specularTex);
+        int[] extra = stageExtra.get(stage);
+        if (extra == null) stageColor(stage);
+        extra = stageExtra.get(stage);
+        for (int k = 0; k + 1 < extra.length; k += 2) bind(extra[k], extra[k + 1]);
+        GL13.glActiveTexture(active);
+    }
+
+    /** a stage's texture overrides, looked up by name once: colortex0..15 (0 = none) and {unit, texture} pairs */
+    private final Map<String, int[]> stageColor = new HashMap<>(), stageExtra = new HashMap<>();
+
+    private int[] stageColor(String stage) {
+        int[] over = stageColor.get(stage);
+        if (over != null) return over;
+        over = new int[RenderTargets.COLOR_TEX];
+        for (int i = 0; i < RenderTargets.COLOR_TEX; i++) {
+            Integer custom = stageTextures.get(stage + ".colortex" + i);
+            if (custom == null && i >= 4 && i < 8) custom = stageTextures.get(stage + ".gaux" + (i - 3));
+            over[i] = custom == null ? 0 : custom;
+        }
+        List<Integer> pairs = new ArrayList<>();
         for (var e : UNITS.entrySet()) {
             if (e.getValue() < 38) continue;
             Integer t = stageTextures.get(stage + "." + e.getKey());
-            if (t != null) bind(e.getValue(), t);
+            if (t == null) continue;
+            pairs.add(e.getValue());
+            pairs.add(t);
         }
-        GL13.glActiveTexture(active);
+        int[] extra = new int[pairs.size()];
+        for (int k = 0; k < extra.length; k++) extra[k] = pairs.get(k);
+        stageColor.put(stage, over);
+        stageExtra.put(stage, extra);
+        return over;
     }
 
     private static void bind(int unit, int tex) {
@@ -534,9 +563,11 @@ public final class ShaderPipeline {
         if (program == null) return vanilla;
         ProgramSet.Program p = set.resolve(program);
         if (p == null || p.sources[0] == null || p.sources[2] == null) return vanilla;
-        String key = vanilla.getName() + "|" + program;
-        PackShader s = shaders.get(key);
-        if (s == null && !shaders.containsKey(key)) {
+        // by the vanilla instance, then the program name (a literal): no key string built per setShader call
+        Map<String, PackShader> byProgram = shaders.get(vanilla);
+        if (byProgram == null) shaders.put(vanilla, byProgram = new HashMap<>());
+        PackShader s = byProgram.get(program);
+        if (s == null && !byProgram.containsKey(program)) {
             try {
                 s = PackShader.create("sleep_pack" + generation + "_" + program + "_" + Integer.toHexString(vanilla.getName().hashCode()), p, vanilla.getVertexFormat(),
                         alphaTest(vanilla.getName(), program), program);
@@ -544,7 +575,7 @@ public final class ShaderPipeline {
                 System.out.println("[sleep/shaders] " + p.name + " for " + vanilla.getName() + ": " + e);
                 s = null;
             }
-            shaders.put(key, s);
+            byProgram.put(program, s);
         }
         return s != null ? s : vanilla;
     }
@@ -638,23 +669,38 @@ public final class ShaderPipeline {
     private final int[] savedBlend = new int[4];
     private boolean savedBlendOn, perBufferApplied;
 
-    void applyBlend(String program) {
+    /** a program's blend.* overrides, read once: [0] the whole program's (null / {-1} off / 4 factors), then per output */
+    private final Map<String, int[][]> blendSpecs = new HashMap<>();
+
+    private int[][] blendSpec(String program) {
+        int[][] spec = blendSpecs.get(program);
+        if (spec != null) return spec;
+        ProgramSet.Program p = set.programs.get(program);
+        int n = p == null ? 0 : p.drawBuffers.length;
+        spec = new int[1 + n][];
         String all = props.get("blend." + program);
+        spec[0] = all == null ? null : all.equalsIgnoreCase("off") ? new int[] {-1} : factors(all);
+        for (int i = 0; i < n; i++) {
+            String b = props.get("blend." + program + ".colortex" + p.drawBuffers[i]);
+            spec[1 + i] = b == null ? null : b.equalsIgnoreCase("off") ? new int[] {-1} : factors(b);
+        }
+        blendSpecs.put(program, spec);
+        return spec;
+    }
+
+    void applyBlend(String program) {
+        int[][] spec = blendSpec(program);
+        int[] all = spec[0];
         if (all != null) {
-            if (all.equalsIgnoreCase("off")) RenderSystem.disableBlend();
+            if (all.length == 1) RenderSystem.disableBlend();
             else {
-                int[] f = factors(all);
-                if (f != null) {
-                    RenderSystem.enableBlend();
-                    RenderSystem.blendFuncSeparate(f[0], f[1], f[2], f[3]);
-                }
+                RenderSystem.enableBlend();
+                RenderSystem.blendFuncSeparate(all[0], all[1], all[2], all[3]);
             }
         }
         perBufferApplied = false;
-        ProgramSet.Program p = set.programs.get(program);
-        if (p == null) return;
-        for (int i = 0; i < p.drawBuffers.length; i++) {
-            String b = props.get("blend." + program + ".colortex" + p.drawBuffers[i]);
+        for (int i = 0; i + 1 < spec.length; i++) {
+            int[] b = spec[1 + i];
             if (b == null) continue;
             if (!perBufferApplied) {
                 perBufferApplied = true;
@@ -664,13 +710,10 @@ public final class ShaderPipeline {
                 savedBlend[2] = GL11.glGetInteger(GL14.GL_BLEND_SRC_ALPHA);
                 savedBlend[3] = GL11.glGetInteger(GL14.GL_BLEND_DST_ALPHA);
             }
-            if (b.equalsIgnoreCase("off")) GL30.glDisablei(GL11.GL_BLEND, i);
+            if (b.length == 1) GL30.glDisablei(GL11.GL_BLEND, i);
             else {
-                int[] f = factors(b);
-                if (f != null) {
-                    GL30.glEnablei(GL11.GL_BLEND, i);
-                    GL40.glBlendFuncSeparatei(i, f[0], f[1], f[2], f[3]);
-                }
+                GL30.glEnablei(GL11.GL_BLEND, i);
+                GL40.glBlendFuncSeparatei(i, b[0], b[1], b[2], b[3]);
             }
         }
     }

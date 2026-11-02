@@ -16,7 +16,7 @@ public class ShaderTargetMixin {
         if (!ShaderPipeline.active) return;
         ShaderPipeline p = ShaderPipeline.current();
         if (!p.inLevel || (Object) this != Minecraft.getInstance().getMainRenderTarget()) return;
-        p.bindGbuffers(new int[] {0});
+        p.bindGbuffers(ShaderPipeline.BUFFER0);
         ci.cancel();
     }
 }

@@ -33,6 +33,8 @@ public final class PackUniforms {
     public int frameCounter;
     private long lastNanos;
     private final long startNanos = System.nanoTime();
+    private final Matrix4f T1 = new Matrix4f(), T2 = new Matrix4f();
+    private final Vector4f V1 = new Vector4f(), V2 = new Vector4f(), V3 = new Vector4f();
     private final Matrix4f prevModelView = new Matrix4f().zero(), prevProjection = new Matrix4f().zero();
     private final Vector3f prevCamera = new Vector3f();
     private float wetness, eyeSmoothBlock, eyeSmoothSky;
@@ -75,128 +77,128 @@ public final class PackUniforms {
         Vec3 cam = camera.getPosition();
         Map<String, float[]> m = frame;
         put("gbufferModelView", modelView);
-        put("gbufferModelViewInverse", new Matrix4f(modelView).invert());
+        put("gbufferModelViewInverse", T1.set(modelView).invert());
         put("gbufferProjection", projection);
-        put("gbufferProjectionInverse", new Matrix4f(projection).invert());
+        put("gbufferProjectionInverse", T1.set(projection).invert());
         put("gbufferPreviousModelView", prevModelView);
         put("gbufferPreviousProjection", prevProjection);
-        m.put("cameraPosition", new float[] {(float) cam.x, (float) cam.y, (float) cam.z});
-        m.put("previousCameraPosition", new float[] {prevCamera.x, prevCamera.y, prevCamera.z});
-        m.put("cameraPositionInt", new float[] {(float) Math.floor(cam.x), (float) Math.floor(cam.y), (float) Math.floor(cam.z)});
-        m.put("cameraPositionFract", new float[] {(float) (cam.x - Math.floor(cam.x)), (float) (cam.y - Math.floor(cam.y)), (float) (cam.z - Math.floor(cam.z))});
-        m.put("previousCameraPositionInt", new float[] {(float) Math.floor(prevCamera.x), (float) Math.floor(prevCamera.y), (float) Math.floor(prevCamera.z)});
-        m.put("previousCameraPositionFract", new float[] {prevCamera.x - (float) Math.floor(prevCamera.x), prevCamera.y - (float) Math.floor(prevCamera.y),
-                prevCamera.z - (float) Math.floor(prevCamera.z)});
+        set3("cameraPosition", (float) cam.x, (float) cam.y, (float) cam.z);
+        set3("previousCameraPosition", prevCamera.x, prevCamera.y, prevCamera.z);
+        set3("cameraPositionInt", (float) Math.floor(cam.x), (float) Math.floor(cam.y), (float) Math.floor(cam.z));
+        set3("cameraPositionFract", (float) (cam.x - Math.floor(cam.x)), (float) (cam.y - Math.floor(cam.y)), (float) (cam.z - Math.floor(cam.z)));
+        set3("previousCameraPositionInt", (float) Math.floor(prevCamera.x), (float) Math.floor(prevCamera.y), (float) Math.floor(prevCamera.z));
+        set3("previousCameraPositionFract", prevCamera.x - (float) Math.floor(prevCamera.x), prevCamera.y - (float) Math.floor(prevCamera.y),
+                prevCamera.z - (float) Math.floor(prevCamera.z));
         prevCamera.set((float) cam.x, (float) cam.y, (float) cam.z);
-        m.put("eyeAltitude", new float[] {(float) cam.y});
-        m.put("viewWidth", new float[] {width});
-        m.put("viewHeight", new float[] {height});
-        m.put("aspectRatio", new float[] {width / (float) height});
-        m.put("near", new float[] {0.05f});
-        m.put("far", new float[] {mc.options.getEffectiveRenderDistance() * 16f});
-        m.put("frameCounter", new float[] {frameCounter});
-        m.put("frameTime", new float[] {dt});
-        m.put("frameTimeCounter", new float[] {((now - startNanos) / 1e9f) % 3600f});
-        m.put("screenBrightness", new float[] {mc.options.gamma().get().floatValue()});
-        m.put("hideGUI", new float[] {mc.options.hideGui ? 1 : 0});
-        m.put("centerDepthSmooth", new float[] {1});
-        Vector4f up = new Vector4f(0, 100, 0, 0).mul(modelView);
-        m.put("upPosition", new float[] {up.x, up.y, up.z});
+        set1("eyeAltitude", (float) cam.y);
+        set1("viewWidth", width);
+        set1("viewHeight", height);
+        set1("aspectRatio", width / (float) height);
+        set1("near", 0.05f);
+        set1("far", mc.options.getEffectiveRenderDistance() * 16f);
+        set1("frameCounter", frameCounter);
+        set1("frameTime", dt);
+        set1("frameTimeCounter", ((now - startNanos) / 1e9f) % 3600f);
+        set1("screenBrightness", mc.options.gamma().get().floatValue());
+        set1("hideGUI", mc.options.hideGui ? 1 : 0);
+        set1("centerDepthSmooth", 1);
+        Vector4f up = V1.set(0, 100, 0, 0).mul(modelView);
+        set3("upPosition", up.x, up.y, up.z);
         if (level != null) {
             float skyAngle = level.getTimeOfDay(partialTick);
             float sunAngle = skyAngle < 0.75f ? skyAngle + 0.25f : skyAngle - 0.75f;
             float shadowAngle = sunAngle > 0.5f ? sunAngle - 0.5f : sunAngle;
-            m.put("sunAngle", new float[] {sunAngle});
-            m.put("shadowAngle", new float[] {shadowAngle});
-            Matrix4f celestial = new Matrix4f(modelView).rotateY((float) Math.toRadians(-90)).rotateZ((float) Math.toRadians(sunPathRotation))
+            set1("sunAngle", sunAngle);
+            set1("shadowAngle", shadowAngle);
+            Matrix4f celestial = T2.set(modelView).rotateY((float) Math.toRadians(-90)).rotateZ((float) Math.toRadians(sunPathRotation))
                     .rotateX((float) Math.toRadians(skyAngle * 360f));
-            Vector4f sun = new Vector4f(0, 100, 0, 0).mul(celestial), moon = new Vector4f(0, -100, 0, 0).mul(celestial);
-            m.put("sunPosition", new float[] {sun.x, sun.y, sun.z});
-            m.put("moonPosition", new float[] {moon.x, moon.y, moon.z});
-            m.put("shadowLightPosition", sunAngle <= 0.5f ? new float[] {sun.x, sun.y, sun.z} : new float[] {moon.x, moon.y, moon.z});
+            Vector4f sun = V2.set(0, 100, 0, 0).mul(celestial), moon = V3.set(0, -100, 0, 0).mul(celestial);
+            set3("sunPosition", sun.x, sun.y, sun.z);
+            set3("moonPosition", moon.x, moon.y, moon.z);
+            if (sunAngle <= 0.5f) set3("shadowLightPosition", sun.x, sun.y, sun.z);
+            else set3("shadowLightPosition", moon.x, moon.y, moon.z);
             long dayTime = level.getDayTime();
-            m.put("worldTime", new float[] {dayTime % 24000});
-            m.put("worldDay", new float[] {dayTime / 24000});
-            m.put("moonPhase", new float[] {level.getMoonPhase()});
+            set1("worldTime", dayTime % 24000);
+            set1("worldDay", dayTime / 24000);
+            set1("moonPhase", level.getMoonPhase());
             float rain = level.getRainLevel(partialTick);
-            m.put("rainStrength", new float[] {rain});
-            m.put("thunderStrength", new float[] {level.getThunderLevel(partialTick)});
+            set1("rainStrength", rain);
+            set1("thunderStrength", level.getThunderLevel(partialTick));
             float hl = rain > wetness ? wetnessHalflife : drynessHalflife;
             wetness += (rain - wetness) * (float) (1 - Math.pow(0.5, dt * 20 / Math.max(1, hl)));
-            m.put("wetness", new float[] {wetness});
+            set1("wetness", wetness);
             Vec3 sky = level.getSkyColor(cam, partialTick);
-            m.put("skyColor", new float[] {(float) sky.x, (float) sky.y, (float) sky.z});
+            set3("skyColor", (float) sky.x, (float) sky.y, (float) sky.z);
             float[] fog = com.mojang.blaze3d.systems.RenderSystem.getShaderFogColor();
-            m.put("fogColor", new float[] {fog[0], fog[1], fog[2]});
-            m.put("fogStart", new float[] {com.mojang.blaze3d.systems.RenderSystem.getShaderFogStart()});
-            m.put("fogEnd", new float[] {com.mojang.blaze3d.systems.RenderSystem.getShaderFogEnd()});
-            m.put("cloudHeight", new float[] {level.effects().getCloudHeight()});
+            set3("fogColor", fog[0], fog[1], fog[2]);
+            set1("fogStart", com.mojang.blaze3d.systems.RenderSystem.getShaderFogStart());
+            set1("fogEnd", com.mojang.blaze3d.systems.RenderSystem.getShaderFogEnd());
+            set1("cloudHeight", level.effects().getCloudHeight());
             BlockPos eye = BlockPos.containing(cam);
             int block = level.getBrightness(LightLayer.BLOCK, eye), skyL = level.getBrightness(LightLayer.SKY, eye);
-            m.put("eyeBrightness", new float[] {block * 16, skyL * 16});
+            set2("eyeBrightness", block * 16, skyL * 16);
             float k = (float) (1 - Math.pow(0.5, dt * 20 / Math.max(1, eyeBrightnessHalflife)));
             eyeSmoothBlock += (block * 16 - eyeSmoothBlock) * k;
             eyeSmoothSky += (skyL * 16 - eyeSmoothSky) * k;
-            m.put("eyeBrightnessSmooth", new float[] {Math.round(eyeSmoothBlock), Math.round(eyeSmoothSky)});
+            set2("eyeBrightnessSmooth", Math.round(eyeSmoothBlock), Math.round(eyeSmoothSky));
             var biome = level.getBiome(eye);
             var reg = level.registryAccess().registryOrThrow(net.minecraft.core.registries.Registries.BIOME);
-            m.put("biome", new float[] {reg.getId(biome.value())});
+            set1("biome", reg.getId(biome.value()));
             var precip = biome.value().getPrecipitationAt(eye);
-            m.put("biome_precipitation", new float[] {precip == net.minecraft.world.level.biome.Biome.Precipitation.RAIN ? 1
-                    : precip == net.minecraft.world.level.biome.Biome.Precipitation.SNOW ? 2 : 0});
-            m.put("temperature", new float[] {biome.value().getBaseTemperature()});
-            m.put("rainfall", new float[] {biome.value().getModifiedClimateSettings().downfall()});
-            m.put("bedrockLevel", new float[] {level.getMinBuildHeight()});
-            m.put("heightLimit", new float[] {level.getHeight()});
-            m.put("hasSkylight", new float[] {level.dimensionType().hasSkyLight() ? 1 : 0});
-            m.put("hasCeiling", new float[] {level.dimensionType().hasCeiling() ? 1 : 0});
+            set1("biome_precipitation", precip == net.minecraft.world.level.biome.Biome.Precipitation.RAIN ? 1
+                    : precip == net.minecraft.world.level.biome.Biome.Precipitation.SNOW ? 2 : 0);
+            set1("temperature", biome.value().getBaseTemperature());
+            set1("rainfall", biome.value().getModifiedClimateSettings().downfall());
+            set1("bedrockLevel", level.getMinBuildHeight());
+            set1("heightLimit", level.getHeight());
+            set1("hasSkylight", level.dimensionType().hasSkyLight() ? 1 : 0);
+            set1("hasCeiling", level.dimensionType().hasCeiling() ? 1 : 0);
             if (biomeIds == null) {
                 biomeIds = new HashMap<>();
-                for (var e : reg.entrySet()) biomeIds.put("BIOME_" + e.getKey().location().getPath().toUpperCase(), (float) reg.getId(e.getValue()));
+                for (var e : reg.entrySet()) {
+                    float[] c = new float[16];
+                    java.util.Arrays.fill(c, reg.getId(e.getValue()));
+                    biomeIds.put("BIOME_" + e.getKey().location().getPath().toUpperCase(), c);
+                }
             }
         }
         LocalPlayer p = mc.player;
         if (p != null) {
             FogType ft = camera.getFluidInCamera();
-            m.put("isEyeInWater", new float[] {ft == FogType.WATER ? 1 : ft == FogType.LAVA ? 2 : ft == FogType.POWDER_SNOW ? 3 : 0});
-            m.put("nightVision", new float[] {p.hasEffect(MobEffects.NIGHT_VISION) ? 1 : 0});
-            m.put("blindness", new float[] {p.hasEffect(MobEffects.BLINDNESS) ? 1 : 0});
-            m.put("darknessFactor", new float[] {mc.options.darknessEffectScale().get().floatValue() * (p.hasEffect(MobEffects.DARKNESS) ? 1 : 0)});
-            m.put("playerMood", new float[] {p.getCurrentMood()});
-            m.put("is_invisible", new float[] {p.isInvisible() ? 1 : 0});
-            m.put("is_sneaking", new float[] {p.isCrouching() ? 1 : 0});
-            m.put("is_sprinting", new float[] {p.isSprinting() ? 1 : 0});
-            m.put("isElytraFlying", new float[] {p.isFallFlying() ? 1 : 0});
-            m.put("isSpectator", new float[] {p.isSpectator() ? 1 : 0});
+            set1("isEyeInWater", ft == FogType.WATER ? 1 : ft == FogType.LAVA ? 2 : ft == FogType.POWDER_SNOW ? 3 : 0);
+            set1("nightVision", p.hasEffect(MobEffects.NIGHT_VISION) ? 1 : 0);
+            set1("blindness", p.hasEffect(MobEffects.BLINDNESS) ? 1 : 0);
+            set1("darknessFactor", mc.options.darknessEffectScale().get().floatValue() * (p.hasEffect(MobEffects.DARKNESS) ? 1 : 0));
+            set1("playerMood", p.getCurrentMood());
+            set1("is_invisible", p.isInvisible() ? 1 : 0);
+            set1("is_sneaking", p.isCrouching() ? 1 : 0);
+            set1("is_sprinting", p.isSprinting() ? 1 : 0);
+            set1("isElytraFlying", p.isFallFlying() ? 1 : 0);
+            set1("isSpectator", p.isSpectator() ? 1 : 0);
             Vec3 look = p.getViewVector(partialTick);
-            m.put("playerLookVector", new float[] {(float) look.x, (float) look.y, (float) look.z});
+            set3("playerLookVector", (float) look.x, (float) look.y, (float) look.z);
             Vec3 eyePos = p.getEyePosition(partialTick);
-            m.put("eyePosition", new float[] {(float) eyePos.x, (float) eyePos.y, (float) eyePos.z});
-            m.put("relativeEyePosition", new float[] {(float) (cam.x - eyePos.x), (float) (cam.y - eyePos.y), (float) (cam.z - eyePos.z)});
-            m.put("heldBlockLightValue", new float[] {lightOf(p.getMainHandItem())});
-            m.put("heldBlockLightValue2", new float[] {lightOf(p.getOffhandItem())});
-            m.put("firstPersonCamera", new float[] {mc.options.getCameraType().isFirstPerson() ? 1 : 0});
+            set3("eyePosition", (float) eyePos.x, (float) eyePos.y, (float) eyePos.z);
+            set3("relativeEyePosition", (float) (cam.x - eyePos.x), (float) (cam.y - eyePos.y), (float) (cam.z - eyePos.z));
+            set1("heldBlockLightValue", lightOf(p.getMainHandItem()));
+            set1("heldBlockLightValue2", lightOf(p.getOffhandItem()));
+            set1("firstPersonCamera", mc.options.getCameraType().isFirstPerson() ? 1 : 0);
         }
-        shadowMatrices(cam, level == null ? 0 : frame.get("shadowAngle")[0]);
+        shadowMatrices(cam, level == null ? 0 : slot("shadowAngle")[0]);
         put("shadowModelView", shadowModelView);
-        put("shadowModelViewInverse", new Matrix4f(shadowModelView).invert());
+        put("shadowModelViewInverse", T1.set(shadowModelView).invert());
         put("shadowProjection", shadowProjection);
-        put("shadowProjectionInverse", new Matrix4f(shadowProjection).invert());
+        put("shadowProjectionInverse", T1.set(shadowProjection).invert());
         if (custom != null) custom.evaluate(this::lookup, dt);
         frameStamp++;
     }
 
-    private Map<String, Float> biomeIds;
+    private Map<String, float[]> biomeIds;
 
     /** a name for the custom-uniform expressions: frame values, biome constants */
     private float[] lookup(String name) {
-        float[] v = frame.get(name);
-        if (v != null) return v;
-        if (biomeIds != null) {
-            Float b = biomeIds.get(name);
-            if (b != null) return new float[] {b};
-        }
-        return null;
+        if (name.startsWith("BIOME_")) return biomeIds == null ? null : biomeIds.get(name);
+        return slot(name);   // a standard name: its slot (filled now or later); unknown names stay a zero slot
     }
 
     private static float lightOf(net.minecraft.world.item.ItemStack s) {
@@ -218,8 +220,31 @@ public final class PackUniforms {
     }
 
     private void put(String name, Matrix4f mat) {
-        float[] v = frame.computeIfAbsent(name, k -> new float[16]);
-        mat.get(v);
+        mat.get(slot(name));
+    }
+
+    /** a name's value slot: made once, written in place every frame (no array per value per frame) */
+    public float[] slot(String name) {
+        float[] v = frame.get(name);
+        if (v == null) frame.put(name, v = new float[16]);
+        return v;
+    }
+
+    private void set1(String name, float a) {
+        slot(name)[0] = a;
+    }
+
+    private void set2(String name, float a, float b) {
+        float[] v = slot(name);
+        v[0] = a;
+        v[1] = b;
+    }
+
+    private void set3(String name, float a, float b, float c) {
+        float[] v = slot(name);
+        v[0] = a;
+        v[1] = b;
+        v[2] = c;
     }
 
     // ------------------------------------------------------------------ upload
@@ -231,6 +256,8 @@ public final class PackUniforms {
         final int program;
         final List<int[]> locs = new ArrayList<>();   // {location, glType, size}
         final List<String> names = new ArrayList<>();
+        /** each uniform's value slot, resolved at the first upload (custom uniforms first, then the standard ones) */
+        float[][] refs;
         int entityIdLoc = -1, blockEntityIdLoc = -1, itemIdLoc = -1, renderStageLoc = -1, normalMatLoc = -1, mvInvLoc = -1, projInvLoc = -1,
                 lightmapMatLoc = -1, atlasSizeLoc = -1;
         long stamp = -1;
@@ -297,18 +324,28 @@ public final class PackUniforms {
     }
 
     private void uploadFrame0(Binding b) {
-        for (int i = 0; i < b.locs.size(); i++) {
-            int[] l = b.locs.get(i);
-            String name = b.names.get(i);
-            float[] v = custom != null ? custom.values.get(name) : null;
-            if (v == null) v = frame.get(name);
+        float[][] refs = b.refs;
+        if (refs == null) {
+            refs = b.refs = new float[b.locs.size()][];
+            for (int i = 0; i < refs.length; i++) {
+                String name = b.names.get(i);
+                float[] v = custom != null ? custom.values.get(name) : null;
+                // only what this engine fills (the frame has run once by now): vanilla's own per-draw uniforms
+                // (ModelViewMat, ProjMat, ChunkOffset...) are not ours to overwrite
+                refs[i] = v != null ? v : frame.get(name);
+            }
+        }
+        for (int i = 0; i < refs.length; i++) {
+            float[] v = refs[i];
             if (v == null) continue;
+            int[] l = b.locs.get(i);
             upload(l[0], l[1], v);
             frameUploads++;
         }
     }
 
     private static final Matrix4f TMP = new Matrix4f();
+    private static final float[] MAT3 = new float[9];
     private static final org.joml.Matrix3f TMP3 = new org.joml.Matrix3f();
     /** vanilla's lightmap UV: (uv + 8) / 256 */
     private static final Matrix4f LIGHTMAP = new Matrix4f().scale(1 / 256f).translate(8, 8, 8);
@@ -382,7 +419,19 @@ public final class PackUniforms {
                 if (v.length >= 16) GL20.glUniformMatrix4fv(loc, false, v);
             }
             case 0x8B5B -> {   // MAT3
-                if (v.length >= 16) GL20.glUniformMatrix3fv(loc, false, new float[] {v[0], v[1], v[2], v[4], v[5], v[6], v[8], v[9], v[10]});
+                if (v.length >= 16) {
+                    float[] m3 = MAT3;
+                    m3[0] = v[0];
+                    m3[1] = v[1];
+                    m3[2] = v[2];
+                    m3[3] = v[4];
+                    m3[4] = v[5];
+                    m3[5] = v[6];
+                    m3[6] = v[8];
+                    m3[7] = v[9];
+                    m3[8] = v[10];
+                    GL20.glUniformMatrix3fv(loc, false, m3);
+                }
                 else if (v.length >= 9) GL20.glUniformMatrix3fv(loc, false, v);
             }
             default -> {}

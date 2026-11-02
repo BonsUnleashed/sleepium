@@ -136,6 +136,21 @@ public final class RenderTargets {
      * alt: the alt textures (composite-style passes), else main.
      */
     public int framebuffer(int[] buffers, boolean alt, boolean depth) {
+        // by the draw-buffer array (a program's own) and which texture of each buffer: no key built per call
+        long state = (alt ? 1L : 0) | (depth ? 2L : 0);
+        for (int b : buffers) if (b < COLOR_TEX && mainIndex[b] == 1) state |= 4L << b;
+        it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap byState = FAST.get(buffers);
+        if (byState == null) FAST.put(buffers, byState = new it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap());
+        int fb = byState.getOrDefault(state, 0);
+        if (fb != 0) return fb;
+        fb = framebuffer0(buffers, alt, depth);
+        byState.put(state, fb);
+        return fb;
+    }
+
+    private final java.util.IdentityHashMap<int[], it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap> FAST = new java.util.IdentityHashMap<>();
+
+    private int framebuffer0(int[] buffers, boolean alt, boolean depth) {
         StringBuilder k = new StringBuilder(alt ? "a" : "m").append(depth ? "d" : "-");
         for (int b : buffers) k.append(',').append(b).append(':').append(alt ? alt(b) : main(b));
         Integer id = fbos.get(k.toString());
@@ -210,6 +225,7 @@ public final class RenderTargets {
     }
 
     public void delete() {
+        FAST.clear();
         if (depthFbo != 0) {
             GL30.glDeleteFramebuffers(depthFbo);
             depthFbo = 0;
