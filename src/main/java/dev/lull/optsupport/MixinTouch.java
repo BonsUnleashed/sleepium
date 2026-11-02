@@ -223,6 +223,38 @@ public final class MixinTouch {
         }
     }
 
+    /** Every mixin class of this mod's configs (sleepium*.mixins.json), read from the mod file (no code). */
+    static void ourMixins(java.util.function.BiConsumer<String, ClassNode> each) {
+        try {
+            var mods = net.neoforged.fml.loading.LoadingModList.get();
+            if (mods == null) return;
+            for (var info : mods.getModFiles()) {
+                var file = info.getFile();
+                for (var cfg : file.getMixinConfigs()) {
+                    String name = cfg.config();
+                    if (!name.startsWith("sleepium")) continue;
+                    java.nio.file.Path json = file.findResource(name);
+                    if (json == null || !java.nio.file.Files.exists(json)) continue;
+                    com.google.gson.JsonObject o = com.google.gson.JsonParser.parseString(java.nio.file.Files.readString(json)).getAsJsonObject();
+                    String pkg = o.get("package").getAsString();
+                    for (String key : new String[] {"mixins", "client", "server"}) {
+                        if (!o.has(key) || !o.get(key).isJsonArray()) continue;
+                        for (var e : o.getAsJsonArray(key)) {
+                            String cls = pkg + "." + e.getAsString();
+                            java.nio.file.Path bytes = file.findResource(cls.replace('.', '/') + ".class");
+                            if (bytes == null || !java.nio.file.Files.exists(bytes)) continue;
+                            ClassNode cn = new ClassNode();
+                            new org.objectweb.asm.ClassReader(java.nio.file.Files.readAllBytes(bytes)).accept(cn, org.objectweb.asm.ClassReader.SKIP_CODE);
+                            each.accept(cls, cn);
+                        }
+                    }
+                }
+            }
+        } catch (Throwable t) {
+            System.out.println("[sleep/opt] own mixin list incomplete: " + t);
+        }
+    }
+
     /** One foreign mixin class's touches, by its target classes (a class without @Mixin adds nothing). */
     private static void indexClass(byte[] bytes, Map<String, Set<String>> m) {
         ClassNode cn = new ClassNode();

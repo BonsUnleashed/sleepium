@@ -615,19 +615,25 @@ public final class SleepEngine {
 
     private static Field seedField;
     private static boolean seedTried;
+    private static long unreadableSeed;
 
     static long seed(Level level) {
         if (!seedTried) {
             seedTried = true;
-            try {
-                Field f = level.random.getClass().getDeclaredField("seed");
-                f.setAccessible(true);
-                seedField = f;
-            } catch (ReflectiveOperationException | RuntimeException e) {
-                System.out.println("[sleep/sleep] level.random seed not readable (" + level.random.getClass().getName() + "): " + e);
+            // the class chain: a mod's random may extend vanilla's (C2ME's CheckedThreadLocalRandom extends SingleThreadedRandomSource)
+            for (Class<?> c = level.random.getClass(); c != null && seedField == null; c = c.getSuperclass()) {
+                try {
+                    Field f = c.getDeclaredField("seed");
+                    f.setAccessible(true);
+                    seedField = f;
+                } catch (ReflectiveOperationException | RuntimeException e) {
+                    // the superclass next
+                }
             }
+            if (seedField == null)
+                System.out.println("[sleep/sleep] level.random seed not readable (" + level.random.getClass().getName() + "): every tick counts as using the shared random");
         }
-        if (seedField == null) return 0;
+        if (seedField == null) return ++unreadableSeed;   // never the same twice: no tick is taken for quiet
         try {
             Object v = seedField.get(level.random);
             return v instanceof AtomicLong a ? a.get() : v instanceof Long l ? l : 0;

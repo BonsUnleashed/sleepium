@@ -64,38 +64,15 @@ public final class MixinYield {
     private static java.util.Map<String, String[]> providers() {
         java.util.Map<String, String[]> m = PROVIDERS;
         if (m != null) return m;
-        m = new java.util.HashMap<>();
-        try {
-            var provider = org.spongepowered.asm.service.MixinService.getService().getBytecodeProvider();
-            for (org.spongepowered.asm.mixin.transformer.Config c : org.spongepowered.asm.mixin.Mixins.getConfigs()) {
-                org.spongepowered.asm.mixin.extensibility.IMixinConfig mc = c.getConfig();
-                if (mc == null || !mc.getName().startsWith("sleepium")) continue;
-                String pkg = mc.getMixinPackage();
-                if (!pkg.endsWith(".")) pkg += ".";
-                for (String field : new String[] {"mixinClasses", "mixinClassesClient", "mixinClassesServer"}) {
-                    java.lang.reflect.Field f = mc.getClass().getDeclaredField(field);
-                    f.setAccessible(true);
-                    if (!(f.get(mc) instanceof java.util.List<?> names)) continue;
-                    for (Object n : names) {
-                        String cls = pkg + n;
-                        ClassNode cn;
-                        try {
-                            cn = provider.getClassNode(cls);
-                        } catch (Throwable t) {
-                            continue;
-                        }
-                        java.util.List<String> targets = MixinTouch.targets(cn);
-                        if (targets.isEmpty() || cn.interfaces == null) continue;
-                        for (String i : cn.interfaces)
-                            if (i.startsWith("dev/lull/")) m.putIfAbsent(i, new String[] {cls, targets.get(0).replace('/', '.')});
-                    }
-                }
-            }
-        } catch (Throwable t) {
-            System.out.println("[sleep/opt] mixin interface providers incomplete: " + t);
-        }
-        PROVIDERS = m;
-        return m;
+        java.util.Map<String, String[]> out = new java.util.HashMap<>();
+        MixinTouch.ourMixins((cls, cn) -> {
+            java.util.List<String> targets = MixinTouch.targets(cn);
+            if (targets.isEmpty() || cn.interfaces == null) return;
+            for (String i : cn.interfaces) if (i.startsWith("dev/lull/")) out.putIfAbsent(i, new String[] {cls, targets.get(0).replace('/', '.')});
+        });
+        if (Boolean.getBoolean("sleep.mixinIndex.debug")) System.out.println("[sleep/opt] mixin interface providers: " + out.keySet());
+        PROVIDERS = out;
+        return out;
     }
 
     private static boolean yields0(String targetClassName, String mixinClassName) {
@@ -124,6 +101,15 @@ public final class MixinYield {
                             + " is overwritten by another mod's mixin (our injector cannot go into it)");
                     return true;
                 }
+        for (MethodNode m : cn.methods) {   // a plain method we add (an override of an interface default: Level.noCollision) that another mod adds too: one is skipped
+            if (overwrite(m) || annotated(m) || m.name.startsWith("<") || m.name.contains("$") || (m.access & (org.objectweb.asm.Opcodes.ACC_SYNTHETIC | org.objectweb.asm.Opcodes.ACC_BRIDGE)) != 0) continue;
+            if (MixinTouch.touched(target, m.name)) {
+                yielded++;
+                System.out.println("[sleep/opt] " + mixinClassName.substring(mixinClassName.lastIndexOf('.') + 1) + " not applied: "
+                        + targetClassName + "#" + m.name + " is added by another mod's mixin too (one of the two would be skipped)");
+                return true;
+            }
+        }
         for (MethodNode m : cn.methods) {
             if (!overwrite(m)) continue;
             if (Boolean.getBoolean("sleep.mixinIndex.debug"))
@@ -135,6 +121,13 @@ public final class MixinYield {
                 return true;
             }
         }
+        return false;
+    }
+
+    /** any annotation of Mixin's (Shadow, Unique, an injector, Accessor...): not a plain merged method */
+    private static boolean annotated(MethodNode m) {
+        for (java.util.List<AnnotationNode> l : java.util.Arrays.asList(m.visibleAnnotations, m.invisibleAnnotations))
+            if (l != null) for (AnnotationNode a : l) if (a.desc.startsWith("Lorg/spongepowered/") || a.desc.startsWith("Lcom/llamalad7/")) return true;
         return false;
     }
 
