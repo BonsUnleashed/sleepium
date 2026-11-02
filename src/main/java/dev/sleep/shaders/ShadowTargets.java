@@ -91,24 +91,10 @@ public final class ShadowTargets {
         return fb;
     }
 
-    /** the start of the shadow pass: depth 1, shadowcolor to their clear colours */
+    /** the start of the shadow pass: depth 1, shadowcolor to their clear colours (on the textures, no framebuffer) */
     public void clear() {
-        int fb = GL30.glGenFramebuffers();
-        GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, fb);
-        GL11.glDisable(GL11.GL_SCISSOR_TEST);
-        GL11.glColorMask(true, true, true, true);
-        GL11.glDepthMask(true);
-        for (int i = 0; i < 2; i++) {
-            if (!clear[i]) continue;
-            GL30.glFramebufferTexture2D(GL30.GL_FRAMEBUFFER, GL30.GL_COLOR_ATTACHMENT0, GL11.GL_TEXTURE_2D, color[i], 0);
-            GL11.glDrawBuffer(GL30.GL_COLOR_ATTACHMENT0);
-            GL30.glClearBufferfv(GL11.GL_COLOR, 0, clearColor[i]);
-        }
-        GL30.glFramebufferTexture2D(GL30.GL_FRAMEBUFFER, GL30.GL_COLOR_ATTACHMENT0, GL11.GL_TEXTURE_2D, 0, 0);
-        GL30.glFramebufferTexture2D(GL30.GL_FRAMEBUFFER, GL30.GL_DEPTH_ATTACHMENT, GL11.GL_TEXTURE_2D, depth0, 0);
-        GL30.glClearBufferfv(GL11.GL_DEPTH, 0, new float[] {1});
-        GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, 0);
-        GL30.glDeleteFramebuffers(fb);
+        for (int i = 0; i < 2; i++) if (clear[i]) RenderTargets.clearTexture(color[i], formats[i], clearColor[i]);
+        org.lwjgl.opengl.GL44.glClearTexImage(depth0, 0, GL11.GL_DEPTH_COMPONENT, GL11.GL_FLOAT, new float[] {1});
     }
 
     /** shadowtex0 -> shadowtex1 (before the translucent casters) */

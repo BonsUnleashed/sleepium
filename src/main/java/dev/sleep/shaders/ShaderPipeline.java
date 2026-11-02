@@ -58,6 +58,7 @@ public final class ShaderPipeline {
     ShadowPass shadow;
     private static final boolean STATS = Boolean.getBoolean("sleep.shaders.stats");
     private long statFrames;
+    private long beginUniformNanos, beginClearNanos;
     private boolean shadowDone;
     private Camera camera;
     private float partialTick;
@@ -266,11 +267,17 @@ public final class ShaderPipeline {
 
     /** LevelRenderer.renderLevel, after vanilla's clear */
     public void beginLevel(Camera camera, Matrix4f frustumMatrix, Matrix4f projectionMatrix, float partialTick) {
+        long t0 = STATS ? System.nanoTime() : 0;
         var main = Minecraft.getInstance().getMainRenderTarget();
         targets.resize(main.width, main.height);
         uniforms.beginFrame(camera, frustumMatrix, projectionMatrix, partialTick, main.width, main.height);
+        long t1 = STATS ? System.nanoTime() : 0;
         float[] fog = RenderSystem.getShaderFogColor();
         targets.clearAll(fog);
+        if (STATS) {
+            beginUniformNanos += t1 - t0;
+            beginClearNanos += System.nanoTime() - t1;
+        }
         inLevel = true;
         ShaderIds.on = true;
         shadowDone = false;
@@ -295,6 +302,8 @@ public final class ShaderPipeline {
                 System.out.printf(java.util.Locale.ROOT, "[sleep/shaders] shadow pass: %.2f ms per frame, sections %.0f, draws %.0f (multi-draw layers %.0f), entities %.0f, block entities %.0f%n",
                         shadow.nanos / 1e6 / 300, shadow.sections / 300.0, shadow.draws / 300.0, shadow.multiLayers / 300.0, shadow.entities / 300.0, shadow.blockEntities / 300.0);
                 shadow.nanos = shadow.sections = shadow.draws = shadow.multiLayers = shadow.entities = shadow.blockEntities = 0;
+                System.out.printf(java.util.Locale.ROOT, "[sleep/shaders] frame start: uniforms %.3f ms, clears %.3f ms%n", beginUniformNanos / 1e6 / 300, beginClearNanos / 1e6 / 300);
+                beginUniformNanos = beginClearNanos = 0;
             }
             bindTextures("gbuffers");
             bindGbuffers(new int[] {0});
