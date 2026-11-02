@@ -95,7 +95,7 @@ public final class PackShader extends ShaderInstance {
     private static final java.util.regex.Pattern MAIN = java.util.regex.Pattern.compile("\\bvoid\\s+main\\s*\\(\\s*(void)?\\s*\\)");
 
     static String withAlphaTest(String fsh, String test) {
-        if (test == null || !word(fsh, "sl_FragData0")) return fsh;
+        if (test == null || !word(fsh, "sl_FragData0") || Boolean.getBoolean("sleep.shaders.noAlphaWrap")) return fsh;
         String[] t = test.trim().split("\\s+");
         if (t.length != 2) return fsh;
         String op = switch (t[0]) {

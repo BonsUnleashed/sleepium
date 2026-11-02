@@ -104,6 +104,12 @@ public final class ShaderPipeline {
         uniforms.configure(set.consts);
         uniforms.custom = CustomUniforms.parse(props.customUniforms);
         ShaderIds.maps = IdMaps.load(src, withOptions);
+        System.out.println("[sleep/shaders] ids: oak_leaves " + ShaderIds.maps.block(net.minecraft.world.level.block.Blocks.OAK_LEAVES.defaultBlockState())
+                + ", grass_block " + ShaderIds.maps.block(net.minecraft.world.level.block.Blocks.GRASS_BLOCK.defaultBlockState())
+                + ", short_grass " + ShaderIds.maps.block(net.minecraft.world.level.block.Blocks.SHORT_GRASS.defaultBlockState())
+                + ", water " + ShaderIds.maps.block(net.minecraft.world.level.block.Blocks.WATER.defaultBlockState())
+                + ", stone " + ShaderIds.maps.block(net.minecraft.world.level.block.Blocks.STONE.defaultBlockState())
+                + "; " + ShaderIds.maps.blocks.size() + " states mapped");
         if (!ShaderIds.maps.unknown.isEmpty()) problems.add("block names this version lacks (ignored): " + ShaderIds.maps.unknown.size());
         problems.addAll(uniforms.custom.errors);
         step("textures");
@@ -307,8 +313,14 @@ public final class ShaderPipeline {
                         shadow.collectNanos / 1e6 / 300, shadow.opaqueNanos / 1e6 / 300, shadow.entityNanos / 1e6 / 300, shadow.translucentNanos / 1e6 / 300);
                 System.out.printf(java.util.Locale.ROOT, "[sleep/shaders] shadow layer setups %.3f ms, per-section draw calls %.3f ms%n", shadow.setupNanos / 1e6 / 300, shadow.drawCallNanos / 1e6 / 300);
                 shadow.setupNanos = shadow.drawCallNanos = 0;
+                System.out.printf(java.util.Locale.ROOT, "[sleep/shaders] chunk multi-draw: flushes %.3f ms (%.0f draws), shadow list reuses %d%n",
+                        dev.sleep.optsupport.ChunkMultiDraw.flushNanos / 1e6 / 300, dev.sleep.optsupport.ChunkMultiDraw.flushDraws / 300.0, dev.sleep.optsupport.ChunkMultiDraw.shadowReuses);
+                System.out.printf(java.util.Locale.ROOT, "[sleep/shaders]   flush: offsets upload %.3f, commands upload %.3f, multi-draw calls %.3f ms%n", dev.sleep.optsupport.ChunkMultiDraw.offNanos / 1e6 / 300, dev.sleep.optsupport.ChunkMultiDraw.cmdUpNanos / 1e6 / 300, dev.sleep.optsupport.ChunkMultiDraw.drawNanos / 1e6 / 300);
+                dev.sleep.optsupport.ChunkMultiDraw.offNanos = dev.sleep.optsupport.ChunkMultiDraw.cmdUpNanos = dev.sleep.optsupport.ChunkMultiDraw.drawNanos = 0;
+                dev.sleep.optsupport.ChunkMultiDraw.flushNanos = dev.sleep.optsupport.ChunkMultiDraw.flushDraws = dev.sleep.optsupport.ChunkMultiDraw.shadowReuses = 0;
                 shadow.collectNanos = shadow.opaqueNanos = shadow.entityNanos = shadow.translucentNanos = 0;
                 shadow.nanos = shadow.sections = shadow.draws = shadow.multiLayers = shadow.entities = shadow.blockEntities = 0;
+                System.out.println("[sleep/shaders] terrain ids: blocks " + ShaderIds.blocks + ", vertices patched " + ShaderIds.patched + " (with an id " + ShaderIds.patchedWithId + ")");
                 System.out.printf(java.util.Locale.ROOT, "[sleep/shaders] frame start: uniforms %.3f ms, clears %.3f ms%n", beginUniformNanos / 1e6 / 300, beginClearNanos / 1e6 / 300);
                 beginUniformNanos = beginClearNanos = 0;
                 System.out.printf(java.util.Locale.ROOT, "[sleep/shaders] uploads: frame values %.3f ms (%.0f calls), per draw %.3f ms (%.0f applies)%n",

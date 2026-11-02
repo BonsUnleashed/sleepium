@@ -630,6 +630,16 @@ public final class ChunkMultiDraw {
             drawReuses++;
             return true;
         }
+        // a shadow pass: its own kept lists, while the sections' contents, the camera, the shadow box's section set
+        // (its signature) and the light-facing buckets are the same (the sun turns slowly: the buckets rarely change)
+        boolean shadowReuse = allFaces && REUSE && replaces && SINGLE && ssbo();
+        LayerCache sc = SCACHE[li];
+        if (shadowReuse && sc.ver == ver && sc.x == x && sc.y == y && sc.z == z && sc.sig == shadowSignature && sc.faces == lightFaces) {
+            LISTED.addAll(sc.arenas);
+            flushAll(layer, ps, true);
+            shadowReuses++;
+            return true;
+        }
         for (SectionRenderDispatcher.RenderSection s : visible) {
             // the section's own entry slots: no emptiness test (an empty layer has no entry), no map lookups
             Object[] md = ((ChunkEntries) s).sleep$md();
@@ -675,7 +685,17 @@ public final class ChunkMultiDraw {
         } else if (!allFaces) {   // (a shadow pass's list leaves the camera's cache alone)
             lc.ver = -1;
         }
-        flushAll(layer, ps, reusable);
+        if (shadowReuse) {
+            sc.arenas.clear();
+            sc.arenas.addAll(LISTED);
+            sc.ver = ver;
+            sc.x = x;
+            sc.y = y;
+            sc.z = z;
+            sc.sig = shadowSignature;
+            sc.faces = lightFaces;
+        }
+        flushAll(layer, ps, reusable || shadowReuse);
         return true;
     }
 
@@ -685,7 +705,8 @@ public final class ChunkMultiDraw {
 
     /** A layer's last draws (single arenas keep their lists when kept) and what they were built from. */
     static final class LayerCache {
-        long ver = -1;
+        long ver = -1, sig;
+        int faces;
         double x = Double.NaN, y, z;
         final List<Arena> arenas = new ArrayList<>();
     }
@@ -705,7 +726,18 @@ public final class ChunkMultiDraw {
      * The layer's queued draws: every arena's offsets in one orphaning upload (each arena then reads its own range),
      * packed arenas first and full-format ones after, so the mode uniform is set at most twice per layer.
      */
+    public static long flushNanos, flushDraws, offNanos, cmdUpNanos, drawNanos;
+
     private static void flushAll(RenderType layer, int[] ps, boolean keep) {
+        long t0 = System.nanoTime();
+        try {
+            flushAll0(layer, ps, keep);
+        } finally {
+            flushNanos += System.nanoTime() - t0;
+        }
+    }
+
+    private static void flushAll0(RenderType layer, int[] ps, boolean keep) {
         boolean sb = ssbo();
         int target = sb ? GL43C.GL_SHADER_STORAGE_BUFFER : GL31C.GL_UNIFORM_BUFFER;
         if (uboAlign == 0) uboAlign = Math.max(16, GL11C.glGetInteger(sb ? GL43C.GL_SHADER_STORAGE_BUFFER_OFFSET_ALIGNMENT : GL31C.GL_UNIFORM_BUFFER_OFFSET_ALIGNMENT));
@@ -715,6 +747,7 @@ public final class ChunkMultiDraw {
             if (a.n == 0) continue;
             a.uboOffset = total;
             total += (16 * a.n + uboAlign - 1) / uboAlign * uboAlign;
+            flushDraws += a.n;
         }
         if (total == 0) return;
         if (staging.capacity() < total) {
@@ -723,6 +756,7 @@ public final class ChunkMultiDraw {
         }
         long st = MemoryUtil.memAddress(staging);
         for (Arena a : LISTED) if (a.n > 0) MemoryUtil.memCopy(MemoryUtil.memAddress(a.offsets), st + a.uboOffset, 16L * a.n);
+        long tOff = System.nanoTime();
         int buf = sb ? ssboBuffer() : ubo();
         GL15C.glBindBuffer(target, buf);
         // new storage each time (no wait on the previous frame's draws); a uniform block's full size past the last range
@@ -730,6 +764,8 @@ public final class ChunkMultiDraw {
         staging.limit(total).position(0);
         GL15C.glBufferSubData(target, 0, staging);
         staging.clear();
+        offNanos += System.nanoTime() - tOff;
+        long tCmd = System.nanoTime();
         boolean indirect = indirect();
         long cmdBase = 0;
         if (indirect) {
@@ -757,7 +793,9 @@ public final class ChunkMultiDraw {
                     MemoryUtil.memPutInt(p + 16, 0);
                 }
             }
+            long tUp = System.nanoTime();
             cmdBase = COMMANDS.upload(c, bytes);
+            cmdUpNanos += System.nanoTime() - tUp;
         }
         RenderSystem.AutoStorageIndexBuffer seq = RenderSystem.getSequentialBuffer(VertexFormat.Mode.QUADS);
         if (LightVolumes.ON && sb) GL30C.glBindBufferBase(GL43C.GL_SHADER_STORAGE_BUFFER, LightVolumes.BINDING, LightVolumes.buffer());
@@ -775,7 +813,9 @@ public final class ChunkMultiDraw {
                 GL30C.glBindBufferRange(target, UBO_BINDING, buf, a.uboOffset, sb ? 16L * a.n : 16L * MAX_DRAWS);
                 if (dev.sleep.DrawStats.ON) dev.sleep.DrawStats.phaseBegin(3);
                 if (indirect) {
+                    long tD = System.nanoTime();
                     GL43C.glMultiDrawElementsIndirect(GL15C.GL_TRIANGLES, seq.type().asGLType, cmdBase + a.cmdOffset, a.n, 20);
+                    drawNanos += System.nanoTime() - tD;
                     if (IndirectDiag.ON) IndirectDiag.after("chunks", seq.type().asGLType, cmdBase + a.cmdOffset, a.n, 20);
                 } else GL32C.nglMultiDrawElementsBaseVertex(GL15C.GL_TRIANGLES, a.counts, seq.type().asGLType, a.indices, a.n, a.bases);
                 if (dev.sleep.DrawStats.ON) dev.sleep.DrawStats.phaseEnd(3);
@@ -855,6 +895,10 @@ public final class ChunkMultiDraw {
     private static final double EPS = 1.0 / 64;
     /** a shadow pass draws: every face bucket (seen from the light, not the camera), no reuse of the camera's lists */
     public static boolean allFaces;
+    /** the shadow pass's section set (ShadowPass.collect: count and origins hashed) */
+    public static long shadowSignature;
+    public static long shadowReuses;
+    private static final LayerCache[] SCACHE = newCaches();
 
     /**
      * A shadow pass's draws in their own lists (every arena's draw list swapped), so the camera pass keeps its lists

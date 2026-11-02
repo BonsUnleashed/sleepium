@@ -26,6 +26,7 @@ public final class ShaderIds {
     public static IdMaps maps;
     /** the overlay slot's id (entity or block entity) and the item id + 1, while their renders run */
     public static int slot1, item1;
+    public static volatile long blocks, patched, patchedWithId;
 
     public static int overlay(int packedOverlay) {
         int id = slot1;
@@ -54,6 +55,7 @@ public final class ShaderIds {
         flush(p);
         IdMaps m = maps;
         if (m == null) return;
+        blocks++;
         int id = m.block(state) + 1;
         p.builder = builder;
         p.from = ((BufferBuilderAccessor) builder).sleep$vertices();
@@ -74,6 +76,8 @@ public final class ShaderIds {
         int n = a.sleep$vertices() - p.from;
         if (n <= 0) return;
         long last = a.sleep$vertexPointer();
+        patched += n;
+        if (p.value != 0 && (p.value & 0xFFFF) != 0) patchedWithId += n;
         int id = p.value & 0xFFFF;
         byte pad = (byte) (p.value >> 16 & 31);
         for (int i = 0; i < n; i++) {

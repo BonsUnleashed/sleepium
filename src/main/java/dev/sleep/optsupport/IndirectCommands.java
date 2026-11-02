@@ -31,7 +31,9 @@ public final class IndirectCommands {
             GL15C.glDeleteBuffers(buffer);
             buffer = GL15C.glGenBuffers();
             GL15C.glBindBuffer(GL40C.GL_DRAW_INDIRECT_BUFFER, buffer);
-            capacity = Math.max(64 << 10, Long.highestOneBit(bytes - 1) << 2);
+            // room for many frames of commands: a range rewritten while the GPU may still read it makes the driver wait
+            // (11-02: 4x one upload wrapped every frame under a shaderpack, 5000 draws: 1.5 ms of flushes)
+            capacity = Math.max(4L << 20, Long.highestOneBit(bytes - 1) << 5);
             GL44C.glBufferStorage(GL40C.GL_DRAW_INDIRECT_BUFFER, capacity, GL44C.GL_DYNAMIC_STORAGE_BIT);
             cursor = 0;
         }

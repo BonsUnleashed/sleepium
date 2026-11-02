@@ -53,7 +53,7 @@ final class ShaderPrologue {
         vsh = out.toString();
         boolean idsVs = ID_UNIFORM.matcher(vsh).find();
         vsh = ID_UNIFORM.matcher(vsh).replaceAll("int $1;");
-        boolean needFetch = attrs.contains("mc_midTexCoord") || attrs.contains("at_tangent") || attrs.contains("at_midBlock");
+        boolean needFetch = !Boolean.getBoolean("sleep.shaders.noFetch") && (attrs.contains("mc_midTexCoord") || attrs.contains("at_tangent") || attrs.contains("at_midBlock"));
         // terrain through chunk multi-draw: the section offset per draw (ChunkMultiDraw's offsets block, gl_DrawIDARB)
         boolean multi = terrain && Pattern.compile("\\bChunkOffset\\b").matcher(vsh).find();
         if (multi) {

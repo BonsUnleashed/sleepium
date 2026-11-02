@@ -112,6 +112,7 @@ final class ShadowPass {
     /** the built sections whose box the shadow volume holds */
     private void collect(ViewArea va, Vec3 cam) {
         count = 0;
+        long sig = 17;
         mvp.set(pl.uniforms.shadowProjection).mul(pl.uniforms.shadowModelView);
         float dist = pl.uniforms.shadowDistance;
         float r = 14f / dist;   // a section's half diagonal in the shadow box's units
@@ -124,7 +125,9 @@ final class ShadowPass {
             if (Math.abs(tmp.x) > 1 + r || Math.abs(tmp.y) > 1 + r || Math.abs(tmp.z) > 1 + r) continue;
             if (count == list.length) list = java.util.Arrays.copyOf(list, count * 2);
             list[count++] = s;
+            sig = sig * 31 + o.asLong();
         }
+        dev.sleep.optsupport.ChunkMultiDraw.shadowSignature = sig ^ count;
         sections += count;
     }
 
