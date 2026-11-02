@@ -30,7 +30,7 @@ public final class SleepUi {
     }
 
     /** -Dsleep.ui.shot=<dir>: a dev probe - opens the screen on the title screen, saves each tab to dir, quits */
-    private static final String SHOT = System.getProperty("sleepium.ui.shot");
+    private static final String SHOT = System.getProperty("sleep.ui.shot");
     private static int shotFrame;
 
     private static void shots() {
@@ -38,7 +38,7 @@ public final class SleepUi {
         if (!(mc.screen instanceof net.minecraft.client.gui.screens.TitleScreen) && !(mc.screen instanceof SleepScreen)
                 && !(mc.screen instanceof OptionsScreen) || mc.getOverlay() != null) return;   // (not while resources reload)
         int f = shotFrame++;
-        String lang = System.getProperty("sleepium.ui.lang");
+        String lang = System.getProperty("sleep.ui.lang");
         if (f == 10 && lang != null) {
             mc.getLanguageManager().setSelected(lang);
             mc.options.languageCode = lang;
@@ -74,7 +74,7 @@ public final class SleepUi {
      * -Dsleep.ui.switchTest=<pack>,<dir>: a dev probe of switching packs live in a world - the pack at 3 s, none at 12 s,
      * the pack again at 20 s; a screenshot before each switch and at 28 s
      */
-    private static final String SWITCH = System.getProperty("sleepium.ui.switchTest");
+    private static final String SWITCH = System.getProperty("sleep.ui.switchTest");
     private static long levelAt;
     private static int step;
 
