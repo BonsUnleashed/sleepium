@@ -42,6 +42,22 @@ Client on real Create worlds (RTX 4070 SUPER, 1280×720, Flywheel on, default se
 
 Experimental, off by default: Create's kinetic parts drawn by Sleepium instead of Flywheel - 2 181 fps against Flywheel's 1 523 on a scene of driven lines and belts.
 
+## Against other optimisation mods
+
+Server, Intel N100, each mod alone, speed-up over vanilla (vanilla MSPT / the mod's MSPT):
+
+| scene | Lithium 0.15.4 | Moonrise beta.15 | Sleepium |
+|---|---:|---:|---:|
+| 4 000 item stacks | ×6.8 | ×10.9 | **×13.6** |
+| 1 024 idle hoppers | ×3.2 | ×1.0 | **×3.7** |
+| 200 cows crammed | ×1.3 | ×1.5 | **×2.1** |
+| 300 animals + 50 villagers | ×1.4 | ×1.3 | **×1.9** |
+| 120 villagers | ×1.4 | ×0.9 | **×1.5** |
+| minecarts | ×3.1 | **×4.2** | ×3.6 |
+| redstone clocks | **×1.5** | ×1.4 | ×1.2 |
+
+Sleepium leads in six of twelve scenes and is level in one; Moonrise is ahead on carts, pistons and crops, Lithium on fluids and redstone. Client: against Sodium 0.8.13 terrain is on par (1 762–1 912 vs 1 697–1 827 fps) and the entity scene about 10× faster (1 500–1 680 vs 146 fps). Running Sleepium together with these mods is not tested yet.
+
 ## What it does
 
 - **Sleeping block entities and entities**: idle ticks skipped and woken at the exact tick vanilla would act.

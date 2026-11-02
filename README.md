@@ -397,7 +397,29 @@ chunk drops from 71.9 ms and 19.1 MB of garbage to 35.5 ms. On the N100, 12 → 
   p50. Horizon is ahead on mobs and
   villagers partly because of its data layout and partly because some of its shortcuts are not vanilla-exact. Sleepium
   keeps the vanilla game and its mods.
-- **Lithium, C2ME, Moonrise, ModernFix, FerriteCore**: no A/B has been run yet.
+- **Lithium 0.15.4 and Moonrise 0.1.0-beta.15** (N100, 2026-11-01): a production NeoForge server, each mod alone in
+  the mods folder, the scene groups in rotating order; mean ms per tick (1–3 passes per scene, the 11-01 build).
+
+  | scene | vanilla | Lithium | Moonrise | Sleepium |
+  |---|---:|---:|---:|---:|
+  | items | 115.05 | 17.00 | 10.53 | **8.48** |
+  | hoppers | 2.57 | 0.80 | 2.67 | **0.70** |
+  | cramming | 13.28 | 10.57 | 9.10 | **6.47** |
+  | mobs | 19.07 | 13.65 | 14.88 | **10.12** |
+  | villagers | 15.82 | 11.43 | 18.38 | **10.25** |
+  | smelters | 3.73 | 4.08 | 3.45 | **2.52** |
+  | furnaces | 1.63 | 1.15 | **0.77** | **0.77** |
+  | carts | 37.28 | 12.17 | **8.96** | 10.35 |
+  | pistons | 7.89 | 6.95 | **3.99** | 4.22 |
+  | crops | 0.67 | 0.71 | **0.30** | 0.47 |
+  | fluids | 10.33 | **4.88** | 6.00 | 5.43 |
+  | redstone | 12.03 | **8.10** | 8.65 | 9.94 |
+
+  Sleepium is ahead in six scenes and level in one; Moonrise leads on carts, pistons and crops (its chunk system and
+  collisions), Lithium on fluids and redstone. Sleepium together with them has not been tested yet.
+
+  <p align="center"><img src="art/gallery/vs-lithium-moonrise.png" width="720" alt="Server speed-up over vanilla: Lithium, Moonrise, Sleepium"></p>
+- **C2ME, ModernFix, FerriteCore**: no A/B has been run yet.
 
 ## What is inside, and why
 
