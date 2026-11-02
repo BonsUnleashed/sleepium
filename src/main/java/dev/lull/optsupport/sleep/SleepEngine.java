@@ -662,6 +662,13 @@ public final class SleepEngine {
         return sb.toString();
     }
 
+    /** the settings screen's overview (server thread, once a second): {tracked, asleep now, ticks skipped so far} */
+    public static long[] snapshot() {
+        int asleep = 0;
+        for (Sleeper s : ALL) if (s.state == State.ASLEEP) asleep++;
+        return new long[] {ALL.size(), asleep, skipped + fastSkipped};
+    }
+
     public static String report() {
         Map<String, int[]> byType = new TreeMap<>();
         int asleep = 0;

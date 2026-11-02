@@ -10,9 +10,12 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.TreeMap;
+import java.util.function.Supplier;
 import java.util.stream.Stream;
 import net.minecraft.ChatFormatting;
+import net.minecraft.SharedConstants;
 import net.minecraft.Util;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
@@ -20,44 +23,33 @@ import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.ContainerObjectSelectionList;
 import net.minecraft.client.gui.components.EditBox;
-import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.gui.components.events.GuiEventListener;
 import net.minecraft.client.gui.narration.NarratableEntry;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.CommonComponents;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
+import net.minecraft.util.FormattedCharSequence;
 
 /**
- * The sleep engine's settings: features (each a group of engine flags, switched together), the shaderpack (switched
- * live), and every flag one by one with search. Changes go to config/sleep.properties on Done; flags read at start
- * say "restart" until the game restarts. Flags given on the launch line are shown locked.
+ * Sleepium's settings: a sidebar of pages - the overview (live numbers: frames, the server's tick, what sleeps, the
+ * shaderpack; presets; the feature groups; a report to copy), one page per feature group, the shaderpacks, every flag
+ * with search - and under the page a panel describing what the pointer is on. Changes go to
+ * config/sleepium.properties on Done; flags read at start say "restart". Launch flags are shown locked; flags a
+ * plugin switches by another flag are shown as part of it.
  */
 public final class SleepScreen extends Screen {
-    private static final int TAB_FEATURES = 0, TAB_SHADERS = 1, TAB_FLAGS = 2;
-    private static int tab = TAB_FEATURES;   // remembered while the game runs
+    private static final int OVERVIEW = 0, SHADERS = 100, FLAGS = 101;
+    private static final int SIDEBAR_W = 116, TOP = 26, BOTTOM = 30, DESC_H = 42;
+    private static int page = OVERVIEW;   // remembered while the game runs
     private final Screen parent;
     private final Map<String, Boolean> desired = new HashMap<>();
     private String pack;
     private final String packAtOpen;
-    private String filter = "", groupFilter;
-    private OptList list;
-
-    /** opened on a tab (the dev shots) */
-    SleepScreen(Screen parent, int tab) {
-        this(parent);
-        SleepScreen.tab = tab;
-    }
-
-    /** the dev probe (-Dsleep.ui.saveTest): a flag switched as its button would, then Done */
-    void probeToggleAndClose(String key) {
-        desired.put(key, !desired.get(key));
-        onClose();
-    }
-
-    Screen parent() {
-        return parent;
-    }
+    private String filter = "";
+    private OptList side, list;
+    private Component hoverTip, flash;
+    private long flashUntil;
 
     public SleepScreen(Screen parent) {
         super(Component.translatable("sleepium.ui.title"));
@@ -71,25 +63,38 @@ public final class SleepScreen extends Screen {
         packAtOpen = pack;
     }
 
+    /** opened on a page (the dev shots: 0 overview, 1 the first group, 2 shaders, 3 flags) */
+    SleepScreen(Screen parent, int shot) {
+        this(parent);
+        page = switch (shot) {
+            case 1 -> 1;
+            case 2 -> SHADERS;
+            case 3 -> FLAGS;
+            default -> OVERVIEW;
+        };
+    }
+
+    /** the dev probe (-Dsleep.ui.saveTest): a flag switched as its button would, then Done */
+    void probeToggleAndClose(String key) {
+        desired.put(key, !desired.get(key));
+        onClose();
+    }
+
+    Screen parent() {
+        return parent;
+    }
+
     // ------------------------------------------------------------------ layout
 
     @Override
     protected void init() {
-        int cx = width / 2;
-        String[] tabs = {"sleepium.ui.tab.features", "sleepium.ui.tab.shaders", "sleepium.ui.tab.flags"};
-        for (int i = 0; i < tabs.length; i++) {
-            final int t = i;
-            Button b = Button.builder(Component.translatable(tabs[i]), x -> {
-                tab = t;
-                if (t != TAB_FLAGS) groupFilter = null;
-                rebuildWidgets();
-            }).bounds(cx - 155 + i * 105, 22, 100, 20).build();
-            b.active = tab != i;
-            addRenderableWidget(b);
-        }
-        int listTop = 48;
-        if (tab == TAB_FLAGS) {
-            EditBox search = new EditBox(font, cx - 100, 48, 200, 18, Component.translatable("sleepium.ui.search"));
+        side = new OptList(minecraft, SIDEBAR_W, height - TOP - BOTTOM, TOP, 22, SIDEBAR_W - 12);
+        side.setX(0);
+        addRenderableWidget(side);
+        sidebar();
+        int contentTop = TOP;
+        if (page == FLAGS) {
+            EditBox search = new EditBox(font, SIDEBAR_W + 10, TOP, width - SIDEBAR_W - 20, 18, Component.translatable("sleepium.ui.search"));
             search.setHint(Component.translatable("sleepium.ui.search").withStyle(ChatFormatting.DARK_GRAY));
             search.setValue(filter);
             search.setResponder(s -> {
@@ -97,78 +102,197 @@ public final class SleepScreen extends Screen {
                 fill();
             });
             addRenderableWidget(search);
-            listTop = 72;
+            contentTop = TOP + 24;
         }
-        list = new OptList(minecraft, width, height - listTop - 56, listTop);
+        list = new OptList(minecraft, width - SIDEBAR_W, height - contentTop - BOTTOM - DESC_H, contentTop, 24, Math.min(400, width - SIDEBAR_W - 24));
+        list.setX(SIDEBAR_W);
         addRenderableWidget(list);
         fill();
+        int bx = SIDEBAR_W + (width - SIDEBAR_W) / 2;
         addRenderableWidget(Button.builder(Component.translatable("sleepium.ui.reset"), x -> {
-            for (SleepOptions.Option o : SleepOptions.all()) if (!SleepConfig.launchFlag(o.key())) desired.put(o.key(), o.byDefault());
+            preset("recommended");
             fill();
-        }).bounds(cx - 155, height - 28, 150, 20).tooltip(Tooltip.create(Component.translatable("sleepium.ui.reset.tooltip"))).build());
-        addRenderableWidget(Button.builder(CommonComponents.GUI_DONE, x -> onClose()).bounds(cx + 5, height - 28, 150, 20).build());
+        }).bounds(bx - 154, height - 26, 150, 20).build());
+        addRenderableWidget(Button.builder(CommonComponents.GUI_DONE, x -> onClose()).bounds(bx + 4, height - 26, 150, 20).build());
+    }
+
+    private void sidebar() {
+        side.clear();
+        sideEntry(OVERVIEW, Component.translatable("sleepium.ui.page.overview"));
+        int i = 1;
+        for (String g : SleepOptions.GROUPS) sideEntry(i++, Component.translatable("sleepium.ui.side." + g));
+        sideEntry(SHADERS, Component.translatable("sleepium.ui.side.shaders"));
+        sideEntry(FLAGS, Component.translatable("sleepium.ui.side.flags"));
+    }
+
+    private void sideEntry(int p, Component name) {
+        Button b = Button.builder(name, x -> {
+            page = p;
+            rebuildWidgets();
+        }).size(SIDEBAR_W - 16, 20).build();
+        b.active = page != p;
+        side.add(new Row(null, null, null, b));
     }
 
     private void fill() {
         list.clear();
-        switch (tab) {
-            case TAB_FEATURES -> fillFeatures();
-            case TAB_SHADERS -> fillShaders();
-            default -> fillFlags();
-        }
+        if (page == OVERVIEW) fillOverview();
+        else if (page == SHADERS) fillShaders();
+        else if (page == FLAGS) fillFlags(null);
+        else fillFlags(SleepOptions.GROUPS[page - 1]);
     }
 
-    private void fillFeatures() {
+    // ------------------------------------------------------------------ the overview
+
+    private void fillOverview() {
+        for (int i = 0; i < 5; i++) {
+            final int k = i;
+            list.add(new Row(() -> Component.literal(SleepStats.lines()[k]).withStyle(k == 0 ? ChatFormatting.WHITE : ChatFormatting.GRAY), null,
+                    Component.translatable("sleepium.ui.stats.tip"), new AbstractWidget[0]));
+        }
+        // the presets
+        List<AbstractWidget> ps = new ArrayList<>();
+        for (String p : new String[] {"maximum", "recommended", "compatible", "off"}) {
+            Button b = Button.builder(Component.translatable("sleepium.ui.preset." + p), x -> preset(p)).size(68, 20)
+                    .tooltip(net.minecraft.client.gui.components.Tooltip.create(Component.translatable("sleepium.ui.preset." + p + ".tip"))).build();
+            ps.add(b);
+        }
+        list.add(new Row(null, () -> {
+            String now = currentPreset();
+            for (int i = 0; i < ps.size(); i++) ps.get(i).active = !(new String[] {"maximum", "recommended", "compatible", "off"}[i]).equals(now);
+            return null;
+        }, Component.translatable("sleepium.ui.presets.tip"), ps.toArray(new AbstractWidget[0])));
         for (var e : SleepOptions.byGroup().entrySet()) {
-            // a feature is its tested flags; the experimental ones (off by default) are switched one by one under All flags
-            List<SleepOptions.Option> opts = e.getValue().stream().filter(o -> o.byDefault() && o.partOf().isEmpty()).toList();
+            List<SleepOptions.Option> opts = own(e.getValue()).stream().filter(SleepOptions.Option::byDefault).toList();
             if (opts.isEmpty()) continue;
-            String g = e.getKey();
             Button toggle = Button.builder(Component.empty(), x -> {
                 boolean allOn = opts.stream().filter(o -> !SleepConfig.launchFlag(o.key())).allMatch(o -> desired.get(o.key()));
                 for (SleepOptions.Option o : opts) if (!SleepConfig.launchFlag(o.key())) desired.put(o.key(), !allOn);
             }).size(70, 20).build();
-            Button details = Button.builder(Component.translatable("sleepium.ui.details"), x -> {
-                tab = TAB_FLAGS;
-                groupFilter = g;
-                filter = "";
-                rebuildWidgets();
-            }).size(60, 20).build();
-            Component label = Component.translatable("sleepium.ui.group." + g);
-            list.add(new Row(label, () -> {
+            String g = e.getKey();
+            list.add(new Row(() -> Component.translatable("sleepium.ui.group." + g), () -> {
                 long on = opts.stream().filter(o -> desired.get(o.key())).count();
-                toggle.setMessage(on == opts.size() ? on(true) : on == 0 ? on(false)
-                        : Component.translatable("sleepium.ui.partly").withStyle(ChatFormatting.YELLOW));
+                toggle.setMessage(on == opts.size() ? on(true) : on == 0 ? on(false) : Component.translatable("sleepium.ui.partly").withStyle(ChatFormatting.YELLOW));
                 return Component.translatable("sleepium.ui.count", on, opts.size()).withStyle(ChatFormatting.GRAY);
-            }, Component.translatable("sleepium.ui.group." + g + ".desc"), toggle, details));
+            }, Component.translatable("sleepium.ui.group." + g + ".desc"), toggle));
+        }
+        Button hud = Button.builder(Component.empty(), x -> SleepStats.hud = !SleepStats.hud).size(70, 20).build();
+        list.add(new Row(() -> Component.translatable("sleepium.ui.hud"), () -> {
+            hud.setMessage(on(SleepStats.hud));
+            return null;
+        }, Component.translatable("sleepium.ui.hud.tip"), hud));
+        Button copy = Button.builder(Component.translatable("sleepium.ui.report"), x -> {
+            minecraft.keyboardHandler.setClipboard(report());
+            flash = Component.translatable("sleepium.ui.report.done").withStyle(ChatFormatting.GREEN);
+            flashUntil = System.currentTimeMillis() + 2500;
+        }).size(110, 20).build();
+        list.add(new Row(() -> Component.translatable("sleepium.ui.report.label"), null, Component.translatable("sleepium.ui.report.tip"), copy));
+    }
+
+    private static List<SleepOptions.Option> own(List<SleepOptions.Option> opts) {
+        return opts.stream().filter(o -> o.partOf().isEmpty()).toList();
+    }
+
+    private static final Set<String> CLIENT_RENDER = Set.of("chunks", "entities_render", "lighting");
+
+    /**
+     * maximum: the tested set and the experimental flags; recommended: the tested set; compatible: the tested set but
+     * the client's rendering groups (for other rendering mods); off: vanilla. Launch flags are left as they are.
+     */
+    private void preset(String p) {
+        for (SleepOptions.Option o : SleepOptions.all()) {
+            if (!o.partOf().isEmpty() || SleepConfig.launchFlag(o.key())) continue;
+            boolean v = switch (p) {
+                case "maximum" -> true;
+                case "compatible" -> o.byDefault() && !CLIENT_RENDER.contains(o.group());
+                case "off" -> false;
+                default -> o.byDefault();
+            };
+            desired.put(o.key(), v);
         }
     }
 
-    private void fillFlags() {
-        String f = filter.toLowerCase(Locale.ROOT);
+    private String currentPreset() {
+        outer:
+        for (String p : new String[] {"maximum", "recommended", "compatible", "off"}) {
+            for (SleepOptions.Option o : SleepOptions.all()) {
+                if (!o.partOf().isEmpty() || SleepConfig.launchFlag(o.key())) continue;
+                boolean v = switch (p) {
+                    case "maximum" -> true;
+                    case "compatible" -> o.byDefault() && !CLIENT_RENDER.contains(o.group());
+                    case "off" -> false;
+                    default -> o.byDefault();
+                };
+                if (desired.get(o.key()) != v) continue outer;
+            }
+            return p;
+        }
+        return null;
+    }
+
+    /** for a bug report: versions, the machine, the pack, the flags changed from the defaults (clipboard) */
+    private String report() {
+        StringBuilder sb = new StringBuilder("Sleepium report\n");
+        var sleepium = net.neoforged.fml.ModList.get().getModContainerById("sleepium");
+        sb.append("Sleepium ").append(sleepium.map(c -> c.getModInfo().getVersion().toString()).orElse("?")).append(", Minecraft ")
+                .append(SharedConstants.getCurrentVersion().getName()).append(", NeoForge ")
+                .append(net.neoforged.fml.ModList.get().getModContainerById("neoforge").map(c -> c.getModInfo().getVersion().toString()).orElse("?")).append('\n');
+        sb.append("Java ").append(System.getProperty("java.version")).append(", ").append(System.getProperty("os.name")).append(' ')
+                .append(System.getProperty("os.version")).append(", ").append(Runtime.getRuntime().availableProcessors()).append(" cores, heap ")
+                .append(Runtime.getRuntime().maxMemory() >> 20).append(" MB\n");
+        sb.append("GPU ").append(SleepStats.gpu()).append(", GL ").append(org.lwjgl.opengl.GL11.glGetString(org.lwjgl.opengl.GL11.GL_VERSION)).append('\n');
+        sb.append("Shaderpack: ").append(SleepStats.shaderState()).append('\n');
+        sb.append("Mods: ").append(net.neoforged.fml.ModList.get().size()).append('\n');
+        for (String l : SleepStats.lines()) sb.append(l).append('\n');
+        sb.append("Changed flags:");
+        int n = 0;
         for (SleepOptions.Option o : SleepOptions.all()) {
-            if (groupFilter != null && !groupFilter.equals(o.group())) continue;
-            if (!f.isEmpty() && !o.key().toLowerCase(Locale.ROOT).contains(f) && !o.description().toLowerCase(Locale.ROOT).contains(f)) continue;
+            boolean now = Boolean.parseBoolean(System.getProperty(o.key()));
+            if (o.partOf().isEmpty() && now != o.byDefault()) {
+                sb.append(' ').append(o.key()).append('=').append(now).append(SleepConfig.launchFlag(o.key()) ? " (launch)" : "");
+                n++;
+            }
+        }
+        if (n == 0) sb.append(" none");
+        return sb.append('\n').toString();
+    }
+
+    // ------------------------------------------------------------------ flags (a group's, or all with search)
+
+    private void fillFlags(String group) {
+        String f = filter.toLowerCase(Locale.ROOT);
+        List<SleepOptions.Option> opts = new ArrayList<>(SleepOptions.all());
+        if (group != null) {
+            opts.removeIf(o -> !group.equals(o.group()));
+            opts.sort((a, b) -> Boolean.compare(!a.partOf().isEmpty(), !b.partOf().isEmpty()));   // its own flags first
+            list.add(new Row(() -> Component.translatable("sleepium.ui.group." + group).withStyle(ChatFormatting.BOLD), null,
+                    Component.translatable("sleepium.ui.group." + group + ".desc"), new AbstractWidget[0]));
+        }
+        for (SleepOptions.Option o : opts) {
+            if (group == null && !f.isEmpty() && !o.key().toLowerCase(Locale.ROOT).contains(f) && !o.description().toLowerCase(Locale.ROOT).contains(f))
+                continue;
             boolean locked = SleepConfig.launchFlag(o.key());
-            // a mixin its plugin switches by another flag: shown with that flag's state, switched there
             boolean part = !o.partOf().isEmpty();
             Button toggle = Button.builder(Component.empty(), x -> desired.put(o.key(), !desired.get(o.key()))).size(70, 20).build();
             toggle.active = !locked && !part;
-            MutableComponent tip = Component.literal(o.key()).withStyle(ChatFormatting.GRAY).append("\n")
-                    .append(o.description().isEmpty() ? Component.translatable("sleepium.ui.nodesc") : Component.literal(o.description())).append("\n")
-                    .append(Component.translatable(o.byDefault() ? "sleepium.ui.default.on" : "sleepium.ui.default.off").withStyle(ChatFormatting.DARK_GRAY));
-            if (locked) tip.append("\n").append(Component.translatable("sleepium.ui.locked", o.key()).withStyle(ChatFormatting.GOLD));
+            MutableComponent tip = Component.literal(o.shortName()).withStyle(ChatFormatting.WHITE).append(" ")
+                    .append(Component.literal(o.key()).withStyle(ChatFormatting.DARK_GRAY)).append("\n")
+                    .append(o.description().isEmpty() ? Component.translatable("sleepium.ui.nodesc") : Component.literal(o.description()))
+                    .append(" ").append(Component.translatable(o.byDefault() ? "sleepium.ui.default.on" : "sleepium.ui.default.off").withStyle(ChatFormatting.DARK_GRAY));
+            if (locked) tip.append(" ").append(Component.translatable("sleepium.ui.locked", o.key()).withStyle(ChatFormatting.GOLD));
             String parts = String.join(", ", o.partOf().stream().map(k -> k.substring(k.lastIndexOf('.') + 1).replaceAll("Mixin$", "")).toList());
-            if (part) tip.append("\n").append(Component.translatable("sleepium.ui.partof.tip", parts).withStyle(ChatFormatting.AQUA));
+            if (part) tip.append(" ").append(Component.translatable("sleepium.ui.partof.tip", parts).withStyle(ChatFormatting.AQUA));
             MutableComponent label = Component.literal(o.shortName());
             if (part) label.append(Component.translatable("sleepium.ui.partof", parts).withStyle(ChatFormatting.DARK_GRAY));
             if (!o.byDefault()) label.append(Component.translatable("sleepium.ui.experimental").withStyle(ChatFormatting.DARK_AQUA));
-            list.add(new Row(label, () -> {
+            list.add(new Row(() -> label, () -> {
                 toggle.setMessage(on(part ? effective(o.partOf().get(0)) : desired.get(o.key())));
                 return !part && restartNeeded(o.key()) ? Component.translatable("sleepium.ui.restart.short").withStyle(ChatFormatting.YELLOW) : null;
             }, tip, toggle));
         }
     }
+
+    // ------------------------------------------------------------------ shaderpacks
 
     private void fillShaders() {
         Path dir = minecraft.gameDirectory.toPath().resolve("shaderpacks");
@@ -188,16 +312,33 @@ public final class SleepScreen extends Screen {
             }
             Util.getPlatform().openPath(dir);
         }).size(150, 20).build();
-        list.add(new Row(packs.isEmpty() ? Component.translatable("sleepium.ui.shaders.empty").withStyle(ChatFormatting.GRAY) : Component.empty(), null,
+        list.add(new Row(() -> packs.isEmpty() ? Component.translatable("sleepium.ui.shaders.empty").withStyle(ChatFormatting.GRAY) : Component.empty(), null,
                 Component.translatable("sleepium.ui.shaders.note"), folder));
     }
 
     private Row packRow(String name, Component label) {
         Button use = Button.builder(Component.empty(), x -> {
             pack = name;
-            ShaderPipeline.request(name);   // live: from the next frame, the chunks rebuilt for it
-        }).size(90, 20).build();
-        return new Row(label, () -> {
+            ShaderPipeline.request(name);   // live: prepared over frames, then on
+        }).size(80, 20).build();
+        if (name != null) {
+            Button opts = Button.builder(Component.translatable("sleepium.ui.packopts.open"), x -> {
+                try {
+                    minecraft.setScreen(new PackOptionsScreen(this, dev.lull.shaders.PackScreenModel.load(minecraft.gameDirectory.toPath(), name,
+                            minecraft.getLanguageManager().getSelected())));
+                } catch (Exception ex) {
+                    System.out.println("[sleep/ui] pack options of " + name + ": " + ex);
+                }
+            }).size(70, 20).build();
+            return new Row(() -> label, () -> {
+                boolean selected = name.equals(pack);
+                use.active = !selected;
+                use.setMessage(selected ? Component.translatable("sleepium.ui.shaders.selected").withStyle(ChatFormatting.GREEN)
+                        : Component.translatable("sleepium.ui.shaders.use"));
+                return null;
+            }, Component.translatable("sleepium.ui.shaders.note"), opts, use);
+        }
+        return new Row(() -> label, () -> {
             boolean selected = name == null ? pack == null : name.equals(pack);
             use.active = !selected;
             use.setMessage(selected ? Component.translatable("sleepium.ui.shaders.selected").withStyle(ChatFormatting.GREEN)
@@ -224,12 +365,24 @@ public final class SleepScreen extends Screen {
 
     @Override
     public void render(GuiGraphics g, int mouseX, int mouseY, float partialTick) {
+        hoverTip = null;
         super.render(g, mouseX, mouseY, partialTick);
-        g.drawCenteredString(font, title, width / 2, 8, 0xFFFFFF);
+        g.drawString(font, title, 8, 9, 0xFFFFFF);
+        g.fill(SIDEBAR_W, TOP, SIDEBAR_W + 1, height - BOTTOM, 0x60FFFFFF);
+        // the description panel: what the pointer is on
+        int x0 = SIDEBAR_W + 10, y0 = height - BOTTOM - DESC_H + 4, w = width - SIDEBAR_W - 20;
+        g.fill(x0 - 4, y0 - 3, x0 + w + 4, height - BOTTOM - 2, 0x50000000);
+        Component desc = hoverTip;
         long n = SleepOptions.all().stream().filter(o -> o.partOf().isEmpty() && restartNeeded(o.key())).count();
-        if (n > 0) g.drawCenteredString(font, Component.translatable("sleepium.ui.restart", n), width / 2, height - 44, 0xFFFF55);
-        else if (tab == TAB_SHADERS && pack != null && !pack.equals(ShaderPipeline.currentName()) && !pack.equals(packAtOpen))
-            g.drawCenteredString(font, Component.translatable("sleepium.ui.shaders.loading"), width / 2, height - 44, 0xAAAAAA);
+        if (desc == null && flash != null && System.currentTimeMillis() < flashUntil) desc = flash;
+        if (desc == null && n > 0) desc = Component.translatable("sleepium.ui.restart", n).withStyle(ChatFormatting.YELLOW);
+        if (desc == null) desc = Component.translatable("sleepium.ui.hover").withStyle(ChatFormatting.DARK_GRAY);
+        int y = y0;
+        for (FormattedCharSequence line : font.split(desc, w)) {
+            if (y > height - BOTTOM - 10) break;
+            g.drawString(font, line, x0, y, 0xE0E0E0);
+            y += 10;
+        }
     }
 
     @Override
@@ -249,14 +402,19 @@ public final class SleepScreen extends Screen {
         }
         if (pack != null) out.put("sleep.shaders", pack);
         else out.remove("sleep.shaders");
+        if (SleepStats.hud) out.put("sleep.ui.hud", "true");
+        else out.remove("sleep.ui.hud");
         SleepConfig.save(out);
     }
 
-    // ------------------------------------------------------------------ the list
+    // ------------------------------------------------------------------ the lists
 
     private static final class OptList extends ContainerObjectSelectionList<Row> {
-        OptList(Minecraft mc, int width, int height, int y) {
-            super(mc, width, height, y, 24);
+        private final int rowWidth;
+
+        OptList(Minecraft mc, int width, int height, int y, int itemHeight, int rowWidth) {
+            super(mc, width, height, y, itemHeight);
+            this.rowWidth = rowWidth;
         }
 
         void add(Row r) {
@@ -270,22 +428,22 @@ public final class SleepScreen extends Screen {
 
         @Override
         public int getRowWidth() {
-            return Math.min(420, width - 40);
+            return rowWidth;
         }
 
         @Override
         protected int getScrollbarPosition() {
-            return width / 2 + getRowWidth() / 2 + 6;
+            return getX() + width - 6;
         }
     }
 
-    /** a label (and a status line computed each frame, which also updates the buttons), its tooltip, buttons at the right */
+    /** a label (computed each frame, as the status line beside it, which also updates the buttons), a description, buttons at the right */
     private final class Row extends ContainerObjectSelectionList.Entry<Row> {
-        private final Component label, tip;
-        private final java.util.function.Supplier<Component> status;
+        private final Supplier<Component> label, status;
+        private final Component tip;
         private final List<AbstractWidget> widgets;
 
-        Row(Component label, java.util.function.Supplier<Component> status, Component tip, AbstractWidget... widgets) {
+        Row(Supplier<Component> label, Supplier<Component> status, Component tip, AbstractWidget... widgets) {
             this.label = label;
             this.status = status;
             this.tip = tip;
@@ -296,6 +454,7 @@ public final class SleepScreen extends Screen {
         public void render(GuiGraphics g, int index, int top, int left, int width, int height, int mouseX, int mouseY, boolean hovering, float partialTick) {
             Component st = status == null ? null : status.get();
             int x = left + width;
+            if (label == null && widgets.size() == 1) x = left + (width + widgets.get(0).getWidth()) / 2;   // a sidebar button: centred
             for (int i = widgets.size() - 1; i >= 0; i--) {
                 AbstractWidget w = widgets.get(i);
                 x -= w.getWidth();
@@ -305,9 +464,13 @@ public final class SleepScreen extends Screen {
                 x -= 4;
             }
             int textRight = x - 4;
-            g.drawString(font, label, left + 2, top + 6, 0xFFFFFF);
+            if (label != null) {
+                Component l = label.get();
+                int room = textRight - left - 2 - (st == null ? 0 : font.width(st) + 6);
+                g.drawString(font, font.width(l) > room ? Component.literal(font.substrByWidth(l, Math.max(0, room - 6)).getString() + "…") : l, left + 2, top + 6, 0xFFFFFF);
+            }
             if (st != null) g.drawString(font, st, textRight - font.width(st), top + 6, 0xAAAAAA);
-            if (tip != null && hovering && mouseX < textRight) setTooltipForNextRenderPass(tip);
+            if (tip != null && hovering) hoverTip = tip;
         }
 
         @Override
