@@ -450,7 +450,9 @@ public final class ChunkMultiDraw {
 
     /** The vanilla buffer is not filled for arena layers (no duplicate VRAM) while the layer's shader is patched. */
     public static boolean replacesVanilla(RenderType layer) {
-        return ACTIVE && !KEEP_VANILLA && PATCHED.size() == SUPPORTED.size();
+        // a shaderpack (sleep's pipeline) draws terrain with its own programs: vanilla's per-section buffers until
+        // the pack's terrain program takes the multi-draw path too
+        return ACTIVE && !KEEP_VANILLA && PATCHED.size() == SUPPORTED.size() && !dev.sleep.shaders.ShaderPipeline.active;
     }
 
     /**

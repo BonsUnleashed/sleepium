@@ -43,3 +43,5 @@ config="sleep-flywheel.mixins.json"
 config="sleep-catnip.mixins.json"
 [[mixins]]
 config="sleep-veil.mixins.json"
+[[mixins]]
+config="sleep-shaders.mixins.json"

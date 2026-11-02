@@ -58,6 +58,8 @@ public final class PartBatch {
     private static Boolean capable;
 
     public static boolean capable() {
+        // a shaderpack (sleep's pipeline) draws with its own programs: parts take vanilla's way until they feed it
+        if (dev.sleep.shaders.ShaderPipeline.active) return false;
         Boolean c = capable;
         if (c == null) {
             GLCapabilities caps = GL.getCapabilities();

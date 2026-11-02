@@ -56,6 +56,7 @@ public final class SleepMod {
                     e -> {
                         dev.sleep.optsupport.RenderCache.frame();
                         dev.sleep.shaders.ShaderPackCompileTest.maybeRun();
+                        dev.sleep.shaders.ShaderPipeline.loadConfigured();
                     });
         }
     }

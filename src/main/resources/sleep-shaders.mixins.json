@@ -1,0 +1,17 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "dev.sleep.shadermixin",
+  "plugin": "dev.sleep.shadermixin.ShaderMixinPlugin",
+  "compatibilityLevel": "JAVA_21",
+  "client": [
+    "ShaderGameRendererMixin",
+    "ShaderLevelMixin",
+    "ShaderProgramCacheAccessor",
+    "ShaderSelectMixin",
+    "ShaderTargetMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}
