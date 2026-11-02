@@ -198,29 +198,44 @@ public final class MixinTouch {
                     com.google.gson.JsonObject o = com.google.gson.JsonParser.parseString(java.nio.file.Files.readString(json)).getAsJsonObject();
                     if (!o.has("package")) continue;
                     String pkg = o.get("package").getAsString();
+                    if (pkg.startsWith("dev.lull") || pkg.startsWith("dev.probe")) continue;
                     for (String key : new String[] {"mixins", "client", "server"}) {
                         if (!o.has(key) || !o.get(key).isJsonArray()) continue;
                         for (var e : o.getAsJsonArray(key)) {
-                            String cls = pkg + "." + e.getAsString();
-                            if (cls.startsWith("dev.lull.") || cls.startsWith("dev.probe.")) continue;
-                            java.nio.file.Path bytes = file.findResource(cls.replace('.', '/') + ".class");
-                            if (bytes == null || !java.nio.file.Files.exists(bytes)) continue;
-                            ClassNode cn = new ClassNode();
-                            new org.objectweb.asm.ClassReader(java.nio.file.Files.readAllBytes(bytes)).accept(cn, org.objectweb.asm.ClassReader.SKIP_CODE);
-                            Set<String> methods = new HashSet<>();
-                            collect(cn, methods);
-                            List<String> reds = redirectKeys(cn), ows = overwriteNames(cn);
-                            for (String target : targets(cn)) {
-                                m.computeIfAbsent(target, k -> new HashSet<>()).addAll(methods);
-                                if (!reds.isEmpty()) REDIRECTS.computeIfAbsent(target, k -> new HashSet<>()).addAll(reds);
-                                if (!ows.isEmpty()) OVERWRITES.computeIfAbsent(target, k -> new HashSet<>()).addAll(ows);
-                            }
+                            java.nio.file.Path bytes = file.findResource((pkg + "." + e.getAsString()).replace('.', '/') + ".class");
+                            if (bytes != null && java.nio.file.Files.exists(bytes)) indexClass(java.nio.file.Files.readAllBytes(bytes), m);
                         }
+                    }
+                    // a config plugin may add mixins of its package the lists do not name (its getMixins: Embeddium's
+                    // lists are empty): every @Mixin class under the package counts (one the plugin then declines too)
+                    if (o.has("plugin")) {
+                        java.nio.file.Path root = file.findResource(pkg.replace('.', '/'));
+                        if (root != null && java.nio.file.Files.isDirectory(root))
+                            try (var walk = java.nio.file.Files.walk(root)) {
+                                for (java.nio.file.Path c : (Iterable<java.nio.file.Path>) walk::iterator)
+                                    if (c.toString().endsWith(".class")) indexClass(java.nio.file.Files.readAllBytes(c), m);
+                            }
                     }
                 }
             }
         } catch (Throwable t) {
             System.out.println("[sleep/opt] foreign mixin index (mod files) incomplete: " + t);
+        }
+    }
+
+    /** One foreign mixin class's touches, by its target classes (a class without @Mixin adds nothing). */
+    private static void indexClass(byte[] bytes, Map<String, Set<String>> m) {
+        ClassNode cn = new ClassNode();
+        new org.objectweb.asm.ClassReader(bytes).accept(cn, org.objectweb.asm.ClassReader.SKIP_CODE);
+        List<String> ts = targets(cn);
+        if (ts.isEmpty()) return;
+        Set<String> methods = new HashSet<>();
+        collect(cn, methods);
+        List<String> reds = redirectKeys(cn), ows = overwriteNames(cn);
+        for (String target : ts) {
+            m.computeIfAbsent(target, k -> new HashSet<>()).addAll(methods);
+            if (!reds.isEmpty()) REDIRECTS.computeIfAbsent(target, k -> new HashSet<>()).addAll(reds);
+            if (!ows.isEmpty()) OVERWRITES.computeIfAbsent(target, k -> new HashSet<>()).addAll(ows);
         }
     }
 
