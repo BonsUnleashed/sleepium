@@ -140,6 +140,11 @@ public final class RecordingBuilder implements VertexConsumer {
 
     @Override
     public VertexConsumer setUv1(int u, int w) {
+        if (dev.sleep.shaders.ShaderIds.on && format == com.mojang.blaze3d.vertex.DefaultVertexFormat.NEW_ENTITY) {   // a shaderpack's ids, as BufferBuilder gets them
+            int id = dev.sleep.shaders.ShaderIds.slot1;
+            u = u & 0xFF | (id & 0xFF) << 8;
+            w = w & 0xFF | (id >> 8 & 0xFF) << 8;
+        }
         if (take(UV1)) {
             long p = v + uv1Off;
             MemoryUtil.memPutShort(p, (short) u);
@@ -155,6 +160,11 @@ public final class RecordingBuilder implements VertexConsumer {
 
     @Override
     public VertexConsumer setUv2(int u, int w) {
+        if (dev.sleep.shaders.ShaderIds.on && format == com.mojang.blaze3d.vertex.DefaultVertexFormat.NEW_ENTITY) {
+            int id = dev.sleep.shaders.ShaderIds.item1;
+            u = u & 0xFF | (id & 0xFF) << 8;
+            w = w & 0xFF | (id >> 8 & 0xFF) << 8;
+        }
         if (take(UV2)) {
             long p = v + uv2Off;
             MemoryUtil.memPutShort(p, (short) u);

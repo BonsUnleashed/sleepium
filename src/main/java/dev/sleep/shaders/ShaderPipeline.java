@@ -92,6 +92,8 @@ public final class ShaderPipeline {
         set = ProgramSet.load(src, options, macros, props, "world0");
         uniforms.configure(set.consts);
         uniforms.custom = CustomUniforms.parse(props.customUniforms);
+        ShaderIds.maps = IdMaps.load(src, withOptions);
+        if (!ShaderIds.maps.unknown.isEmpty()) problems.add("block names this version lacks (ignored): " + ShaderIds.maps.unknown.size());
         problems.addAll(uniforms.custom.errors);
         step("textures");
         loadTextures();
@@ -260,6 +262,7 @@ public final class ShaderPipeline {
         float[] fog = RenderSystem.getShaderFogColor();
         targets.clearAll(fog);
         inLevel = true;
+        ShaderIds.on = true;
         deferredDone = false;
         handPhase = false;
         phase = "";
@@ -312,9 +315,33 @@ public final class ShaderPipeline {
         if (!inLevel) return;
         if (!deferredDone) phase("translucent");
         inLevel = false;
-        for (CompositeProgram cp : composite) runPass(cp, "composite", false);
+        ShaderIds.on = false;
+        if (SHOW != null && SHOW.equals("gbuffers")) {
+            show();
+            return;
+        }
+        for (CompositeProgram cp : composite) {
+            runPass(cp, "composite", false);
+            if (SHOW != null && SHOW.equals(cp.program.name)) {
+                show();
+                return;
+            }
+        }
         if (finalPass != null && finalPass.id != 0) runPass(finalPass, "composite", true);
         else blitToMain();
+        restoreVanillaState();
+    }
+
+    /** -Dsleep.shaders.show=gbuffers|<pass> (+ showBuffer=N): colortex N as it is after that point, on the screen */
+    private static final String SHOW = System.getProperty("sleep.shaders.show");
+    private static final int SHOW_BUFFER = Integer.getInteger("sleep.shaders.showBuffer", 0);
+
+    private void show() {
+        var main = Minecraft.getInstance().getMainRenderTarget();
+        int read = targets.framebuffer(new int[] {SHOW_BUFFER}, false, false);
+        GL30.glBindFramebuffer(GL30.GL_READ_FRAMEBUFFER, read);
+        GL30.glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, main.frameBufferId);
+        GL30.glBlitFramebuffer(0, 0, targets.width, targets.height, 0, 0, main.width, main.height, GL11.GL_COLOR_BUFFER_BIT, GL11.GL_NEAREST);
         restoreVanillaState();
     }
 
@@ -326,7 +353,7 @@ public final class ShaderPipeline {
 
     private void runPass(CompositeProgram cp, String stage, boolean isFinal) {
         for (int i = 0; i < RenderTargets.COLOR_TEX; i++) if (cp.wantsMipmap[i]) targets.generateMipmap(i);
-        bindTextures(stage);
+        bindTextures(stage, cp.wantsMipmap);
         int[] db = cp.program.drawBuffers;
         if (isFinal) {
             var main = Minecraft.getInstance().getMainRenderTarget();
@@ -369,12 +396,24 @@ public final class ShaderPipeline {
 
     /** the pack textures on their fixed units (main of each colortex; a stage's custom textures in place of samplers) */
     void bindTextures(String stage) {
+        bindTextures(stage, NO_MIPMAPS);
+    }
+
+    private static final boolean[] NO_MIPMAPS = new boolean[RenderTargets.COLOR_TEX];
+
+    /**
+     * mipmapped: the buffers this pass asked mipmaps for get a mipmap filter, every other one plain LINEAR (as Iris: a
+     * texture() in non-uniform control flow - Complementary's FXAA - may pick a level above 0, never filled for it)
+     */
+    void bindTextures(String stage, boolean[] mipmapped) {
         int active = com.mojang.blaze3d.platform.GlStateManager._getActiveTexture();
         for (int i = 0; i < RenderTargets.COLOR_TEX; i++) {
             Integer custom = stageTextures.get(stage + ".colortex" + i);
             if (custom == null && i >= 4 && i < 8) custom = stageTextures.get(stage + ".gaux" + (i - 3));
             int tex = custom != null ? custom : targets.used[i] ? targets.main(i) : 0;
             bind(12 + i, tex);
+            if (custom == null && tex != 0 && targets.mipmapped(i) && !RenderTargets.isInteger(targets.internalFormat[i]))
+                GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MIN_FILTER, mipmapped[i] ? GL11.GL_LINEAR_MIPMAP_LINEAR : GL11.GL_LINEAR);
         }
         bind(28, targets.depthTex0);
         bind(29, targets.depthTex1);
@@ -423,12 +462,12 @@ public final class ShaderPipeline {
         if (program == null) return vanilla;
         ProgramSet.Program p = set.resolve(program);
         if (p == null || p.sources[0] == null || p.sources[2] == null) return vanilla;
-        String key = vanilla.getName() + "|" + p.name;
+        String key = vanilla.getName() + "|" + program;
         PackShader s = shaders.get(key);
         if (s == null && !shaders.containsKey(key)) {
             try {
-                s = PackShader.create("sleep_pack" + generation + "_" + p.name + "_" + Integer.toHexString(vanilla.getName().hashCode()), p, vanilla.getVertexFormat(),
-                        alphaTest(vanilla.getName(), program));
+                s = PackShader.create("sleep_pack" + generation + "_" + program + "_" + Integer.toHexString(vanilla.getName().hashCode()), p, vanilla.getVertexFormat(),
+                        alphaTest(vanilla.getName(), program), program);
             } catch (Exception e) {
                 System.out.println("[sleep/shaders] " + p.name + " for " + vanilla.getName() + ": " + e);
                 s = null;

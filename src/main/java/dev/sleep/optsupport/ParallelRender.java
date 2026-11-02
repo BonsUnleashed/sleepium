@@ -369,7 +369,8 @@ public final class ParallelRender {
             && !MixinTouch.touched("net/minecraft/client/renderer/LevelRenderer", "renderEntity");
 
     private static boolean eligible(Entity e, MultiBufferSource buffers) {
-        if (!DISPATCH_UNTOUCHED || !WORKER_REFUSED.isEmpty() && WORKER_REFUSED.contains(e.getType())) return false;
+        // a shaderpack: the ids its vertices carry come from render-thread state (ShaderIds)
+        if (!DISPATCH_UNTOUCHED || dev.sleep.shaders.ShaderPipeline.active || !WORKER_REFUSED.isEmpty() && WORKER_REFUSED.contains(e.getType())) return false;
         Minecraft mc = Minecraft.getInstance();
         EntityRenderDispatcher d = mc.getEntityRenderDispatcher();
         if (LIB_UNSAFE.get(d.getRenderer(e).getClass())) return false;

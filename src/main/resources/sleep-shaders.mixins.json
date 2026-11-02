@@ -5,11 +5,18 @@
   "plugin": "dev.sleep.shadermixin.ShaderMixinPlugin",
   "compatibilityLevel": "JAVA_21",
   "client": [
+    "ShaderArmorIdsMixin",
+    "ShaderBlockEntityIdsMixin",
+    "ShaderEntityIdsMixin",
     "ShaderGameRendererMixin",
+    "ShaderItemIdsMixin",
     "ShaderLevelMixin",
     "ShaderProgramCacheAccessor",
     "ShaderSelectMixin",
-    "ShaderTargetMixin"
+    "ShaderTargetMixin",
+    "ShaderTerrainIdsMixin",
+    "ShaderVertexFetchMixin",
+    "ShaderVertexIdsMixin"
   ],
   "injectors": {
     "defaultRequire": 1

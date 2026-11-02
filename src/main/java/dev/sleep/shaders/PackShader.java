@@ -47,8 +47,15 @@ public final class PackShader extends ShaderInstance {
      * alphaTest: "GREATER 0.1" style (func ref) or null - Iris's alpha test for a legacy program writing gl_FragData:
      * its main is wrapped and the fragment discarded when output 0's alpha fails the test.
      */
-    static PackShader create(String uniqueName, ProgramSet.Program p, VertexFormat format, String alphaTest) throws IOException {
-        String vsh = p.sources[0], fsh = withAlphaTest(p.sources[2], alphaTest);
+    static PackShader create(String uniqueName, ProgramSet.Program p, VertexFormat format, String alphaTest, String requested) throws IOException {
+        String[] pro = ShaderPrologue.apply(p.sources[0], p.sources[2], format, requested.startsWith("gbuffers_block"));
+        String vsh = pro[0], fsh = withAlphaTest(pro[1], alphaTest);
+        if (Boolean.getBoolean("sleep.shaders.dump")) {   // the sources as compiled, per instance
+            java.nio.file.Path d = Minecraft.getInstance().gameDirectory.toPath().resolve("sleep/shaders/instances");
+            java.nio.file.Files.createDirectories(d);
+            java.nio.file.Files.writeString(d.resolve(uniqueName + ".vsh"), vsh);
+            java.nio.file.Files.writeString(d.resolve(uniqueName + ".fsh"), fsh);
+        }
         StringBuilder json = new StringBuilder("{\"vertex\":\"").append(uniqueName).append("\",\"fragment\":\"").append(uniqueName).append("\",\"samplers\":[");
         boolean first = true;
         for (int i = 0; i < 12; i++) {
@@ -115,7 +122,11 @@ public final class PackShader extends ShaderInstance {
     public void attachToProgram() {
         super.attachToProgram();
         int k = 0;
-        for (String n : getVertexFormat().getElementAttributeNames()) GL20.glBindAttribLocation(getId(), k++, "va" + n);
+        for (String n : getVertexFormat().getElementAttributeNames()) {
+            GL20.glBindAttribLocation(getId(), k, "va" + n);
+            GL20.glBindAttribLocation(getId(), k, "sl_raw" + n);   // the prologue's raw UV1 / UV2 (ids in the high bytes)
+            k++;
+        }
     }
 
     @Override
