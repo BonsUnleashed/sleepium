@@ -44,6 +44,11 @@ public final class IndirectCommands {
         return at;
     }
 
+    /** the buffer the commands are in (OcclusionCull reads them) */
+    public int buffer() {
+        return buffer;
+    }
+
     private static boolean immutable() {
         Boolean i = immutable;
         if (i == null) {

@@ -110,6 +110,8 @@ public final class ChunkMultiDraw {
         final int[] bq = new int[8];
         /** per bucket: the face plane nearest the camera side that could see it (+ buckets min, - buckets max coordinate, section-relative) */
         final float[] plane = new float[7];
+        /** OcclusionCull: the entry's visibility slot (-1: none) */
+        int id = -1;
     }
 
     private static ByteBuffer scratch = MemoryUtil.memAlloc(1 << 20);
@@ -188,6 +190,8 @@ public final class ChunkMultiDraw {
         // per-frame draw list
         int n, maxIndices, drawCap = MAX_DRAWS;
         long counts = MemoryUtil.nmemAlloc(4L * MAX_DRAWS), bases = MemoryUtil.nmemAlloc(4L * MAX_DRAWS), indices = MemoryUtil.nmemCalloc(MAX_DRAWS, 8);
+        /** per draw: its entry's visibility slot (OcclusionCull) */
+        long slots = MemoryUtil.nmemAlloc(4L * MAX_DRAWS);
         ByteBuffer offsets = MemoryUtil.memAlloc(16 * MAX_DRAWS);
 
         /** Storage-buffer offsets have no size limit: the draw list grows instead of being split. */
@@ -196,6 +200,7 @@ public final class ChunkMultiDraw {
             int c = Math.max(needed, drawCap * 2);
             counts = MemoryUtil.nmemRealloc(counts, 4L * c);
             bases = MemoryUtil.nmemRealloc(bases, 4L * c);
+            slots = MemoryUtil.nmemRealloc(slots, 4L * c);
             MemoryUtil.nmemFree(indices);
             indices = MemoryUtil.nmemCalloc(c, 8);
             ByteBuffer o = MemoryUtil.memAlloc(16 * c);
@@ -210,7 +215,7 @@ public final class ChunkMultiDraw {
         long cmdOffset;
         /** the other pass's draw list (a shadow pass), swapped in and out whole: the camera's kept lists stay intact */
         private int n2, maxIndices2, drawCap2, uboOffset2;
-        private long counts2, bases2, indices2, cmdOffset2;
+        private long counts2, bases2, indices2, cmdOffset2, slots2;
         private ByteBuffer offsets2;
         private boolean listed2;
 
@@ -219,6 +224,7 @@ public final class ChunkMultiDraw {
                 drawCap2 = MAX_DRAWS;
                 counts2 = MemoryUtil.nmemAlloc(4L * MAX_DRAWS);
                 bases2 = MemoryUtil.nmemAlloc(4L * MAX_DRAWS);
+                slots2 = MemoryUtil.nmemAlloc(4L * MAX_DRAWS);
                 indices2 = MemoryUtil.nmemCalloc(MAX_DRAWS, 8);
                 offsets2 = MemoryUtil.memAlloc(16 * MAX_DRAWS);
             }
@@ -228,6 +234,7 @@ public final class ChunkMultiDraw {
             i = uboOffset; uboOffset = uboOffset2; uboOffset2 = i;
             long l = counts; counts = counts2; counts2 = l;
             l = bases; bases = bases2; bases2 = l;
+            l = slots; slots = slots2; slots2 = l;
             l = indices; indices = indices2; indices2 = l;
             l = cmdOffset; cmdOffset = cmdOffset2; cmdOffset2 = l;
             ByteBuffer b = offsets; offsets = offsets2; offsets2 = b;
@@ -431,6 +438,7 @@ public final class ChunkMultiDraw {
         e.vertices = verts;
         e.indexCount = verts / 4 * 6;
         e.arena = a;
+        if (OcclusionCull.ON && e.id < 0) e.id = OcclusionCull.newId();
         ((ChunkEntries) section).sleep$md()[slot(a)] = e;
         SectionLists.changed();
     }
@@ -557,6 +565,8 @@ public final class ChunkMultiDraw {
             Entry e = (Entry) md[k];
             if (e != null) {
                 e.arena.release(e.start, e.vertices);
+                OcclusionCull.freeId(e.id);
+                e.id = -1;
                 md[k] = null;
                 SectionLists.changed();
             }
@@ -616,6 +626,8 @@ public final class ChunkMultiDraw {
         if (!PENDING_COMPILED.isEmpty()) drainCompiled();
         int[] ps = programState(shader.getId());
         if (ps == null) return false;
+        program = shader.getId();
+        layerIndex = li;
         var uniform = shader.CHUNK_OFFSET;
         LISTED.clear();
         boolean replaces = replacesVanilla(layer);
@@ -773,6 +785,7 @@ public final class ChunkMultiDraw {
         long tCmd = System.nanoTime();
         boolean indirect = indirect();
         long cmdBase = 0;
+        occl = false;
         if (indirect) {
             // every arena's commands {count, 1 instance, first index 0, base vertex, base instance 0} in one upload
             int cmds = 0;
@@ -787,6 +800,16 @@ public final class ChunkMultiDraw {
                 cmdStaging = MemoryUtil.memAlloc((int) Math.max(bytes, cmdStaging.capacity() * 2L));
             }
             long c = MemoryUtil.memAddress(cmdStaging);
+            occl = sb && !allFaces && OcclusionCull.usable();
+            if (occl) {
+                if (slotStaging.capacity() < 4 * cmds) {
+                    MemoryUtil.memFree(slotStaging);
+                    slotStaging = MemoryUtil.memAlloc(Math.max(4 * cmds, slotStaging.capacity() * 2));
+                }
+                long sl = MemoryUtil.memAddress(slotStaging);
+                for (Arena a : LISTED) if (a.n > 0) MemoryUtil.memCopy(a.slots, sl + a.cmdOffset / 5, 4L * a.n);
+                occlCmds = cmds;
+            }
             for (Arena a : LISTED) {
                 if (a.n == 0) continue;
                 long p = c + a.cmdOffset;
@@ -807,6 +830,43 @@ public final class ChunkMultiDraw {
         if (LightVolumes.ON && sb) GL30C.glBindBufferBase(GL43C.GL_SHADER_STORAGE_BUFFER, LightVolumes.BINDING, LightVolumes.buffer());
         lvNanos += System.nanoTime() - tLv;
         long tLoop = System.nanoTime();
+        if (occl && OcclusionCull.begin(layerIndex, MemoryUtil.memAddress(slotStaging), occlCmds, LISTED.size())) {
+            // phase 1: what was visible last frame; the depth pyramid; phase 2: the rest that is visible now
+            int idx = seq.type().asGLType;
+            for (int phase = 1; phase <= 2; phase++) {
+                if (phase == 2 && OcclusionCull.needHiZ()) OcclusionCull.buildHiZ(program);
+                for (int j = 0; j < LISTED.size(); j++) {
+                    Arena a = LISTED.get(j);
+                    if (a.n == 0) continue;
+                    OcclusionCull.cull(phase, j, COMMANDS.buffer(), cmdBase + a.cmdOffset, a.n, buf, a.uboOffset, (int) (a.cmdOffset / 20));
+                }
+                OcclusionCull.barrierForDraws(program);
+                drawArenas(layer, ps, seq, target, buf, sb, phase);
+            }
+            OcclusionCull.stats();
+            OcclusionCull.endLayer();
+            if (!keep) for (Arena a : LISTED) {
+                a.n = 0;
+                a.maxIndices = 0;
+            }
+        } else drawArenas(layer, ps, seq, target, buf, sb, indirect ? 0 : -1, cmdBase, keep);
+        loopNanos += System.nanoTime() - tLoop;
+        GL20C.glUniform1i(ps[0], 0);
+        if (indirect) GL15C.glBindBuffer(GL40C.GL_DRAW_INDIRECT_BUFFER, 0);
+    }
+
+    private static int program, layerIndex, occlCmds;
+    private static boolean occl;
+    private static ByteBuffer slotStaging = MemoryUtil.memAlloc(1 << 14);
+
+    private static void drawArenas(RenderType layer, int[] ps, RenderSystem.AutoStorageIndexBuffer seq, int target, int buf, boolean sb, int phase) {
+        drawArenas(layer, ps, seq, target, buf, sb, phase, 0, true);
+    }
+
+    /** phase: -1 the non-indirect fallback, 0 every command, 1 / 2 an occlusion phase's (OcclusionCull's buffers bound) */
+    private static void drawArenas(RenderType layer, int[] ps, RenderSystem.AutoStorageIndexBuffer seq, int target, int buf, boolean sb, int phase, long cmdBase,
+            boolean keep) {
+        boolean indirect = phase >= 0;
         int mode = -1;
         for (int pass = 0; pass < 2; pass++) {
             for (Arena a : LISTED) {
@@ -820,7 +880,9 @@ public final class ChunkMultiDraw {
                 if (dev.sleep.shaders.ShaderPipeline.active) GL30C.glBindBufferBase(GL43C.GL_SHADER_STORAGE_BUFFER, 9, a.vbo);
                 GL30C.glBindBufferRange(target, UBO_BINDING, buf, a.uboOffset, sb ? 16L * a.n : 16L * MAX_DRAWS);
                 if (dev.sleep.DrawStats.ON) dev.sleep.DrawStats.phaseBegin(3);
-                if (indirect) {
+                if (phase > 0)   // the layer's commands, those this phase does not draw with no instance (the order kept)
+                    OcclusionCull.draw(phase, LISTED.indexOf(a), seq.type().asGLType, a.n, (int) (a.cmdOffset / 20));
+                else if (indirect) {
                     long tD = System.nanoTime();
                     GL43C.glMultiDrawElementsIndirect(GL15C.GL_TRIANGLES, seq.type().asGLType, cmdBase + a.cmdOffset, a.n, 20);
                     drawNanos += System.nanoTime() - tD;
@@ -834,9 +896,6 @@ public final class ChunkMultiDraw {
                 }
             }
         }
-        loopNanos += System.nanoTime() - tLoop;
-        GL20C.glUniform1i(ps[0], 0);
-        if (indirect) GL15C.glBindBuffer(GL40C.GL_DRAW_INDIRECT_BUFFER, 0);
     }
 
     private static ByteBuffer cmdStaging = MemoryUtil.memAlloc(1 << 16);
@@ -893,7 +952,7 @@ public final class ChunkMultiDraw {
                     if (runStart < 0) runStart = bq[k];
                     runEnd = bq[k + 1];
                 } else if (!empty && runStart >= 0) {   // an invisible, non-empty bucket (or the end) closes the run
-                    addDraw(a, e.start + runStart * 4, (runEnd - runStart) * 6, ox, oy, oz, e.recipes ? e.vol : -1);
+                    addDraw(a, e.start + runStart * 4, (runEnd - runStart) * 6, ox, oy, oz, e.recipes ? e.vol : -1, e.id);
                     quadsDrawn += runEnd - runStart;
                     runStart = -1;
                 }
@@ -986,8 +1045,9 @@ public final class ChunkMultiDraw {
     }
     private static final boolean SECTION_LISTS = Boolean.getBoolean("lab.opt.SectionListsMixin");
 
-    private static void addDraw(Arena a, int baseVertex, int indices, float ox, float oy, float oz, int vol) {
+    private static void addDraw(Arena a, int baseVertex, int indices, float ox, float oy, float oz, int vol, int slot) {
         int i = a.n++;
+        MemoryUtil.memPutInt(a.slots + 4L * i, slot);
         MemoryUtil.memPutInt(a.counts + 4L * i, indices);
         MemoryUtil.memPutInt(a.bases + 4L * i, baseVertex);
         a.offsets.putFloat(16 * i, ox).putFloat(16 * i + 4, oy).putFloat(16 * i + 8, oz).putFloat(16 * i + 12, vol);

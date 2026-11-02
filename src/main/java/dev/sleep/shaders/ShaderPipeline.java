@@ -41,6 +41,20 @@ public final class ShaderPipeline {
         return current;
     }
 
+    /** the depth texture the gbuffers programs draw into (0: no pack loaded) and its size: OcclusionCull */
+    public static int gbufferDepth() {
+        ShaderPipeline p = current;
+        return active && p != null ? p.targets.depthTex0 : 0;
+    }
+
+    public static int gbufferWidth() {
+        return current.targets.width;
+    }
+
+    public static int gbufferHeight() {
+        return current.targets.height;
+    }
+
     final ShaderPackSource src;
     final ProgramSet set;
     final PackProperties props;

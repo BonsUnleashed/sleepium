@@ -46,6 +46,7 @@ public abstract class ChunkMultiDrawMixin {
         ShaderInstance shader = RenderSystem.getShader();
         shader.setDefaultUniforms(VertexFormat.Mode.QUADS, frustumMatrix, projectionMatrix, this.minecraft.getWindow());
         shader.apply();
+        if (dev.sleep.optsupport.OcclusionCull.ON) dev.sleep.optsupport.OcclusionCull.matrices(frustumMatrix, projectionMatrix);
         var uniform = shader.CHUNK_OFFSET;
         if (!ChunkMultiDraw.draw(renderType, this.visibleSections, x, y, z, shader)) {
             for (SectionRenderDispatcher.RenderSection s : this.visibleSections) {   // vanilla loop
