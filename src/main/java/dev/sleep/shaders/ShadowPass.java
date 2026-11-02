@@ -78,6 +78,7 @@ final class ShadowPass {
         pl.shadowPhase = true;
         try {
             collect(va, cam);
+            dev.sleep.optsupport.ChunkMultiDraw.beginOtherLists();   // the camera pass keeps its kept draw lists
             boolean terrain = pl.props.bool("shadowTerrain", true);
             if (terrain) {
                 layer(RenderType.solid(), cam);
@@ -90,6 +91,7 @@ final class ShadowPass {
             targets.copyOpaque();
             if (terrain && pl.props.bool("shadowTranslucent", true)) layer(RenderType.translucent(), cam);
         } finally {
+            dev.sleep.optsupport.ChunkMultiDraw.endOtherLists();
             pl.shadowPhase = false;
             pl.shadowBlockEntitiesPhase = false;
             mvs.popMatrix();

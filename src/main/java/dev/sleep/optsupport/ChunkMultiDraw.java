@@ -208,6 +208,31 @@ public final class ChunkMultiDraw {
         final boolean packed;
         int uboOffset;
         long cmdOffset;
+        /** the other pass's draw list (a shadow pass), swapped in and out whole: the camera's kept lists stay intact */
+        private int n2, maxIndices2, drawCap2, uboOffset2;
+        private long counts2, bases2, indices2, cmdOffset2;
+        private ByteBuffer offsets2;
+        private boolean listed2;
+
+        void swapLists() {
+            if (offsets2 == null) {
+                drawCap2 = MAX_DRAWS;
+                counts2 = MemoryUtil.nmemAlloc(4L * MAX_DRAWS);
+                bases2 = MemoryUtil.nmemAlloc(4L * MAX_DRAWS);
+                indices2 = MemoryUtil.nmemCalloc(MAX_DRAWS, 8);
+                offsets2 = MemoryUtil.memAlloc(16 * MAX_DRAWS);
+            }
+            int i = n; n = n2; n2 = i;
+            i = maxIndices; maxIndices = maxIndices2; maxIndices2 = i;
+            i = drawCap; drawCap = drawCap2; drawCap2 = i;
+            i = uboOffset; uboOffset = uboOffset2; uboOffset2 = i;
+            long l = counts; counts = counts2; counts2 = l;
+            l = bases; bases = bases2; bases2 = l;
+            l = indices; indices = indices2; indices2 = l;
+            l = cmdOffset; cmdOffset = cmdOffset2; cmdOffset2 = l;
+            ByteBuffer b = offsets; offsets = offsets2; offsets2 = b;
+            boolean z = listed; listed = listed2; listed2 = z;
+        }
 
         Arena(long key, RenderType layer, boolean packed) {
             this.key = key;
@@ -564,8 +589,6 @@ public final class ChunkMultiDraw {
         // the same camera position over the same lists and contents gives the same draws: last frame's are drawn again
         // (offsets and face buckets depend on the position only, so turning the head keeps them)
         boolean reusable = REUSE && replaces && SECTION_LISTS && SINGLE && ssbo() && !allFaces;
-        // a shadow pass refills the arenas' draw lists: the camera's kept lists are gone (built again next time)
-        if (allFaces) for (LayerCache c : LCACHE) c.ver = -1;
         LayerCache lc = LCACHE[li];
         long ver = SectionLists.version();
         if (reusable && lc.ver == ver && lc.x == x && lc.y == y && lc.z == z) {
@@ -799,6 +822,23 @@ public final class ChunkMultiDraw {
     private static final double EPS = 1.0 / 64;
     /** a shadow pass draws: every face bucket (seen from the light, not the camera), no reuse of the camera's lists */
     public static boolean allFaces;
+
+    /**
+     * A shadow pass's draws in their own lists (every arena's draw list swapped), so the camera pass keeps its lists
+     * for reuse; endOtherLists swaps back. (LISTED holds nothing across draw calls.)
+     */
+    public static void beginOtherLists() {
+        swapAll();
+    }
+
+    public static void endOtherLists() {
+        swapAll();
+    }
+
+    private static void swapAll() {
+        for (Long2ObjectOpenHashMap<Arena> m : ARENAS) for (Arena a : m.values()) a.swapLists();
+        for (Long2ObjectOpenHashMap<Arena> m : PACKED_ARENAS) for (Arena a : m.values()) a.swapLists();
+    }
     /** allFaces: the axis buckets facing the light (bits as in queue: -X -Y -Z, other, +X +Y +Z) */
     public static int lightFaces = 0x77;
 
