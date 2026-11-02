@@ -559,6 +559,21 @@ animated block entities: 131–148 → 1 363–1 475 fps.
 | `-Dlab.opt.WorldgenReactor=true` | finished chunks admitted to the main thread against the tick deadline | needed three fixes in singleplayer and was tested on few scenes |
 | `-Dlab.opt.HeapReturn=true` | returns unused heap to the OS at run time | was on by default for one day: on a 1.2 GB live heap G1 thrashed (315 full collections in 2.5 min) |
 
+## Settings screen
+
+Options → **sleep...** (or the mod list's Config button) opens the engine's settings: features (groups of tested
+flags, switched together), shaderpacks, and every flag one by one with search. Choices are saved to
+`config/sleep.properties`; a `-D` flag on the launch line still wins. Most flags apply after a restart; the screen says
+which.
+
+## Shaderpacks (beta)
+
+sleep runs OptiFine / Iris-format shaderpacks itself, inside its own renderer (no Iris or Sodium needed): put a pack
+(.zip or folder) into `shaderpacks/` and pick it on the settings screen's Shaders tab; it switches without a restart.
+Tested with Complementary Reimagined r5.9.3 (shadows, deferred lighting, composites). This is a **beta**: packs that
+need features not implemented yet (compute passes, custom images, some uniforms) may render wrong. With Iris, Oculus or
+OptiFine installed, sleep leaves shaders to them.
+
 ## Known limits
 
 - **Other optimisation mods.** Compatibility with Sodium/Embeddium/Iris, Lithium, C2ME, Moonrise, ModernFix and
