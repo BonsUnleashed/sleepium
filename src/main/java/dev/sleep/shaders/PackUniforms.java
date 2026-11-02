@@ -282,9 +282,21 @@ public final class PackUniforms {
     }
 
     /** frame values into the program (in use), once per frame */
+    /** -Dsleep.shaders.stats: time and calls of the uploads */
+    public static long frameUploadNanos, frameUploads, drawUploadNanos, drawUploads, applies;
+
     public void uploadFrame(Binding b) {
         if (b.stamp == frameStamp) return;
         b.stamp = frameStamp;
+        long t0 = System.nanoTime();
+        try {
+            uploadFrame0(b);
+        } finally {
+            frameUploadNanos += System.nanoTime() - t0;
+        }
+    }
+
+    private void uploadFrame0(Binding b) {
         for (int i = 0; i < b.locs.size(); i++) {
             int[] l = b.locs.get(i);
             String name = b.names.get(i);
@@ -292,6 +304,7 @@ public final class PackUniforms {
             if (v == null) v = frame.get(name);
             if (v == null) continue;
             upload(l[0], l[1], v);
+            frameUploads++;
         }
     }
 
@@ -302,6 +315,16 @@ public final class PackUniforms {
 
     /** per draw: ids, render stage and the matrices derived from the current ModelViewMat / ProjMat */
     public void uploadDraw(Binding b, Matrix4f mv, Matrix4f proj) {
+        long t0 = System.nanoTime();
+        applies++;
+        try {
+            uploadDraw0(b, mv, proj);
+        } finally {
+            drawUploadNanos += System.nanoTime() - t0;
+        }
+    }
+
+    private void uploadDraw0(Binding b, Matrix4f mv, Matrix4f proj) {
         if (b.entityIdLoc >= 0) GL20.glUniform1i(b.entityIdLoc, entityId);
         if (b.blockEntityIdLoc >= 0) GL20.glUniform1i(b.blockEntityIdLoc, blockEntityId);
         if (b.itemIdLoc >= 0) GL20.glUniform1i(b.itemIdLoc, itemId);
@@ -318,17 +341,31 @@ public final class PackUniforms {
             if (b.lightmapMatLoc >= 0) GL20.glUniformMatrix4fv(b.lightmapMatLoc, false, LIGHTMAP.get(fb));
         }
         if (b.atlasSizeLoc >= 0) {
-            int tex = com.mojang.blaze3d.systems.RenderSystem.getShaderTexture(0);
-            int w = 0, h = 0;
-            if (tex != 0) {
-                int prev = org.lwjgl.opengl.GL11.glGetInteger(org.lwjgl.opengl.GL11.GL_TEXTURE_BINDING_2D);
-                org.lwjgl.opengl.GL11.glBindTexture(org.lwjgl.opengl.GL11.GL_TEXTURE_2D, tex);
-                w = org.lwjgl.opengl.GL11.glGetTexLevelParameteri(org.lwjgl.opengl.GL11.GL_TEXTURE_2D, 0, org.lwjgl.opengl.GL11.GL_TEXTURE_WIDTH);
-                h = org.lwjgl.opengl.GL11.glGetTexLevelParameteri(org.lwjgl.opengl.GL11.GL_TEXTURE_2D, 0, org.lwjgl.opengl.GL11.GL_TEXTURE_HEIGHT);
-                org.lwjgl.opengl.GL11.glBindTexture(org.lwjgl.opengl.GL11.GL_TEXTURE_2D, prev);
-            }
-            org.lwjgl.opengl.GL20.glUniform2i(b.atlasSizeLoc, w, h);
+            long wh = textureSize(com.mojang.blaze3d.systems.RenderSystem.getShaderTexture(0));
+            org.lwjgl.opengl.GL20.glUniform2i(b.atlasSizeLoc, (int) (wh >>> 32), (int) wh);
         }
+    }
+
+    /**
+     * A texture's size (width << 32 | height), asked of GL once per texture (a bind and two queries per draw cost ~25 us
+     * each - 1 ms a frame on client_entities); forgotten when the texture is deleted (its id may come back resized).
+     */
+    private static final it.unimi.dsi.fastutil.ints.Int2LongOpenHashMap SIZES = new it.unimi.dsi.fastutil.ints.Int2LongOpenHashMap();
+
+    static long textureSize(int tex) {
+        if (tex == 0) return 0;
+        long wh = SIZES.getOrDefault(tex, -1L);
+        if (wh != -1L) return wh;
+        int w = org.lwjgl.opengl.GL45.glGetTextureLevelParameteri(tex, 0, org.lwjgl.opengl.GL11.GL_TEXTURE_WIDTH);
+        int h = org.lwjgl.opengl.GL45.glGetTextureLevelParameteri(tex, 0, org.lwjgl.opengl.GL11.GL_TEXTURE_HEIGHT);
+        wh = (long) w << 32 | (h & 0xFFFFFFFFL);
+        SIZES.put(tex, wh);
+        return wh;
+    }
+
+    /** GlStateManager deletes a texture */
+    public static void forgetTexture(int tex) {
+        SIZES.remove(tex);
     }
 
     static void upload(int loc, int type, float[] v) {

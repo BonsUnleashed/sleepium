@@ -15,6 +15,7 @@
     "ShaderSelectMixin",
     "ShaderTargetMixin",
     "ShaderTerrainIdsMixin",
+    "ShaderTextureDeleteMixin",
     "ShaderVertexFetchMixin",
     "ShaderVertexIdsMixin",
     "ShaderViewAreaAccessor"

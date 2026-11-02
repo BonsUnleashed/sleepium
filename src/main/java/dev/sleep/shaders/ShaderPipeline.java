@@ -304,6 +304,9 @@ public final class ShaderPipeline {
                 shadow.nanos = shadow.sections = shadow.draws = shadow.multiLayers = shadow.entities = shadow.blockEntities = 0;
                 System.out.printf(java.util.Locale.ROOT, "[sleep/shaders] frame start: uniforms %.3f ms, clears %.3f ms%n", beginUniformNanos / 1e6 / 300, beginClearNanos / 1e6 / 300);
                 beginUniformNanos = beginClearNanos = 0;
+                System.out.printf(java.util.Locale.ROOT, "[sleep/shaders] uploads: frame values %.3f ms (%.0f calls), per draw %.3f ms (%.0f applies)%n",
+                        PackUniforms.frameUploadNanos / 1e6 / 300, PackUniforms.frameUploads / 300.0, PackUniforms.drawUploadNanos / 1e6 / 300, PackUniforms.applies / 300.0);
+                PackUniforms.frameUploadNanos = PackUniforms.frameUploads = PackUniforms.drawUploadNanos = PackUniforms.applies = 0;
             }
             bindTextures("gbuffers");
             bindGbuffers(new int[] {0});
@@ -327,6 +330,7 @@ public final class ShaderPipeline {
             deferredDone = true;
             targets.copyDepth(targets.depthTex1);
             for (CompositeProgram cp : deferred) runPass(cp, "deferred", false);
+            afterPasses();
             bindTextures("gbuffers");
             bindGbuffers(new int[] {0});
         }
@@ -397,11 +401,14 @@ public final class ShaderPipeline {
             GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, targets.framebuffer(db, true, false));
             GL11.glViewport(0, 0, targets.width, targets.height);
         }
-        GL11.glDisable(GL11.GL_BLEND);
-        GL11.glDisable(GL11.GL_DEPTH_TEST);
-        GL11.glDepthMask(false);
-        GL11.glDisable(GL11.GL_CULL_FACE);
-        GL11.glColorMask(true, true, true, true);
+        // through GlStateManager: a deferred pass runs inside the level render, and a raw glDisable(DEPTH_TEST) left
+        // its cache saying "enabled" - the water after it was drawn without a depth test (11-02, the user: water and
+        // caves through the terrain)
+        RenderSystem.disableBlend();
+        RenderSystem.disableDepthTest();
+        RenderSystem.depthMask(false);
+        RenderSystem.disableCull();
+        RenderSystem.colorMask(true, true, true, true);
         if (cp.id != 0) {
             GL20.glUseProgram(cp.id);
             uniforms.uploadFrame(cp.binding);
@@ -417,6 +424,16 @@ public final class ShaderPipeline {
     }
 
     private static final Matrix4f IDENTITY = new Matrix4f();
+
+    /** back into the level render after passes inside it: vanilla's program / buffer caches forget what we bound */
+    private void afterPasses() {
+        GL20.glUseProgram(0);
+        ShaderPipelineHooks.resetProgramCache();
+        com.mojang.blaze3d.vertex.BufferUploader.reset();
+        RenderSystem.enableDepthTest();
+        RenderSystem.depthMask(true);
+        RenderSystem.enableCull();
+    }
 
     /** no final program: colortex0 to the window as it is */
     private void blitToMain() {
