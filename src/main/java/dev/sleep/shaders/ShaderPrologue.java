@@ -25,6 +25,7 @@ final class ShaderPrologue {
     private static final Pattern RAW = Pattern.compile("(?:layout\\s*\\([^)]*\\)\\s*)?\\bin\\s+ivec2\\s+(vaUV1|vaUV2)\\s*;");
     private static final Pattern ID_UNIFORM = Pattern.compile("\\buniform\\s+int\\s+(entityId|blockEntityId|currentRenderedItemId)\\s*;");
     private static final Pattern MAIN = Pattern.compile("\\bvoid\\s+main\\s*\\(\\s*(void)?\\s*\\)");
+    private static final Pattern POSITION = Pattern.compile("(?:layout\\s*\\([^)]*\\)\\s*)?\\bin\\s+vec3\\s+vaPosition\\s*;");
 
     /** {vsh, fsh} with the prologue; blockEntityIds: the overlay slot holds block entity ids (gbuffers_block*) */
     static String[] apply(String vsh, String fsh, VertexFormat format, boolean blockEntityIds) {
@@ -59,7 +60,14 @@ final class ShaderPrologue {
             vsh = vsh.replaceAll("\\bChunkOffset\\b", "sl_chunkOffset").replace("uniform vec3 sl_chunkOffset;", "uniform vec3 ChunkOffset;");
             globals.append("uniform int ProbeMultiDraw;\nlayout(std430) buffer ProbeChunkOffsets { vec4 ProbeOffsets[]; };\nvec3 sl_chunkOffset;\n");
         }
-        if (attrs.isEmpty() && !raw[1] && !raw[2] && !idsVs && !idsFs && !multi) return new String[] {vsh, fsh};
+        // entities: PartBatch's resident recordings (mode 2: the recorded vertices in VRAM, posed by the draw's record)
+        boolean parts = entity && POSITION.matcher(vsh).find();
+        if (parts) {
+            vsh = POSITION.matcher(vsh).replaceFirst("vec3 vaPosition;\nin vec3 sl_rawPosition;");
+            globals.append("struct ProbePart { mat4 pose; vec4 n0; vec4 n1; vec4 n2; vec4 color; ivec4 lo; };\n")
+                    .append("layout(std430) buffer ProbeParts { ProbePart probeParts[]; };\nuniform int ProbePartMode;\n");
+        }
+        if (attrs.isEmpty() && !raw[1] && !raw[2] && !idsVs && !idsFs && !multi && !parts) return new String[] {vsh, fsh};
         // the vertex prologue
         int stride = format.getVertexSize() / 4;
         int pos = format.contains(VertexFormatElement.POSITION) ? format.getOffset(VertexFormatElement.POSITION) / 4 : -1;
@@ -70,7 +78,8 @@ final class ShaderPrologue {
         if (quads) {
             globals.append("layout(std430, binding = 9) buffer SlVertexData { uint sl_vdata[]; };\n")
                     .append("vec3 sl_vpos(int v) { int b = v * ").append(stride).append(" + ").append(pos)
-                    .append("; return vec3(uintBitsToFloat(sl_vdata[b]), uintBitsToFloat(sl_vdata[b + 1]), uintBitsToFloat(sl_vdata[b + 2])); }\n")
+                    .append("; vec3 p = vec3(uintBitsToFloat(sl_vdata[b]), uintBitsToFloat(sl_vdata[b + 1]), uintBitsToFloat(sl_vdata[b + 2]));")
+                    .append(parts ? " if (ProbePartMode == 2) p = (probeParts[gl_DrawIDARB].pose * vec4(p, 1.0)).xyz;" : "").append(" return p; }\n")
                     .append("vec2 sl_vuv(int v) { int b = v * ").append(stride).append(" + ").append(uv)
                     .append("; return vec2(uintBitsToFloat(sl_vdata[b]), uintBitsToFloat(sl_vdata[b + 1])); }\n");
             if (nrm >= 0)
@@ -80,6 +89,7 @@ final class ShaderPrologue {
         }
         StringBuilder pro = new StringBuilder("void main() {\n");
         if (multi) pro.append("    sl_chunkOffset = ProbeMultiDraw != 0 ? ProbeOffsets[gl_DrawIDARB].xyz : ChunkOffset;\n");
+        if (parts) pro.append("    vaPosition = ProbePartMode == 2 ? (probeParts[gl_DrawIDARB].pose * vec4(sl_rawPosition, 1.0)).xyz : sl_rawPosition;\n");
         if (raw[1]) pro.append("    vaUV1 = sl_rawUV1 & 255;\n");
         if (raw[2]) pro.append("    vaUV2 = sl_rawUV2 & 255;\n");
         pro.append("    int sl_hi1 = (sl_rawUV1.x >> 8 & 255) | (sl_rawUV1.y >> 8 & 255) << 8;\n");

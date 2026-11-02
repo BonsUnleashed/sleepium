@@ -57,9 +57,15 @@ public final class PartBatch {
 
     private static Boolean capable;
 
+    /**
+     * The intercepted part paths (ModelPart, SuperByteBuffer, GeckoLib bones: records without a shaderpack's per-vertex
+     * ids) - not under sleep's shaderpack pipeline; resident recordings (mode 2) are, their vertices carry the ids.
+     */
+    public static boolean partsAllowed() {
+        return capable() && !dev.sleep.shaders.ShaderPipeline.active;
+    }
+
     public static boolean capable() {
-        // a shaderpack (sleep's pipeline) draws with its own programs: parts take vanilla's way until they feed it
-        if (dev.sleep.shaders.ShaderPipeline.active) return false;
         Boolean c = capable;
         if (c == null) {
             GLCapabilities caps = GL.getCapabilities();
@@ -518,7 +524,7 @@ public final class PartBatch {
     public static boolean sbbTarget(Object key, GeometrySource src, Object a, VertexConsumer buffer) {
         int why = !(buffer instanceof BufferBuilder) ? 0 : !RenderSystem.isOnRenderThread() ? 1 : -1;
         RenderType type = why < 0 ? EntityBatch.typeOf((BufferBuilder) buffer) : null;
-        if (why < 0) why = type == null ? 2 : type.format() != DefaultVertexFormat.BLOCK || type.mode() != VertexFormat.Mode.QUADS ? 3 : !typeOk(type) ? 4 : !capable() ? 5 : -1;
+        if (why < 0) why = type == null ? 2 : type.format() != DefaultVertexFormat.BLOCK || type.mode() != VertexFormat.Mode.QUADS ? 3 : !typeOk(type) ? 4 : !partsAllowed() ? 5 : -1;
         if (why >= 0) {
             sbbRefused++;
             SBB_WHY[why]++;
@@ -846,7 +852,7 @@ public final class PartBatch {
     private static RenderType batchedType(VertexConsumer buffer) {
         if (!(buffer instanceof BufferBuilder bb) || !RenderSystem.isOnRenderThread()) return null;
         RenderType type = EntityBatch.typeOf(bb);
-        if (type == null || type.format() != DefaultVertexFormat.NEW_ENTITY || type.mode() != VertexFormat.Mode.QUADS || !typeOk(type) || !capable()) return null;
+        if (type == null || type.format() != DefaultVertexFormat.NEW_ENTITY || type.mode() != VertexFormat.Mode.QUADS || !typeOk(type) || !partsAllowed()) return null;
         return type;
     }
 
@@ -985,7 +991,7 @@ public final class PartBatch {
     /** Render thread: whether PartBatch can draw this type from VRAM (checked here: GL queries); published for workers. */
     private static void learnType(RenderType type) {
         ASKED.remove(type);
-        if (EntityBatch.commutes(type) && type.format() == DefaultVertexFormat.NEW_ENTITY && type.mode() == VertexFormat.Mode.QUADS && typeOk(type) && capable()) {
+        if (EntityBatch.commutes(type) && type.format() == DefaultVertexFormat.NEW_ENTITY && type.mode() == VertexFormat.Mode.QUADS && typeOk(type) && partsAllowed()) {
             java.util.Set<RenderType> s = java.util.Collections.newSetFromMap(new IdentityHashMap<>());
             s.addAll(workerTypes);
             s.add(type);
@@ -1186,6 +1192,8 @@ public final class PartBatch {
                 RES_ARENA.vaoStale = false;
             }
             GL30C.glBindVertexArray(resVao);
+            // a shaderpack program's vertex prologue reads the quad's other vertices (tangent, mid UV) from the arena
+            if (dev.sleep.shaders.ShaderPipeline.active) GL30C.glBindBufferBase(GL43C.GL_SHADER_STORAGE_BUFFER, 9, RES_ARENA.vbo);
         }
         RenderSystem.AutoStorageIndexBuffer seq = RenderSystem.getSequentialBuffer(VertexFormat.Mode.QUADS);
         seq.bind(q.maxIndices);
