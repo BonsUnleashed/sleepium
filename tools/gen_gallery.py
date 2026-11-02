@@ -188,3 +188,49 @@ for title, rows, top_v, other in panels:
     y0 = base + len(rows) * 130 + 30
 img.save(os.path.join(OUT, 'vs-sodium.png'))
 print('sodium chart written')
+
+# ---------------------------------------------------------------- against Horizon (a Rust rewrite of Minecraft 26.3,
+# release 0.2.97), the N100, 2026-10-30 (README): the mean of two interleaved passes; client fps, the same session
+SRV = [('items', 8.5, 14.2), ('hoppers', 0.715, 2.7), ('smelters', 2.65, 11.45), ('furnaces', 0.765, 0.985), ('pistons', 4.3, 6.15),
+       ('crops', 0.5, 0.5), ('mobs', 10.05, 8.15), ('villagers', 12.1, 5.35), ('cramming', 6.5, 4.7), ('redstone', 10.05, 8.4),
+       ('carts', 10.95, 8.05), ('fluids', 5.0, 0.47)]
+CLI = [('entities', 115, 87), ('mobs', 136, 112), ('light', 156, 138)]
+HOR = (232, 128, 96)
+W, H = 1600, 1420
+img = Image.new('RGB', (W, H), BG)
+d = ImageDraw.Draw(img)
+d.text((60, 40), 'Against Horizon, a Rust rewrite of Minecraft (Intel N100)', font=font(44, True), fill=INK)
+d.text((60, 100), 'Sleepium on 1.21.1, Horizon 0.2.97 on 26.3 (the versions differ); same machine, same session, 2026-10-30', font=font(25), fill=MUTED)
+lx = W - 470
+d.rectangle([lx, 156, lx + 26, 182], fill=HOR)
+d.text((lx + 36, 152), 'Horizon', font=font(26), fill=INK)
+d.rectangle([lx + 200, 156, lx + 226, 182], fill=SLEEPIUM)
+d.text((lx + 236, 152), 'Sleepium', font=font(26, True), fill=INK)
+left, right = 300, W - 220
+d.text((60, 220), 'Server: ms per tick (lower is better)', font=font(30, True), fill=INK)
+top, row_h = 280, 62
+scale = (right - left) / 15.0
+for x in range(0, 16, 5):
+    gx = left + x * scale
+    d.line([(gx, top - 6), (gx, top + row_h * len(SRV))], fill=GRID, width=2)
+    d.text((gx - 8, top + row_h * len(SRV) + 4), str(x), font=font(22), fill=MUTED)
+for i, (name, sl, ho) in enumerate(SRV):
+    y = top + i * row_h
+    d.text((60, y + 12), name, font=font(26), fill=INK)
+    for j, (v, col) in enumerate(((ho, HOR), (sl, SLEEPIUM))):
+        yy = y + 4 + j * 26
+        d.rectangle([left, yy, left + max(3, v * scale), yy + 22], fill=col)
+        d.text((left + max(3, v * scale) + 8, yy - 3), ('%.2f' % v).rstrip('0').rstrip('.'), font=font(20, j == 1), fill=col)
+y0 = top + row_h * len(SRV) + 60
+d.text((60, y0), 'Client: fps, 1280x720 (higher is better)', font=font(30, True), fill=INK)
+top, row_h = y0 + 60, 90
+scale = (right - left) / 160.0
+for i, (name, sl, ho) in enumerate(CLI):
+    y = top + i * row_h
+    d.text((60, y + 22), name, font=font(26), fill=INK)
+    for j, (v, col, extra) in enumerate(((ho, HOR, ''), (sl, SLEEPIUM, '  +%d %%' % round((sl / ho - 1) * 100)))):
+        yy = y + 6 + j * 38
+        d.rectangle([left, yy, left + v * scale, yy + 32], fill=col)
+        d.text((left + v * scale + 10, yy), '%d fps%s' % (v, extra), font=font(22, j == 1), fill=col)
+img.save(os.path.join(OUT, 'vs-horizon.png'))
+print('horizon chart written')

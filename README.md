@@ -401,6 +401,8 @@ chunk drops from 71.9 ms and 19.1 MB of garbage to 35.5 ms. On the N100, 12 → 
   p50. Horizon is ahead on mobs and
   villagers partly because of its data layout and partly because some of its shortcuts are not vanilla-exact. Sleepium
   keeps the vanilla game and its mods.
+
+  <p align="center"><img src="art/gallery/vs-horizon.png" width="720" alt="Against Horizon on the Intel N100: server ms per tick and client fps"></p>
 - **Lithium 0.15.4 and Moonrise 0.1.0-beta.15** (N100, 2026-11-01): a production NeoForge server, each mod alone in
   the mods folder, the scene groups in rotating order; mean ms per tick (1–3 passes per scene, the 11-01 build).
 

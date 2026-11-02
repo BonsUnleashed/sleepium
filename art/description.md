@@ -69,6 +69,8 @@ Client against Sodium (RTX 4070 SUPER, 1280×720):
 
 Running Sleepium together with these mods is not tested yet.
 
+Against **Horizon**, a Rust rewrite of Minecraft (0.2.97, on 26.3 - the versions differ), on the same Intel N100: the client draws more frames in every scene (entities 115 vs 87 fps, mobs 136 vs 112, light 156 vs 138: +13-32 %); on the server Sleepium is ahead on items, hoppers, smelters, furnaces and pistons, Horizon on mobs, villagers, cramming, redstone, carts and fluids, partly through shortcuts that are not vanilla-exact. Sleepium keeps the vanilla game and its mods.
+
 ## What it does
 
 - **Sleeping block entities and entities**: idle ticks skipped and woken at the exact tick vanilla would act.
