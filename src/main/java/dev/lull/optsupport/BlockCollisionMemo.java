@@ -66,10 +66,11 @@ public final class BlockCollisionMemo {
                         for (int x = ax; x <= bx; x++)
                             for (int y = ay; y <= by; y++)
                                 for (int z = az; z <= bz; z++)
-                                    if (!((StaticShape) s.getBlockState(x & 15, y & 15, z & 15)).sleep$staticShape()) return false;
+                                    if (!(s.getBlockState(x & 15, y & 15, z & 15) instanceof StaticShape st) || !st.sleep$staticShape()) return false;
                     }
+                    if (!(s instanceof Counted counted)) return false;   // (its mixin gave way to another mod)
                     m.sections[k] = s;
-                    m.mods[k] = ((Counted) s).sleep$mod();
+                    m.mods[k] = counted.sleep$mod();
                     k++;
                 }
             }
@@ -108,7 +109,7 @@ public final class BlockCollisionMemo {
                     if (idx < 0 || idx >= chunk.getSections().length) continue;
                     if (k == m.n) return false;
                     LevelChunkSection s = chunk.getSection(idx);
-                    if (m.sections[k] != s || m.mods[k] != ((Counted) s).sleep$mod()) return false;
+                    if (m.sections[k] != s || !(s instanceof Counted counted) || m.mods[k] != counted.sleep$mod()) return false;
                     k++;
                 }
             }

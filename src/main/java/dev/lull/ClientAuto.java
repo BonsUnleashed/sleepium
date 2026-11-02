@@ -389,6 +389,13 @@ public final class ClientAuto {
         ticks++;
         switch (phase) {
             case TITLE -> {
+                if (ticks % 400 == 0) log("waiting for the title screen, now: " + (mc.screen == null ? "no screen" : mc.screen.getClass().getName())
+                        + (mc.getOverlay() != null ? ", overlay " + mc.getOverlay().getClass().getSimpleName() : ""));
+                if (mc.screen instanceof net.neoforged.neoforge.client.gui.LoadingErrorScreen) {
+                    // mods' loading warnings (ModernFix: "performance mods missing"): a player clicks Proceed
+                    log("loading warnings screen dismissed (a player would click Proceed)");
+                    mc.setScreen(new TitleScreen());
+                }
                 if (mc.screen instanceof TitleScreen) {
                     log(String.format(Locale.ROOT, "title screen at %.1f s since JVM start", sinceJvm()));
                     // remember what we change, restored before the client closes (options.txt is shared with manual play)

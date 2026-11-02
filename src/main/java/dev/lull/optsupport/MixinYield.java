@@ -17,8 +17,88 @@ public final class MixinYield {
 
     public static long yielded;
 
-    /** True when our mixin overwrites a method of the target that a foreign mixin touches. */
+    private static final java.util.Map<String, Boolean> DECIDED = new java.util.concurrent.ConcurrentHashMap<>();
+
+    /** True when our mixin overwrites a method of the target that a foreign mixin touches (decided once per mixin). */
     public static boolean yields(String targetClassName, String mixinClassName) {
+        Boolean d = DECIDED.get(mixinClassName);
+        if (d == null) DECIDED.put(mixinClassName, d = yields0(targetClassName, mixinClassName));
+        return d;
+    }
+
+    /** our mixins that add an interface of ours to their target: interface (internal name) -> {mixin class, target class} */
+    private static volatile java.util.Map<String, String[]> PROVIDERS;
+
+    /**
+     * True when this mixin of ours uses (casts to, checks, calls) an interface another mixin of ours adds, and that one
+     * gives way to another mod: applied alone it would find the interface missing (ShapeCacheMixin gave way to
+     * ModernFix's getCollisionShape and BlockCollisionMemoMixin's casts failed).
+     */
+    public static boolean needsYielded(String mixinClassName) {
+        ClassNode cn;
+        try {
+            cn = org.spongepowered.asm.service.MixinService.getService().getBytecodeProvider().getClassNode(mixinClassName);
+        } catch (Throwable t) {
+            return false;
+        }
+        java.util.Map<String, String[]> providers = providers();
+        java.util.Set<String> used = new java.util.HashSet<>();
+        for (MethodNode m : cn.methods)
+            for (org.objectweb.asm.tree.AbstractInsnNode in = m.instructions.getFirst(); in != null; in = in.getNext()) {
+                if (in instanceof org.objectweb.asm.tree.TypeInsnNode t) used.add(t.desc);
+                else if (in instanceof org.objectweb.asm.tree.MethodInsnNode mi && mi.getOpcode() == org.objectweb.asm.Opcodes.INVOKEINTERFACE) used.add(mi.owner);
+            }
+        for (String type : used) {
+            String[] p = providers.get(type);
+            if (p == null || p[0].equals(mixinClassName)) continue;
+            if (yields(p[1], p[0])) {
+                yielded++;
+                System.out.println("[sleep/opt] " + mixinClassName.substring(mixinClassName.lastIndexOf('.') + 1) + " not applied: it needs "
+                        + type.substring(type.lastIndexOf('/') + 1) + " from " + p[0].substring(p[0].lastIndexOf('.') + 1) + ", which gave way");
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static java.util.Map<String, String[]> providers() {
+        java.util.Map<String, String[]> m = PROVIDERS;
+        if (m != null) return m;
+        m = new java.util.HashMap<>();
+        try {
+            var provider = org.spongepowered.asm.service.MixinService.getService().getBytecodeProvider();
+            for (org.spongepowered.asm.mixin.transformer.Config c : org.spongepowered.asm.mixin.Mixins.getConfigs()) {
+                org.spongepowered.asm.mixin.extensibility.IMixinConfig mc = c.getConfig();
+                if (mc == null || !mc.getName().startsWith("sleepium")) continue;
+                String pkg = mc.getMixinPackage();
+                if (!pkg.endsWith(".")) pkg += ".";
+                for (String field : new String[] {"mixinClasses", "mixinClassesClient", "mixinClassesServer"}) {
+                    java.lang.reflect.Field f = mc.getClass().getDeclaredField(field);
+                    f.setAccessible(true);
+                    if (!(f.get(mc) instanceof java.util.List<?> names)) continue;
+                    for (Object n : names) {
+                        String cls = pkg + n;
+                        ClassNode cn;
+                        try {
+                            cn = provider.getClassNode(cls);
+                        } catch (Throwable t) {
+                            continue;
+                        }
+                        java.util.List<String> targets = MixinTouch.targets(cn);
+                        if (targets.isEmpty() || cn.interfaces == null) continue;
+                        for (String i : cn.interfaces)
+                            if (i.startsWith("dev/lull/")) m.putIfAbsent(i, new String[] {cls, targets.get(0).replace('/', '.')});
+                    }
+                }
+            }
+        } catch (Throwable t) {
+            System.out.println("[sleep/opt] mixin interface providers incomplete: " + t);
+        }
+        PROVIDERS = m;
+        return m;
+    }
+
+    private static boolean yields0(String targetClassName, String mixinClassName) {
         ClassNode cn;
         try {
             cn = org.spongepowered.asm.service.MixinService.getService().getBytecodeProvider().getClassNode(mixinClassName);

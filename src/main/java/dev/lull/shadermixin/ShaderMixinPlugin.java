@@ -21,7 +21,7 @@ public final class ShaderMixinPlugin implements IMixinConfigPlugin {
 
     @Override
     public boolean shouldApplyMixin(String targetClassName, String mixinClassName) {
-        return !otherShaderMod() && !dev.lull.optsupport.MixinYield.yields(targetClassName, mixinClassName);
+        return !otherShaderMod() && !dev.lull.optsupport.MixinYield.yields(targetClassName, mixinClassName) && !dev.lull.optsupport.MixinYield.needsYielded(mixinClassName);
     }
 
     @Override public void acceptTargets(Set<String> myTargets, Set<String> otherTargets) {}

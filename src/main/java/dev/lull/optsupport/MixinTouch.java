@@ -240,7 +240,7 @@ public final class MixinTouch {
     }
 
     /** The target classes (internal names) of a mixin class: @Mixin's value and targets. */
-    private static List<String> targets(ClassNode cn) {
+    static List<String> targets(ClassNode cn) {
         List<String> out = new java.util.ArrayList<>();
         List<AnnotationNode> as = new java.util.ArrayList<>();
         if (cn.visibleAnnotations != null) as.addAll(cn.visibleAnnotations);
