@@ -344,6 +344,7 @@ public final class RenderCache {
     /** RenderFrameEvent.Pre */
     public static void frame() {
         frameRecordNanos = 0;
+        if (TIME) tFrames++;
     }
 
     private static long realVerticesTimed() {
@@ -406,7 +407,29 @@ public final class RenderCache {
      * From the dispatchers, in place of renderer.render(...). key: whatever else the output depends on that the caller
      * knows (block state, synched data, yaw). camera: the entity dispatcher when its orientation can be probed.
      */
+    /**
+     * -Dlab.rcache.time=true: render thread nanos in render (all of it), replay, and inside replay the resident check,
+     * getBuffer, the resident queue, the copy + transform; CPU-path segments and vertices by render type (report)
+     */
+    static final boolean TIME = Boolean.getBoolean("lab.rcache.time");
+    static long tRender, tReplay, tResidentOk, tGetBuffer, tQueue, tCopy, tFrames;
+    private static final java.util.Map<RenderType, long[]> CPU_TYPES = new java.util.IdentityHashMap<>();
+
     public static void render(Object obj, Class<?> rendererClass, Draw d, float pt, PoseStack pose, MultiBufferSource buffers, int light, int overlay,
+            float yaw, long key, net.minecraft.client.renderer.entity.EntityRenderDispatcher camera) {
+        if (!TIME) {
+            render0(obj, rendererClass, d, pt, pose, buffers, light, overlay, yaw, key, camera);
+            return;
+        }
+        long t0 = System.nanoTime();
+        try {
+            render0(obj, rendererClass, d, pt, pose, buffers, light, overlay, yaw, key, camera);
+        } finally {
+            tRender += System.nanoTime() - t0;
+        }
+    }
+
+    private static void render0(Object obj, Class<?> rendererClass, Draw d, float pt, PoseStack pose, MultiBufferSource buffers, int light, int overlay,
             float yaw, long key, net.minecraft.client.renderer.entity.EntityRenderDispatcher camera) {
         var level = Minecraft.getInstance().level;
         BeMemo memo = BE_MEMO;
@@ -603,6 +626,16 @@ public final class RenderCache {
     private static final Matrix3f N = new Matrix3f(), IDENTITY3 = new Matrix3f();
 
     private static void replay(Rec rec, MultiBufferSource buffers, PoseStack pose) {
+        if (!TIME) {
+            replay0(rec, buffers, pose);
+            return;
+        }
+        long t0 = System.nanoTime();
+        replay0(rec, buffers, pose);
+        tReplay += System.nanoTime() - t0;
+    }
+
+    private static void replay0(Rec rec, MultiBufferSource buffers, PoseStack pose) {
         boolean asIs = pose == null;
         if (!asIs) {
             M.set(pose.last().pose());
@@ -613,11 +646,18 @@ public final class RenderCache {
         if (tags) VertexTags.read(TAGS_SAVED, 0);
         for (int i = 0; i < rec.types.size(); i++) {
             RenderType t = rec.types.get(i);
+            long ta = TIME ? System.nanoTime() : 0;
             VertexConsumer vc = buffers.getBuffer(t);
+            long tb = TIME ? System.nanoTime() : 0;
+            if (TIME) tGetBuffer += tb - ta;
             long src = rec.mem + rec.offs[i];
             int n = rec.counts[i];
-            if (!asIs && normalIdentity && rec != PROBE && n % 4 == 0 && PartBatch.residentOk(t, vc, buffers)) {
+            boolean resident = !asIs && normalIdentity && rec != PROBE && n % 4 == 0 && PartBatch.residentOk(t, vc, buffers);
+            long tc = TIME ? System.nanoTime() : 0;
+            if (TIME) tResidentOk += tc - tb;
+            if (resident) {
                 PartBatch.queueResident(t, (BufferBuilder) vc, rec.resident(i), n, M);
+                if (TIME) tQueue += System.nanoTime() - tc;
                 replayedVertices += n;
                 residentSegments++;
                 continue;
@@ -632,6 +672,12 @@ public final class RenderCache {
                 if (!asIs) transform(dst, n, f, normalIdentity);
                 a.sleep$setVertices(a.sleep$vertices() + n);
                 a.sleep$setVertexPointer(dst + (long) (n - 1) * vs);
+                if (TIME) {
+                    tCopy += System.nanoTime() - tc;
+                    long[] c = CPU_TYPES.computeIfAbsent(t, k -> new long[2]);
+                    c[0]++;
+                    c[1] += n;
+                }
             } else {
                 generic(vc, src, n, f, rec, i);
             }
@@ -723,6 +769,12 @@ public final class RenderCache {
                 "render cache: hits %d, records %d, animated %d, unsupported %d, vanilla %d, deferred to next frames %d, replayed vertices %d%s%s", hits, records,
                 animated, unsupported, vanilla, deferred, replayedVertices, VERIFY ? ", verified " + verified + ", mismatches " + mismatches : "",
                 StateHash.LEARN ? ", same after a state change " + sameAfterChange + ", fields left out " + StateHash.learned : ""));
+        if (TIME && tFrames > 0) {
+            double f = tFrames;
+            sb.append(String.format(java.util.Locale.ROOT, "%n  render cache time per frame: render %.3f ms, replay %.3f (getBuffer %.3f, resident check %.3f, resident queue %.3f, copy + transform %.3f)",
+                    tRender / f / 1e6, tReplay / f / 1e6, tGetBuffer / f / 1e6, tResidentOk / f / 1e6, tQueue / f / 1e6, tCopy / f / 1e6));
+            CPU_TYPES.forEach((k, v) -> sb.append(String.format(java.util.Locale.ROOT, "%n    cpu path %s: %.1f segments, %.0f vertices per frame", k.toString().split("\\[")[0], v[0] / f, v[1] / f)));
+        }
         BY_CLASS.forEach((c, v) -> sb.append(String.format(java.util.Locale.ROOT, "\n    %s: hits %d, records %d, animated %d, unsupported %d%s", c.getSimpleName(),
                 v[0], v[1], v[2], v[3], (v[5] != 0 ? ", learned: animated" : "") + (VERIFY ? ", mismatches " + v[4] : ""))));
         return sb.toString();

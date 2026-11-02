@@ -368,17 +368,35 @@ public final class ParallelRender {
     static final boolean DISPATCH_UNTOUCHED = !MixinTouch.touched("net/minecraft/client/renderer/entity/EntityRenderDispatcher", "render")
             && !MixinTouch.touched("net/minecraft/client/renderer/LevelRenderer", "renderEntity");
 
+    /** -Dlab.prender.why=true: why entities stayed on the render thread (counts in the report) */
+    private static final boolean WHY = Boolean.getBoolean("lab.prender.why");
+    static final long[] WHY_N = new long[8];
+    private static final String[] WHY_NAMES = {"dispatch touched by a mod", "shaderpack", "type refused", "library renderer", "other buffers / player / name / fire / hitboxes",
+            "render event listened", "excluded (Compat)", "cached by the render cache"};
+
+    private static boolean no(int why) {
+        if (WHY) WHY_N[why]++;
+        return false;
+    }
+
     private static boolean eligible(Entity e, MultiBufferSource buffers) {
         // a shaderpack: the ids its vertices carry come from render-thread state (ShaderIds)
-        if (!DISPATCH_UNTOUCHED || dev.lull.shaders.ShaderPipeline.active || !WORKER_REFUSED.isEmpty() && WORKER_REFUSED.contains(e.getType())) return false;
+        if (!DISPATCH_UNTOUCHED) return no(0);
+        if (dev.lull.shaders.ShaderPipeline.active) return no(1);
+        if (!WORKER_REFUSED.isEmpty() && WORKER_REFUSED.contains(e.getType())) return no(2);
         Minecraft mc = Minecraft.getInstance();
         EntityRenderDispatcher d = mc.getEntityRenderDispatcher();
-        if (LIB_UNSAFE.get(d.getRenderer(e).getClass())) return false;
+        if (LIB_UNSAFE.get(d.getRenderer(e).getClass())) return no(3);
         if (buffers != mc.renderBuffers().bufferSource() || e instanceof AbstractClientPlayer || e.hasCustomName() || e.displayFireAnimation()
-                || d.shouldRenderHitBoxes() || listened || dev.lull.api.Compat.parallelRenderExcluded(e)) return false;
+                || d.shouldRenderHitBoxes()) return no(4);
+        if (listened) return no(5);
+        if (dev.lull.api.Compat.parallelRenderExcluded(e)) return no(6);
+        if (!(!Boolean.getBoolean("lab.opt.RenderCacheMixin") || RenderCache.animated(e) || dev.lull.api.Compat.renderCacheExcluded(e))) return no(7);
         // with the render cache on: what it draws the vanilla way (animated, or excluded from it by Compat)
-        return !Boolean.getBoolean("lab.opt.RenderCacheMixin") || RenderCache.animated(e) || dev.lull.api.Compat.renderCacheExcluded(e);
+        return true;
     }
+
+
 
     /** After the loop: every job in order. */
     public static void drain(LevelRenderer lr) {
@@ -492,6 +510,11 @@ public final class ParallelRender {
     }
 
     public static String report() {
+        if (WHY) {
+            StringBuilder w = new StringBuilder("parallel render, why on the render thread:");
+            for (int i = 0; i < WHY_N.length; i++) if (WHY_N[i] > 0) w.append(' ').append(WHY_NAMES[i]).append(' ').append(WHY_N[i]).append(';');
+            System.out.println(w);
+        }
         return String.format(java.util.Locale.ROOT, "parallel render: %d workers, jobs %d, on workers %d (render thread helped %d), on the render thread %d, failed %d, refused %d, journaled calls %d, part records merged in %.0f ms%s", THREADS, jobs, parallel,
                 helped, sequential, failed, refused, journaled, mergeNanos / 1e6, (WORKER_REFUSED.isEmpty() ? "" : ", kept on the render thread " + WORKER_REFUSED) + (VERIFY ? ", verified " + verified + ", mismatches " + mismatches : ""));
     }

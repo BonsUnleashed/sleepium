@@ -25,6 +25,9 @@ public abstract class ParallelEntitiesMixin {
 
     @Inject(method = "renderLevel", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/MultiBufferSource$BufferSource;endLastBatch()V", ordinal = 0))
     private void sleep$drain(CallbackInfo ci) {
+        // -Dsleep.drawStats: the entity loop ("entities"), the drain of its queue, and what follows until block entities
+        if (dev.lull.DrawStats.ON) dev.lull.DrawStats.section("entities/drain");
         ParallelRender.drain((LevelRenderer) (Object) this);
+        if (dev.lull.DrawStats.ON) dev.lull.DrawStats.section("entities/after");
     }
 }
