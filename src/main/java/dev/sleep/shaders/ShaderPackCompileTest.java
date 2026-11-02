@@ -4,17 +4,17 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
-import java.util.Map;
-import java.util.TreeMap;
 import net.minecraft.client.Minecraft;
 import org.lwjgl.opengl.GL20;
 import org.lwjgl.opengl.GL43;
 
 /**
- * -Dsleep.shaders.compileTest=<pack>: on the first frame, every program of the pack's overworld folder is
- * preprocessed (default option values), translated to core GLSL and compiled + linked; per program OK or the driver's
- * log. Sources as compiled and the logs go to run/sleep/shaders/<pack>/. -Dsleep.shaders.compileTest.quit=true quits.
+ * -Dsleep.shaders.compileTest=<pack>: on the first frame, the pack's overworld program set is loaded (default option
+ * values + shaderpacks/<pack>.txt), every program compiled + linked; per program OK or the driver's log, and the table
+ * of served programs (fallbacks), draw buffers and pack-wide const directives. Sources as compiled and the logs go to
+ * run/sleep/shaders/<pack>/. -Dsleep.shaders.compileTest.quit=true quits.
  */
 public final class ShaderPackCompileTest {
     private static boolean done;
@@ -39,54 +39,34 @@ public final class ShaderPackCompileTest {
     static void run(Path gameDir, String packName) throws Exception {
         long t0 = System.nanoTime();
         ShaderPackSource src = ShaderPackSource.open(gameDir.resolve("shaderpacks"), packName);
-        String world = src.list("world0").isEmpty() ? "" : "world0/";
-        Map<String, String[]> programs = new TreeMap<>();   // name -> {vsh, gsh, fsh, csh}
-        for (String f : src.list(world.isEmpty() ? "" : "world0")) {
-            String rel = f.substring(world.length());
-            if (rel.contains("/")) continue;
-            int dot = rel.lastIndexOf('.');
-            if (dot < 0) continue;
-            String base = rel.substring(0, dot), ext = rel.substring(dot + 1);
-            int k = switch (ext) {
-                case "vsh" -> 0;
-                case "gsh" -> 1;
-                case "fsh" -> 2;
-                case "csh" -> 3;
-                default -> -1;
-            };
-            if (k >= 0) programs.computeIfAbsent(base, x -> new String[4])[k] = f;
-        }
-        List<String> macros = StandardMacros.build(List.of());
         PackOptions options = PackOptions.scan(src);
-        System.out.println("[sleep/shaders] " + options.options.size() + " options, e.g. SHADOW_QUALITY=" + options.value("SHADOW_QUALITY"));
+        Path userFile = gameDir.resolve("shaderpacks").resolve(src.name + ".txt");
+        if (Files.exists(userFile)) options.load(Files.readString(userFile));
+        List<String> macros = StandardMacros.build(List.of());
+        List<String> withOptions = new ArrayList<>(macros);
+        withOptions.addAll(options.asMacros());
+        PackProperties props = PackProperties.load(src, withOptions);
+        ProgramSet set = ProgramSet.load(src, options, macros, props, "world0");
+        long tLoad = System.nanoTime();
         Path out = gameDir.resolve("sleep/shaders/" + src.name);
         Files.createDirectories(out);
-        int ok = 0, bad = 0;
+        int ok = 0;
         List<String> failed = new ArrayList<>();
-        for (var e : programs.entrySet()) {
-            String name = e.getKey();
-            String[] files = e.getValue();
+        for (ProgramSet.Program p : set.programs.values()) {
             StringBuilder log = new StringBuilder();
+            for (String e : p.errors) log.append(e).append('\n');
             List<Integer> shaders = new ArrayList<>();
             boolean compiled = true;
             for (int k = 0; k < 4; k++) {
-                if (files[k] == null) continue;
-                GlslTranslator.Stage stage = GlslTranslator.Stage.values()[k];
-                GlslPreprocessor pp = new GlslPreprocessor(src::text, macros, options::rewrite);
-                String pre = pp.process(files[k]);
-                if (!pp.errors().isEmpty()) log.append(stage).append(" preprocessor: ").append(pp.errors()).append('\n');
-                boolean gb = name.startsWith("gbuffers") || name.startsWith("shadow") && !name.startsWith("shadowcomp");
-                GlslTranslator.Result r = GlslTranslator.translate(pre, stage, gb);
-                if (!r.notes().isEmpty()) log.append(stage).append(" translator: ").append(r.notes()).append('\n');
+                if (p.sources[k] == null) continue;
                 String ext = new String[] {"vsh", "gsh", "fsh", "csh"}[k];
-                Files.writeString(out.resolve(name + "." + ext + ".glsl"), r.text(), StandardCharsets.UTF_8);
-                int type = new int[] {GL20.GL_VERTEX_SHADER, 0x8DD9, GL20.GL_FRAGMENT_SHADER, GL43.GL_COMPUTE_SHADER}[k];
-                int sh = GL20.glCreateShader(type);
-                GL20.glShaderSource(sh, r.text());
+                Files.writeString(out.resolve(p.name + "." + ext + ".glsl"), p.sources[k], StandardCharsets.UTF_8);
+                int sh = GL20.glCreateShader(new int[] {GL20.GL_VERTEX_SHADER, 0x8DD9, GL20.GL_FRAGMENT_SHADER, GL43.GL_COMPUTE_SHADER}[k]);
+                GL20.glShaderSource(sh, p.sources[k]);
                 GL20.glCompileShader(sh);
                 if (GL20.glGetShaderi(sh, GL20.GL_COMPILE_STATUS) == 0) {
                     compiled = false;
-                    log.append(stage).append(" compile:\n").append(GL20.glGetShaderInfoLog(sh, 32768)).append('\n');
+                    log.append(ext).append(" compile:\n").append(GL20.glGetShaderInfoLog(sh, 32768)).append('\n');
                 }
                 shaders.add(sh);
             }
@@ -103,13 +83,25 @@ public final class ShaderPackCompileTest {
             }
             for (int sh : shaders) GL20.glDeleteShader(sh);
             if (compiled) ok++;
-            else {
-                bad++;
-                failed.add(name);
-            }
-            if (log.length() > 0) Files.writeString(out.resolve(name + ".log"), log.toString(), StandardCharsets.UTF_8);
+            else failed.add(p.name);
+            if (log.length() > 0) Files.writeString(out.resolve(p.name + ".log"), log.toString(), StandardCharsets.UTF_8);
         }
-        System.out.printf("[sleep/shaders] compile test %s (%s): %d programs, %d ok, %d failed %s, %.0f ms; sources and logs in %s%n", src.name,
-                world.isEmpty() ? "shaders/" : world, programs.size(), ok, bad, failed, (System.nanoTime() - t0) / 1e6, out);
+        StringBuilder table = new StringBuilder();
+        for (String g : ProgramSet.FALLBACK.keySet()) {
+            ProgramSet.Program p = set.resolve(g);
+            table.append(String.format("  %-30s -> %-26s writes %s%n", g, p == null ? "(none: vanilla)" : p.name,
+                    p == null ? "" : Arrays.toString(p.drawBuffers) + (p.explicitDrawBuffers ? "" : " (default)")));
+        }
+        for (ProgramSet.Program p : set.programs.values())
+            if (!ProgramSet.FALLBACK.containsKey(p.name))
+                table.append(String.format("  %-30s %s%s writes %s%n", p.name, p.computeOnly() ? "compute only" : "",
+                        p.computes.isEmpty() ? "" : " + " + p.computes.size() + " compute", Arrays.toString(p.drawBuffers)));
+        table.append("  consts: ").append(set.consts).append('\n');
+        table.append("  properties: ").append(props.all.size()).append(" keys, ").append(props.customUniforms.size()).append(" custom uniforms")
+                .append(props.errors.isEmpty() ? "" : ", errors " + props.errors).append('\n');
+        Files.writeString(out.resolve("_programs.txt"), table.toString(), StandardCharsets.UTF_8);
+        System.out.printf("[sleep/shaders] compile test %s (%s): %d options, %d programs, %d ok, %d failed %s; load %.0f ms, compile %.0f ms; %s%n%s",
+                src.name, set.folder.isEmpty() ? "shaders/" : set.folder, options.options.size(), set.programs.size(), ok, failed.size(), failed,
+                (tLoad - t0) / 1e6, (System.nanoTime() - tLoad) / 1e6, out, table);
     }
 }
