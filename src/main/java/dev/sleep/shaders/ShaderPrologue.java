@@ -88,7 +88,7 @@ final class ShaderPrologue {
                         .append("uint sl_vpad(int v) { return sl_vdata[v * ").append(stride).append(" + ").append(nrm / 4).append("] >> 24; }\n");
         }
         StringBuilder pro = new StringBuilder("void main() {\n");
-        if (multi) pro.append("    sl_chunkOffset = ProbeMultiDraw != 0 ? ProbeOffsets[gl_DrawIDARB].xyz : ChunkOffset;\n");
+        if (multi) pro.append("    sl_chunkOffset = ProbeMultiDraw != 0 ? ProbeOffsets[" + dev.sleep.optsupport.ChunkMultiDraw.drawIndex() + "].xyz : ChunkOffset;\n");
         if (parts) pro.append("    vaPosition = ProbePartMode == 2 ? (probeParts[gl_DrawIDARB].pose * vec4(sl_rawPosition, 1.0)).xyz : sl_rawPosition;\n");
         if (raw[1]) pro.append("    vaUV1 = sl_rawUV1 & 255;\n");
         if (raw[2]) pro.append("    vaUV2 = sl_rawUV2 & 255;\n");

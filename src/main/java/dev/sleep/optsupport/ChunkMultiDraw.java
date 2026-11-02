@@ -80,14 +80,14 @@ public final class ChunkMultiDraw {
                 .replace(decl, decl + "\nuniform int ProbeMultiDraw;\n" + (ssbo()
                         ? "layout(std430) buffer ProbeChunkOffsets { vec4 ProbeOffsets[]; };"
                         : "layout(std140) uniform ProbeChunkOffsets { vec4 ProbeOffsets[" + MAX_DRAWS + "]; };"))
-                .replace(use, "vec3 pos = Position; if (ProbeMultiDraw == 2) pos = (Position - 2048.0) * 0.00390625; if (ProbeMultiDraw != 0) pos += ProbeOffsets[gl_DrawIDARB].xyz; else pos += ChunkOffset;")
+                .replace(use, "vec3 pos = Position; if (ProbeMultiDraw == 2) pos = (Position - 2048.0) * 0.00390625; if (ProbeMultiDraw != 0) pos += ProbeOffsets[" + drawIndex() + "].xyz; else pos += ChunkOffset;")
                 // (statements, no ternary inside an expression: Veil reprints vanilla shader sources and drops their parentheses)
                 .replace(uv, "texCoord0 = ProbeMultiDraw == 2 ? UV0 * 0.0000152587890625 : UV0;");
         String light = "vertexColor = Color * minecraft_sample_lightmap(Sampler2, UV2);";
         if (LightVolumes.ON && ssbo() && out.contains(light)) {
             out = out.replaceFirst("#extension GL_ARB_shader_draw_parameters : require", "#extension GL_ARB_shader_draw_parameters : require\n#extension GL_ARB_explicit_attrib_location : require")
                     .replace("void main() {", LightVolumes.glsl() + "\nvoid main() {")
-                    .replace(light, "ivec2 probe_uv2 = ProbeMultiDraw != 0 ? probeUV2(ProbeOffsets[gl_DrawIDARB].w) : UV2; vertexColor = Color * minecraft_sample_lightmap(Sampler2, probe_uv2);");
+                    .replace(light, "ivec2 probe_uv2 = ProbeMultiDraw != 0 ? probeUV2(ProbeOffsets[" + drawIndex() + "].w) : UV2; vertexColor = Color * minecraft_sample_lightmap(Sampler2, probe_uv2);");
             LIGHT_PATCHED.add(name);
         }
         PATCHED.add(name);
@@ -795,7 +795,7 @@ public final class ChunkMultiDraw {
                     MemoryUtil.memPutInt(p + 4, 1);
                     MemoryUtil.memPutInt(p + 8, 0);
                     MemoryUtil.memPutInt(p + 12, MemoryUtil.memGetInt(a.bases + 4L * i));
-                    MemoryUtil.memPutInt(p + 16, 0);
+                    MemoryUtil.memPutInt(p + 16, i);   // base instance = the draw's index: its offset (a GPU pass may drop draws)
                 }
             }
             long tUp = System.nanoTime();
@@ -904,6 +904,15 @@ public final class ChunkMultiDraw {
     private static final double EPS = 1.0 / 64;
     /** a shadow pass draws: every face bucket (seen from the light, not the camera), no reuse of the camera's lists */
     public static boolean allFaces;
+
+    /**
+     * The shader expression of a draw's index into the offsets: the base instance each indirect command carries
+     * (draws can then be filtered and compacted on the GPU - occlusion culling - and each still finds its offset),
+     * else the draw ID (the non-indirect fallback, whose commands carry no base instance).
+     */
+    public static String drawIndex() {
+        return indirect() && ssbo() ? "gl_BaseInstanceARB" : "gl_DrawIDARB";
+    }
     /** -Dlab.chunkmd.sortNear: the camera's sections ordered nearest first (a reused array; experiment) */
     private static final boolean SORT_NEAR = Boolean.getBoolean("lab.chunkmd.sortNear");
     /** -Dlab.chunkmd.sortFar (with sortNear): farthest first - an overdraw probe */
