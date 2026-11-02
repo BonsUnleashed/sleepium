@@ -1,5 +1,25 @@
 # Sleepium
 
+<p align="center"><img src="art/logo-512.png" width="160" alt="Sleepium logo"></p>
+
+<p align="center">
+<a href="https://modrinth.com/mod/sleepium"><img alt="Modrinth" src="https://img.shields.io/badge/Modrinth-Sleepium-1bd96a?logo=modrinth&logoColor=white"></a>
+<a href="https://www.curseforge.com/projects/1780057"><img alt="CurseForge" src="https://img.shields.io/badge/CurseForge-Sleepium-f16436?logo=curseforge&logoColor=white"></a>
+<a href="https://github.com/ha7gawa/sleepium/releases"><img alt="Release" src="https://img.shields.io/github/v/release/ha7gawa/sleepium?label=release"></a>
+<img alt="Minecraft 1.21.1" src="https://img.shields.io/badge/Minecraft-1.21.1-62b47a">
+<img alt="NeoForge 21.1.251+" src="https://img.shields.io/badge/NeoForge-21.1.251%2B-e68a00">
+<a href="LICENSE"><img alt="LGPL-3.0" src="https://img.shields.io/badge/license-LGPL--3.0-blue"></a>
+</p>
+
+**Download:** [Modrinth](https://modrinth.com/mod/sleepium) · [CurseForge](https://www.curseforge.com/projects/1780057) ·
+[GitHub releases](https://github.com/ha7gawa/sleepium/releases). Bugs and ideas: [issues](https://github.com/ha7gawa/sleepium/issues).
+
+<p align="center"><img src="art/gallery/ticks-n100.png" width="720" alt="Server time per tick on an Intel N100, vanilla vs Sleepium"></p>
+
+| Complementary Reimagined, run by Sleepium's own renderer (beta) | The settings screen (Options → Sleepium...) |
+|---|---|
+| <img src="art/gallery/shaders-complementary.png" alt="Complementary Reimagined on Sleepium"> | <img src="art/gallery/settings-features.png" alt="Sleepium settings screen"> |
+
 A NeoForge mod for Minecraft 1.21.1 that makes servers and clients cheaper to run **without changing what the game
 computes**. A hopper with nothing to do, a resting item stack, a furnace waiting for fuel: in vanilla each of them runs
 its full tick 20 times a second only to find out that nothing happened. The engine proves from the class's own bytecode

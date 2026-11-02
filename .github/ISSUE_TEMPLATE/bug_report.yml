@@ -1,0 +1,48 @@
+name: Bug report
+description: Something works differently with Sleepium than without it, a crash, or a mod that does not get along
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. Sleepium aims to keep the game exactly as vanilla computes it, so "it behaves differently with Sleepium" is a bug too.
+        Tip: the settings screen (Options → Sleepium...) can switch feature groups off - telling which group causes it helps a lot.
+  - type: input
+    id: version
+    attributes:
+      label: Sleepium version
+      placeholder: 1.0.0+mc1.21.1
+    validations:
+      required: true
+  - type: input
+    id: neoforge
+    attributes:
+      label: NeoForge version
+      placeholder: 21.1.251
+    validations:
+      required: true
+  - type: dropdown
+    id: side
+    attributes:
+      label: Where
+      options: [Client (singleplayer), Client (multiplayer), Dedicated server, Both]
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened, and what did you expect
+      description: Steps to reproduce if you have them.
+    validations:
+      required: true
+  - type: textarea
+    id: mods
+    attributes:
+      label: Other mods
+      description: The mods folder's list, or the modpack and its version. A shaderpack too, if one is on.
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: Link to logs/latest.log or a crash report (mclo.gs or a gist), or paste it here.
+      render: text

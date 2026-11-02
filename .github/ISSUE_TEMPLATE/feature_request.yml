@@ -1,0 +1,16 @@
+name: Idea or request
+description: Something to optimise, a mod to support, a shaderpack feature that is missing
+labels: [enhancement]
+body:
+  - type: textarea
+    id: idea
+    attributes:
+      label: The idea
+      description: What should be faster or supported, and where it hurts now (a scene, a mod, a pack).
+    validations:
+      required: true
+  - type: textarea
+    id: numbers
+    attributes:
+      label: Numbers, if you have them
+      description: MSPT from /tick query, fps, a spark profile link.
