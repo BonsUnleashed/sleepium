@@ -51,7 +51,20 @@ public final class PackShader extends ShaderInstance {
      * alphaTest: "GREATER 0.1" style (func ref) or null - Iris's alpha test for a legacy program writing gl_FragData:
      * its main is wrapped and the fragment discarded when output 0's alpha fails the test.
      */
+    /** time spent preparing sources (Java) and in vanilla's compile + link (the driver), all instances */
+    static long prepNanos, glNanos;
+
+    /** an instance's sources and resource JSON, made without GL (any thread) */
+    record Prepared(String uniqueName, String vsh, String fsh, String json) {}
+
     static PackShader create(String uniqueName, ProgramSet.Program p, VertexFormat format, String alphaTest, String requested) throws IOException {
+        long t0 = System.nanoTime();
+        Prepared pr = prepare(uniqueName, p, format, alphaTest, requested);
+        prepNanos += System.nanoTime() - t0;
+        return build(pr, p, format);
+    }
+
+    static Prepared prepare(String uniqueName, ProgramSet.Program p, VertexFormat format, String alphaTest, String requested) throws IOException {
         String[] pro = ShaderPrologue.apply(p.sources[0], p.sources[2], format, requested.startsWith("gbuffers_block"));
         String vsh = pro[0], fsh = withAlphaTest(pro[1], alphaTest);
         if (Boolean.getBoolean("sleep.shaders.dump")) {   // the sources as compiled, per instance
@@ -60,18 +73,19 @@ public final class PackShader extends ShaderInstance {
             java.nio.file.Files.writeString(d.resolve(uniqueName + ".vsh"), vsh);
             java.nio.file.Files.writeString(d.resolve(uniqueName + ".fsh"), fsh);
         }
+        java.util.Set<String> ids = identifiers(vsh, fsh);
         StringBuilder json = new StringBuilder("{\"vertex\":\"").append(uniqueName).append("\",\"fragment\":\"").append(uniqueName).append("\",\"samplers\":[");
         boolean first = true;
         for (int i = 0; i < 12; i++) {
             String s = "Sampler" + i;
-            if (!word(vsh, s) && !word(fsh, s)) continue;
+            if (!ids.contains(s)) continue;
             json.append(first ? "" : ",").append("{\"name\":\"").append(s).append("\"}");
             first = false;
         }
         json.append("],\"uniforms\":[");
         first = true;
         for (String[] u : VANILLA_UNIFORMS) {
-            if (!word(vsh, u[0]) && !word(fsh, u[0])) continue;
+            if (!ids.contains(u[0])) continue;
             int n = Integer.parseInt(u[2]);
             StringBuilder vals = new StringBuilder();
             for (int i = 0; i < n; i++) vals.append(i == 0 ? "" : ",").append(n == 16 && i % 5 == 0 ? "1.0" : "0.0");
@@ -80,8 +94,13 @@ public final class PackShader extends ShaderInstance {
             first = false;
         }
         json.append("]}");
+        return new Prepared(uniqueName, vsh, fsh, json.toString());
+    }
+
+    /** the GL program of prepared sources (render thread) */
+    static PackShader build(Prepared pr, ProgramSet.Program p, VertexFormat format) throws IOException {
+        String vsh = pr.vsh(), fsh = pr.fsh(), js = pr.json(), uniqueName = pr.uniqueName();
         var vanillaPack = Minecraft.getInstance().getVanillaPackResources();
-        String js = json.toString();
         ResourceProvider rp = loc -> {
             String path = loc.getPath();
             String text = path.endsWith(".json") ? js : path.endsWith(".vsh") ? vsh : path.endsWith(".fsh") ? fsh : null;
@@ -89,13 +108,18 @@ public final class PackShader extends ShaderInstance {
             byte[] bytes = text.getBytes(StandardCharsets.UTF_8);
             return Optional.of(new Resource(vanillaPack, () -> new ByteArrayInputStream(bytes)));
         };
-        return new PackShader(rp, uniqueName, format, p, vsh.contains("SlVertexData"));
+        long t1 = System.nanoTime();
+        try {
+            return new PackShader(rp, uniqueName, format, p, vsh.contains("SlVertexData"));
+        } finally {
+            glNanos += System.nanoTime() - t1;
+        }
     }
 
     private static final java.util.regex.Pattern MAIN = java.util.regex.Pattern.compile("\\bvoid\\s+main\\s*\\(\\s*(void)?\\s*\\)");
 
     static String withAlphaTest(String fsh, String test) {
-        if (test == null || !word(fsh, "sl_FragData0") || Boolean.getBoolean("sleep.shaders.noAlphaWrap")) return fsh;
+        if (test == null || !fsh.contains("sl_FragData0") || Boolean.getBoolean("sleep.shaders.noAlphaWrap")) return fsh;
         String[] t = test.trim().split("\\s+");
         if (t.length != 2) return fsh;
         String op = switch (t[0]) {
@@ -114,6 +138,29 @@ public final class PackShader extends ShaderInstance {
         String cond = op.equals("never") ? "false" : "sl_FragData0.a " + op + " " + t[1];
         return fsh.substring(0, m.start()) + "void sl_main()" + fsh.substring(m.end())
                 + "\nvoid main() {\n    sl_main();\n    if (!(" + cond + ")) discard;\n}\n";
+    }
+
+    /**
+     * Every identifier of the sources, in one pass (a regex per name over ~200 KB sources made a pack instance cost
+     * ~90 ms of Java: 8.5 s for Complementary's 92 instances, measured 11-02).
+     */
+    static java.util.Set<String> identifiers(String... sources) {
+        java.util.Set<String> out = new java.util.HashSet<>();
+        for (String src : sources) {
+            int n = src.length(), i = 0;
+            while (i < n) {
+                char c = src.charAt(i);
+                if (Character.isLetter(c) || c == '_') {
+                    int j = i + 1;
+                    while (j < n && (Character.isLetterOrDigit(src.charAt(j)) || src.charAt(j) == '_')) j++;
+                    out.add(src.substring(i, j));
+                    i = j;
+                } else if (Character.isDigit(c)) {
+                    while (i < n && (Character.isLetterOrDigit(src.charAt(i)) || src.charAt(i) == '.')) i++;
+                } else i++;
+            }
+        }
+        return out;
     }
 
     /** name as a whole identifier in the source */

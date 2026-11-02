@@ -50,6 +50,14 @@ public final class ShaderPipeline {
     private final List<CompositeProgram> deferred = new ArrayList<>(), composite = new ArrayList<>(), begin = new ArrayList<>(), prepare = new ArrayList<>();
     private CompositeProgram finalPass;
     private final Map<ShaderInstance, Map<String, PackShader>> shaders = new java.util.IdentityHashMap<>();
+    private final Map<String, PackShader.Prepared> prepared = new java.util.concurrent.ConcurrentHashMap<>();
+
+    private String uniqueName(ProgramSet.Program p, String key) {
+        return "sleep_pack" + generation + "_" + p.name + "_" + Integer.toHexString(key.hashCode());
+    }
+
+    /** compiled instances by what makes their source (see shaderFor) */
+    private final Map<String, PackShader> shared = new HashMap<>();
     private final Map<String, Integer> stageTextures = new HashMap<>();   // "<stage>.<sampler>" -> texture id
     private int noiseTex, normalsTex, specularTex, shadowDepthTex, shadowColorTex;
     private static final Map<String, Integer> UNITS = new HashMap<>(RenderTargets.UNITS);
@@ -277,6 +285,7 @@ public final class ShaderPipeline {
 
     /** LevelRenderer.renderLevel, after vanilla's clear */
     public void beginLevel(Camera camera, Matrix4f frustumMatrix, Matrix4f projectionMatrix, float partialTick) {
+        if (!prewarmed) prewarm();
         long t0 = STATS ? System.nanoTime() : 0;
         var main = Minecraft.getInstance().getMainRenderTarget();
         targets.resize(main.width, main.height);
@@ -556,6 +565,97 @@ public final class ShaderPipeline {
 
     // ------------------------------------------------------------------ programs in place of vanilla's
 
+    private boolean prewarmed;
+    /** the phases a vanilla shader can be drawn in: phase name, hand, shadow, shadow block entities */
+    private static final Object[][] PHASES = {{"", false, false, false}, {"sky", false, false, false}, {"clouds", false, false, false},
+            {"weather", false, false, false}, {"blockentities", false, false, false}, {"particles", false, false, false},
+            {"hand", true, false, false}, {"", false, true, false}, {"", false, true, true}};
+
+    /**
+     * Before the first frame of a level (and again after a resource reload makes new vanilla instances): every
+     * program this pack can give each loaded vanilla shader, in every phase, compiled now - not at the moment a mob
+     * or an effect is first drawn (a 20-100 ms hitch each). The driver compiles on its own threads meanwhile
+     * (KHR_parallel_shader_compile).
+     */
+    private void prewarm() {
+        prewarmed = true;
+        long t0 = System.nanoTime();
+        var caps = org.lwjgl.opengl.GL.getCapabilities();
+        if (caps.GL_KHR_parallel_shader_compile) org.lwjgl.opengl.KHRParallelShaderCompile.glMaxShaderCompilerThreadsKHR(0xFFFFFFFF);
+        Map<String, ShaderInstance> vanilla = ((dev.sleep.shadermixin.ShaderGameRendererShadersAccessor) Minecraft.getInstance().gameRenderer).sleep$shaders();
+        String savedPhase = phase;
+        boolean savedHand = handPhase, savedShadow = shadowPhase, savedBe = shadowBlockEntitiesPhase, savedIn = inLevel;
+        int before = shared.size();
+        inLevel = true;
+        try {
+            // 1: what every vanilla shader / phase pair needs (render thread, cheap); 2: the sources made on every
+            // core (string work only); 3: the GL programs below, through shaderFor, one after another
+            Map<String, Object[]> specs = new HashMap<>();
+            for (ShaderInstance v : vanilla.values()) {
+                for (Object[] ph : PHASES) {
+                    phase = (String) ph[0];
+                    handPhase = (Boolean) ph[1];
+                    shadowPhase = (Boolean) ph[2];
+                    shadowBlockEntitiesPhase = (Boolean) ph[3];
+                    if (shadowPhase && shadow == null) continue;
+                    String program = programFor(v.getName());
+                    if (program == null) continue;
+                    ProgramSet.Program p = set.resolve(program);
+                    if (p == null || p.sources[0] == null || p.sources[2] == null) continue;
+                    String alpha = alphaTest(v.getName(), program);
+                    boolean be = program.startsWith("gbuffers_block") || program.equals("shadow_block");
+                    String key = p.name + "|" + System.identityHashCode(v.getVertexFormat()) + "|" + alpha + "|" + be;
+                    if (!shared.containsKey(key)) specs.putIfAbsent(key, new Object[] {p, v.getVertexFormat(), alpha, program});
+                }
+            }
+            long tp = System.nanoTime();
+            specs.entrySet().parallelStream().forEach(e -> {
+                Object[] sp = e.getValue();
+                ProgramSet.Program p = (ProgramSet.Program) sp[0];
+                try {
+                    prepared.put(e.getKey(), PackShader.prepare(uniqueName(p, e.getKey()), p, (com.mojang.blaze3d.vertex.VertexFormat) sp[1], (String) sp[2], (String) sp[3]));
+                } catch (Exception ex) {
+                    System.out.println("[sleep/shaders] preparing " + p.name + ": " + ex);
+                }
+            });
+            PackShader.prepNanos += System.nanoTime() - tp;
+            for (ShaderInstance v : vanilla.values()) {
+                for (Object[] ph : PHASES) {
+                    phase = (String) ph[0];
+                    handPhase = (Boolean) ph[1];
+                    shadowPhase = (Boolean) ph[2];
+                    shadowBlockEntitiesPhase = (Boolean) ph[3];
+                    if (shadowPhase && shadow == null) continue;
+                    shaderFor(v);
+                }
+            }
+        } finally {
+            phase = savedPhase;
+            handPhase = savedHand;
+            shadowPhase = savedShadow;
+            shadowBlockEntitiesPhase = savedBe;
+            inLevel = savedIn;
+        }
+        ShaderPipelineHooks.resetProgramCache();
+        System.out.printf("[sleep/shaders] prepared %d program instances (%d vanilla shader / phase pairs) for %d vanilla shaders in %.0f ms"
+                + " (sources %.0f ms, compile + link %.0f ms)%n", shared.size() - before, countShaders(), vanilla.size(), (System.nanoTime() - t0) / 1e6,
+                PackShader.prepNanos / 1e6, PackShader.glNanos / 1e6);
+        if (false) System.out.printf("%d%d%d%f", shared.size() - before,
+                countShaders(), vanilla.size(),
+                (System.nanoTime() - t0) / 1e6);
+    }
+
+    private int countShaders() {
+        int n = 0;
+        for (Map<String, PackShader> m : shaders.values()) n += m.size();
+        return n;
+    }
+
+    /** a resource reload made new vanilla instances: prepare again */
+    public void reloaded() {
+        prewarmed = false;
+    }
+
     /** the pack's program for a vanilla shader in the current phase, or vanilla's own */
     public ShaderInstance shaderFor(ShaderInstance vanilla) {
         if (!inLevel || vanilla == null || vanilla instanceof PackShader) return vanilla;
@@ -568,12 +668,22 @@ public final class ShaderPipeline {
         if (byProgram == null) shaders.put(vanilla, byProgram = new HashMap<>());
         PackShader s = byProgram.get(program);
         if (s == null && !byProgram.containsKey(program)) {
-            try {
-                s = PackShader.create("sleep_pack" + generation + "_" + program + "_" + Integer.toHexString(vanilla.getName().hashCode()), p, vanilla.getVertexFormat(),
-                        alphaTest(vanilla.getName(), program), program);
-            } catch (Exception e) {
-                System.out.println("[sleep/shaders] " + p.name + " for " + vanilla.getName() + ": " + e);
-                s = null;
+            // one instance for every vanilla shader giving the same source: the pack program, the vertex format, the
+            // alpha test, which id the overlay slot holds (11-02: 326 instances, 88 ms each, became a few dozen)
+            String alpha = alphaTest(vanilla.getName(), program);
+            boolean be = program.startsWith("gbuffers_block") || program.equals("shadow_block");
+            String key = p.name + "|" + System.identityHashCode(vanilla.getVertexFormat()) + "|" + alpha + "|" + be;
+            s = shared.get(key);
+            if (s == null && !shared.containsKey(key)) {
+                try {
+                    PackShader.Prepared pr = prepared.remove(key);
+                    s = pr != null ? PackShader.build(pr, p, vanilla.getVertexFormat())
+                            : PackShader.create(uniqueName(p, key), p, vanilla.getVertexFormat(), alpha, program);
+                } catch (Exception e) {
+                    System.out.println("[sleep/shaders] " + p.name + " for " + vanilla.getName() + ": " + e);
+                    s = null;
+                }
+                shared.put(key, s);
             }
             byProgram.put(program, s);
         }

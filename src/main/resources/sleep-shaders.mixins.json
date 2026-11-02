@@ -9,6 +9,7 @@
     "ShaderBlockEntityIdsMixin",
     "ShaderEntityIdsMixin",
     "ShaderGameRendererMixin",
+    "ShaderGameRendererShadersAccessor",
     "ShaderItemIdsMixin",
     "ShaderLevelMixin",
     "ShaderProgramCacheAccessor",

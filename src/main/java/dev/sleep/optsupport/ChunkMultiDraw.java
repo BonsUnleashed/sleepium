@@ -597,7 +597,11 @@ public final class ChunkMultiDraw {
      */
     public static boolean draw(RenderType layer, Iterable<SectionRenderDispatcher.RenderSection> visible, double x, double y, double z,
             net.minecraft.client.renderer.ShaderInstance shader) {
-        if (dev.sleep.DrawStats.ON) dev.sleep.DrawStats.phaseBegin(4);
+        if (dev.sleep.DrawStats.ON) {
+            dev.sleep.DrawStats.phaseBegin(4);
+            // the camera's layers as their own sections (GPU time, pipeline statistics per layer)
+            if (!allFaces) dev.sleep.DrawStats.section(layer == RenderType.solid() ? "terrain/solid" : layer == RenderType.cutoutMipped() ? "terrain/cutout_mipped" : "terrain/cutout");
+        }
         try {
             return draw0(layer, visible, x, y, z, shader);
         } finally {
