@@ -25,6 +25,10 @@ public final class RecordingBuilder implements VertexConsumer {
     int n;
     private long v;
     private int fill;
+    /** VertexTags: runs of vertices written under one state - each run's first vertex and its three ids */
+    int runs;
+    int[] runAt = new int[2], runTag = new int[6];
+    private final int[] now = new int[3];
 
     private static final int COLOR = 1, UV0 = 2, UV1 = 4, UV2 = 8, NORMAL = 16;
 
@@ -47,6 +51,23 @@ public final class RecordingBuilder implements VertexConsumer {
     public void reset() {
         n = 0;
         fill = 0;
+        runs = 0;
+    }
+
+    /** a new run when the state differs from the last run's */
+    private void tag(int vertex) {
+        VertexTags.read(now, 0);
+        if (runs > 0) {
+            int k = (runs - 1) * 3;
+            if (runTag[k] == now[0] && runTag[k + 1] == now[1] && runTag[k + 2] == now[2]) return;
+        }
+        if (runs == runAt.length) {
+            runAt = java.util.Arrays.copyOf(runAt, runs * 2);
+            runTag = java.util.Arrays.copyOf(runTag, runs * 6);
+        }
+        runAt[runs] = vertex;
+        System.arraycopy(now, 0, runTag, runs * 3, 3);
+        runs++;
     }
 
     /** count whole vertices appended by the caller (BlockMeshMemo's replay): their first byte */
@@ -58,6 +79,7 @@ public final class RecordingBuilder implements VertexConsumer {
             cap = c;
         }
         long dst = mem + (long) n * vertexSize;
+        if (VertexTags.ON) tag(n);
         n += count;
         v = mem + (long) (n - 1) * vertexSize;
         fill = 0;
@@ -73,6 +95,7 @@ public final class RecordingBuilder implements VertexConsumer {
             cap = c;
         }
         v = mem + (long) n * vertexSize;
+        if (VertexTags.ON) tag(n);
         n++;
         fill = initialFill;
         long p = v + posOff;

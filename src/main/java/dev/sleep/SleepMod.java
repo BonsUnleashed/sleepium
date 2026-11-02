@@ -52,6 +52,8 @@ public final class SleepMod {
         gameBus.addListener(net.neoforged.neoforge.event.level.ChunkEvent.Load.class, GenBench::onChunkLoad);
         if (FMLEnvironment.dist.isClient()) {
             ClientMeter.register(gameBus);   // class is only loaded on the physical client
+            gameBus.addListener(net.neoforged.bus.api.EventPriority.HIGHEST, net.neoforged.neoforge.client.event.RenderFrameEvent.Pre.class,
+                    e -> dev.sleep.optsupport.RenderCache.frame());
         }
     }
 }

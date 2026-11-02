@@ -141,6 +141,30 @@ final class ClientMeter {
         if (stopAtNanos >= 0 && n < CAPACITY) {
             renders[n] = System.nanoTime() - preNanos;   // belongs to the frame that is completed at the next Pre
         }
+        if (dev.sleep.optsupport.RenderCache.SPIKES) spikes(System.nanoTime() - preNanos);
+    }
+
+    private static long spRecords, spRecordNs, spRealNs, spHashNs, spHashes, spHits;
+    private static final long[] spWhy = new long[5];
+
+    /** -Dlab.rcache.spikes: a slow render (over 25 ms) with what the render cache did in it */
+    private static void spikes(long render) {
+        long rec = dev.sleep.optsupport.RenderCache.records, rn = dev.sleep.optsupport.RenderCache.recordNanos, re = dev.sleep.optsupport.RenderCache.realNanos,
+                hn = dev.sleep.optsupport.RenderCache.hashNanos, hs = dev.sleep.optsupport.RenderCache.hashes, hi = dev.sleep.optsupport.RenderCache.hits;
+        if (render > 25_000_000L && stopAtNanos >= 0)
+            System.out.printf(Locale.ROOT, "[sleep/spike] render %.1f ms: records %d (%.2f ms, real-source checks %.2f ms), hashes %d (%.2f ms), hits %d%n", render / 1e6,
+                    rec - spRecords, (rn - spRecordNs) / 1e6, (re - spRealNs) / 1e6, hs - spHashes, (hn - spHashNs) / 1e6, hi - spHits);
+        long[] w = dev.sleep.optsupport.RenderCache.WHY_RECORD;
+        if (render > 25_000_000L && stopAtNanos >= 0)
+            System.out.printf(Locale.ROOT, "[sleep/spike]   why: new %d, state %d, key %d, light/overlay/yaw %d, refresh %d%n", w[0] - spWhy[0], w[1] - spWhy[1],
+                    w[2] - spWhy[2], w[3] - spWhy[3], w[4] - spWhy[4]);
+        System.arraycopy(w, 0, spWhy, 0, 5);
+        spRecords = rec;
+        spRecordNs = rn;
+        spRealNs = re;
+        spHashNs = hn;
+        spHashes = hs;
+        spHits = hi;
     }
 
     private static void finish() {

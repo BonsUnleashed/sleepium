@@ -360,8 +360,16 @@ public final class ParallelRender {
         return false;
     }
 
+    /**
+     * A job renders the way renderEntity + EntityRenderDispatcher.render do, without calling them: what another mod's
+     * mixin adds there (Iris: the entity id its shaders read, its per-entity render type wrap) would be lost on a
+     * worker. Such a mod changes them: every entity stays on the render thread.
+     */
+    static final boolean DISPATCH_UNTOUCHED = !MixinTouch.touched("net/minecraft/client/renderer/entity/EntityRenderDispatcher", "render")
+            && !MixinTouch.touched("net/minecraft/client/renderer/LevelRenderer", "renderEntity");
+
     private static boolean eligible(Entity e, MultiBufferSource buffers) {
-        if (!WORKER_REFUSED.isEmpty() && WORKER_REFUSED.contains(e.getType())) return false;
+        if (!DISPATCH_UNTOUCHED || !WORKER_REFUSED.isEmpty() && WORKER_REFUSED.contains(e.getType())) return false;
         Minecraft mc = Minecraft.getInstance();
         EntityRenderDispatcher d = mc.getEntityRenderDispatcher();
         if (LIB_UNSAFE.get(d.getRenderer(e).getClass())) return false;

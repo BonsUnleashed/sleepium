@@ -75,6 +75,10 @@ public final class RenderCache {
         int[] offs = new int[4], counts = new int[4];
         long mem;
         int size, cap;
+        /** VertexTags runs: per segment its first run and run count; per run its first vertex (in the segment) and ids */
+        int[] runFirst = new int[4], runCount = new int[4];
+        int[] runAt = new int[8], runTag = new int[24];
+        int runN;
         /** the native block, freed when the record is collected (its object left the world) */
         final long[] box = new long[1];
         /** per segment: first vertex in PartBatch's resident arena (-1: not uploaded); shared with the cleaner */
@@ -117,6 +121,7 @@ public final class RenderCache {
             releaseResident();
             types.clear();
             size = 0;
+            runN = 0;
         }
 
         void add(RenderType t, ByteBuffer data, int vertices) {
@@ -135,17 +140,36 @@ public final class RenderCache {
             if (i == offs.length) {
                 offs = java.util.Arrays.copyOf(offs, i * 2);
                 counts = java.util.Arrays.copyOf(counts, i * 2);
+                runFirst = java.util.Arrays.copyOf(runFirst, i * 2);
+                runCount = java.util.Arrays.copyOf(runCount, i * 2);
             }
             types.add(t);
             offs[i] = size;
             counts[i] = vertices;
+            runFirst[i] = runN;
+            runCount[i] = 0;
             size += n;
+        }
+
+        /** the last segment's VertexTags runs, from its recorder */
+        void addRuns(RecordingBuilder b) {
+            if (b.runs == 0) return;
+            int need = runN + b.runs;
+            if (need > runAt.length) {
+                runAt = java.util.Arrays.copyOf(runAt, Math.max(need, runAt.length * 2));
+                runTag = java.util.Arrays.copyOf(runTag, runAt.length * 3);
+            }
+            System.arraycopy(b.runAt, 0, runAt, runN, b.runs);
+            System.arraycopy(b.runTag, 0, runTag, runN * 3, b.runs * 3);
+            runCount[types.size() - 1] = b.runs;
+            runN = need;
         }
 
         /** Same types, counts and element bytes (a format's padding bytes are never written: left out). */
         boolean sameAs(Rec o) {
-            if (o.size != size || !o.types.equals(types)) return false;
-            for (int i = 0; i < types.size(); i++) if (o.counts[i] != counts[i] || o.offs[i] != offs[i]) return false;
+            if (o.size != size || !o.types.equals(types) || o.runN != runN) return false;
+            for (int i = 0; i < types.size(); i++) if (o.counts[i] != counts[i] || o.offs[i] != offs[i] || o.runCount[i] != runCount[i]) return false;
+            if (!java.util.Arrays.equals(runAt, 0, runN, o.runAt, 0, runN) || !java.util.Arrays.equals(runTag, 0, runN * 3, o.runTag, 0, runN * 3)) return false;
             for (int i = 0; i < types.size(); i++) {
                 VertexFormat f = types.get(i).format();
                 boolean[] used = usedBytes(f);
@@ -190,7 +214,10 @@ public final class RenderCache {
             rec.clear();
             for (RenderType t : order) {
                 RecordingBuilder b = builders.get(t);
-                if (b.n > 0) rec.add(t, b.mem, b.n * b.vertexSize, b.n);
+                if (b.n > 0) {
+                    rec.add(t, b.mem, b.n * b.vertexSize, b.n);
+                    rec.addRuns(b);
+                }
             }
             order.clear();
             used.clear();
@@ -256,13 +283,80 @@ public final class RenderCache {
     private static long realVertices() {
         long n = 0;
         for (BufferBuilder b : ((dev.sleep.opt.BufferSourceAccessor) real).sleep$started().values()) n += ((BufferBuilderAccessor) b).sleep$vertices();
-        return n;
+        return n + ownBuildersUsed(real);
+    }
+
+    /**
+     * A BufferSource subclass that keeps its own builders (Iris's FullyBufferedMultiBufferSource: vanilla's started map
+     * stays empty) and reports the bytes in them with a {@code long getUsedSize()}: that number, else 0.
+     */
+    private static final ClassValue<java.lang.invoke.MethodHandle> USED_SIZE = new ClassValue<>() {
+        @Override
+        protected java.lang.invoke.MethodHandle computeValue(Class<?> c) {
+            if (c == MultiBufferSource.BufferSource.class) return null;
+            try {
+                return java.lang.invoke.MethodHandles.publicLookup().findVirtual(c, "getUsedSize", java.lang.invoke.MethodType.methodType(long.class))
+                        .asType(java.lang.invoke.MethodType.methodType(long.class, Object.class));
+            } catch (ReflectiveOperationException e) {
+                return null;
+            }
+        }
+    };
+
+    private static long ownBuildersUsed(MultiBufferSource.BufferSource s) {
+        java.lang.invoke.MethodHandle h = USED_SIZE.get(s.getClass());
+        if (h == null) return 0;
+        try {
+            return (long) h.invokeExact((Object) s);
+        } catch (Throwable t) {
+            return 0;
+        }
     }
 
     /** Records one render into rec (only if OK; on BYPASS the recorded part is kept too). */
+    /** -Dlab.rcache.spikes=true: time in recordings / their real-source checks / state hashes (ClientMeter prints them per slow frame) */
+    public static final boolean SPIKES = Boolean.getBoolean("lab.rcache.spikes");
+    public static long recordNanos, realNanos, hashNanos, hashes;
+    /** SPIKES: recordings by reason - new, state, key, light / overlay / yaw, refresh */
+    public static final long[] WHY_RECORD = new long[5];
+
     private static int record(Draw d, float pt, Rec rec) {
+        long t0 = System.nanoTime();
+        try {
+            return record0(d, pt, rec);
+        } finally {
+            long dt = System.nanoTime() - t0;
+            frameRecordNanos += dt;
+            if (SPIKES) recordNanos += dt;
+        }
+    }
+
+    /**
+     * Recording time per frame is bounded: when many objects change at once (the server's periodic position resync of
+     * every armor stand: 119 recordings with their probes, 15 ms in one frame under a shaderpack), the ones past the
+     * budget are drawn the vanilla way in this frame and recorded in the next ones. Such a frame costs about a vanilla
+     * one. -Dlab.rcache.recordBudgetMs (default 4).
+     */
+    private static final long RECORD_BUDGET = (long) (Double.parseDouble(System.getProperty("lab.rcache.recordBudgetMs", "4")) * 1e6);
+    private static long frameRecordNanos;
+    public static long deferred;
+
+    /** RenderFrameEvent.Pre */
+    public static void frame() {
+        frameRecordNanos = 0;
+    }
+
+    private static long realVerticesTimed() {
+        if (!SPIKES) return realVertices();
+        long t0 = System.nanoTime();
+        long n = realVertices();
+        realNanos += System.nanoTime() - t0;
+        return n;
+    }
+
+    private static int record0(Draw d, float pt, Rec rec) {
         RECORDER.reset();
-        long before = realVertices();
+        long before = realVerticesTimed();
         // one stack for the recordings (render thread) so its pose pool persists; a recording inside a recording (a
         // renderer rendering another object) gets its own
         PoseStack ps = recordDepth == 0 ? LOCAL : new PoseStack();
@@ -273,7 +367,7 @@ public final class RenderCache {
         } finally {
             recordDepth--;
         }
-        if (realVertices() != before) {
+        if (realVerticesTimed() != before) {
             RECORDER.finish(rec);
             return BYPASS;
         }
@@ -318,12 +412,15 @@ public final class RenderCache {
         BeMemo memo = BE_MEMO;
         if (memo != null && level != null && buffers instanceof MultiBufferSource.BufferSource && recordDepth == 0
                 && memo.render(obj, rendererClass, d, pt, pose, buffers, light, overlay)) return;
-        if (level == null || !(buffers instanceof MultiBufferSource.BufferSource) || dev.sleep.api.Compat.renderCacheExcluded(obj)) {
+        // any source but the outline one (a wrapper such as Iris's per-entity BufferSourceWrapper replays the same way:
+        // the recorded getBuffer calls, through it)
+        if (level == null || buffers instanceof net.minecraft.client.renderer.OutlineBufferSource || dev.sleep.api.Compat.renderCacheExcluded(obj)) {
             vanilla++;
             d.draw(pose, buffers, pt);
             return;
         }
-        real = (MultiBufferSource.BufferSource) buffers;
+        // where a renderer drawing past its recorder ends up: the source itself, or the frame's one behind a wrapper
+        real = buffers instanceof MultiBufferSource.BufferSource bs ? bs : Minecraft.getInstance().renderBuffers().bufferSource();
         long tick = level.getGameTime();
         long[] cs = BY_CLASS.computeIfAbsent(rendererClass, RenderCache::classCounters);
         Rec rec = RECS.get(obj);
@@ -335,7 +432,12 @@ public final class RenderCache {
             return;
         }
         if (rec.hashTick != tick) {   // the whole state, once per tick (packets and ticks change it)
+            long h0 = SPIKES ? System.nanoTime() : 0;
             rec.stateNow = StateHash.of(obj);
+            if (SPIKES) {
+                hashNanos += System.nanoTime() - h0;
+                hashes++;
+            }
             rec.hashTick = tick;
             if (WHY) why(obj, rec);
         }
@@ -350,6 +452,11 @@ public final class RenderCache {
             replay(rec, buffers, pose);
             hits++;
             cs[0]++;
+            return;
+        }
+        if (frameRecordNanos >= RECORD_BUDGET && recordDepth == 0) {   // the frame's recording time is spent: next frame
+            deferred++;
+            d.draw(pose, buffers, pt);
             return;
         }
         boolean changed = !rec.recorded || rec.state != rec.stateNow || rec.key != key;
@@ -367,6 +474,7 @@ public final class RenderCache {
             }
             StateHash.changedOutput(obj, rec.fieldsAt, now);
         }
+        if (SPIKES) WHY_RECORD[!rec.recorded ? 0 : rec.state != rec.stateNow ? 1 : rec.key != key ? 2 : rec.light != light || rec.overlay != overlay || rec.yaw != yaw ? 3 : 4]++;
         rec.recorded = false;
         int r = record(d, pt, rec);
         if (r != OK) {
@@ -501,6 +609,8 @@ public final class RenderCache {
             N.set(pose.last().normal());
         }
         boolean normalIdentity = asIs || N.equals(IDENTITY3);
+        boolean tags = rec.runN > 0;   // VertexTags: the state as it was put back after the replay
+        if (tags) VertexTags.read(TAGS_SAVED, 0);
         for (int i = 0; i < rec.types.size(); i++) {
             RenderType t = rec.types.get(i);
             VertexConsumer vc = buffers.getBuffer(t);
@@ -523,11 +633,14 @@ public final class RenderCache {
                 a.sleep$setVertices(a.sleep$vertices() + n);
                 a.sleep$setVertexPointer(dst + (long) (n - 1) * vs);
             } else {
-                generic(vc, src, n, f);
+                generic(vc, src, n, f, rec, i);
             }
             replayedVertices += n;
         }
+        if (tags) VertexTags.write(TAGS_SAVED, 0);
     }
+
+    private static final int[] TAGS_SAVED = new int[3];
 
     private static void transform(long base, int n, VertexFormat f, boolean normalIdentity) {
         int vs = f.getVertexSize(), po = f.getOffset(VertexFormatElement.POSITION), no = f.contains(VertexFormatElement.NORMAL) ? f.getOffset(VertexFormatElement.NORMAL) : -1;
@@ -567,9 +680,11 @@ public final class RenderCache {
     }
 
     /** Any other consumer (outline, glint wrappers of a mod): the vertices through the VertexConsumer calls. */
-    private static void generic(VertexConsumer vc, long src, int n, VertexFormat f) {
+    private static void generic(VertexConsumer vc, long src, int n, VertexFormat f, Rec rec, int seg) {
         int vs = f.getVertexSize();
+        int k = rec.runFirst[seg], kEnd = k + rec.runCount[seg];   // VertexTags runs of this segment
         for (int i = 0; i < n; i++) {
+            if (k < kEnd && rec.runAt[k] == i) VertexTags.write(rec.runTag, 3 * k++);
             long v = src + (long) i * vs;
             int po = f.getOffset(VertexFormatElement.POSITION);
             float x = MemoryUtil.memGetFloat(v + po), y = MemoryUtil.memGetFloat(v + po + 4), z = MemoryUtil.memGetFloat(v + po + 8);
@@ -605,8 +720,8 @@ public final class RenderCache {
                 .forEach(e -> w.append("\n    changed ").append(e.getValue()[0]).append("x ").append(e.getKey()));
         StringBuilder sb = new StringBuilder(w.length() > 0 ? "render cache field changes:" + w + "\n" : "");
         sb.append(String.format(java.util.Locale.ROOT,
-                "render cache: hits %d, records %d, animated %d, unsupported %d, vanilla %d, replayed vertices %d%s%s", hits, records, animated, unsupported, vanilla,
-                replayedVertices, VERIFY ? ", verified " + verified + ", mismatches " + mismatches : "",
+                "render cache: hits %d, records %d, animated %d, unsupported %d, vanilla %d, deferred to next frames %d, replayed vertices %d%s%s", hits, records,
+                animated, unsupported, vanilla, deferred, replayedVertices, VERIFY ? ", verified " + verified + ", mismatches " + mismatches : "",
                 StateHash.LEARN ? ", same after a state change " + sameAfterChange + ", fields left out " + StateHash.learned : ""));
         BY_CLASS.forEach((c, v) -> sb.append(String.format(java.util.Locale.ROOT, "\n    %s: hits %d, records %d, animated %d, unsupported %d%s", c.getSimpleName(),
                 v[0], v[1], v[2], v[3], (v[5] != 0 ? ", learned: animated" : "") + (VERIFY ? ", mismatches " + v[4] : ""))));
