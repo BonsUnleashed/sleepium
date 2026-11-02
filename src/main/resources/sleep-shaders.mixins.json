@@ -16,7 +16,8 @@
     "ShaderTargetMixin",
     "ShaderTerrainIdsMixin",
     "ShaderVertexFetchMixin",
-    "ShaderVertexIdsMixin"
+    "ShaderVertexIdsMixin",
+    "ShaderViewAreaAccessor"
   ],
   "injectors": {
     "defaultRequire": 1

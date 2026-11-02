@@ -340,7 +340,8 @@ public final class ChunkMultiDraw {
         e.recipes = LightVolumes.hasRecipes(mesh);
         uploads++;
         // meshes with light recipes (exp/shader-light) keep the 32-byte format: the packed one has no room for them
-        if (PACK && ds.format() == DefaultVertexFormat.BLOCK && verts % 4 == 0 && !LightVolumes.hasRecipes(mesh)) {
+        // (not under a shaderpack: its vertex prologue reads the quads' positions as BLOCK floats)
+        if (PACK && !dev.sleep.shaders.ShaderPipeline.active && ds.format() == DefaultVertexFormat.BLOCK && verts % 4 == 0 && !LightVolumes.hasRecipes(mesh)) {
             Entry pe = new Entry();
             pe.origin = e.origin;
             System.arraycopy(e.plane, 0, pe.plane, 0, 7);
@@ -450,9 +451,8 @@ public final class ChunkMultiDraw {
 
     /** The vanilla buffer is not filled for arena layers (no duplicate VRAM) while the layer's shader is patched. */
     public static boolean replacesVanilla(RenderType layer) {
-        // a shaderpack (sleep's pipeline) draws terrain with its own programs: vanilla's per-section buffers until
-        // the pack's terrain program takes the multi-draw path too
-        return ACTIVE && !KEEP_VANILLA && PATCHED.size() == SUPPORTED.size() && !dev.sleep.shaders.ShaderPipeline.active;
+        // (a shaderpack's terrain programs take the multi-draw path too: ShaderPrologue gives them the offsets)
+        return ACTIVE && !KEEP_VANILLA && PATCHED.size() == SUPPORTED.size();
     }
 
     /**
@@ -563,7 +563,9 @@ public final class ChunkMultiDraw {
             visible = SectionLists.layer(vis, li);
         // the same camera position over the same lists and contents gives the same draws: last frame's are drawn again
         // (offsets and face buckets depend on the position only, so turning the head keeps them)
-        boolean reusable = REUSE && replaces && SECTION_LISTS && SINGLE && ssbo();
+        boolean reusable = REUSE && replaces && SECTION_LISTS && SINGLE && ssbo() && !allFaces;
+        // a shadow pass refills the arenas' draw lists: the camera's kept lists are gone (built again next time)
+        if (allFaces) for (LayerCache c : LCACHE) c.ver = -1;
         LayerCache lc = LCACHE[li];
         long ver = SectionLists.version();
         if (reusable && lc.ver == ver && lc.x == x && lc.y == y && lc.z == z) {
@@ -614,7 +616,7 @@ public final class ChunkMultiDraw {
             lc.x = x;
             lc.y = y;
             lc.z = z;
-        } else {
+        } else if (!allFaces) {   // (a shadow pass's list leaves the camera's cache alone)
             lc.ver = -1;
         }
         flushAll(layer, ps, reusable);
@@ -712,6 +714,8 @@ public final class ChunkMultiDraw {
                 if (a.vaoStale || a.vao == 0) setupVao(a, layer);
                 GL30C.glBindVertexArray(a.vao);
                 seq.bind(a.maxIndices);
+                // a shaderpack's vertex prologue reads the quad's other vertices from the arena
+                if (dev.sleep.shaders.ShaderPipeline.active) GL30C.glBindBufferBase(GL43C.GL_SHADER_STORAGE_BUFFER, 9, a.vbo);
                 GL30C.glBindBufferRange(target, UBO_BINDING, buf, a.uboOffset, sb ? 16L * a.n : 16L * MAX_DRAWS);
                 if (dev.sleep.DrawStats.ON) dev.sleep.DrawStats.phaseBegin(3);
                 if (indirect) {
@@ -762,7 +766,7 @@ public final class ChunkMultiDraw {
             // (a margin of 1/64 block keeps it conservative against float rounding: more faces drawn, never fewer)
             float[] pl = e.plane;
             double rx = x - o.getX(), ry = y - o.getY(), rz = z - o.getZ();
-            int vis = 1 << 3;   // other
+            int vis = allFaces ? 0x7F : 1 << 3;   // other (allFaces: a shadow pass, the GPU culls by the light's view)
             if (rx < pl[0] + EPS) vis |= 1;
             if (ry < pl[1] + EPS) vis |= 1 << 1;
             if (rz < pl[2] + EPS) vis |= 1 << 2;
@@ -787,6 +791,8 @@ public final class ChunkMultiDraw {
     }
 
     private static final double EPS = 1.0 / 64;
+    /** a shadow pass draws: every face bucket (seen from the light, not the camera), no reuse of the camera's lists */
+    public static boolean allFaces;
     private static final boolean SECTION_LISTS = Boolean.getBoolean("lab.opt.SectionListsMixin");
 
     private static void addDraw(Arena a, int baseVertex, int indices, float ox, float oy, float oz, int vol) {

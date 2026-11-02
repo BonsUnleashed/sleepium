@@ -53,7 +53,13 @@ final class ShaderPrologue {
         boolean idsVs = ID_UNIFORM.matcher(vsh).find();
         vsh = ID_UNIFORM.matcher(vsh).replaceAll("int $1;");
         boolean needFetch = attrs.contains("mc_midTexCoord") || attrs.contains("at_tangent") || attrs.contains("at_midBlock");
-        if (attrs.isEmpty() && !raw[1] && !raw[2] && !idsVs && !idsFs) return new String[] {vsh, fsh};
+        // terrain through chunk multi-draw: the section offset per draw (ChunkMultiDraw's offsets block, gl_DrawIDARB)
+        boolean multi = terrain && Pattern.compile("\\bChunkOffset\\b").matcher(vsh).find();
+        if (multi) {
+            vsh = vsh.replaceAll("\\bChunkOffset\\b", "sl_chunkOffset").replace("uniform vec3 sl_chunkOffset;", "uniform vec3 ChunkOffset;");
+            globals.append("uniform int ProbeMultiDraw;\nlayout(std430) buffer ProbeChunkOffsets { vec4 ProbeOffsets[]; };\nvec3 sl_chunkOffset;\n");
+        }
+        if (attrs.isEmpty() && !raw[1] && !raw[2] && !idsVs && !idsFs && !multi) return new String[] {vsh, fsh};
         // the vertex prologue
         int stride = format.getVertexSize() / 4;
         int pos = format.contains(VertexFormatElement.POSITION) ? format.getOffset(VertexFormatElement.POSITION) / 4 : -1;
@@ -73,6 +79,7 @@ final class ShaderPrologue {
                         .append("uint sl_vpad(int v) { return sl_vdata[v * ").append(stride).append(" + ").append(nrm / 4).append("] >> 24; }\n");
         }
         StringBuilder pro = new StringBuilder("void main() {\n");
+        if (multi) pro.append("    sl_chunkOffset = ProbeMultiDraw != 0 ? ProbeOffsets[gl_DrawIDARB].xyz : ChunkOffset;\n");
         if (raw[1]) pro.append("    vaUV1 = sl_rawUV1 & 255;\n");
         if (raw[2]) pro.append("    vaUV2 = sl_rawUV2 & 255;\n");
         pro.append("    int sl_hi1 = (sl_rawUV1.x >> 8 & 255) | (sl_rawUV1.y >> 8 & 255) << 8;\n");
@@ -141,7 +148,7 @@ final class ShaderPrologue {
     /** the storage-buffer extension right after #version; the globals before the first code line */
     private static String insertGlobals(String src, String globals) {
         int v = src.indexOf('\n');
-        String head = src.substring(0, v + 1) + "#extension GL_ARB_shader_storage_buffer_object : enable\n";
+        String head = src.substring(0, v + 1) + "#extension GL_ARB_shader_storage_buffer_object : enable\n#extension GL_ARB_shader_draw_parameters : enable\n";
         String[] lines = src.substring(v + 1).split("\n", -1);
         StringBuilder lead = new StringBuilder(), rest = new StringBuilder();
         boolean inComment = false;

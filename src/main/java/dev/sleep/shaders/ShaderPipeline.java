@@ -53,6 +53,14 @@ public final class ShaderPipeline {
     private static final Map<String, Integer> UNITS = new HashMap<>(RenderTargets.UNITS);
     private int generation;
     public boolean inLevel;
+    /** the shadow pass runs (shadow programs, the shadow framebuffer); its block-entity part */
+    boolean shadowPhase, shadowBlockEntitiesPhase;
+    ShadowPass shadow;
+    private static final boolean STATS = Boolean.getBoolean("sleep.shaders.stats");
+    private long statFrames;
+    private boolean shadowDone;
+    private Camera camera;
+    private float partialTick;
     private boolean deferredDone, handPhase;
     private String phase = "";
     private final List<String> problems = new ArrayList<>();
@@ -128,6 +136,8 @@ public final class ShaderPipeline {
             }
         }
         finalPass = passes.get("final");
+        ProgramSet.Program sp = set.resolve("shadow");
+        if (sp != null && sp.sources[0] != null && sp.sources[2] != null && props.bool("shadow.enabled", true)) shadow = new ShadowPass(this, new ShadowTargets(set.consts));
         generation++;
         System.out.printf("[sleep/shaders] loaded %s: %d programs, %d deferred, %d composite, final %s, %d custom uniforms, %.0f ms%s%n", src.name,
                 set.programs.size(), deferred.size(), composite.size(), finalPass != null && finalPass.id != 0, uniforms.custom.entries.size(),
@@ -263,6 +273,9 @@ public final class ShaderPipeline {
         targets.clearAll(fog);
         inLevel = true;
         ShaderIds.on = true;
+        shadowDone = false;
+        this.camera = camera;
+        this.partialTick = partialTick;
         deferredDone = false;
         handPhase = false;
         phase = "";
@@ -275,6 +288,17 @@ public final class ShaderPipeline {
     /** a profiler section of renderLevel starts */
     public void phase(String name) {
         if (!inLevel) return;
+        if (name.equals("sky") && !shadowDone && shadow != null) {
+            shadowDone = true;
+            shadow.run(camera, partialTick);
+            if (STATS && ++statFrames % 300 == 0) {
+                System.out.printf(java.util.Locale.ROOT, "[sleep/shaders] shadow pass: %.2f ms per frame, sections %.0f, draws %.0f (multi-draw layers %.0f), entities %.0f, block entities %.0f%n",
+                        shadow.nanos / 1e6 / 300, shadow.sections / 300.0, shadow.draws / 300.0, shadow.multiLayers / 300.0, shadow.entities / 300.0, shadow.blockEntities / 300.0);
+                shadow.nanos = shadow.sections = shadow.draws = shadow.multiLayers = shadow.entities = shadow.blockEntities = 0;
+            }
+            bindTextures("gbuffers");
+            bindGbuffers(new int[] {0});
+        }
         phase = name;
         uniforms.renderStage = switch (name) {
             case "sky" -> 1;
@@ -418,10 +442,11 @@ public final class ShaderPipeline {
         bind(28, targets.depthTex0);
         bind(29, targets.depthTex1);
         bind(30, targets.depthTex2);
-        bind(31, shadowDepthTex);
-        bind(32, shadowDepthTex);
-        bind(33, shadowColorTex);
-        bind(34, shadowColorTex);
+        ShadowTargets st = shadow == null ? null : shadow.targets;
+        bind(31, st == null ? shadowDepthTex : st.depth0);
+        bind(32, st == null ? shadowDepthTex : st.depth1);
+        bind(33, st == null ? shadowColorTex : st.color[0]);
+        bind(34, st == null ? shadowColorTex : st.color[1]);
         bind(35, noiseTex);
         bind(36, normalsTex);
         bind(37, specularTex);
@@ -499,6 +524,20 @@ public final class ShaderPipeline {
     }
 
     String programFor(String v) {
+        if (shadowPhase) {
+            switch (v) {
+                case "rendertype_solid":
+                    return shadowBlockEntitiesPhase ? "shadow_block" : "shadow_solid";
+                case "rendertype_cutout_mipped", "rendertype_cutout":
+                    return shadowBlockEntitiesPhase ? "shadow_block" : "shadow_cutout";
+                case "rendertype_translucent", "rendertype_tripwire":
+                    return shadowBlockEntitiesPhase ? "shadow_block" : "shadow_water";
+                case "rendertype_lightning":
+                    return "shadow_lightning";
+                default:
+                    return shadowBlockEntitiesPhase ? "shadow_block" : v.startsWith("rendertype_") ? "shadow_entities" : "shadow";
+            }
+        }
         switch (phase) {
             case "sky":
                 return v.equals("position_tex") || v.equals("position_tex_color") ? "gbuffers_skytextured" : "gbuffers_skybasic";

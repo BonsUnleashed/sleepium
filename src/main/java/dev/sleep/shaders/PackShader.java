@@ -142,7 +142,10 @@ public final class PackShader extends ShaderInstance {
         super.apply();
         ShaderPipeline pl = ShaderPipeline.current();
         if (pl == null) return;
-        GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, pl.targets.framebuffer(program.drawBuffers, false, true));
+        if (pl.shadowPhase) {
+            pl.shadow.framebuffer(program.drawBuffers);
+            RenderSystem.disableBlend();   // shadow programs never blend (Iris)
+        } else GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, pl.targets.framebuffer(program.drawBuffers, false, true));
         pl.uniforms.uploadFrame(binding);
         if (!haveMatrices) {
             mv.set(RenderSystem.getModelViewMatrix());
@@ -150,7 +153,7 @@ public final class PackShader extends ShaderInstance {
         }
         pl.uniforms.uploadDraw(binding, mv, proj);
         haveMatrices = false;
-        pl.applyBlend(program.name);
+        if (!pl.shadowPhase) pl.applyBlend(program.name);
     }
 
     @Override
