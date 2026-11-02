@@ -1,0 +1,184 @@
+lab.opt.AmbientParticleSkipMixin	chunks	true	exp/ambient-skip (client): doAnimateTick asks the biome of every random position it samples (twice 667 per tick) only for its ambient particle.
+lab.opt.AsyncChunkSaveMixin	saving	true	exp/async-chunk-save: see AsyncChunkSave (ChunkMap.save: the tag with placeholders, then the deferred store).
+lab.opt.AsyncChunkSaveStorageMixin	saving	true	AsyncChunkSaveMixin: reads wait for a pending save of their position; flush and close wait for all of them.
+lab.opt.BlockCollisionMemoMixin	ticks	true	exp/collision-memo: resting entities ask the same block question every tick (items: noCollision on their deflated box, ~36 block reads each; JFR 4000 items: 28 % of the server thread in BlockCollisions.computeNext).
+lab.opt.BlockEntityCullNoAllocMixin	entities_render	true	exp/frame-garbage (client): renderLevel's block-entity frustum tests through NoAllocChecks (no AABB for the default box).
+lab.opt.BlockMeshDirtyMixin	chunks	true	BlockMeshMemoMixin: the section marks vanilla makes for its chunk meshes (every block, light and chunk change goes through setSectionDirty), a renderer reset or a new level (everything stale), and the frame counter for eviction.
+lab.opt.BlockMeshMemoMixin	chunks	true	exp/block-mesh-memo (client): tesselateBlock's AO / flat tesselation against the client level served from BlockMeshMemo while the section around the block is unchanged (pistons' moving blocks, falling blocks, …).
+lab.opt.BrainFlatMixin	ticks	true	exp/brain-flat: universal for every Brain-driven mob (villagers, piglins, axolotls, frogs, allays, wardens, ...
+lab.opt.BulkDataArraysMixin	ticks	true	exp/bulk-arrays (client): the short putBulkData overloads build new float[]{1,1,1,1} and int[]{light x4} per quad (13 % of the render thread's allocation in an entity-heavy scene: items in frames, held items, armour).
+lab.opt.ChunkCacheClearMixin	saving	true	Drop ChunkCacheMixin's entry whenever vanilla clears its own chunk cache (status changes, unloads).
+lab.opt.ChunkCacheMixin	saving	true	exp/chunk-cache: one-chunk lookup cache in Level for getBlockState / getChunkAt (getFluidState, getBlockEntity, setBlock...).
+lab.opt.ChunkMultiDrawMixin	chunks	true	exp/chunk-multidraw (client): the opaque chunk layers through ChunkMultiDraw (one multi-draw per region).
+lab.opt.ChunkSectionMixin	chunks	true	ChunkMultiDraw: tags the section's layer buffers; a reset (origin change, release) frees its arena entries.
+lab.opt.ChunkShaderPatchMixin	chunks	true	ChunkMultiDraw: the vanilla chunk vertex shaders get the multi-draw offset path (see ChunkMultiDraw.patch).
+lab.opt.ChunkTickMemoChunkMixin	ticks	true	ChunkTickMemoMixin: the remembered answer and its epoch on the chunk.
+lab.opt.ChunkTickMemoEpochMixin	ticks	true	ChunkTickMemoMixin: every write of the chunk-visibility map goes through here.
+lab.opt.ChunkTickMemoMixin	ticks	true	exp/chunk-tick-memo: see ChunkTickMemo.
+lab.opt.ChunkUploadMixin	chunks	true	ChunkMultiDraw: a section layer's mesh is also copied into its region arena before vanilla uploads it.
+lab.opt.ClientBiomeMemoMixin	chunks	true	exp/client-biome-memo (client): the render thread's noise-biome lookups (fog colour: 216 per frame, sky colour, the ambient particles of animateTick: ~1300 per tick) answered from a per-level memo of quart position -> biome holder.
+lab.opt.ClientChunkCacheBiomeMixin	chunks	true	ClientBiomeMemoMixin: every change of the chunk data (or of which chunks count as present) clears the biome memo.
+lab.opt.ClientEventSiteMixin	ticks	true	
+lab.opt.ClientLightAsyncMixin	lighting	true	exp/client-light-async (client): renderLevel's light updates on a worker that may span several frames.
+lab.opt.ClientLightCallbackMixin	lighting	true	ClientLightAsyncMixin: the engine's section-dirty callback, recorded while it runs on the light worker.
+lab.opt.ClientLightJoinMixin	lighting	true	ClientLightAsyncMixin: before anything may touch the world or the light engine — queued tasks (packets), the client tick — a running light job is joined (packets only if there are any).
+lab.opt.CondWakeMixin	ticks	true	exp/eventloop-condwake: wake the loop's thread only if it announced it is parking.
+lab.opt.CubeShapeMixin	ticks	true	exp/cube-shape: every full block found by an entity collision query (BlockCollisions) is Shapes.block().move(x, y, z): 4 objects and megamorphic coordinate reads for the collide math.
+lab.opt.CubicSamplerMixin	worldgen	true	exp/cubic-sampler (client): the fog / sky colour blur (216 fetches per call, every frame) without the two Vec3 objects vanilla makes per sample.
+lab.opt.EntityBatchMixin	entities_render	true	exp/entity-batch (client): immediate-mode draws batched per render type, for every renderer (vanilla or mod) that draws through a BufferSource.
+lab.opt.EntityBoxIndexMixin	ticks	true	Entity bounding boxes change only through setBoundingBox: keep the section index of the entity in sync.
+lab.opt.EntityCollideMemoMixin	ticks	true	Goes with BlockCollisionMemoMixin: the block collision of a move (Entity.collideBoundingBox) is a pure function of the movement, the box and the shapes of the blocks in the range BlockCollisions scans.
+lab.opt.EntityCollisionMemoMixin	ticks	true	Goes with BlockCollisionMemoMixin: the per-entity memo slot.
+lab.opt.EntityCollisionSkipMixin	ticks	true	exp/collide-skip: every entity move and every item tick (noCollision) asks getEntityCollisions: vanilla walks every nearby entity and tests !isSpectator && mover.canCollideWith(e), i.e.
+lab.opt.EntityCullNoAllocMixin	entities_render	true	exp/frame-garbage (client): EntityRenderer.shouldRender without the inflated AABB it makes per entity per frame.
+lab.opt.EntityLightNoAllocMixin	entities_render	true	exp/frame-garbage (client): EntityRenderer.getPackedLightCoords (final: no renderer overrides it) without its Vec3 and BlockPos when the probe and the light levels are the base implementations (NoAllocChecks); vanilla's body otherwise.
+lab.opt.EntitySectionCollidableMixin	ticks	true	Goes with EntityCollisionSkipMixin: counts the section's entities whose class may be collided with.
+lab.opt.EntitySectionIndexMixin	ticks	true	exp/section-index: exact spatial indices for dense entity sections (see SectionIndex): one over the section's full list (untyped queries) and one per typed list (getEntitiesOfClass).
+lab.opt.EntitySectionIterMixin	ticks	true	exp/section-iter (goes with EntitySectionScanMixin): iterate a section's entities with an index loop over the same backing lists, in the same order.
+lab.opt.EntitySectionKeyMixin	ticks	true	Every new EntitySection learns its section key (the grid origin of its index).
+lab.opt.EntitySectionScanMixin	ticks	true	exp/section-scan: allocation-free, exact entity-section walk for every entity query in the game.
+lab.opt.EntitySleep	ticks	true	Entity sleep (-Dlab.opt.EntitySleep=true): period replay of idle entities, vanilla and modded alike.
+lab.opt.EntityStorageCollidableMixin	ticks	true	Goes with EntityCollisionSkipMixin: an existence query over exactly the sections vanilla's forEachAccessibleNonEmptySection would visit for the box (order is irrelevant for "any").
+lab.opt.EventSiteMixin	ticks	true	exp/event-sites: carrier for EventSiteTransformer (run from OptMixinPlugin.postApply on these classes): every NeoForge.EVENT_BUS.post(new E(...)) in NeoForge's hook classes becomes an EventSites call site, so an event nobody listens to costs nothing, not even its allocation.
+lab.opt.FluidSpreadMixin	ticks	true	exp/fluid-spread: the spread search of every flowing fluid (water, lava, modded FlowingFluids) without allocation.
+lab.opt.FrameGarbageMixin	chunks	true	
+lab.opt.GenScoutBeardMixin	worldgen	true	Measurement only (lab.genscout): how many pieces/junctions each chunk's Beardifier walks per block.
+lab.opt.GenScoutFluidMixin	worldgen	true	Measurement only (lab.genscout): Aquifer.NoiseBasedAquifer.computeFluid calls and time.
+lab.opt.GenScoutPerlinMixin	worldgen	true	Measurement only (-Dlab.genscout=true): ImprovedNoise.noise calls per thread, attributed to phases by GenProfile.
+lab.opt.GenScoutSurfaceMixin	worldgen	true	Measurement only (lab.genscout): NoiseChunk.computePreliminarySurfaceLevel (one column scan) calls and time.
+lab.opt.GeoAnimControllerMixin	animation	true	
+lab.opt.GeoAnimMixin	animation	true	
+lab.opt.GeoAnimProcessorMixin	animation	true	
+lab.opt.GeoCubesMixin	animation	true	
+lab.opt.GeoMarkersMixin	animation	true	
+lab.opt.GeoModelWorkerMixin	animation	true	A GeoModel made while ParallelRender builds its worker renderer sets animates its own copy of the baked model (own bones); GeoModel then registers the copy's bones with its processor as it would the cached model's.
+lab.opt.GeoParallelMixin	animation	true	
+lab.opt.GeoPartsMixin	animation	true	
+lab.opt.GeoTextureDimsMixin	animation	true	DynamicGeoEntityRenderer's texture size cache is a static HashMap filled lazily, and the fill waits for the render thread (mc.submit(...).get(): a deadlock on a worker while the render thread waits for the workers).
+lab.opt.GoalSelectorMixin	ticks	true	exp/goal-selector-noalloc.
+lab.opt.ItemFrameOffsetMixin	chunks	true	exp/frame-garbage (client): ItemFrameRenderer.getRenderOffset depends on the frame's direction only; the six values, each made once by the same expression, instead of a new Vec3 per frame per item frame (Vec3 is immutable).
+lab.opt.KeyframeJournalMixin	animation	true	Keyframe events (sounds, particles, custom instructions: a mod's code that touches the level, the sound engine...) reached inside a ParallelRender job: kept in the job and run on the render thread when the job is merged, in order.
+lab.opt.LabPoolsMixin	threads	true	exp/lab-pools: vanilla's background and IO pools replaced by LabRuntime.
+lab.opt.LightLayerCacheMixin	lighting	true	exp/light-layer-cache (server and client): DataLayerStorageMap.getLayer behind vanilla's own 2-entry cache looks the section up in the whole map (every section of every loaded chunk) — and a missing layer is never cached, so the light propagation's "does this neighbour section store light" asks the 
+lab.opt.LightRecipeVerifyMixin	lighting	true	exp/shader-light step 1 (measurement, -Dlab.lightrecipe.verify=true): recipes checked against vanilla's AO light.
+lab.opt.LightScoutAoMixin	lighting	true	Measurement only (lab.lightscout): an AO face, full (flag 1 clear) or partial.
+lab.opt.LightScoutFlatMixin	lighting	true	Measurement only (lab.lightscout): flat-lit quads.
+lab.opt.LightScoutFluidMixin	lighting	true	Measurement only (lab.lightscout): fluid blocks (their own light code).
+lab.opt.LightScoutMixin	lighting	true	Measurement only (lab.lightscout): section compile boundaries.
+lab.opt.LightTimingMixin	lighting	true	Measurement only (-Dlab.lighttime=true): time spent in LevelLightEngine.runLightUpdates per thread group (the client's engine on the render thread / light worker, the server's on its light mailbox), printed every 2000 calls.
+lab.opt.MailboxBatchMixin	threads	true	exp/mailbox-batch: let one executor dispatch of a mailbox drain up to N tasks instead of exactly one.
+lab.opt.MainReactor	threads	true	ServerReactor stage 1: the server thread sleeps until something is to be done.
+lab.opt.MainReactorLightMixin	threads	true	MainReactor: light updates are started by the server thread's polling (MainThreadExecutor.pollTask → tryScheduleUpdate) unless 1000 tasks queue up.
+lab.opt.MainReactorLightNotifyMixin	threads	true	ServerReactor (light notifications): onLightUpdate notes the section in a LightNotifyRing; one drain task on the same main-thread executor vanilla uses applies every pending section (vanilla's body, once per section).
+lab.opt.MainReactorScoutLoopMixin	threads	true	Measurement (lab.reactor.scout): a queued task ran right after a timeout wake — its producer did not signal.
+lab.opt.MainReactorScoutMixin	threads	true	Measurement (lab.reactor.scout): after the reactor woke by its timeout (no signal), which main-thread work was waiting — found only because the thread polled.
+lab.opt.MainReactorServerMixin	threads	true	ServerReactor stage 1 (MainReactor): the idle wait between ticks sleeps until work or the next tick.
+lab.opt.ModelPartIterMixin	entities_render	true	exp/modelpart-quat (client): ModelPart.render's loop over its children and compile's loop over its cubes use one reusable array iterator per part instead of a new iterator per call (the map's values iterator, the list iterator).
+lab.opt.ModelPartQuatMixin	entities_render	true	exp/modelpart-quat (client): translateAndRotate's new Quaternionf().rotationZYX(z, y, x) for PoseStack.mulPose uses one quaternion per part instead of a new one per call.
+lab.opt.MolangActorMixin	animation	true	GeckoLib's Molang actor (the object being animated, one static field): per job inside ParallelRender jobs.
+lab.opt.AnimStreamMixin	animation	true	GeckoLib's animation files read as a stream, an animation at a time (dev.sleep.optsupport.AnimStream)
+lab.opt.KeyframeInternMixin	animation	true	
+lab.opt.MolangJitMixin	animation	true	Every Molang expression GeckoLib compiles (animation keyframes, easing arguments...): compiled to bytecode by MolangJit.
+lab.opt.MolangVariableMixin	animation	true	GeckoLib's Molang variables are global (query.anim_time is set by every controller before its keyframes are read): inside a ParallelRender job a set goes to the job's own values and a get reads them first, then the global one (what was set outside rendering).
+lab.opt.NeighborNotifySkipMixin	ticks	true	exp/neighbor-notify-skip: ServerLevel.updateNeighborsAt(...) builds, for every call, getBlockState(pos) + EnumSet.allOf(Direction) + a NeighborNotifyEvent and posts it (1 800 per tick in the redstone scene), even with no listener.
+lab.opt.NeighborQueueMixin	ticks	true	exp/neighbor-queue: the neighbour-update queue of every Level without an object per update (the discrete-event core).
+lab.opt.NeighborReactMixin	ticks	true	
+lab.opt.NeighborReactStateMixin	ticks	true	Per-state cache of NeighborReact (computed on first use).
+lab.opt.NeoForgeBusMixin	threads	true	exp/bus-composite: install CompositeEventBus as NeoForge.EVENT_BUS.
+lab.opt.NetBulk	network	true	
+lab.opt.NetCoalesce	network	true	
+lab.opt.NetLagMixin	network	true	NetLag: test latency, installed as a connection becomes active (-Dlab.net.lagMs)
+lab.opt.NetReactor	network	true	Network reactor, stage A: outbound batching.
+lab.opt.NetReactorConnectionMixin	network	true	NetReactor: a server connection in the PLAY protocol batches the server thread's sends (see NetReactor).
+lab.opt.NetReactorTickMixin	network	true	NetReactor: the end of the server tick is a flush point (what the tick sent leaves as one task per connection).
+lab.opt.NetReactorWaitMixin	network	true	NetReactor without MainReactor: before the server thread sleeps (vanilla's waitForTasks) its pending batches go out.
+lab.opt.OverworldFogMixin	chunks	true	exp/frame-garbage (client): the overworld's brightness-dependent fog colour (a multiply per fetched colour, 216 per frame) remembered per input colour instance and brightness: with Vec3FromRgbMixin the inputs are the same few instances, and the function is pure (the same product of the same doubles)
+lab.opt.ParallelEntitiesMixin	threads	true	exp/parallel-render (client): the entity loop of renderLevel queues its entities (ParallelRender starts the eligible ones on workers at once) and the queue is drained in order right after the loop, before the batch is ended.
+lab.opt.ParallelReloadMixin	chunks	true	ParallelEntitiesMixin: the worker renderer sets follow a resource reload.
+lab.opt.PartBatchMixin	entities_render	true	exp/part-batch (client, render cache v3): a model part's compile becomes a queued record (pose, light, overlay, colour) drawn from its VRAM geometry, when PartBatch can take it; otherwise the vanilla compile.
+lab.opt.PartDrawMixin	entities_render	true	PartBatchMixin: the queued parts of the render type being drawn, right after its batch (program still bound).
+lab.opt.PartFrameMixin	entities_render	true	PartBatchMixin: no queued part outlives the level render.
+lab.opt.PartTypeMixin	entities_render	true	PartBatchMixin: which render type's batch is being drawn.
+lab.opt.PersistentPoolsMixin	threads	true	exp/persistent-pools: stop the engine from re-creating its worker threads.
+lab.opt.PoiColumnMixin	saving	true	exp/poi-columns: every POI range query (villager jobs, beds and meeting points, bees, portals, lightning rods, lodestones, modded POI types) goes through getInChunk for each chunk of the square: vanilla boxes 24 section indices, builds a SectionPos and does a hash lookup per section, then filters Op
+lab.opt.PoseStackPoolMixin	entities_render	true	exp/pose-pool (client): every pushPose allocated a Pose with a new Matrix4f and Matrix3f (18 % of the render thread's allocation in an entity-heavy scene).
+lab.opt.ReactorChunkLoadMixin	threads	true	WorldgenReactor (chunk loads): vanilla's scheduleChunkLoad hops to the main thread twice for every chunk it starts — thenApplyAsync(main) to create or deserialize it, then exceptionallyAsync(main), which the JDK runs on its executor even for a normal result — and each hop waited ~140 ms in the main 
+lab.opt.ReactorExecutorMixin	threads	true	WorldgenReactor: the level's main-thread executor also serves FullRing — within the idle budget when called from the idle loop, without a budget when the main thread blocks on a chunk future (managedBlock).
+lab.opt.ReactorFullMixin	threads	true	WorldgenReactor: the FULL step's executor puts its main-thread task into FullRing instead of the main mailbox.
+lab.opt.ReactorMainDrainMixin	threads	true	WorldgenReactor: ServerChunkCache.pollTask is the server's idle-loop entry (MinecraftServer.pollTaskInternal, only while it has time): FullRing's window and deadline apply there.
+lab.opt.ReactorReadJournalMixin	threads	true	ServerReactor (chunk loads): inside ChunkSerializer.read on the pool, shared-state calls go to the ReadJournal.
+lab.opt.ReactorTickMixin	threads	true	WorldgenReactor: FullRing's feedback — each server tick's duration adjusts its window; the idle phase's deadline (the next tick's start) bounds what it may run between ticks.
+lab.opt.RenderCacheBlockEntityMixin	chunks	true	exp/render-cache (client): the block entity renderer call of setupAndRender goes through RenderCache.
+lab.opt.RenderCacheClockMixin	chunks	true	The render cache's animation probe also moves the wall clock (GLFW time): renderers that animate by it (GeckoLib's block entities: RenderUtil.getCurrentTick() = Blaze3D.getTime() * 20) otherwise record the same output twice and are taken for static.
+lab.opt.RenderCacheMixin	chunks	true	exp/render-cache (client): the entity renderer call of EntityRenderDispatcher.render goes through RenderCache (the dispatcher's own flame, shadow and hitbox stay as they are).
+lab.opt.RenderCallJournalMixin	chunks	true	ParallelRender: render-thread work a renderer defers from a worker job (RenderSystem.setShaderTexture and the other "off the render thread: record it" calls) is kept in the job and run on the render thread when the job is merged, in job order, instead of at the next frame's queue flush.
+lab.opt.SamplerUnitDedupeMixin	chunks	true	exp/uniform-dedupe (client): ShaderInstance.apply sets each sampler uniform to its texture unit on every apply; the unit of a sampler never changes for a program, so after the first time the call is skipped (per program instance, per location, forgotten when the instance's program changes).
+lab.opt.ScoutBlockEntityMixin	ticks	true	exp/parallel-tick-scout (measurement only): a block entity tick is a task.
+lab.opt.ScoutChunkMixin	ticks	true	exp/parallel-tick-scout (measurement only): block reads and writes of a task.
+lab.opt.ScoutEffectsMixin	ticks	true	exp/parallel-tick-scout (measurement only): the level-wide side effects a task can have (entity lists, the game event dispatcher, the block event queue, packets to players).
+lab.opt.ScoutEntityMixin	ticks	true	exp/parallel-tick-scout (measurement only): every constructed entity takes an id from the global counter.
+lab.opt.ScoutLevelMixin	ticks	true	exp/parallel-tick-scout (measurement only): the task boundaries of ServerLevel's tick.
+lab.opt.ScoutMiscMixin	ticks	true	exp/parallel-tick-scout (measurement only): entity queries by box are reads of their sections.
+lab.opt.ScoutRandomMixin	ticks	true	exp/parallel-tick-scout (measurement only): draws from the level's RNG.
+lab.opt.ScoutRemoveMixin	ticks	true	exp/parallel-tick-scout (measurement only): removing an entity changes the level's entity lists.
+lab.opt.SectionLayerMaskMixin	chunks	true	exp/section-layers (client): CompiledSection.isEmpty(layer) is asked for every visible section and every chunk layer each frame; vanilla searches an ObjectArraySet (a second object and its array per section).
+lab.opt.SectionListsMixin	chunks	true	exp/section-lists (client): renderLevel's block entity loop and renderSectionLayer's loops (translucent, tripwire) walk SectionLists' compact lists instead of every visible section; a compiled section arriving bumps the generation.
+lab.opt.SectionModCountMixin	chunks	true	Goes with BlockCollisionMemoMixin: a modification counter per chunk section, bumped at every write of its block states (setBlockState, both paths, and the client packet read); these are the only writers of the container.
+lab.opt.SectionStorageIndexMixin	saving	true	exp/poi-columns (goes with PoiColumnMixin): a per-column index of SectionStorage (the POI storage): which sections are stored and which hold a value.
+lab.opt.ShaderLightChunkCacheMixin	lighting	true	ShaderLightMixin: a light change goes to the light volumes (a volume refresh, or the vanilla re-mesh with recipes).
+lab.opt.ShaderLightCompileMixin	lighting	true	ShaderLightMixin: a section compile with recipes (dynamic sections), the sentinel pass before each layer is built.
+lab.opt.ShaderLightFluidMixin	lighting	true	ShaderLightMixin: fluid vertices get the fluid light recipe — the light of each face comes from getLightColor(level, p) (per channel max of p and p.above()) computed just before its vertices.
+lab.opt.ShaderLightFrameMixin	lighting	true	ShaderLightMixin: the light volumes of sections whose light changed, refreshed before the terrain is drawn.
+lab.opt.ShaderLightMeshMixin	lighting	true	ShaderLightMixin: a mesh built with light recipes in its normal bytes.
+lab.opt.ShaderLightMixin	lighting	true	exp/shader-light: after each quad of the AO and flat face paths is written, its vertices get their light recipe (LightVolumes.quadWritten) while the section is compiled with recipes.
+lab.opt.ShaderLightTranslucentMixin	lighting	true	ShaderLightMixin: vanilla's per-section draws of the translucent layer read the section's light volume.
+lab.opt.ShaderSamplerCacheMixin	chunks	true	exp/shader-samplers (client): ShaderInstance.apply() asks the driver for every sampler's uniform location by name (glGetUniformLocation, a string lookup in the driver) on every apply: a third of the render thread's native time (JFR).
+lab.opt.ShapeCacheMixin	ticks	true	exp/shape-cache: the context-taking getCollisionShape(level, pos, context) (every entity collision, support block and pathfinding query) never uses the state's cached collision shape: each call is a megamorphic Block.getCollisionShape -> getShape chain.
+lab.opt.SignalPathMixin	ticks	true	exp/signal-path: the redstone signal queries of every Level without a new BlockPos per neighbour.
+lab.opt.SignalProofStateMixin	ticks	true	Goes with SignalPathMixin: the per-state proof flags.
+lab.opt.SleepMixin	ticks	true	
+lab.opt.StructurePlaceLockMixin	worldgen	true	exp/parallel-worldgen: one StructureStart is shared by every chunk its pieces cover, and pieces keep mutable state across chunks (MineShaftCorridor.hasPlacedSpider, ScatteredFeaturePiece's heightPosition and bounding box moved by updateAverageGroundHeight, the temples' placed-chest flags, modded pie
+lab.opt.TagCacheMixin	ticks	true	exp/tag-cache: Holder.Reference.is(TagKey) is a Set.contains with record hashing and equals on every call.
+lab.opt.TextureIdWorkerMixin	chunks	true	ParallelRender: AbstractTexture.getId() inside a worker job.
+lab.opt.TextureRegisterWorkerMixin	chunks	true	ParallelRender: a texture registered from a worker job (a renderer's first getTexture of a new path) would be put in the manager while its GL upload waits in the job's journal, and a job that then fails drops the journal: the texture stays registered and never uploaded (black).
+lab.opt.TickMemoMixin	ticks	true	exp/tick-memo: Level.tickBlockEntities asks shouldTickBlocksAt(pos) for every ticking block entity, every tick: a hash lookup in the distance manager's ticking tracker (JFR: ~30 % of the server thread in the smelter scene).
+lab.opt.AmbientChunksMixin	ticks	true	exp/ambient-skip (client, with AmbientParticleSkipMixin): the loaded chunks whose biome palettes contain a biome with ambient particles (vanilla: nether biomes; any modded one too).
+lab.opt.TickSchedulerMixin	ticks	true	exp/tick-scheduler: scheduled block and fluid ticks (vanilla and every mod) through the lab's time queue.
+lab.opt.UniformDedupeMixin	chunks	true	exp/uniform-dedupe (client): Uniform.upload sends the value only when it differs from the one this uniform last sent to its location.
+lab.opt.UtilMemoizeMixin	ticks	true	exp/frame-garbage: Util.memoize(BiFunction) without a Pair and a lambda per call (Memo2).
+lab.opt.Vec3FromRgbMixin	entities_render	true	exp/frame-garbage: Vec3.fromRGB24 (fog and sky colours: 216 fetches per sampler call, every frame, from a handful of biome colours) answered from a small direct-mapped cache.
+lab.opt.VertexSortDirectMixin	chunks	true	VertexSortRadixMixin: the translucent sort of BufferSource taken straight from the vertex buffer (QuadSort.sortQuads).
+lab.opt.VertexSortRadixMixin	chunks	true	exp/quad-sort (client): carrier only.
+lab.opt.GenScoutAquiferMixin	worldgen	true	Measurement only (lab.genscout): Aquifer.computeSubstance paths and results.
+lab.opt.WorldgenAlloc	worldgen	true	
+lab.opt.WorldgenAllocAp2Mixin	worldgen	true	WorldgenAlloc (Ap2): no members; applying it lets OptMixinPlugin.postApply run ScratchArrays.transform on Ap2.
+lab.opt.WorldgenAllocDepthMixin	worldgen	true	WorldgenAlloc (randoms): the surface depth's per-column random, reused (see ReusableRandom).
+lab.opt.WorldgenAllocGradientMixin	worldgen	true	WorldgenAlloc (randoms): the vertical gradient condition's per-block random, reused (see ReusableRandom).
+lab.opt.WorldgenAllocJointMixin	worldgen	true	WorldgenAlloc (jigsaw): JointType.byName streams over a fresh values() copy for every jigsaw block loaded while structures are placed.
+lab.opt.WorldgenAllocMaterialMixin	worldgen	true	WorldgenAlloc: MaterialRuleList.calculate (per block of NOISE) without an iterator per call (~12 % of allocation).
+lab.opt.WorldgenAllocOreMixin	worldgen	true	WorldgenAlloc (randoms): the ore vein filler's per-block random, reused (see ReusableRandom).
+lab.opt.WorldgenAllocPlacementMixin	worldgen	true	WorldgenAlloc (placement): PlacedFeature.placeWithContext chains one flatMap per placement modifier over Stream.of(origin) — a pipeline of stream objects per placed feature per chunk.
+lab.opt.WorldgenAllocSequenceMixin	worldgen	true	WorldgenAlloc: SurfaceRules.SequenceRule.tryApply runs per block and rule level; its for-each allocates an ImmutableList iterator each time (escape analysis loses it in the recursive, megamorphic rule tree): ~16 % of worldgen allocation.
+lab.opt.WorldgenAllocSurfaceContextMixin	worldgen	true	WorldgenAlloc: updateY without a lambda and a memoizing supplier per block (see LazyBiome).
+lab.opt.WorldgenFeatureAlloc	worldgen	true	
+lab.opt.WorldgenShare	worldgen	true	
+lab.opt.WorldgenShareBiomeMixin	worldgen	true	WorldgenShare (biomes): BiomeManager.getBiome picks the nearest of the 8 quart corners around a block, each moved by a "fiddle" offset hashed from the seed and the corner (8 LCG steps and 3 offsets per corner, 8 corners per call).
+lab.opt.WorldgenShareCoordinateMixin	worldgen	true	WorldgenShare (mapAll): a spline coordinate's function is mapped once per NoiseChunk traversal (see MapAllMemo).
+lab.opt.WorldgenShareHolderMixin	worldgen	true	WorldgenShare (mapAll): a holder's function is mapped once per NoiseChunk traversal (see MapAllMemo).
+lab.opt.WorldgenShareRegionBiomeMixin	worldgen	true	WorldgenShare (biomes): a WorldGenRegion's BiomeManager serves one step on one thread: it may memoise.
+lab.opt.WorldgenShareRegionMixin	worldgen	true	WorldgenShare (region): every block access of a generation step (features place ores block by block) looks its chunk up again — StaticCache2D, then the holder's AtomicReferenceArray of futures and CompletableFuture.getNow: volatile reads of lines other workers keep writing (18.7 % of FEATURES' own t
+lab.opt.WorldgenShareSlicesMixin	worldgen	true	WorldgenShare (corners): vanilla's fillSlice, taking a border corner column from the neighbour that already computed it and publishing its own (see SliceColumns).
+lab.opt.WorldgenShareSurfaceMixin	worldgen	true	WorldgenShare: preliminary surface levels shared across chunks while the Blender is empty (see SurfaceColumns).
+lab.opt.WorldgenSkip	worldgen	true	
+lab.opt.WorldgenSkipAquiferMixin	worldgen	true	WorldgenSkip: NoiseBasedAquifer.computeSubstance runs for every non-solid block of NOISE (and for carved blocks); two thirds of all blocks, mostly the air above the surface, take its slow path: find the 3 nearest of 12 aquifer grid points, their fluid statuses, pressures between them — to answer "ai
+lab.opt.WorldgenSkipBeardMixin	worldgen	true	WorldgenSkip: Beardifier.compute runs for every block of NOISE and walks every structure piece and jigsaw junction near the chunk (villages: ~34 pieces + ~53 junctions for each of ~98k blocks).
+lab.opt.WorldgenSkipCellsMixin	worldgen	true	WorldgenSkip (cells): keeps the NoiseChunk's final density function (the one the aquifer filler evaluates per block: cacheAllInCell(add(finalDensity, beardifier)) wrapped for this chunk) and builds its CellProof once.
+lab.opt.WorldgenSkipFillMixin	worldgen	true	WorldgenSkip (cells): vanilla's doFill, plus one check before each noise cell.
+lab.opt.AsyncChunkSaveEncodeMixin	saving	true	AsyncChunkSaveMixin: ChunkSerializer.write's encodes (palettes deferred while a save is deferred, the rest as is).
+lab.opt.universal	ticks	true	
+lab.opt.UnloadRecheckMixin	saving	true	A chunk being unloaded that is not ready for saving yet (a generation task still claims it) is checked again next tick instead of at once.
+lab.opt.LightSnapshotMixin	lighting	true	LightSnapshot: a light storage map remembers the keys it wrote since its last full copy (its only writes).
+lab.opt.AllocTrim	saving	true	AllocTrim (lab.opt.AllocTrim): temporary arrays vanilla allocates per call in hot paths, reused per thread instead.
+lab.opt.ChunkIo	saving	true	Chunk storage without blocking (lab.opt.ChunkIo, every IOWorker: chunks, entities, POI; notes/38).
+lab.opt.ParallelWorldgenMixin	worldgen	true	exp/parallel-worldgen: hand SURFACE/CARVERS/FEATURES to ParallelGen's pool instead of running them inside the single worldgen mailbox actor.
+lab.chunkmd.occlusion	chunks	false	GPU occlusion culling of chunk sections (two phases, exact). Pays off where most of the loaded terrain is hidden.

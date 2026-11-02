@@ -192,6 +192,10 @@ public final class Materials {
         public void load(net.minecraft.server.packs.resources.ResourceManager rm) {}
     };
     private static final Map<Integer, int[]> PROGRAMS = new java.util.HashMap<>();
+
+    static void forgetProgram(int id) {
+        PROGRAMS.remove(id);
+    }
     private static Field stateField, textureField;
     private static Method cutoutTexture;
     private static boolean reflectFailed;

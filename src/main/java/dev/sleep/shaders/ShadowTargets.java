@@ -110,6 +110,19 @@ public final class ShadowTargets {
 
     private int depthFbo;
 
+    /** every texture and framebuffer (the pack unloaded) */
+    void delete() {
+        for (int id : fbos.values()) GL30.glDeleteFramebuffers(id);
+        fbos.clear();
+        if (depthFbo != 0) GL30.glDeleteFramebuffers(depthFbo);
+        depthFbo = 0;
+        for (int t : new int[] {depth0, depth1, color[0], color[1]}) {
+            if (t == 0) continue;
+            PackUniforms.forgetTexture(t);
+            GL11.glDeleteTextures(t);
+        }
+    }
+
     /** shadowtex0 -> shadowtex1 (before the translucent casters) */
     public void copyOpaque() {
         GL43.glCopyImageSubData(depth0, GL11.GL_TEXTURE_2D, 0, 0, 0, 0, depth1, GL11.GL_TEXTURE_2D, 0, 0, 0, 0, size, size, 1);

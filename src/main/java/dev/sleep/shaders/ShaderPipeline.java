@@ -99,7 +99,67 @@ public final class ShaderPipeline {
     // ------------------------------------------------------------------ loading
 
     /** render thread, once: the pack named by -Dsleep.shaders, if any */
+    private static volatile String requested;
+    private static volatile boolean requestPending;
+
+    /** the settings screen: this pack (null or blank: none) from the next frame on, the chunks rebuilt for it */
+    public static void request(String name) {
+        requested = name;
+        requestPending = true;
+    }
+
+    /** the loaded pack's name (null: none) */
+    public static String currentName() {
+        ShaderPipeline p = current;
+        return p == null ? null : p.src.name;
+    }
+
     public static void loadConfigured() {
+        if (requestPending) {
+            requestPending = false;
+            String name = requested;
+            ShaderPipeline old = current;
+            if (old != null) {
+                active = false;
+                ShaderIds.on = false;
+                current = null;
+                old.close();
+            }
+            if (name == null || name.isBlank()) System.clearProperty("sleep.shaders");
+            else System.setProperty("sleep.shaders", name);
+            load();
+            // the meshes carry the pack's ids (or not) and its translucent shadow copies: built again, as Iris does
+            if (Minecraft.getInstance().levelRenderer != null) Minecraft.getInstance().levelRenderer.allChanged();
+            System.out.println("[sleep/shaders] switched to " + (current == null ? "no pack" : current.src.name));
+            return;
+        }
+        if (current == null) load();
+    }
+
+    /** frees everything the pack made (render thread, between frames: the hooks see active = false first) */
+    private void close() {
+        for (CompositeProgram cp : passes.values()) cp.delete();
+        for (PackShader s : shared.values()) {
+            if (s == null) continue;
+            dev.sleep.optsupport.ProgramCaches.forget(s.getId());
+            s.close();
+        }
+        shared.clear();
+        shaders.clear();
+        targets.delete();
+        if (shadow != null) shadow.targets.delete();
+        java.util.Set<Integer> tex = new java.util.HashSet<>(stageTextures.values());
+        for (int t : new int[] {noiseTex, normalsTex, specularTex, shadowDepthTex, shadowColorTex}) tex.add(t);
+        for (int t : tex) {
+            if (t == 0) continue;
+            PackUniforms.forgetTexture(t);
+            GL11.glDeleteTextures(t);
+        }
+        GL20.glUseProgram(0);
+        ShaderPipelineHooks.resetProgramCache();
+    }
+
+    private static void load() {
         String name = System.getProperty("sleep.shaders");
         if (name == null || name.isBlank() || current != null) return;
         try {

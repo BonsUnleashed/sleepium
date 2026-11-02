@@ -1060,6 +1060,10 @@ public final class PartBatch {
     private static long cmdMem, cmdCap;
     private static final IndirectCommands COMMANDS = new IndirectCommands();
     private static final java.util.HashMap<Integer, int[]> PROGRAMS = new java.util.HashMap<>();
+
+    static void forgetProgram(int id) {
+        PROGRAMS.remove(id);
+    }
     private static int ssbo, ssboSize;
 
     public static void beginType(RenderType t) {

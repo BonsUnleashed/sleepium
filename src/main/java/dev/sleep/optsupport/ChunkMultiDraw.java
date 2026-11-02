@@ -601,6 +601,11 @@ public final class ChunkMultiDraw {
     private static final List<Arena> LISTED = new ArrayList<>();
     private static final Map<Integer, int[]> PROGRAM_STATE = new java.util.HashMap<>();   // program -> {flagLocation}
 
+    /** a program deleted (its id may come back for another): ProgramCaches */
+    static void forgetProgram(int id) {
+        PROGRAM_STATE.remove(id);
+    }
+
     /**
      * Draws the layer's visible sections: arena sections queued per region, others (no entry, stale origin) the vanilla
      * way on the spot. Returns false when the layer or the current shader cannot use it (then the caller draws vanilla).

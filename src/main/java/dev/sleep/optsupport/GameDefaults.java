@@ -17,6 +17,15 @@ public final class GameDefaults {
     public static synchronized void ensure() {
         if (done) return;
         done = true;
+        SleepConfig.load();   // the player's settings first: they win over the defaults
+        try {
+            defaults();
+        } finally {
+            SleepConfig.started();
+        }
+    }
+
+    private static void defaults() {
         String opt = System.getProperty("lab.opt.defaults");
         if ("false".equals(opt)) return;
         boolean prod;

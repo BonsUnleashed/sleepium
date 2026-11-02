@@ -189,6 +189,10 @@ public final class LightVolumes {
         System.out.println("[sleep/opt] shader light: " + where + " does not read the light recipes (another mod rewrote its light line): light changes re-mesh as vanilla");
     }
     private static final it.unimi.dsi.fastutil.ints.Int2IntOpenHashMap VOLUME_UNIFORM = new it.unimi.dsi.fastutil.ints.Int2IntOpenHashMap();
+
+    static void forgetProgram(int id) {
+        VOLUME_UNIFORM.remove(id);
+    }
     private static long boundFrame = -1;
 
     public static String patchTranslucent(String src) {

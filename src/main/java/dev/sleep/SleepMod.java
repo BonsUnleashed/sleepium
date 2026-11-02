@@ -23,7 +23,7 @@ public final class SleepMod {
     public static final String MOD_ID = "sleep";
     static final Logger LOGGER = LogUtils.getLogger();
 
-    public SleepMod(IEventBus modBus) {
+    public SleepMod(IEventBus modBus, net.neoforged.fml.ModContainer container) {
         IEventBus gameBus = NeoForge.EVENT_BUS;
         // Which layer/loader owns the bus? Mixin can only transform classes of the GAME layer (TransformingClassLoader).
         LOGGER.info("sleep: bus class {} module {} loader {}; game class loader {}", gameBus.getClass().getName(),
@@ -52,6 +52,7 @@ public final class SleepMod {
         gameBus.addListener(net.neoforged.neoforge.event.level.ChunkEvent.Load.class, GenBench::onChunkLoad);
         if (FMLEnvironment.dist.isClient()) {
             ClientMeter.register(gameBus);   // class is only loaded on the physical client
+            dev.sleep.ui.SleepUi.register(container, gameBus);   // the settings screen (mod list, Options)
             gameBus.addListener(net.neoforged.bus.api.EventPriority.HIGHEST, net.neoforged.neoforge.client.event.RenderFrameEvent.Pre.class,
                     e -> {
                         dev.sleep.optsupport.RenderCache.frame();
