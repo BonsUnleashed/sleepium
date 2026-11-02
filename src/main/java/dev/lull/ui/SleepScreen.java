@@ -49,6 +49,12 @@ public final class SleepScreen extends Screen {
         SleepScreen.tab = tab;
     }
 
+    /** the dev probe (-Dsleep.ui.saveTest): a flag switched as its button would, then Done */
+    void probeToggleAndClose(String key) {
+        desired.put(key, !desired.get(key));
+        onClose();
+    }
+
     Screen parent() {
         return parent;
     }
@@ -115,7 +121,7 @@ public final class SleepScreen extends Screen {
     private void fillFeatures() {
         for (var e : SleepOptions.byGroup().entrySet()) {
             // a feature is its tested flags; the experimental ones (off by default) are switched one by one under All flags
-            List<SleepOptions.Option> opts = e.getValue().stream().filter(SleepOptions.Option::byDefault).toList();
+            List<SleepOptions.Option> opts = e.getValue().stream().filter(o -> o.byDefault() && o.partOf().isEmpty()).toList();
             if (opts.isEmpty()) continue;
             String g = e.getKey();
             Button toggle = Button.builder(Component.empty(), x -> {
@@ -144,17 +150,22 @@ public final class SleepScreen extends Screen {
             if (groupFilter != null && !groupFilter.equals(o.group())) continue;
             if (!f.isEmpty() && !o.key().toLowerCase(Locale.ROOT).contains(f) && !o.description().toLowerCase(Locale.ROOT).contains(f)) continue;
             boolean locked = SleepConfig.launchFlag(o.key());
+            // a mixin its plugin switches by another flag: shown with that flag's state, switched there
+            boolean part = !o.partOf().isEmpty();
             Button toggle = Button.builder(Component.empty(), x -> desired.put(o.key(), !desired.get(o.key()))).size(70, 20).build();
-            toggle.active = !locked;
+            toggle.active = !locked && !part;
             MutableComponent tip = Component.literal(o.key()).withStyle(ChatFormatting.GRAY).append("\n")
                     .append(o.description().isEmpty() ? Component.translatable("sleepium.ui.nodesc") : Component.literal(o.description())).append("\n")
                     .append(Component.translatable(o.byDefault() ? "sleepium.ui.default.on" : "sleepium.ui.default.off").withStyle(ChatFormatting.DARK_GRAY));
             if (locked) tip.append("\n").append(Component.translatable("sleepium.ui.locked", o.key()).withStyle(ChatFormatting.GOLD));
+            String parts = String.join(", ", o.partOf().stream().map(k -> k.substring(k.lastIndexOf('.') + 1).replaceAll("Mixin$", "")).toList());
+            if (part) tip.append("\n").append(Component.translatable("sleepium.ui.partof.tip", parts).withStyle(ChatFormatting.AQUA));
             MutableComponent label = Component.literal(o.shortName());
+            if (part) label.append(Component.translatable("sleepium.ui.partof", parts).withStyle(ChatFormatting.DARK_GRAY));
             if (!o.byDefault()) label.append(Component.translatable("sleepium.ui.experimental").withStyle(ChatFormatting.DARK_AQUA));
             list.add(new Row(label, () -> {
-                toggle.setMessage(on(desired.get(o.key())));
-                return restartNeeded(o.key()) ? Component.translatable("sleepium.ui.restart.short").withStyle(ChatFormatting.YELLOW) : null;
+                toggle.setMessage(on(part ? effective(o.partOf().get(0)) : desired.get(o.key())));
+                return !part && restartNeeded(o.key()) ? Component.translatable("sleepium.ui.restart.short").withStyle(ChatFormatting.YELLOW) : null;
             }, tip, toggle));
         }
     }
@@ -199,6 +210,12 @@ public final class SleepScreen extends Screen {
         return on ? CommonComponents.OPTION_ON.copy().withStyle(ChatFormatting.GREEN) : CommonComponents.OPTION_OFF.copy().withStyle(ChatFormatting.RED);
     }
 
+    /** a flag's value as this screen would leave it (its own button's, else the property's) */
+    private boolean effective(String key) {
+        Boolean d = desired.get(key);
+        return d != null ? d : Boolean.parseBoolean(System.getProperty(key));
+    }
+
     private boolean restartNeeded(String key) {
         return desired.get(key) != Boolean.parseBoolean(SleepConfig.startup(key));
     }
@@ -209,7 +226,7 @@ public final class SleepScreen extends Screen {
     public void render(GuiGraphics g, int mouseX, int mouseY, float partialTick) {
         super.render(g, mouseX, mouseY, partialTick);
         g.drawCenteredString(font, title, width / 2, 8, 0xFFFFFF);
-        long n = SleepOptions.all().stream().filter(o -> restartNeeded(o.key())).count();
+        long n = SleepOptions.all().stream().filter(o -> o.partOf().isEmpty() && restartNeeded(o.key())).count();
         if (n > 0) g.drawCenteredString(font, Component.translatable("sleepium.ui.restart", n), width / 2, height - 44, 0xFFFF55);
         else if (tab == TAB_SHADERS && pack != null && !pack.equals(ShaderPipeline.currentName()) && !pack.equals(packAtOpen))
             g.drawCenteredString(font, Component.translatable("sleepium.ui.shaders.loading"), width / 2, height - 44, 0xAAAAAA);
@@ -225,6 +242,7 @@ public final class SleepScreen extends Screen {
     private void save() {
         Map<String, String> out = new TreeMap<>(SleepConfig.saved());
         for (SleepOptions.Option o : SleepOptions.all()) {
+            if (!o.partOf().isEmpty()) continue;   // switched by its own flag's line
             boolean v = desired.get(o.key());
             if (v != o.byDefault() || v != Boolean.parseBoolean(SleepConfig.startup(o.key()))) out.put(o.key(), Boolean.toString(v));
             else out.remove(o.key());

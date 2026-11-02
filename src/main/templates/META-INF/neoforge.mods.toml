@@ -1,12 +1,17 @@
 modLoader="javafml"
 loaderVersion="${loader_version_range}"
 license="${mod_license}"
+issueTrackerURL="https://github.com/ha7gawa/sleepium/issues"
 
 [[mods]]
 modId="${mod_id}"
 version="${mod_version}"
 displayName="${mod_name}"
 authors="${mod_authors}"
+displayURL="https://modrinth.com/mod/sleepium"
+logoFile="sleepium_logo.png"
+# the mod list tells of a newer version (update.json in the repository, updated with each release)
+updateJSONURL="https://raw.githubusercontent.com/ha7gawa/sleepium/main/update.json"
 description='''
 Sleepium: server and client optimisations that keep the game's results exact - idle block entities and mobs put to
 sleep, a ring event bus, parallel world generation, chunk I/O, a renderer with its own shaderpack support (beta).

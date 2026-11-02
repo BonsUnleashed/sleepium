@@ -43,5 +43,7 @@
   "sleepium.ui.group.worldgen.desc": "Parallel generation, shared noise, work skipped where it cannot change the result.",
   "sleepium.ui.group.saving": "Saving and chunk IO",
   "sleepium.ui.group.saving.desc": "Chunk saving and loading off the main thread, chunk caches.",
-  "sleepium.shaders.preparing": "Sleepium: preparing %s... %s (shaders on when ready; the first time on a driver takes longest)"
+  "sleepium.shaders.preparing": "Sleepium: preparing %s... %s (shaders on when ready; the first time on a driver takes longest)",
+  "sleepium.ui.partof": " (part of %s)",
+  "sleepium.ui.partof.tip": "Switched together with %s: change that one"
 }

@@ -78,7 +78,12 @@ public final class SleepUi {
                 System.out.println("[sleep/ui] shot: " + ex);
             }
             if (i + 1 < at.length) mc.setScreen(new SleepScreen(((SleepScreen) mc.screen).parent(), i + 1));
-            else mc.stop();
+            else {
+                // -Dsleep.ui.saveTest=<key>: the screen's Done with that flag switched (config/sleepium.properties written)
+                String key = System.getProperty("sleep.ui.saveTest");
+                if (key != null && mc.screen instanceof SleepScreen s) s.probeToggleAndClose(key);
+                mc.stop();
+            }
         }
     }
 

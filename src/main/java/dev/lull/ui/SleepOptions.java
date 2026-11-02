@@ -16,7 +16,8 @@ public final class SleepOptions {
     /** the groups, in the order the screen shows them */
     public static final String[] GROUPS = {"chunks", "entities_render", "lighting", "animation", "ticks", "threads", "network", "worldgen", "saving"};
 
-    public record Option(String key, String group, boolean byDefault, String description) {
+    /** partOf: the flags that really switch it (a plugin gates it by them); empty: its own flag */
+    public record Option(String key, String group, boolean byDefault, String description, java.util.List<String> partOf) {
         /** the flag's short name: lab.opt.ChunkMultiDrawMixin -> ChunkMultiDraw */
         public String shortName() {
             String n = key.substring(key.lastIndexOf('.') + 1);
@@ -36,7 +37,8 @@ public final class SleepOptions {
             if (in != null) {
                 for (String line : new String(in.readAllBytes(), StandardCharsets.UTF_8).split("\n")) {
                     String[] c = line.split("\t", -1);
-                    if (c.length >= 4) all.add(new Option(c[0], c[1], "true".equals(c[2]), c[3]));
+                    if (c.length >= 4) all.add(new Option(c[0], c[1], "true".equals(c[2]), c[3],
+                            c.length >= 5 && !c[4].isEmpty() ? java.util.List.of(c[4].split(",")) : java.util.List.of()));
                 }
             }
         } catch (IOException e) {

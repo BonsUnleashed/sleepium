@@ -175,7 +175,8 @@ public final class OptMixinPlugin implements IMixinConfigPlugin {
         if (Boolean.getBoolean("lab.opt.universal")) {
             // -Dlab.opt.except=A,B: universal without those (A/B of one part)
             java.util.Set<String> except = new java.util.HashSet<>(java.util.Arrays.asList(System.getProperty("lab.opt.except", "").split(",")));
-            for (String f : UNIVERSAL) if (!except.contains(f)) System.setProperty("lab.opt." + f, "true");
+            // a flag set off (a launch flag, the settings screen's config/sleepium.properties) stays off
+            for (String f : UNIVERSAL) if (!except.contains(f) && !"false".equals(System.getProperty("lab.opt." + f))) System.setProperty("lab.opt." + f, "true");
             System.out.println("[sleep/opt] lab.opt.universal: " + String.join(", ", UNIVERSAL));
         }
         // the worldgen reactor removes the worldgen actor; FEATURES of neighbouring chunks are then kept apart only by
