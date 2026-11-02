@@ -14,8 +14,8 @@ import java.util.TreeSet;
  * the current ones. Comments and preprocessor lines pass through (a #define body is code too: rewritten the same way).
  *
  * <p>What the engine provides for the result: attributes {@code vaPosition (vec3) vaColor (vec4) vaUV0 (vec2)
- * vaUV1 (ivec2) vaUV2 (ivec2) vaNormal (vec3)}, uniforms {@code modelViewMatrix projectionMatrix (mat4) normalMatrix
- * (mat3) textureMatrix sl_LightmapTextureMat (mat4) sl_Fog (struct)}; see {@link #ATTRIBUTES}.
+ * vaUV1 (ivec2) vaUV2 (ivec2) vaNormal (vec3)}, uniforms {@code ModelViewMat ProjMat (mat4) sl_NormalMat
+ * (mat3) TextureMat sl_LightmapTextureMat (mat4) sl_Fog (struct)}; see {@link #ATTRIBUTES}.
  */
 public final class GlslTranslator {
     public enum Stage { VERTEX, GEOMETRY, FRAGMENT, COMPUTE }
@@ -25,8 +25,8 @@ public final class GlslTranslator {
             {"vaUV2", "ivec2"}, {"vaNormal", "vec3"}};
 
     /** uniforms this engine sets for every program (Iris's core-profile names): declared when used but not declared */
-    public static final String[][] ENGINE_UNIFORMS = {{"modelViewMatrix", "mat4"}, {"projectionMatrix", "mat4"}, {"normalMatrix", "mat3"},
-            {"textureMatrix", "mat4"}, {"chunkOffset", "vec3"}, {"modelViewMatrixInverse", "mat4"}, {"projectionMatrixInverse", "mat4"}};
+    public static final String[][] ENGINE_UNIFORMS = {{"ModelViewMat", "mat4"}, {"ProjMat", "mat4"}, {"sl_NormalMat", "mat3"},
+            {"TextureMat", "mat4"}, {"ChunkOffset", "vec3"}, {"sl_ModelViewMatInverse", "mat4"}, {"sl_ProjMatInverse", "mat4"}};
 
     static final Set<String> QUALIFIERS = Set.of("in", "out", "uniform", "attribute", "varying", "flat", "smooth", "noperspective", "centroid", "const");
     static final Set<String> PRECISION = Set.of("highp", "mediump", "lowp", "layout");
@@ -36,8 +36,23 @@ public final class GlslTranslator {
 
     private GlslTranslator() {}
 
+    /** Iris's core-profile uniform names -> the names this engine sets (vanilla's where vanilla sets them per draw) */
+    static final java.util.Map<String, String> ALIASES = java.util.Map.of("modelViewMatrix", "ModelViewMat", "projectionMatrix", "ProjMat",
+            "normalMatrix", "sl_NormalMat", "textureMatrix", "TextureMat", "chunkOffset", "ChunkOffset", "modelViewMatrixInverse",
+            "sl_ModelViewMatInverse", "projectionMatrixInverse", "sl_ProjMatInverse");
+
     public static Result translate(String src, Stage stage) {
-        return new GlslTranslator0(src, stage).run();
+        return translate(src, stage, false);
+    }
+
+    /**
+     * gbuffers: a gbuffers / shadow program drawn through vanilla's ShaderInstance - its atlas sampler (gtexture, tex,
+     * texture) becomes Sampler0 and lightmap Sampler2 (vanilla binds Sampler0..11 by name per draw).
+     */
+    public static Result translate(String src, Stage stage, boolean gbuffers) {
+        GlslTranslator0 t = new GlslTranslator0(src, stage);
+        t.gbuffers = gbuffers;
+        return t.run();
     }
 
     private static final class GlslTranslator0 {
@@ -49,7 +64,9 @@ public final class GlslTranslator {
         final Set<String> uniforms = new LinkedHashSet<>();
         final Set<String> helpers = new LinkedHashSet<>();
         final List<String> notes = new ArrayList<>();
-        boolean usesFog, usesFogCoord, usesFrontColor, usesTexCoordArray, samplerNamedTexture;
+        boolean usesFog, usesFogCoord, usesFrontColor, usesTexCoordArray, gbuffers;
+        /** pack sampler names -> the engine's (gbuffers: atlas Sampler0, lightmap Sampler2; else "texture" -> gtexture) */
+        java.util.Map<String, String> samplerRenames = new java.util.HashMap<>();
         int version = 110;
         boolean compatibility;
 
@@ -61,7 +78,10 @@ public final class GlslTranslator {
 
         Result run() {
             readVersion();
-            samplerNamedTexture = declaresSamplerNamed("texture");
+            if (gbuffers) {
+                for (String a : new String[] {"gtexture", "tex", "texture"}) if (declaresSamplerNamed(a)) samplerRenames.put(a, "Sampler0");
+                if (declaresSamplerNamed("lightmap")) samplerRenames.put("lightmap", "Sampler2");
+            } else if (declaresSamplerNamed("texture")) samplerRenames.put("texture", "gtexture");
             StringBuilder body = new StringBuilder();
             int n = toks.size();
             for (int i = 0; i < n; i++) {
@@ -138,7 +158,7 @@ public final class GlslTranslator {
                     return "sl_" + id;
                 case "texture":
                     // a #version 120 pack's atlas sampler named "texture" (a function in 130+): renamed where it is not called
-                    return samplerNamedTexture && !isCall(i) ? "gtexture" : id;
+                    return samplerRenames.containsKey("texture") && !isCall(i) ? samplerRenames.get("texture") : id;
                 case "gl_FragColor":
                     if (stage != Stage.FRAGMENT) return id;
                     fragOut.add(0);
@@ -158,8 +178,8 @@ public final class GlslTranslator {
                 case "gl_Vertex":
                     if (stage != Stage.VERTEX) return id;
                     attrs.add("vaPosition");
-                    uniform("uniform vec3 chunkOffset;");   // terrain: section-relative positions (0 for everything else)
-                    return "vec4(vaPosition + chunkOffset, 1.0)";
+                    uniform("uniform vec3 ChunkOffset;");   // terrain: section-relative positions (0 for everything else)
+                    return "vec4(vaPosition + ChunkOffset, 1.0)";
                 case "gl_Color":
                     if (stage == Stage.VERTEX) {
                         attrs.add("vaColor");
@@ -192,31 +212,31 @@ public final class GlslTranslator {
                     usesFog = true;
                     return "sl_Fog";
                 case "gl_ModelViewMatrix":
-                    uniform("uniform mat4 modelViewMatrix;");
-                    return "modelViewMatrix";
+                    uniform("uniform mat4 ModelViewMat;");
+                    return "ModelViewMat";
                 case "gl_ProjectionMatrix":
-                    uniform("uniform mat4 projectionMatrix;");
-                    return "projectionMatrix";
+                    uniform("uniform mat4 ProjMat;");
+                    return "ProjMat";
                 case "gl_ModelViewProjectionMatrix":
-                    uniform("uniform mat4 modelViewMatrix;");
-                    uniform("uniform mat4 projectionMatrix;");
-                    return "(projectionMatrix * modelViewMatrix)";
+                    uniform("uniform mat4 ModelViewMat;");
+                    uniform("uniform mat4 ProjMat;");
+                    return "(ProjMat * ModelViewMat)";
                 case "gl_ModelViewMatrixInverse":
-                    uniform("uniform mat4 modelViewMatrix;");
-                    return "inverse(modelViewMatrix)";
+                    uniform("uniform mat4 ModelViewMat;");
+                    return "inverse(ModelViewMat)";
                 case "gl_ProjectionMatrixInverse":
-                    uniform("uniform mat4 projectionMatrix;");
-                    return "inverse(projectionMatrix)";
+                    uniform("uniform mat4 ProjMat;");
+                    return "inverse(ProjMat)";
                 case "gl_NormalMatrix":
-                    uniform("uniform mat3 normalMatrix;");
-                    return "normalMatrix";
+                    uniform("uniform mat3 sl_NormalMat;");
+                    return "sl_NormalMat";
                 case "gl_TextureMatrix": {
                     int a = nextSignificant(i), b = a < 0 ? -1 : nextSignificant(a), c = b < 0 ? -1 : nextSignificant(b);
                     if (a >= 0 && toks.get(a).text.equals("[") && c >= 0 && toks.get(c).text.equals("]") && toks.get(b).text.matches("\\d+")) {
                         next[0] = c;
                         if (toks.get(b).text.equals("0")) {
-                            uniform("uniform mat4 textureMatrix;");
-                            return "textureMatrix";
+                            uniform("uniform mat4 TextureMat;");
+                            return "TextureMat";
                         }
                         uniform("uniform mat4 sl_LightmapTextureMat;");
                         return "sl_LightmapTextureMat";
@@ -227,14 +247,22 @@ public final class GlslTranslator {
                 case "ftransform":
                     if (!isCall(i)) return id;
                     attrs.add("vaPosition");
-                    uniform("uniform mat4 modelViewMatrix;");
-                    uniform("uniform mat4 projectionMatrix;");
-                    uniform("uniform vec3 chunkOffset;");
-                    helpers.add("#define ftransform() (projectionMatrix * (modelViewMatrix * vec4(vaPosition + chunkOffset, 1.0)))");
+                    uniform("uniform mat4 ModelViewMat;");
+                    uniform("uniform mat4 ProjMat;");
+                    uniform("uniform vec3 ChunkOffset;");
+                    helpers.add("#define ftransform() (ProjMat * (ModelViewMat * vec4(vaPosition + ChunkOffset, 1.0)))");
                     return id;
                 default:
-                    return id;
+                    return renamed(id);
             }
+        }
+
+        /** an identifier under the aliases and sampler renames */
+        String renamed(String id) {
+            String a = ALIASES.get(id);
+            if (a != null) return a;
+            String r = samplerRenames.get(id);
+            return r != null ? r : id;
         }
 
         /** names the source declares: the identifier after a type that follows in / out / uniform / attribute / varying */
@@ -247,7 +275,7 @@ public final class GlslTranslator {
                 while (a >= 0 && toks.get(a).kind == Tok.IDENT && (QUALIFIERS.contains(toks.get(a).text) || PRECISION.contains(toks.get(a).text)))
                     a = nextSignificant(a);
                 int b = a < 0 ? -1 : nextSignificant(a);
-                if (b >= 0 && toks.get(b).kind == Tok.IDENT) out.add(toks.get(b).text);
+                if (b >= 0 && toks.get(b).kind == Tok.IDENT) out.add(renamed(toks.get(b).text));
             }
             return out;
         }
@@ -256,8 +284,8 @@ public final class GlslTranslator {
         Set<String> usedIdents() {
             Set<String> out = new java.util.HashSet<>();
             for (Tok t : toks) {
-                if (t.kind == Tok.IDENT) out.add(t.text);
-                else if (t.kind == Tok.DIRECTIVE) for (Tok d : lex(t.text.stripLeading().substring(1))) if (d.kind == Tok.IDENT) out.add(d.text);
+                if (t.kind == Tok.IDENT) out.add(renamed(t.text));
+                else if (t.kind == Tok.DIRECTIVE) for (Tok d : lex(t.text.stripLeading().substring(1))) if (d.kind == Tok.IDENT) out.add(renamed(d.text));
             }
             return out;
         }
@@ -273,7 +301,8 @@ public final class GlslTranslator {
             String d = s.substring(1).stripLeading();
             if (!d.startsWith("define")) return line;
             GlslTranslator0 sub = new GlslTranslator0(line, stage);
-            sub.samplerNamedTexture = samplerNamedTexture;
+            sub.samplerRenames = samplerRenames;
+            sub.gbuffers = gbuffers;
             StringBuilder b = new StringBuilder();
             for (int i = 0; i < sub.toks.size(); i++) {
                 Tok t = sub.toks.get(i);

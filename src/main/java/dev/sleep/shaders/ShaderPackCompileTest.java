@@ -57,6 +57,8 @@ public final class ShaderPackCompileTest {
             if (k >= 0) programs.computeIfAbsent(base, x -> new String[4])[k] = f;
         }
         List<String> macros = StandardMacros.build(List.of());
+        PackOptions options = PackOptions.scan(src);
+        System.out.println("[sleep/shaders] " + options.options.size() + " options, e.g. SHADOW_QUALITY=" + options.value("SHADOW_QUALITY"));
         Path out = gameDir.resolve("sleep/shaders/" + src.name);
         Files.createDirectories(out);
         int ok = 0, bad = 0;
@@ -70,10 +72,11 @@ public final class ShaderPackCompileTest {
             for (int k = 0; k < 4; k++) {
                 if (files[k] == null) continue;
                 GlslTranslator.Stage stage = GlslTranslator.Stage.values()[k];
-                GlslPreprocessor pp = new GlslPreprocessor(src::text, macros, l -> l);
+                GlslPreprocessor pp = new GlslPreprocessor(src::text, macros, options::rewrite);
                 String pre = pp.process(files[k]);
                 if (!pp.errors().isEmpty()) log.append(stage).append(" preprocessor: ").append(pp.errors()).append('\n');
-                GlslTranslator.Result r = GlslTranslator.translate(pre, stage);
+                boolean gb = name.startsWith("gbuffers") || name.startsWith("shadow") && !name.startsWith("shadowcomp");
+                GlslTranslator.Result r = GlslTranslator.translate(pre, stage, gb);
                 if (!r.notes().isEmpty()) log.append(stage).append(" translator: ").append(r.notes()).append('\n');
                 String ext = new String[] {"vsh", "gsh", "fsh", "csh"}[k];
                 Files.writeString(out.resolve(name + "." + ext + ".glsl"), r.text(), StandardCharsets.UTF_8);
