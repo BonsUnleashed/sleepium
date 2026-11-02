@@ -9,7 +9,8 @@ import org.objectweb.asm.tree.MethodNode;
  * changes. Mixin cannot inject into a method merged by an overwrite (a load error: "cannot inject into ... merged by"),
  * and an overwrite of theirs would drop ours or theirs anyway. Then our mixin is not applied (logged), and the method
  * runs vanilla's code with their change. The same for a @Redirect of ours on a call another mod's mixin redirects
- * (two redirects of one call: the second fails to load). Everything else of ours stays.
+ * (two redirects of one call: the second fails to load), and for any injector of ours into a method another mod's
+ * mixin overwrites (Sodium's renderSectionLayer). Everything else of ours stays.
  */
 public final class MixinYield {
     private MixinYield() {}
@@ -35,6 +36,14 @@ public final class MixinYield {
                 return true;
             }
         }
+        for (MethodNode m : cn.methods)   // an injector of ours into a method another mod overwrites: Mixin refuses it at load
+            for (String t : MixinTouch.injectorTargets(m))
+                if (MixinTouch.overwritten(target, t)) {
+                    yielded++;
+                    System.out.println("[sleep/opt] " + mixinClassName.substring(mixinClassName.lastIndexOf('.') + 1) + " not applied: " + targetClassName + "#" + t
+                            + " is overwritten by another mod's mixin (our injector cannot go into it)");
+                    return true;
+                }
         for (MethodNode m : cn.methods) {
             if (!overwrite(m)) continue;
             if (Boolean.getBoolean("sleep.mixinIndex.debug"))

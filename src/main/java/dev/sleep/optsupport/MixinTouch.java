@@ -47,6 +47,42 @@ public final class MixinTouch {
     }
 
     private static volatile Map<String, Set<String>> INDEX;
+    /** foreign @Overwrites by target class: the method names (filled with the index) */
+    private static final Map<String, Set<String>> OVERWRITES = new java.util.HashMap<>();
+
+    /** Is method {@code name} of this class overwritten by a foreign mixin (no injector of ours can go into it)? */
+    public static boolean overwritten(String internalName, String name) {
+        index();
+        Set<String> o = OVERWRITES.get(internalName);
+        return o != null && o.contains(name);
+    }
+
+    /** the names of a mixin class's @Overwrite methods */
+    static List<String> overwriteNames(ClassNode cn) {
+        List<String> out = new java.util.ArrayList<>();
+        for (MethodNode m : cn.methods)
+            for (AnnotationNode a : annotations(m)) if ("Lorg/spongepowered/asm/mixin/Overwrite;".equals(a.desc)) out.add(m.name);
+        return out;
+    }
+
+    /** the target method names of a mixin method's injector annotations (empty: not an injector) */
+    static List<String> injectorTargets(MethodNode m) {
+        List<String> out = new java.util.ArrayList<>();
+        for (AnnotationNode a : annotations(m)) {
+            String d = a.desc;
+            boolean injector = d.startsWith("Lorg/spongepowered/asm/mixin/injection/") && !d.endsWith("/At;") && !d.endsWith("/Slice;")
+                    || d.startsWith("Lcom/llamalad7/mixinextras/injector/");
+            if (!injector || a.values == null) continue;
+            for (int i = 0; i + 1 < a.values.size(); i += 2) {
+                if (!"method".equals(a.values.get(i))) continue;
+                Object v = a.values.get(i + 1);
+                if (v instanceof List<?> l) for (Object o : l) out.add(nameOf(String.valueOf(o)));
+                else out.add(nameOf(String.valueOf(v)));
+            }
+        }
+        return out;
+    }
+
     /** foreign @Redirects by target class: "method|invoked name" (filled with the index) */
     private static final Map<String, Set<String>> REDIRECTS = new java.util.HashMap<>();
 
@@ -126,10 +162,11 @@ public final class MixinTouch {
                         }
                         Set<String> methods = new HashSet<>();
                         collect(cn, methods);
-                        List<String> reds = redirectKeys(cn);
+                        List<String> reds = redirectKeys(cn), ows = overwriteNames(cn);
                         for (String target : targets(cn)) {
                             m.computeIfAbsent(target, k -> new HashSet<>()).addAll(methods);
                             if (!reds.isEmpty()) REDIRECTS.computeIfAbsent(target, k -> new HashSet<>()).addAll(reds);
+                            if (!ows.isEmpty()) OVERWRITES.computeIfAbsent(target, k -> new HashSet<>()).addAll(ows);
                         }
                     }
                 }
@@ -172,10 +209,11 @@ public final class MixinTouch {
                             new org.objectweb.asm.ClassReader(java.nio.file.Files.readAllBytes(bytes)).accept(cn, org.objectweb.asm.ClassReader.SKIP_CODE);
                             Set<String> methods = new HashSet<>();
                             collect(cn, methods);
-                            List<String> reds = redirectKeys(cn);
+                            List<String> reds = redirectKeys(cn), ows = overwriteNames(cn);
                             for (String target : targets(cn)) {
                                 m.computeIfAbsent(target, k -> new HashSet<>()).addAll(methods);
                                 if (!reds.isEmpty()) REDIRECTS.computeIfAbsent(target, k -> new HashSet<>()).addAll(reds);
+                                if (!ows.isEmpty()) OVERWRITES.computeIfAbsent(target, k -> new HashSet<>()).addAll(ows);
                             }
                         }
                     }
