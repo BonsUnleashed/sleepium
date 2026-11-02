@@ -1,0 +1,22 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "dev.lull.catmixin",
+  "plugin": "dev.lull.catmixin.CatnipMixinPlugin",
+  "compatibilityLevel": "JAVA_21",
+  "client": [
+    "SbbPartsMixin",
+    "SbbCacheWorkerMixin",
+    "RenderSystemLightAccessor",
+    "KineticRotationMixin",
+    "KineticBeMixin",
+    "OverStressAccessor",
+    "ChainConveyorMemoMixin",
+    "KineticLevelMixin",
+    "ViewAreaInvoker",
+    "CreateTimeTestMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

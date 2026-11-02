@@ -1,4 +1,4 @@
-# sleep
+# Sleepium
 
 A NeoForge mod for Minecraft 1.21.1 that makes servers and clients cheaper to run **without changing what the game
 computes**. A hopper with nothing to do, a resting item stack, a furnace waiting for fuel: in vanilla each of them runs
@@ -12,8 +12,8 @@ with the optimisations off and once with them on. After the same number of ticks
 every field of every entity are hashed. On the client, rendered frames are hashed.
 
 - Minecraft 1.21.1, NeoForge 21.1.251, Java 21.
-- License: MIT.
-- Status: 0.1.0, tested as described below. Compatibility with other optimisation mods has **not** been tested yet
+- License: LGPL-3.0-only (see [LICENSE](LICENSE) and [COPYING](COPYING)).
+- Status: 1.0.0 (shaderpacks: beta), tested as described below. Compatibility with other optimisation mods has **not** been tested yet
   (see [Known limits](#known-limits)).
 
 ## Results at a glance
@@ -21,7 +21,7 @@ every field of every entity are hashed. On the client, rendered frames are hashe
 Intel N100 (4 cores, 6 W, Intel UHD Graphics, 16 GB): server milliseconds per tick (MSPT) as reported by vanilla's
 `/tick query`, lower is better. "vanilla" is the same jar with every optimisation off (`-Dlab.opt.defaults=false`).
 
-| scene | what it stresses | vanilla | sleep | |
+| scene | what it stresses | vanilla | Sleepium | |
 |---|---|---:|---:|---:|
 | items | 4 000 item stacks that cannot merge | 109.60 | 8.00 | ×13.7 |
 | hoppers | 1 024 idle hoppers | 2.78 | 0.73 | ×3.8 |
@@ -48,7 +48,7 @@ The world after N ticks is the same as vanilla's in every scene where vanilla it
 
 ## Install
 
-Put `sleep-<version>.jar` into the `mods` folder of the server, the client, or both. In a built jar the tested set of
+Put `sleepium-<version>.jar` into the `mods` folder of the server, the client, or both. In a built jar the tested set of
 optimisations ([`defaults.txt`](defaults.txt)) is on by itself; nothing needs to be configured.
 
 - `-Dlab.opt.<Name>=false` turns one optimisation off, for example `-Dlab.opt.ParallelEntitiesMixin=false`.
@@ -62,7 +62,7 @@ parallel workers and from video memory, and its Molang expressions are compiled.
 ## Build
 
 ```
-./gradlew build          # build/libs/sleep-0.1.0.jar
+./gradlew build          # build/libs/sleepium-1.0.0+mc1.21.1.jar
 ./gradlew runClient      # a dev client with the test scenes
 ./gradlew runServer      # a dev server; reads commands from standard input
 ```
@@ -70,8 +70,8 @@ parallel workers and from video memory, and its Molang expressions are compiled.
 The build needs only this folder: GeckoLib comes from its maven as a compile-only dependency. The test scenes live in
 their own source set (`src/scenes`). Dev runs load them, the jar does not ship them.
 
-Other mods can include the engine from source, `includeBuild('../sleep')` in `settings.gradle` and then
-`compileOnly 'dev.sleep:sleep:0.1.0'`. Only `dev.sleep.api` is meant for them (see [API](#api-for-other-mods)). The
+Other mods can include the engine from source, `includeBuild('../sleepium')` in `settings.gradle` and then
+`compileOnly 'dev.lull:sleepium:1.0.0'`. Only `dev.lull.api` is meant for them (see [API](#api-for-other-mods)). The
 build fails if the engine imports another mod's package (`checkEngineIndependent`).
 
 ## How it was tested
@@ -82,12 +82,12 @@ build fails if the engine imports another mod's package (`checkEngineIndependent
 
 1. a fresh flat world (fixed seed), ticks frozen with `/tick freeze`;
 2. the scene's chunks force-loaded, the clock stepped to game time 300;
-3. vanilla's randoms that are seeded from the clock made reproducible (`-Dsleep.seedEntities`, `/sleep reseed`), so two
+3. vanilla's randoms that are seeded from the clock made reproducible (`-Dsleep.seedEntities`, `/sleepium reseed`), so two
    runs draw the same numbers. These are every entity's random generator and UUID, each level's randoms, the
    random-tick generator, the static randoms of `Sensor` and `Mth`, and the randoms of every `ShufflingList` (a brain's
    behaviour order) and `Explosion`;
 4. the scene built, then exactly N ticks stepped (`/tick step`, 2 400 by default = two minutes of game time);
-5. `/sleep hash` over the scene's area: every block state, every block entity's saved data and every entity: position,
+5. `/sleepium hash` over the scene's area: every block state, every block entity's saved data and every entity: position,
    motion, saved data and all its primitive fields (`-Dsleep.hashEntitiesDeep`). One row per entity is also written to
    a file.
 
@@ -149,7 +149,7 @@ Other checks used while building each optimisation (all still in the code, switc
 - **Shadow checks.** The engine runs vanilla's code next to its own and counts mismatches. Examples: entity-section
   scans (2.7 M queries), the spatial index (4.2 M), collision skips (1.9 M), the signal path (1.77 M), light recipes
   (43.6 M vertices), translucent sorting (63.5 M quads), Molang (59 895 test cases). All had 0 mismatches.
-- **In-world clone test** (`/sleep equiv`). The same scene is built twice, 2 000 blocks apart, and only one copy may
+- **In-world clone test** (`/sleepium equiv`). The same scene is built twice, 2 000 blocks apart, and only one copy may
   sleep; every block and every block entity's saved data is then compared.
 - **Frame hashes.** On the client the GUI is hidden, animated textures and light flicker are frozen, and the colour
   buffer is hashed. Rendering optimisations must give the same hash as vanilla.
@@ -232,7 +232,7 @@ alternating which side goes first:
   -XX:G1MixedGCLiveThresholdPercent=90 -XX:G1RSetUpdatingPauseTimePercent=5 -XX:SurvivorRatio=32
   -XX:+PerfDisableSharedMem -XX:MaxTenuringThreshold=1`).
 
-| scene | pre-touched: vanilla | sleep | | Aikar's flags: vanilla | sleep | |
+| scene | pre-touched: vanilla | Sleepium | | Aikar's flags: vanilla | Sleepium | |
 |---|---:|---:|---:|---:|---:|---:|
 | items | 143.93 | 8.97 | ×16.0 | 115.12 | 8.95 | ×12.9 |
 | hoppers | 3.20 | 0.77 | ×4.2 | 3.00 | 0.70 | ×4.3 |
@@ -256,7 +256,7 @@ apply there.
 `tools/bench.py`, heap 4 GB pre-touched, 30 s warm-up, then 30 s of `/tick query` windows per scene. Values are ms per
 tick, lower is better.
 
-| scene | vanilla (mean / p50 / p99) | sleep (mean / p50 / p99) | |
+| scene | vanilla (mean / p50 / p99) | Sleepium (mean / p50 / p99) | |
 |---|---:|---:|---:|
 | items | 48.93 / 49.00 / 59.10 | 3.08 / 3.00 / 5.50 | ×15.9 |
 | carts | 11.35 / 11.30 / 28.50 | 3.12 / 2.90 / 7.00 | ×3.6 |
@@ -281,7 +281,7 @@ p99 spikes are not a pattern.
 Self-driving client (`-Dsleep.clientAuto`): fixed seed, vsync off, unlimited fps. The client waits 150 s for the
 world to load, builds the scene, then measures 30 s at a fixed position. Window 1280×720.
 
-| scene | | vanilla | previous build | sleep |
+| scene | | vanilla | previous build | Sleepium |
 |---|---|---:|---:|---:|
 | entities: 120 armour stands, 235 item frames, 69 chests, 69 signs, 46 skulls | fps | 39 | 118 / 115 | 117 |
 | | frame p50 / p99, ms | 25.6 / 38.1 | 7.8 / 14.8 | 7.7 / 18.3 |
@@ -292,7 +292,7 @@ world to load, builds the scene, then measures 30 s at a fixed position. Window 
 | light: 196 light sources switched every 2 ticks | fps | 144 | 157–161 | 158–160 (release: 159) |
 | | frame p50 / p99, ms | 5.8 / 18.1 | 5.9–6.2 / 12.1–13.8 | 5.9–6.1 / 12.1–16.0 |
 
-"Previous build" is the engine's last build before it became a standalone mod. The "sleep" column is the release
+"Previous build" is the engine's last build before it became a standalone mod. The "Sleepium" column is the release
 jar; ranges come from repeated runs of the same build. Frame rates are level.
 
 One open point is CPU use in the light scene. The previous build used 0.60–0.78 cores (mean 0.69, 5 runs) and this
@@ -305,7 +305,7 @@ meshing. Vanilla uses 0.44 cores here: the engine runs that work on workers in p
 `tools/client_bench.py`: the same self-driving client from `./gradlew runClient` of this build, window 1280×720,
 vsync off, unlimited fps, heap 3 GB pre-touched, 40 s for the terrain, 30 s measured. NVIDIA RTX 4070 SUPER.
 
-| scene | | vanilla | sleep | |
+| scene | | vanilla | Sleepium | |
 |---|---|---:|---:|---:|
 | entities | fps | 67 | 1 514 / 1 540 | ×23 |
 | | frame p50 / p99, ms | 14.7 / 18.3 | 0.58 / 1.54 | |
@@ -320,7 +320,7 @@ vsync off, unlimited fps, heap 3 GB pre-touched, 40 s for the terrain, 30 s meas
 Without a frame cap the engine uses more cores (mobs 1.9 → 3.8) because it draws ten times as many frames. Per frame
 it costs a fraction of vanilla's CPU.
 
-Measured earlier on the host, uncapped (RTX 4070 SUPER), vanilla → sleep: terrain 242–283 → ≈1 840 fps; 225 mobs
+Measured earlier on the host, uncapped (RTX 4070 SUPER), vanilla → Sleepium: terrain 242–283 → ≈1 840 fps; 225 mobs
 167 → ≈1 775 fps; the entity / block-entity scene 64 → ≈690 fps (later 994). At a fixed 60 fps the whole client process
 used 0.74 → 0.28 cores.
 
@@ -332,12 +332,12 @@ chunk drops from 71.9 ms and 19.1 MB of garbage to 35.5 ms. On the N100, 12 → 
 ### Against other projects
 
 - **Sodium 0.8.13** (host, same day, render distance 12). Terrain is on par: Sodium 1 697–1 827 fps against
-  1 762–1 912. The entity scene is about 10× faster: Sodium 146 fps against 1 500–1 680. On terrain, sleep's process
+  1 762–1 912. The entity scene is about 10× faster: Sodium 146 fps against 1 500–1 680. On terrain, Sleepium's process
   used ~0.9 core more, all of it in the NVIDIA driver's own thread; that is not explained yet.
 - **Horizon** (a Rust rewrite of Minecraft 26.3, release 0.2.97), on the N100 on 2026-10-30. The versions differ, so
   each is shown next to its own vanilla. Values are ms per tick, two interleaved passes.
 
-  | scene | vanilla 1.21.1 | sleep | vanilla 26.3 | Horizon |
+  | scene | vanilla 1.21.1 | Sleepium | vanilla 26.3 | Horizon |
   |---|---|---|---|---|
   | items | 127 / 130 | **8.5 / 8.5** | 97 / 83 | 14.7 / 13.7 |
   | hoppers | 3.2 / 2.5 | **0.73 / 0.70** | 1.2 / 1.4 | 2.7 / 2.7 |
@@ -353,18 +353,18 @@ chunk drops from 71.9 ms and 19.1 MB of garbage to 35.5 ms. On the N100, 12 → 
   | crops | 0.8 / 0.8 | 0.5 / 0.5 | 0.6 / 0.6 | 0.5 / 0.5 |
   | memory (RSS) | 0.7–0.9 GB | 0.7–0.9 GB | 0.6–0.8 GB | **0.37–0.45 GB** |
 
-  **Client: sleep draws more frames than Horizon in every scene**, on the same N100, the same view and 1280×720 (the
+  **Client: Sleepium draws more frames than Horizon in every scene**, on the same N100, the same view and 1280×720 (the
   same session, 2026-10-30):
 
-  | client scene | vanilla 1.21.1 | sleep | Horizon | sleep against Horizon |
+  | client scene | vanilla 1.21.1 | Sleepium | Horizon | Sleepium against Horizon |
   |---|---:|---:|---:|---:|
   | entities | 37 fps | **115 fps** | 87 fps | +32 % |
   | mobs | 70 fps | **136 fps** | 112 fps | +21 % |
   | light | 132 fps | **156 fps** | 138 fps | +13 % |
 
-  Horizon draws with Vulkan (wgpu) and keeps frame-time p99 lower (10–14 ms against 17–33 ms); sleep has the lower
+  Horizon draws with Vulkan (wgpu) and keeps frame-time p99 lower (10–14 ms against 17–33 ms); Sleepium has the lower
   p50. Horizon is ahead on mobs and
-  villagers partly because of its data layout and partly because some of its shortcuts are not vanilla-exact. sleep
+  villagers partly because of its data layout and partly because some of its shortcuts are not vanilla-exact. Sleepium
   keeps the vanilla game and its mods.
 - **Lithium, C2ME, Moonrise, ModernFix, FerriteCore**: no A/B has been run yet.
 
@@ -392,7 +392,7 @@ nothing did it for modded block entities.
   stay awake while a menu is open.
 
 Most ticking vanilla types can sleep. Sculk sensors, shriekers, trial spawners, vaults, spawners, beacons and conduits
-are refused, each for a reason that `/sleep sleep` lists.
+are refused, each for a reason that `/sleepium sleep` lists.
 
 **Effect.** Host: 1 024 hoppers 0.597 → 0.250 ms p50 (−58 %), allocation −94 %; smelters −43 %. In tick-sprint mode
 hoppers ran 4 125 → 20 366 TPS.
@@ -451,7 +451,7 @@ All of these were shadow-checked (0 mismatches over millions of queries) and giv
 ### Redstone, neighbour updates, fluids
 
 Faster redstone wire algorithms (Alternate Current and similar) change the update order, so they are not
-vanilla-exact. sleep keeps vanilla's algorithm and removes its garbage. The neighbour-update queue becomes
+vanilla-exact. Sleepium keeps vanilla's algorithm and removes its garbage. The neighbour-update queue becomes
 struct-of-arrays. The signal path uses a reused position wherever a bytecode proof shows the block never keeps it.
 Updates to blocks that do not override `neighborChanged` are skipped. Fluid spreading uses generation-stamped arrays
 instead of per-call hash maps.
@@ -533,19 +533,19 @@ indirect draws from a re-specified buffer.
 
 ### GeckoLib (only when installed)
 
-GeckoLib shares one bone set per model. sleep gives each render worker its own copy, so GeckoLib entities render in
+GeckoLib shares one bone set per model. Sleepium gives each render worker its own copy, so GeckoLib entities render in
 parallel. Bones are drawn through the GPU-posed part path, and Molang expressions are compiled to bytecode with
 GeckoLib's exact operators: 0 mismatches over 59 895 test cases. Synthetic scene with 140 animated mobs and 48
 animated block entities: 131–148 → 1 363–1 475 fps.
 
 ### Measurement tools
 
-- `/sleep run <seconds> <label>`: MSPT mean, p50 and p99; allocation per tick; CPU by thread group; GC and JIT time.
-- `/sleep events`: a per-tick census of bus posts, neighbour updates, scheduled ticks and block-entity / entity ticks.
-- `/sleep sleep`, `/sleep sleepents`: which classes sleep and why the others do not.
-- `/sleep hash`, `/sleep equiv`: region and entity hashes, the in-world clone comparison.
-- `/sleep genbench`: chunks/s, time and allocation per generation step, the CARVERS hash.
-- `/sleep bench`, `/sleep busbench`, `/sleep threads`, `/sleep net`, `/sleepclient` (client frame statistics).
+- `/sleepium run <seconds> <label>`: MSPT mean, p50 and p99; allocation per tick; CPU by thread group; GC and JIT time.
+- `/sleepium events`: a per-tick census of bus posts, neighbour updates, scheduled ticks and block-entity / entity ticks.
+- `/sleepium sleep`, `/sleepium sleepents`: which classes sleep and why the others do not.
+- `/sleepium hash`, `/sleepium equiv`: region and entity hashes, the in-world clone comparison.
+- `/sleepium genbench`: chunks/s, time and allocation per generation step, the CARVERS hash.
+- `/sleepium bench`, `/sleepium busbench`, `/sleepium threads`, `/sleepium net`, `/sleepiumclient` (client frame statistics).
 - Test scenes: `/function sleep:lag_<scene>` (server) and `sleep:client_<scene>` (client), in `src/scenes`.
 - `tools/exactness.py`, `tools/exactness_all.sh`, `tools/bench.py`, `tools/server.py`: the procedures above.
 
@@ -561,18 +561,18 @@ animated block entities: 131–148 → 1 363–1 475 fps.
 
 ## Settings screen
 
-Options → **sleep...** (or the mod list's Config button) opens the engine's settings: features (groups of tested
+Options → **Sleepium...** (or the mod list's Config button) opens the engine's settings: features (groups of tested
 flags, switched together), shaderpacks, and every flag one by one with search. Choices are saved to
-`config/sleep.properties`; a `-D` flag on the launch line still wins. Most flags apply after a restart; the screen says
+`config/sleepium.properties`; a `-D` flag on the launch line still wins. Most flags apply after a restart; the screen says
 which.
 
 ## Shaderpacks (beta)
 
-sleep runs OptiFine / Iris-format shaderpacks itself, inside its own renderer (no Iris or Sodium needed): put a pack
+Sleepium runs OptiFine / Iris-format shaderpacks itself, inside its own renderer (no Iris or Sodium needed): put a pack
 (.zip or folder) into `shaderpacks/` and pick it on the settings screen's Shaders tab; it switches without a restart.
 Tested with Complementary Reimagined r5.9.3 (shadows, deferred lighting, composites). This is a **beta**: packs that
 need features not implemented yet (compute passes, custom images, some uniforms) may render wrong. With Iris, Oculus or
-OptiFine installed, sleep leaves shaders to them.
+OptiFine installed, Sleepium leaves shaders to them.
 
 ## Known limits
 
@@ -632,7 +632,7 @@ These are the mistakes that cost the most time. Each produced a rule that the nu
 
 ## API for other mods
 
-`dev.sleep.api`:
+`dev.lull.api`:
 
 - `SleepApi`: is a feature on; wake the server thread.
 - `Pools`: the shared background and IO pools.
@@ -649,4 +649,6 @@ Every API call is safe with any combination of flags.
 
 ## License
 
-MIT, see [LICENSE](LICENSE).
+Copyright (C) 2026 ha7gawa. LGPL-3.0-only: [LICENSE](LICENSE), with the GPL-3.0 it supplements in
+[COPYING](COPYING). Modpacks may include the jar and other mods (open or not) may depend on it; a changed version of
+Sleepium itself is published under the same license.

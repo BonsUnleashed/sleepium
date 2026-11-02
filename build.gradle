@@ -16,6 +16,11 @@ base {
     archivesName = mod_id
 }
 
+// the jar names the Minecraft version it is for: sleepium-1.0.0+mc1.21.1.jar
+tasks.named('jar', Jar).configure {
+    archiveVersion = "${mod_version}+mc${minecraft_version}"
+}
+
 // the test scenes (data/sleep/function: lag_*, client_*): loaded by the dev runs and the tools, not in the jar
 sourceSets {
     scenes
@@ -104,13 +109,14 @@ sourceSets.main.resources.srcDir generateModMetadata
 neoForge.ideSyncTask generateModMetadata
 
 // the engine's default flags (defaults.txt) in the jar: on in production unless -Dlab.opt.defaults=false
-// (dev.sleep.optsupport.GameDefaults); the network lag simulator stays a test tool
+// (dev.lull.optsupport.GameDefaults); the network lag simulator stays a test tool
 processResources {
     from('defaults.txt') {
-        into 'sleep'
+        into 'sleepium'
         filter { line -> line.contains('NetLagMixin') ? null : line }
     }
     from('LICENSE')
+    from('COPYING')
 }
 
 publishing {
@@ -137,14 +143,14 @@ idea {
     }
 }
 
-// The engine stands alone: its sources may use only its own packages (dev.sleep, dev.lab), Minecraft, NeoForge and
+// The engine stands alone: its sources may use only its own packages (dev.lull, dev.lab), Minecraft, NeoForge and
 // libraries - never a mod built on it.
 def engineSources = fileTree('src/main/java')
 def checkEngine = tasks.register('checkEngineIndependent') {
     inputs.files(engineSources)
     doLast {
         def bad = engineSources.files.findAll { f ->
-            f.name.endsWith('.java') && f.text.find(/(?m)^\s*import\s+(static\s+)?dev\.(?!sleep\.|lab\.|engine_room\.flywheel\.)/)
+            f.name.endsWith('.java') && f.text.find(/(?m)^\s*import\s+(static\s+)?dev\.(?!lull\.|lab\.|engine_room\.flywheel\.)/)
         }
         if (!bad.isEmpty()) throw new GradleException("the engine imports another mod's package: " + bad*.name)
     }

@@ -8,8 +8,8 @@ version="${mod_version}"
 displayName="${mod_name}"
 authors="${mod_authors}"
 description='''
-The sleep engine: server and client optimisations that keep the game's results exact - sleeping block entities and
-mobs, a ring event bus, parallel world generation, chunk I/O, rendering - with measurement tools.
+Sleepium: server and client optimisations that keep the game's results exact - idle block entities and mobs put to
+sleep, a ring event bus, parallel world generation, chunk I/O, a renderer with its own shaderpack support (beta).
 '''
 
 [[dependencies.${mod_id}]]
@@ -33,15 +33,15 @@ config="${mod_id}.mixins.json"
 config="${mod_id}-opt.mixins.json"
 
 [[mixins]]
-config="sleep-foreign-test.mixins.json"
+config="sleepium-foreign-test.mixins.json"
 
 [[mixins]]
-config="sleep-geo.mixins.json"
+config="sleepium-geo.mixins.json"
 [[mixins]]
-config="sleep-flywheel.mixins.json"
+config="sleepium-flywheel.mixins.json"
 [[mixins]]
-config="sleep-catnip.mixins.json"
+config="sleepium-catnip.mixins.json"
 [[mixins]]
-config="sleep-veil.mixins.json"
+config="sleepium-veil.mixins.json"
 [[mixins]]
-config="sleep-shaders.mixins.json"
+config="sleepium-shaders.mixins.json"

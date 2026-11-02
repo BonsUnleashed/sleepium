@@ -1,5 +1,5 @@
 """The settings screen's catalogue: every engine flag of defaults.txt (plus the experimental ones below) with its group
-and a one-line description taken from its class's javadoc. Writes src/main/resources/assets/sleep/options.tsv:
+and a one-line description taken from its class's javadoc. Writes src/main/resources/assets/sleepium/options.tsv:
     key <TAB> group <TAB> default (true/false) <TAB> description
 Run after adding a flag:  python tools/gen_options.py
 """
@@ -9,7 +9,7 @@ import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SRC = os.path.join(ROOT, 'src', 'main', 'java')
-OUT = os.path.join(ROOT, 'src', 'main', 'resources', 'assets', 'sleep', 'options.tsv')
+OUT = os.path.join(ROOT, 'src', 'main', 'resources', 'assets', 'sleepium', 'options.tsv')
 
 # first matching rule wins: (group, name regex)
 GROUPS = [
