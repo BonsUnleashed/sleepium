@@ -80,6 +80,12 @@ public final class SleepScreen extends Screen {
         onClose();
     }
 
+    /** the dev probe (-Dsleep.ui.presetTest): a preset chosen as its button would, then Done */
+    void probePresetAndClose(String p) {
+        preset(p);
+        onClose();
+    }
+
     Screen parent() {
         return parent;
     }

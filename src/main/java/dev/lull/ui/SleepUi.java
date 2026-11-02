@@ -39,6 +39,7 @@ public final class SleepUi {
             if (Minecraft.getInstance().screen == null) preparing(e.getGuiGraphics());
         });
         if (SHOT != null) gameBus.addListener(net.neoforged.neoforge.client.event.RenderFrameEvent.Post.class, e -> shots());
+        if (APPLY_TEST != null) gameBus.addListener(net.neoforged.neoforge.client.event.RenderFrameEvent.Post.class, e -> applyTest());
         if (SHOT_WORLD != null) gameBus.addListener(net.neoforged.neoforge.client.event.RenderFrameEvent.Post.class, e -> worldShots());
         if (SWITCH != null) gameBus.addListener(net.neoforged.neoforge.client.event.RenderFrameEvent.Post.class, e -> switchTest());
     }
@@ -86,7 +87,10 @@ public final class SleepUi {
             } catch (Exception ex) {
                 System.out.println("[sleep/ui] shot: " + ex);
             }
-            if (i + 1 < 4) mc.setScreen(new SleepScreen(((SleepScreen) mc.screen).parent(), i + 1));
+            if (System.getProperty("sleep.ui.presetTest") != null && i + 1 == 4) {   // the preset probe: chosen on the screen open now, Done, quit
+                if (mc.screen instanceof SleepScreen s) s.probePresetAndClose(System.getProperty("sleep.ui.presetTest"));
+                mc.stop();
+            } else if (i + 1 < 4) mc.setScreen(new SleepScreen(((SleepScreen) mc.screen).parent(), i + 1));
             else if (i + 1 == 4) {   // the first pack's own options, then its first sub-screen
                 try {
                     var dir = mc.gameDirectory.toPath().resolve("shaderpacks");
@@ -107,6 +111,8 @@ public final class SleepUi {
                 // -Dsleep.ui.saveTest=<key>: the screen's Done with that flag switched (config/sleepium.properties written)
                 String key = System.getProperty("sleep.ui.saveTest");
                 if (key != null && mc.screen instanceof SleepScreen s) s.probeToggleAndClose(key);
+                String preset = System.getProperty("sleep.ui.presetTest");
+                if (preset != null && mc.screen instanceof SleepScreen s) s.probePresetAndClose(preset);
                 mc.stop();
             }
         }
@@ -170,6 +176,53 @@ public final class SleepUi {
     private static void shot(Minecraft mc, String name) {
         try (var img = net.minecraft.client.Screenshot.takeScreenshot(mc.getMainRenderTarget())) {
             java.nio.file.Path out = java.nio.file.Path.of(SHOT_WORLD).resolve(name + ".png");
+            java.nio.file.Files.createDirectories(out.getParent());
+            img.writeToFile(out);
+        } catch (Exception ex) {
+            System.out.println("[sleep/ui] shot: " + ex);
+        }
+    }
+
+    /**
+     * -Dsleep.ui.packApplyTest=OPTION=value,<dir>: in a world with the pack on, a shot, then the option set through the
+     * pack options screen and applied, and a shot once the pack is on again (apply-before.png / apply-after.png)
+     */
+    private static final String APPLY_TEST = System.getProperty("sleep.ui.packApplyTest");
+    private static long applyAt;
+    private static int applyStep;
+
+    private static void applyTest() {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.level == null || mc.player == null || dev.lull.shaders.ShaderPipeline.currentName() == null || dev.lull.shaders.ShaderPipeline.preparing() != null) return;
+        long now = System.nanoTime();
+        if (applyAt == 0) applyAt = now;
+        double t = (now - applyAt) / 1e9;
+        String[] a = APPLY_TEST.split(",", 2);
+        String dir = a[1];
+        if (applyStep == 0 && t > 6) {
+            shotTo(mc, dir, "apply-before");
+            try {
+                String pack = dev.lull.shaders.ShaderPipeline.currentName();
+                PackOptionsScreen s = new PackOptionsScreen(null, dev.lull.shaders.PackScreenModel.load(mc.gameDirectory.toPath(), pack, mc.getLanguageManager().getSelected()));
+                mc.setScreen(s);
+                String[] kv = a[0].split("=", 2);
+                s.probeSetAndApply(kv[0], kv[1]);
+                mc.setScreen(null);
+                System.out.println("[sleep/ui] apply test: " + a[0] + " applied to " + pack);
+            } catch (Exception ex) {
+                System.out.println("[sleep/ui] apply test: " + ex);
+            }
+            applyStep = 1;
+            applyAt = now;
+        } else if (applyStep == 1 && t > 4) {
+            shotTo(mc, dir, "apply-after");
+            applyStep = 2;
+        }
+    }
+
+    private static void shotTo(Minecraft mc, String dir, String name) {
+        try (var img = net.minecraft.client.Screenshot.takeScreenshot(mc.getMainRenderTarget())) {
+            java.nio.file.Path out = java.nio.file.Path.of(dir).resolve(name + ".png");
             java.nio.file.Files.createDirectories(out.getParent());
             img.writeToFile(out);
         } catch (Exception ex) {

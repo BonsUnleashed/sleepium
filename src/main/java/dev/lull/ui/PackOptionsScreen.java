@@ -60,6 +60,13 @@ public final class PackOptionsScreen extends Screen {
         }).bounds(cx + bw + 6, height - 26, bw, 20).build());
     }
 
+    /** the dev probe (-Dsleep.ui.packApplyTest): an option set as its button would, then Apply */
+    void probeSetAndApply(String option, String value) {
+        model.set(option, value);
+        dirty = true;
+        apply();
+    }
+
     /** the dev shots: open a screen of the pack as its button would */
     void probeScreen(String id) {
         stack.push(screen);

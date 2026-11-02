@@ -4,6 +4,18 @@ Versions follow [Semantic Versioning](https://semver.org): a patch release fixes
 release changes the API (`dev.lull.api`) or the settings in a way that needs attention. Jars are named
 `sleepium-<version>+mc<minecraft version>.jar`.
 
+## 1.0.2+mc1.21.1 - 2026-11-02
+
+- A new settings screen: a sidebar of pages (Overview, the feature groups, Shaders, All flags) and a panel describing
+  what the pointer is on. The Overview shows the engine at work: FPS and frame times, the singleplayer server's
+  MSPT / TPS, block entities asleep and ticks saved per second, the shaderpack's state; presets (Maximum, Default,
+  Compatible, Off), the feature groups' switches, live stats in the game corner, and a report to copy for bug
+  reports. Also opened from the pause menu.
+- Shaderpack options: each pack's own settings screen (its screens, sliders, profiles and labels, as Iris shows
+  them), saved to shaderpacks/<pack>.txt. Applying prepares the new settings beside the pack in use and swaps them in
+  one frame: no vanilla frames meanwhile, and the world's meshes are kept when the pack's block ids stay the same.
+- Diagnostics for the render thread (-Dlab.rcache.time, -Dlab.prender.why), off by default.
+
 ## 1.0.1+mc1.21.1 - 2026-11-02
 
 - Shaderpacks: a pack is now prepared over frames and switched on when ready, with the progress in the corner; the game

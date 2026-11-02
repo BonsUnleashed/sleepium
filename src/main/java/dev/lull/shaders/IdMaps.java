@@ -160,6 +160,12 @@ public final class IdMaps {
 
     // ------------------------------------------------------------------ values
 
+    /** the same ids for everything (a mesh built with one is right with the other) */
+    public boolean sameAs(IdMaps o) {
+        return blocks.equals(o.blocks) && entities.equals(o.entities) && items.equals(o.items) && special.equals(o.special) && hasBlocks == o.hasBlocks
+                && hasEntities == o.hasEntities && hasItems == o.hasItems;
+    }
+
     public int block(BlockState s) {
         return blocks.getInt(s);
     }

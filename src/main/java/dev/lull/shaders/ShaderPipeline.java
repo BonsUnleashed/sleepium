@@ -58,6 +58,8 @@ public final class ShaderPipeline {
     final ShaderPackSource src;
     final ProgramSet set;
     final PackProperties props;
+    /** the pack's block / entity / item ids (ShaderIds.maps while this pipeline is current) */
+    final IdMaps ids;
     final RenderTargets targets = new RenderTargets();
     final PackUniforms uniforms = new PackUniforms();
     private final Map<String, CompositeProgram> passes = new HashMap<>();
@@ -75,7 +77,9 @@ public final class ShaderPipeline {
     private final Map<String, Integer> stageTextures = new HashMap<>();   // "<stage>.<sampler>" -> texture id
     private int noiseTex, normalsTex, specularTex, shadowDepthTex, shadowColorTex;
     private static final Map<String, Integer> UNITS = new HashMap<>(RenderTargets.UNITS);
+    /** this pipeline's number: its programs' names (vanilla keeps compiled shaders by name; two pipelines live at once while one is prepared beside the other) */
     private int generation;
+    private static int generations;
     public boolean inLevel;
     /** the program applied last reads its quad's vertices: each drawn vertex buffer bound for it (binding 9) */
     public boolean fetch;
@@ -118,44 +122,79 @@ public final class ShaderPipeline {
         if (requestPending) {
             requestPending = false;
             String name = requested;
-            ShaderPipeline old = current;
-            if (old != null) {
-                active = false;
-                ShaderIds.on = false;
-                current = null;
-                old.close();
-            }
             if (name == null || name.isBlank()) System.clearProperty("sleep.shaders");
             else System.setProperty("sleep.shaders", name);
-            load();
-            // no pack: the meshes built again without the pack's ids now (a new pack: once it is prepared, activate)
-            if (current == null && Minecraft.getInstance().levelRenderer != null) Minecraft.getInstance().levelRenderer.allChanged();
-            System.out.println("[sleep/shaders] switched to " + (current == null ? "no pack" : current.src.name + " (preparing)"));
+            if (pending != null) {   // a pack still being prepared is replaced
+                pending.close();
+                pending = null;
+            }
+            ShaderPipeline old = current;
+            if (old == null || name == null || name.isBlank()) {
+                // nothing on, or the pack switched off: at once (a new pack is prepared while vanilla draws)
+                if (old != null) {
+                    active = false;
+                    ShaderIds.on = false;
+                    current = null;
+                    old.close();
+                }
+                load();
+                if (current == null && Minecraft.getInstance().levelRenderer != null) Minecraft.getInstance().levelRenderer.allChanged();
+                System.out.println("[sleep/shaders] switched to " + (current == null ? "no pack" : current.src.name + " (preparing)"));
+                return;
+            }
+            // a pack on: the new one (another pack, or the same with new options) prepared beside it, the old one drawn
+            // meanwhile, then swapped in one frame (no vanilla frames drawn on a pack's meshes, no empty world)
+            try {
+                pending = new ShaderPipeline(Minecraft.getInstance().gameDirectory.toPath(), name);
+                System.out.println("[sleep/shaders] preparing " + pending.src.name + " beside " + old.src.name);
+            } catch (Exception e) {
+                System.out.println("[sleep/shaders] could not load " + name + ": " + e);
+                e.printStackTrace(System.out);
+            }
             return;
         }
         if (current == null) load();
+        var mc = Minecraft.getInstance();
+        long budget = mc.level == null || mc.screen != null ? 60_000_000L : 25_000_000L;
         // a loaded pack not yet on: its programs built over frames, vanilla drawn meanwhile (more per frame on a screen)
         ShaderPipeline p = current;
         if (p != null && !active) {
-            var mc = Minecraft.getInstance();
-            if (p.stepPrewarm(mc.level == null || mc.screen != null ? 60_000_000L : 25_000_000L)) activate(p);
+            if (p.stepPrewarm(budget)) {
+                ShaderIds.maps = p.ids;
+                activate(p, true);
+            }
+            return;
+        }
+        ShaderPipeline n = pending;
+        if (n != null && n.stepPrewarm(budget)) {
+            ShaderPipeline old = current;
+            // the meshes carry the pack's block ids: built again only when the new pack maps blocks otherwise
+            boolean sameIds = old != null && old.ids.sameAs(n.ids);
+            pending = null;
+            current = n;
+            ShaderIds.maps = n.ids;
+            if (old != null) old.close();
+            activate(n, !sameIds);
         }
     }
 
-    private static void activate(ShaderPipeline p) {
+    /** a pack prepared beside the one on (an applied change of options, or another pack) */
+    private static ShaderPipeline pending;
+
+    private static void activate(ShaderPipeline p, boolean remesh) {
         active = true;
         dev.lull.optsupport.LightVolumes.recipesIgnored("a shaderpack's terrain program");
         var mc = Minecraft.getInstance();
         if (mc.options.graphicsMode().get() == net.minecraft.client.GraphicsStatus.FABULOUS) mc.options.graphicsMode().set(net.minecraft.client.GraphicsStatus.FANCY);
         // the meshes carry the pack's ids and its translucent shadow copies: built again, as Iris does
-        if (mc.levelRenderer != null && mc.level != null) mc.levelRenderer.allChanged();
-        System.out.println("[sleep/shaders] " + p.src.name + " on");
+        if (remesh && mc.levelRenderer != null && mc.level != null) mc.levelRenderer.allChanged();
+        System.out.println("[sleep/shaders] " + p.src.name + " on" + (remesh ? "" : " (the meshes kept: same block ids)"));
     }
 
     /** "name built/total" while a pack is being prepared (the screen shows it), else null */
     public static String preparing() {
-        ShaderPipeline p = current;
-        if (p == null || active) return null;
+        ShaderPipeline p = pending != null ? pending : current;
+        if (p == null || p == current && active) return null;
         return p.src.name + " " + p.prewarmBuilt() + "/" + Math.max(p.prewarmTotal(), p.prewarmBuilt());
     }
 
@@ -187,6 +226,7 @@ public final class ShaderPipeline {
         if (name == null || name.isBlank() || current != null) return;
         try {
             current = new ShaderPipeline(Minecraft.getInstance().gameDirectory.toPath(), name);   // on once prepared (loadConfigured)
+            ShaderIds.maps = current.ids;
         } catch (Exception e) {
             System.out.println("[sleep/shaders] could not load " + name + ": " + e);
             e.printStackTrace(System.out);
@@ -206,14 +246,14 @@ public final class ShaderPipeline {
         set = ProgramSet.load(src, options, macros, props, "world0");
         uniforms.configure(set.consts);
         uniforms.custom = CustomUniforms.parse(props.customUniforms);
-        ShaderIds.maps = IdMaps.load(src, withOptions);
-        System.out.println("[sleep/shaders] ids: oak_leaves " + ShaderIds.maps.block(net.minecraft.world.level.block.Blocks.OAK_LEAVES.defaultBlockState())
-                + ", grass_block " + ShaderIds.maps.block(net.minecraft.world.level.block.Blocks.GRASS_BLOCK.defaultBlockState())
-                + ", short_grass " + ShaderIds.maps.block(net.minecraft.world.level.block.Blocks.SHORT_GRASS.defaultBlockState())
-                + ", water " + ShaderIds.maps.block(net.minecraft.world.level.block.Blocks.WATER.defaultBlockState())
-                + ", stone " + ShaderIds.maps.block(net.minecraft.world.level.block.Blocks.STONE.defaultBlockState())
-                + "; " + ShaderIds.maps.blocks.size() + " states mapped");
-        if (!ShaderIds.maps.unknown.isEmpty()) problems.add("block names this version lacks (ignored): " + ShaderIds.maps.unknown.size());
+        ids = IdMaps.load(src, withOptions);
+        System.out.println("[sleep/shaders] ids: oak_leaves " + ids.block(net.minecraft.world.level.block.Blocks.OAK_LEAVES.defaultBlockState())
+                + ", grass_block " + ids.block(net.minecraft.world.level.block.Blocks.GRASS_BLOCK.defaultBlockState())
+                + ", short_grass " + ids.block(net.minecraft.world.level.block.Blocks.SHORT_GRASS.defaultBlockState())
+                + ", water " + ids.block(net.minecraft.world.level.block.Blocks.WATER.defaultBlockState())
+                + ", stone " + ids.block(net.minecraft.world.level.block.Blocks.STONE.defaultBlockState())
+                + "; " + ids.blocks.size() + " states mapped");
+        if (!ids.unknown.isEmpty()) problems.add("block names this version lacks (ignored): " + ids.unknown.size());
         problems.addAll(uniforms.custom.errors);
         step("textures");
         loadTextures();
@@ -255,7 +295,7 @@ public final class ShaderPipeline {
         }
         ProgramSet.Program sp = set.resolve("shadow");
         if (sp != null && sp.sources[0] != null && sp.sources[2] != null && props.bool("shadow.enabled", true)) shadow = new ShadowPass(this, new ShadowTargets(set.consts));
-        generation++;
+        generation = ++generations;
         System.out.printf("[sleep/shaders] loaded %s: %d programs, %d deferred, %d composite, final %s, %d custom uniforms, %.0f ms%s%n", src.name,
                 set.programs.size(), deferred.size(), composite.size(), finalPass != null && finalPass.id != 0, uniforms.custom.entries.size(),
                 (System.nanoTime() - t0) / 1e6, problems.isEmpty() ? "" : "; problems:\n" + String.join("\n", problems));
