@@ -344,6 +344,8 @@ final class SleepCommand {
                 + " realHashCode=" + keys.stream().filter(o -> o.hashCode() != System.identityHashCode(o)).count();
     }
 
+    private static final java.util.List<String> BE_ROWS = System.getProperty("sleep.hashBeRows") != null ? new java.util.ArrayList<>() : null;
+
     static String regionHash(ServerLevel level, int x1, int y1, int z1, int x2, int y2, int z2) {
         var reg = level.registryAccess();
         long h = 1125899906842597L;
@@ -357,9 +359,22 @@ final class SleepCommand {
                     var be = level.getBlockEntity(p);
                     if (be != null) {
                         bes++;
-                        h = h * 31 + be.saveWithoutMetadata(reg).toString().hashCode();
+                        String nbt = be.saveWithoutMetadata(reg).toString();
+                        h = h * 31 + nbt.hashCode();
+                        // -Dsleep.hashClientNbt=true: what the block entity sends to clients too (Create's client NBT)
+                        String client = Boolean.getBoolean("sleep.hashClientNbt") ? be.getUpdateTag(reg).toString() : null;
+                        if (client != null) h = h * 31 + client.hashCode();
+                        if (BE_ROWS != null) BE_ROWS.add(p.toShortString() + " " + level.getBlockState(p) + " " + nbt + (client != null ? " client=" + client : ""));
                     }
                 }
+        if (BE_ROWS != null) {   // -Dsleep.hashBeRows=<file>: every block entity's row, for a line diff between two runs
+            try {
+                java.nio.file.Files.write(java.nio.file.Path.of(System.getProperty("sleep.hashBeRows")), BE_ROWS);
+            } catch (java.io.IOException e) {
+                System.out.println("[sleep/hash] block entity rows not written: " + e);
+            }
+            BE_ROWS.clear();
+        }
         // -Dsleep.hashEntities=true: also every entity in the region (type, exact position and motion, NBT without
         // UUIDs), sorted, so the hash does not depend on iteration order but does on every value
         int ents = 0;

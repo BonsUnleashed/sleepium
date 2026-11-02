@@ -44,6 +44,8 @@ def wait_time(s, target):
 for mode in ((a.only,) if a.only else ('off', 'on')):
     rows = os.path.abspath(os.path.join(RUN, 'exactness-%s-%s-rows.txt' % (a.scene, mode)))
     jvm = ['-Dsleep.seedEntities=true', '-Dsleep.hashEntities=true', '-Dsleep.hashEntitiesDeep=true', '-Dsleep.hashRows=' + rows.replace('\\', '/')]
+    berows = os.path.abspath(os.path.join(RUN, 'exactness-%s-%s-berows.txt' % (a.scene, mode)))   # every block entity's saved and client NBT
+    jvm += ['-Dsleep.hashClientNbt=true', '-Dsleep.hashBeRows=' + berows.replace('\\', '/')]
     jvm += a.jvm.split()
     if mode == 'on' and not a.offoff:
         jvm += ['-Dlab.opt.defaults=true'] + a.flags.split()
