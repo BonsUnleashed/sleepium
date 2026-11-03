@@ -31,6 +31,17 @@ belts.
 
 <p align="center"><img src="art/gallery/create-client.png" width="720" alt="Create worlds on the client, vanilla vs Sleepium"></p>
 
+### Water and glass in one draw (1.0.3)
+
+A view over a river on the production client (RTX 4070 SUPER, uncapped): **1 227–1 383 fps on 1.0.2, 2 635–2 833 on
+1.0.3** (Sleepium 1.0.2 with Sodium: 1 718). The terrain view was bound by the graphics driver's own thread, busy with
+vanilla's per-section draws of the translucent layer; water, glass and ice are now one multi-draw in vanilla's order,
+with the frames unchanged (frame hashes). On the Intel N100 the client's CPU use dropped from 1.67 to 0.52 cores.
+
+<p align="center"><img src="art/gallery/water-view.png" width="720" alt="Water and glass in one draw: fps on a river view and N100 CPU"></p>
+
+<p align="center"><img src="art/gallery/compat.png" width="720" alt="Optimisation mods tested together with Sleepium 1.0.3"></p>
+
 A NeoForge mod for Minecraft 1.21.1 that makes servers and clients cheaper to run **without changing what the game
 computes**. A hopper with nothing to do, a resting item stack, a furnace waiting for fuel: in vanilla each of them runs
 its full tick 20 times a second only to find out that nothing happened. The engine proves from the class's own bytecode
@@ -44,8 +55,8 @@ every field of every entity are hashed. On the client, rendered frames are hashe
 
 - Minecraft 1.21.1, NeoForge 21.1.251, Java 21.
 - License: LGPL-3.0-only (see [LICENSE](LICENSE) and [COPYING](COPYING)).
-- Status: 1.0.0 (shaderpacks: beta), tested as described below. Compatibility with other optimisation mods has **not** been tested yet
-  (see [Known limits](#known-limits)).
+- Status: 1.0.3 (shaderpacks: beta), tested as described below. Tested together with 22 optimisation mods (see
+  [Compatibility](#compatibility)).
 
 ## Results at a glance
 
@@ -422,7 +433,7 @@ chunk drops from 71.9 ms and 19.1 MB of garbage to 35.5 ms. On the N100, 12 → 
   | redstone | 12.03 | **8.10** | 8.65 | 9.94 |
 
   Sleepium is ahead in six scenes and level in one; Moonrise leads on carts, pistons and crops (its chunk system and
-  collisions), Lithium on fluids and redstone. Sleepium together with them has not been tested yet.
+  collisions), Lithium on fluids and redstone. Together with them: see [Compatibility](#compatibility).
 
   <p align="center"><img src="art/gallery/vs-lithium-moonrise.png" width="720" alt="Server speed-up over vanilla: Lithium, Moonrise, Sleepium"></p>
 - **C2ME, ModernFix, FerriteCore**: no A/B has been run yet.
@@ -572,7 +583,8 @@ Every change is checked against vanilla with frame hashes.
 | entities rendered on worker threads into per-worker buffers, merged in vanilla's order | one render thread | 174 → 299 fps; 2.49 M jobs verified byte-equal |
 | model parts posed on the GPU: 144 bytes per part, one indirect draw | | 225 mobs 1 255 → 1 773 fps |
 | translucent sort as a stable radix sort (same permutation) | | 63.5 M quads, 0 mismatches |
-| per-vertex light "recipes" and per-section light volumes: a light-only change refreshes the volume instead of re-meshing | light switching re-meshed whole sections | compile work −42 % |
+| the translucent layer (water, glass, ice) in one indirect multi-draw: the sections' vertices and vanilla's sorted indices (renewed by every resort) in one arena, drawn in vanilla's order | the terrain view was bound by the driver's thread, busy with vanilla's per-section translucent draws | river view 1 227–1 383 → 2 635–2 833 fps; N100 client CPU 1.67 → 0.52 cores |
+| per-vertex light "recipes" and per-section light volumes (water too since 1.0.3): a light-only change refreshes the volume instead of re-meshing | light switching re-meshed whole sections | compile work −42 % |
 | client light updates on a worker thread | | light-switching p99 7.83 → 3.11 ms |
 | per-frame garbage removed (pose stacks, buffers, iterators, colour vectors) | | 3 984 → 74 KiB per frame |
 
@@ -633,12 +645,40 @@ Tested with Complementary Reimagined r5.9.3 (shadows, deferred lighting, composi
 need features not implemented yet (compute passes, custom images, some uniforms) may render wrong. With Iris, Oculus or
 OptiFine installed, Sleepium leaves shaders to them.
 
+## Compatibility
+
+Tested on 2026-11-03 (notes/53): each mod on the production NeoForge client together with Sleepium 1.0.3, the world
+loaded and drawn for a measured window, no exceptions; and 13 of them at once. Five crashed or broke with 1.0.2 and
+were fixed in 1.0.3 (Embeddium, ModernFix, Lithium, Moonrise, C2ME).
+
+Sodium 0.8.13, Iris 1.8.14 (with a shaderpack too), Embeddium 1.0.15, Lithium 0.15.4, Moonrise 0.1.0-beta.15,
+C2ME 0.4.0-alpha, ModernFix 5.27.27, FerriteCore 7.0.3, ImmediatelyFast 1.6.15, EntityCulling 1.11.3,
+ScalableLux 0.1.0.1, Radium 0.13.1, BadOptimizations 2.4.1, Dynamic FPS 3.11.4, Chloride 1.8.1, Noisium 2.3.0,
+spark 1.10.124, FastSuite 6.0.7, Ksyxis 1.4.6, ServerCore 1.5.19, Clumps 19.0.0.1, Create 6.0.10.
+
+With Lithium or with Moonrise installed, the exactness check still holds (hoppers, items, mobs: Sleepium off = on).
+Server speed together (host, mean ms per tick, one pass each):
+
+| scene | Sleepium | + Lithium | + Moonrise |
+|---|---:|---:|---:|
+| items | 3.30 | 4.13 | **2.35** |
+| hoppers | 0.27 | 0.20 | **0.10** |
+| carts | 2.78 | 2.80 | **1.87** |
+| crops | 0.30 | 0.30 | **0.00** |
+| fluids | 1.70 | **1.02** | 1.43 |
+| pistons | 1.28 | 1.02 | **0.60** |
+| redstone | 3.72 | 2.45 | **2.15** |
+| mobs | 3.23 | 3.07 | **2.80** |
+
+Moonrise on top of Sleepium is faster in most scenes (its random ticks are not vanilla-exact, so crops are not a fair
+comparison); Lithium helps fluids, redstone and pistons and slows items.
+
 ## Known limits
 
-- **Other optimisation mods.** Compatibility with Sodium/Embeddium/Iris, Lithium, C2ME, Moonrise, ModernFix and
-  FerriteCore is untested. Many mixins overlap with them. Mixins are declared `require = 1`, so a conflict fails at
-  load instead of silently. The sleep engines refuse classes that another mod's mixin has changed; a stand-in foreign
-  mixin ships as a test (`-Dsleep.foreignTest`).
+- **Other optimisation mods.** 22 were tested together with Sleepium (see [Compatibility](#compatibility)); others
+  are not. Where another mod changes the same code, Sleepium's change there steps aside (logged as "not applied");
+  the sleep engines refuse classes that another mod's mixin has changed. Not ours, but seen in the tests:
+  MoreCulling 1.0.11 fails to load on NeoForge 21.1.251 on its own, and Create and Moonrise do not start together.
 - **Visible differences from vanilla.**
   - The render cache and GPU-posed parts may differ at float-rounding level: a few pixels at silhouette edges, 4 of
     269 864 on the host and 2 on the N100.

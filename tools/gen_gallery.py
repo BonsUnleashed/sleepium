@@ -234,3 +234,60 @@ for i, (name, sl, ho) in enumerate(CLI):
         d.text((left + v * scale + 10, yy), '%d fps%s' % (v, extra), font=font(22, j == 1), fill=col)
 img.save(os.path.join(OUT, 'vs-horizon.png'))
 print('horizon chart written')
+
+# ---------------------------------------------------------------- 1.0.3: a view over a river (production client, the
+# saved world-auto at 40 110 40, RTX 4070 SUPER; bars at the middle of each measured range) and the N100's client CPU
+W, H = 1600, 920
+img = Image.new('RGB', (W, H), BG)
+d = ImageDraw.Draw(img)
+d.text((60, 40), 'Water and glass in one draw (Sleepium 1.0.3)', font=font(44, True), fill=INK)
+d.text((60, 100), 'production NeoForge client, a view over a river, RTX 4070 SUPER, uncapped; frames unchanged (frame hashes)', font=font(26), fill=MUTED)
+SODIUM = (226, 120, 120)
+panel = [('Sleepium 1.0.2', '1227-1383 fps', 1305, VANILLA), ('Sleepium 1.0.2 + Sodium 0.8.13', '1718 fps', 1718, SODIUM),
+         ('Sleepium 1.0.3', '2635-2833 fps', 2734, SLEEPIUM)]
+left, right, top = 560, W - 230, 190
+scale = (right - left) / 3000.0
+d.text((60, top - 10), 'fps (higher is better)', font=font(28, True), fill=INK)
+for x in range(0, 3001, 500):
+    gx = left + x * scale
+    d.line([(gx, top + 34), (gx, top + 330)], fill=GRID, width=2)
+    d.text((gx - 22, top + 336), str(x), font=font(22), fill=MUTED)
+for i, (name, label, v, col) in enumerate(panel):
+    y = top + 44 + i * 96
+    d.text((60, y + 14), name, font=font(28, i == 2), fill=INK)
+    d.rectangle([left, y + 8, left + v * scale, y + 64], fill=col)
+    d.text((left + v * scale + 12, y + 20), label, font=font(26, i == 2), fill=col)
+top2 = top + 420
+d.text((60, top2), 'Intel N100 (Intel UHD), entity scene: client CPU (lower is better)', font=font(28, True), fill=INK)
+cpu = [('Sleepium 1.0.2', 1.67, VANILLA), ('Sleepium 1.0.3', 0.52, SLEEPIUM)]
+scale2 = (right - left) / 2.0
+for x10 in range(0, 21, 5):
+    gx = left + x10 / 10.0 * scale2
+    d.line([(gx, top2 + 44), (gx, top2 + 240)], fill=GRID, width=2)
+    d.text((gx - 18, top2 + 246), '%.1f' % (x10 / 10.0), font=font(22), fill=MUTED)
+for i, (name, v, col) in enumerate(cpu):
+    y = top2 + 54 + i * 90
+    d.text((60, y + 14), name, font=font(28, i == 1), fill=INK)
+    d.rectangle([left, y + 8, left + v * scale2, y + 64], fill=col)
+    d.text((left + v * scale2 + 12, y + 20), '%.2f cores' % v, font=font(26, i == 1), fill=col)
+img.save(os.path.join(OUT, 'water-view.png'))
+
+# ---------------------------------------------------------------- 1.0.3: tested together with (notes/53)
+mods = ['Sodium', 'Iris + shaders', 'Embeddium', 'Lithium', 'Moonrise', 'C2ME', 'ModernFix', 'FerriteCore', 'ImmediatelyFast',
+        'EntityCulling', 'ScalableLux', 'Radium', 'BadOptimizations', 'Dynamic FPS', 'Chloride', 'Noisium', 'spark', 'FastSuite',
+        'Ksyxis', 'ServerCore', 'Clumps', 'Create']
+W, H = 1600, 900
+img = Image.new('RGB', (W, H), BG)
+d = ImageDraw.Draw(img)
+d.text((60, 40), 'Tested together with Sleepium 1.0.3', font=font(44, True), fill=INK)
+d.text((60, 100), 'NeoForge 1.21.1, each alongside Sleepium and 13 of them at once; where another mod changes the same code,', font=font(26), fill=MUTED)
+d.text((60, 136), 'Sleepium steps aside there. With Lithium or Moonrise its changes stay exact (world hashes).', font=font(26), fill=MUTED)
+cols, cw, ch, gap = 4, 352, 92, 18
+x0, y0 = 60, 210
+for i, m in enumerate(mods):
+    cx, cy = x0 + (i % cols) * (cw + gap), y0 + (i // cols) * (ch + gap)
+    d.rounded_rectangle([cx, cy, cx + cw, cy + ch], radius=12, fill=(30, 36, 66), outline=GRID, width=2)
+    d.ellipse([cx + 22, cy + 30, cx + 54, cy + 62], fill=SLEEPIUM)
+    d.line([(cx + 30, cy + 46), (cx + 36, cy + 53), (cx + 47, cy + 38)], fill=BG, width=4)
+    d.text((cx + 72, cy + 28), m, font=font(30, True), fill=INK)
+img.save(os.path.join(OUT, 'compat.png'))

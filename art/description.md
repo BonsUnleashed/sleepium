@@ -30,6 +30,10 @@ Client, entity / block-entity scene (armour stands, item frames, chests, signs, 
 - Intel N100: **39 → 117 fps**, garbage 3 952 → 113 KiB per frame
 - Ryzen 7 5800X + RTX 4070 SUPER: **67 → 1 514 fps**; 300 animated mobs 175 → 1 782 fps
 
+## Water and glass in one draw (1.0.3)
+
+A view over a river on the client (RTX 4070 SUPER): **1 227-1 383 fps on 1.0.2, 2 635-2 833 on 1.0.3** (Sleepium 1.0.2 with Sodium: 1 718). Water, glass and ice are drawn in one multi-draw in vanilla's order; frames unchanged. On an Intel N100 the client's CPU use dropped from 1.67 to 0.52 cores.
+
 ## With Create
 
 Client on real Create worlds (RTX 4070 SUPER, 1280×720, Flywheel on, default settings; vanilla = the same mods without Sleepium):
@@ -67,7 +71,7 @@ Client against Sodium (RTX 4070 SUPER, 1280×720):
 | 538 entities, Complementary + shadows (Iris + Sodium) | 68–73 fps | 484 fps |
 | terrain view, Complementary (Iris + Sodium) | 477–515 fps | 452–475 fps |
 
-Running Sleepium together with these mods is not tested yet.
+Running Sleepium together with them works since 1.0.3 (tested with 22 optimisation mods and a 13-mod pack); see below.
 
 Against **Horizon**, a Rust rewrite of Minecraft (0.2.97, on 26.3 - the versions differ), on the same Intel N100: the client draws more frames in every scene (entities 115 vs 87 fps, mobs 136 vs 112, light 156 vs 138: +13-32 %); on the server Sleepium is ahead on items, hoppers, smelters, furnaces and pistons, Horizon on mobs, villagers, cramming, redstone, carts and fluids, partly through shortcuts that are not vanilla-exact. Sleepium keeps the vanilla game and its mods.
 
@@ -98,7 +102,7 @@ engine flag one by one with search. Saved to `config/sleepium.properties`.
 - Minecraft 1.21.1, NeoForge 21.1.251 or later, Java 21. The renderer needs OpenGL 4.3 (4.6 for multi-draw).
 - Works on the server, on the client, or both: a server with Sleepium accepts clients without it, and the other way round.
 - Tested with Create 6.0.10, Create Aeronautics (Sable, Veil) and GeckoLib 4.9.3.
-- Not meant to be combined with other rendering engines (Sodium, Embeddium): their changes overlap; untested.
+- Tested together with Sodium, Iris (also with shaderpacks), Embeddium, Lithium, Moonrise, C2ME, ModernFix, FerriteCore, ImmediatelyFast, EntityCulling, ScalableLux, Radium, BadOptimizations, Dynamic FPS, Chloride, Noisium, spark, FastSuite, Ksyxis, ServerCore, Clumps and Create, and 13 of them at once. With Lithium or Moonrise installed Sleepium's changes stay exact.
 - Where another mod overwrites or redirects the same method, Sleepium's change to it steps aside and vanilla's code runs with the other mod's change.
 
 ## Source and license
