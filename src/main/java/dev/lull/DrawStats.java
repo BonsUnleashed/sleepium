@@ -49,6 +49,8 @@ public final class DrawStats {
     private DrawStats() {}
 
     static void start() {
+        dev.lull.optsupport.ChunkMultiDraw.flushNanos = dev.lull.optsupport.ChunkMultiDraw.offNanos = dev.lull.optsupport.ChunkMultiDraw.cmdUpNanos = 0;
+        dev.lull.optsupport.ChunkMultiDraw.lvNanos = dev.lull.optsupport.ChunkMultiDraw.loopNanos = dev.lull.optsupport.ChunkMultiDraw.drawNanos = 0;
         TYPES.clear();
         OBJECTS.clear();
         SECTIONS.clear();
@@ -102,6 +104,10 @@ public final class DrawStats {
         }
         sb.append("\n  ").append(GpuTimer.report());
         for (int i = 0; i < PHASE.length; i++) sb.append(String.format(Locale.ROOT, "\n  %s: %.3f ms per frame", PHASE_NAMES[i], PHASE[i] / 1e6 / frames));
+        sb.append(String.format(Locale.ROOT, "\n  chunk multi-draw flush %.3f ms per frame: offsets upload %.3f, commands upload %.3f, light volumes %.3f, draw loop %.3f (multi-draw calls %.3f)",
+                dev.lull.optsupport.ChunkMultiDraw.flushNanos / 1e6 / frames, dev.lull.optsupport.ChunkMultiDraw.offNanos / 1e6 / frames,
+                dev.lull.optsupport.ChunkMultiDraw.cmdUpNanos / 1e6 / frames, dev.lull.optsupport.ChunkMultiDraw.lvNanos / 1e6 / frames,
+                dev.lull.optsupport.ChunkMultiDraw.loopNanos / 1e6 / frames, dev.lull.optsupport.ChunkMultiDraw.drawNanos / 1e6 / frames));
         sb.append("\n  renderLevel sections (ms per frame):");
         SECTIONS.forEach((k, t) -> sb.append(String.format(Locale.ROOT, " %s %.3f;", k, t[0] / 1e6 / frames)));
         sb.append(String.format(Locale.ROOT, "\n  immediate draws %.1f, vertices %.0f, uploaded %.0f KiB", d / (double) frames, v / (double) frames, b / 1024.0 / frames));

@@ -33,6 +33,15 @@ public abstract class ChunkUploadMixin implements ChunkBufferTag {
             dev.lull.optsupport.LightVolumes.vanillaBufferUploaded();
     }
 
+    @org.spongepowered.asm.mixin.Shadow private com.mojang.blaze3d.vertex.VertexFormat.IndexType indexType;
+
+    /** a translucent section's resort: ChunkMultiDraw's copy takes the new order too */
+    @Inject(method = "uploadIndexBuffer(Lcom/mojang/blaze3d/vertex/ByteBufferBuilder$Result;)V", at = @At("HEAD"))
+    private void sleep$resorted(com.mojang.blaze3d.vertex.ByteBufferBuilder.Result result, CallbackInfo ci) {
+        if (sleep$section != null && sleep$layer == RenderType.translucent() && ChunkMultiDraw.TRANSLUCENT)
+            ChunkMultiDraw.resorted(sleep$section, result.byteBuffer(), indexType);
+    }
+
     @Inject(method = "upload(Lcom/mojang/blaze3d/vertex/MeshData;)V", at = @At("HEAD"), cancellable = true)
     private void sleep$store(MeshData mesh, CallbackInfo ci) {
         if (sleep$section == null) return;

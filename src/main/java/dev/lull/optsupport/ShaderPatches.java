@@ -13,7 +13,9 @@ public final class ShaderPatches {
 
     public static String apply(Program.Type type, String name, String src) {
         if (type == Program.Type.VERTEX) {
-            if (ChunkMultiDraw.SUPPORTED.contains(name)) {
+            if ("rendertype_translucent".equals(name)) {
+                if (ChunkMultiDraw.TRANSLUCENT && Boolean.getBoolean("lab.opt.ChunkMultiDrawMixin") && ChunkMultiDraw.capable()) src = ChunkMultiDraw.patch(name, src);
+            } else if (ChunkMultiDraw.SUPPORTED.contains(name)) {
                 if (Boolean.getBoolean("lab.opt.ChunkMultiDrawMixin") && ChunkMultiDraw.capable()) src = ChunkMultiDraw.patch(name, src);
                 // SuperByteBuffer parts (SbbPartsMixin) draw into the opaque block types too: their shaders take part records as well
                 if (Boolean.getBoolean("lab.opt.SbbPartsMixin") && Boolean.getBoolean("lab.opt.PartBatchMixin") && !"rendertype_translucent".equals(name)

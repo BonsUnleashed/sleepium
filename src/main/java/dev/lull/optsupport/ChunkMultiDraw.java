@@ -68,7 +68,26 @@ public final class ChunkMultiDraw {
 
     /** Shader source patch: the vanilla chunk vertex shader, offset from the uniform block while multi-drawing. */
     public static String patch(String name, String src) {
-        if ("rendertype_translucent".equals(name)) return LightVolumes.patchTranslucent(src);
+        if ("rendertype_translucent".equals(name)) {
+            // (LightVolumes.patchTranslucent is not applied: ShaderPatches never sent this shader here before, so the
+            // translucent layer has always kept vanilla's baked light - the multi-draw keeps exactly that)
+            String lit = src;
+            if (!TRANSLUCENT || !ssbo() || !indirect()) return lit;
+            String d = "uniform vec3 ChunkOffset;", u = "vec3 pos = Position + ChunkOffset;", vol = "probeUV2(float(ProbeVolume))";
+            if (!lit.startsWith("#version 150") || !lit.contains(d) || !lit.contains(u)) return lit;
+            String out = lit.replaceFirst("#version 150", "#version 150\n#extension GL_ARB_shader_draw_parameters : require"
+                            + (lit.contains("GL_ARB_shader_storage_buffer_object") ? "" : "\n#extension GL_ARB_shader_storage_buffer_object : require"))
+                    .replace(d, d + "\nuniform int ProbeMultiDraw;\nlayout(std430) buffer ProbeChunkOffsets { vec4 ProbeOffsets[]; };")
+                    .replace(u, "vec3 pos = Position; if (ProbeMultiDraw != 0) pos += ProbeOffsets[" + drawIndex() + "].xyz; else pos += ChunkOffset;");
+            if (lit.contains(vol)) {   // multi-drawn: the volume from the draw's offset (statements: Veil reprints sources without parentheses)
+                String line = "vertexColor = Color * minecraft_sample_lightmap(Sampler2, " + vol + ");";
+                if (!out.contains(line)) return lit;
+                out = out.replace(line, "float probe_vol = float(ProbeVolume); if (ProbeMultiDraw != 0) probe_vol = ProbeOffsets[" + drawIndex()
+                        + "].w; vertexColor = Color * minecraft_sample_lightmap(Sampler2, probeUV2(probe_vol));");
+            }
+            translucentPatched = true;
+            return out;
+        }
         String decl = "uniform vec3 ChunkOffset;";
         String use = "vec3 pos = Position + ChunkOffset;";
         String uv = "texCoord0 = UV0;";
@@ -106,6 +125,8 @@ public final class ChunkMultiDraw {
         /** exp/shader-light: the mesh has light recipes; the section's light volume (-1: none, baked light) */
         boolean recipes;
         int vol = -1;
+        /** a translucent copy's indices: first index in its arena's index buffer (-1: none, sequential indices) */
+        int idx = -1;
         long origin;
         final int[] bq = new int[8];
         /** per bucket: the face plane nearest the camera side that could see it (+ buckets min, - buckets max coordinate, section-relative) */
@@ -241,6 +262,10 @@ public final class ChunkMultiDraw {
             boolean z = listed; listed = listed2; listed2 = z;
         }
 
+        /** translucent: the sections' own (sorted) indices, 2 ints of room per vertex at start * 2 */
+        boolean indexed;
+        int ibo;
+
         Arena(long key, RenderType layer, boolean packed) {
             this.key = key;
             this.layer = layer;
@@ -284,6 +309,17 @@ public final class ChunkMultiDraw {
                 GL15C.glBindBuffer(GL31C.GL_COPY_READ_BUFFER, vbo);
                 GL31C.glCopyBufferSubData(GL31C.GL_COPY_READ_BUFFER, GL31C.GL_COPY_WRITE_BUFFER, 0, 0, (long) capacity * stride);
                 GL15C.glDeleteBuffers(vbo);
+            }
+            if (indexed) {
+                int ni = GL15C.glGenBuffers();
+                GL15C.glBindBuffer(GL31C.GL_COPY_WRITE_BUFFER, ni);
+                GL15C.glBufferData(GL31C.GL_COPY_WRITE_BUFFER, (long) cap * 8, GL15C.GL_STATIC_DRAW);
+                if (ibo != 0) {
+                    GL15C.glBindBuffer(GL31C.GL_COPY_READ_BUFFER, ibo);
+                    GL31C.glCopyBufferSubData(GL31C.GL_COPY_READ_BUFFER, GL31C.GL_COPY_WRITE_BUFFER, 0, 0, (long) capacity * 8);
+                    GL15C.glDeleteBuffers(ibo);
+                }
+                ibo = ni;
             }
             release(capacity, cap - capacity);
             vbo = nb;
@@ -351,6 +387,10 @@ public final class ChunkMultiDraw {
             storeShadowCopy(section, layer, mesh);
             return false;   // vanilla's sorted buffer still draws the camera's pass
         }
+        if (layer == RenderType.translucent()) {
+            storeTranslucent(section, layer, mesh);
+            return false;   // vanilla's buffer kept too: its resorts and any frame drawn the vanilla way
+        }
         if (!layerSupported(layer) || mesh.indexBuffer() != null || ds.mode() != VertexFormat.Mode.QUADS || !capable()) return false;
         release(section, layer);
         int li = layerIndex(layer);
@@ -409,7 +449,10 @@ public final class ChunkMultiDraw {
         int li = layerIndex(layer);
         if (li < 0) return;
         Arena a = ARENAS[li].get(0L);
-        if (a == null) ARENAS[li].put(0L, a = new Arena(0L, layer, false));
+        if (a == null) {
+            ARENAS[li].put(0L, a = new Arena(0L, layer, false));
+            a.indexed = TRANSLUCENT;   // (the camera's translucent multi-draw shares it once the pack is off)
+        }
         int stride = ds.format().getVertexSize();
         if (a.stride == 0) a.stride = stride;
         int verts = ds.vertexCount();
@@ -518,7 +561,7 @@ public final class ChunkMultiDraw {
     /** The vanilla buffer is not filled for arena layers (no duplicate VRAM) while the layer's shader is patched. */
     public static boolean replacesVanilla(RenderType layer) {
         // (a shaderpack's terrain programs take the multi-draw path too: ShaderPrologue gives them the offsets)
-        return ACTIVE && !KEEP_VANILLA && PATCHED.size() == SUPPORTED.size();
+        return ACTIVE && !KEEP_VANILLA && PATCHED.size() == SUPPORTED.size() && layer != RenderType.translucent();
     }
 
     /**
@@ -628,6 +671,7 @@ public final class ChunkMultiDraw {
             net.minecraft.client.renderer.ShaderInstance shader) {
         int li = LAYERS.indexOf(layer);
         if (li < 0) return false;
+
         if (!PENDING_COMPILED.isEmpty()) drainCompiled();
         int[] ps = programState(shader.getId());
         if (ps == null) return false;
@@ -647,6 +691,10 @@ public final class ChunkMultiDraw {
         long ver = SectionLists.version();
         if (reusable && lc.ver == ver && lc.x == x && lc.y == y && lc.z == z) {
             LISTED.addAll(lc.arenas);
+            if (STABLE && flushStable(layer, ps, lc)) {
+                drawReuses++;
+                return true;
+            }
             flushAll(layer, ps, true);
             drawReuses++;
             return true;
@@ -698,6 +746,7 @@ public final class ChunkMultiDraw {
             sectionsMulti++;
         }
         if (reusable) {
+            lc.stable = false;
             lc.arenas.clear();
             lc.arenas.addAll(LISTED);
             lc.ver = ver;
@@ -706,6 +755,7 @@ public final class ChunkMultiDraw {
             lc.z = z;
         } else if (!allFaces) {   // (a shadow pass's list leaves the camera's cache alone)
             lc.ver = -1;
+            lc.stable = false;
         }
         if (shadowReuse) {
             sc.arenas.clear();
@@ -721,6 +771,252 @@ public final class ChunkMultiDraw {
         return true;
     }
 
+    /**
+     * -Dlab.chunkmd.stable (default on; =false: uploaded every frame): a layer drawn again from its kept lists (the same camera position and
+     * contents) keeps its offsets and indirect commands in buffers of its own, written once when the lists are kept,
+     * instead of a new offsets store and a commands upload every frame (the driver's thread does that work).
+     */
+    private static final boolean STABLE = !"false".equals(System.getProperty("lab.chunkmd.stable"));
+    public static long stableWrites;
+
+    private static boolean flushStable(RenderType layer, int[] ps, LayerCache lc) {
+        if (!ssbo() || !indirect() || OcclusionCull.usable() || allFaces) return false;
+        List<Arena> as = lc.arenas;
+        int n = as.size();
+        if (!lc.stable) {
+            if (uboAlign == 0) uboAlign = Math.max(16, GL11C.glGetInteger(GL43C.GL_SHADER_STORAGE_BUFFER_OFFSET_ALIGNMENT));
+            if (lc.uboOffs.length < n) {
+                lc.uboOffs = new int[n];
+                lc.cmdOffs = new long[n];
+            }
+            int total = 0, cmds = 0;
+            for (int i = 0; i < n; i++) {
+                Arena a = as.get(i);
+                lc.uboOffs[i] = total;
+                lc.cmdOffs[i] = cmds * 20L;
+                if (a.n == 0) continue;
+                total += (16 * a.n + uboAlign - 1) / uboAlign * uboAlign;
+                cmds += a.n;
+            }
+            if (total == 0) return false;
+            if (staging.capacity() < total) {
+                MemoryUtil.memFree(staging);
+                staging = MemoryUtil.memAlloc(Math.max(total, staging.capacity() * 2));
+            }
+            long bytes = cmds * 20L;
+            if (cmdStaging.capacity() < bytes) {
+                MemoryUtil.memFree(cmdStaging);
+                cmdStaging = MemoryUtil.memAlloc((int) Math.max(bytes, cmdStaging.capacity() * 2L));
+            }
+            long st = MemoryUtil.memAddress(staging), c = MemoryUtil.memAddress(cmdStaging);
+            for (int i = 0; i < n; i++) {
+                Arena a = as.get(i);
+                if (a.n == 0) continue;
+                MemoryUtil.memCopy(MemoryUtil.memAddress(a.offsets), st + lc.uboOffs[i], 16L * a.n);
+                long p = c + lc.cmdOffs[i];
+                for (int k = 0; k < a.n; k++, p += 20) {
+                    MemoryUtil.memPutInt(p, MemoryUtil.memGetInt(a.counts + 4L * k));
+                    MemoryUtil.memPutInt(p + 4, 1);
+                    MemoryUtil.memPutInt(p + 8, 0);
+                    MemoryUtil.memPutInt(p + 12, MemoryUtil.memGetInt(a.bases + 4L * k));
+                    MemoryUtil.memPutInt(p + 16, k);
+                }
+            }
+            if (lc.ssbo == 0) lc.ssbo = GL15C.glGenBuffers();
+            GL15C.glBindBuffer(GL43C.GL_SHADER_STORAGE_BUFFER, lc.ssbo);
+            GL15C.nglBufferData(GL43C.GL_SHADER_STORAGE_BUFFER, total + 16L, st, GL15C.GL_STATIC_DRAW);
+            // commands in an immutable store (Intel draws indirect only from those), a new one per kept list
+            if (lc.cmd != 0) GL15C.glDeleteBuffers(lc.cmd);
+            lc.cmd = GL15C.glGenBuffers();
+            GL15C.glBindBuffer(GL40C.GL_DRAW_INDIRECT_BUFFER, lc.cmd);
+            org.lwjgl.opengl.GL44C.nglBufferStorage(GL40C.GL_DRAW_INDIRECT_BUFFER, bytes, c, 0);
+            lc.stable = true;
+            stableWrites++;
+        }
+        for (int i = 0; i < n; i++) {
+            Arena a = as.get(i);
+            a.listed = false;
+            a.uboOffset = lc.uboOffs[i];
+            a.cmdOffset = lc.cmdOffs[i];
+        }
+        GL15C.glBindBuffer(GL40C.GL_DRAW_INDIRECT_BUFFER, lc.cmd);
+        if (LightVolumes.ON) GL30C.glBindBufferBase(GL43C.GL_SHADER_STORAGE_BUFFER, LightVolumes.BINDING, LightVolumes.buffer());
+        long tLoop = System.nanoTime();
+        drawArenas(layer, ps, RenderSystem.getSequentialBuffer(VertexFormat.Mode.QUADS), GL43C.GL_SHADER_STORAGE_BUFFER, lc.ssbo, true, 0, 0, true);
+        loopNanos += System.nanoTime() - tLoop;
+        GL20C.glUniform1i(ps[0], 0);
+        GL15C.glBindBuffer(GL40C.GL_DRAW_INDIRECT_BUFFER, 0);
+        return true;
+    }
+
+    // ------------------------------------------------------------------ the translucent layer
+
+    /**
+     * -Dlab.chunkmd.translucent (default on; =false: vanilla's loop): the translucent layer in one multi-draw too. Each section's vertices are copied into
+     * one arena and its indices - vanilla's back-to-front sort, renewed by every resort - into the arena's index buffer;
+     * the sections are drawn in vanilla's order (the visible list backwards) by one indirect call, whose commands keep
+     * that order and each section's own index order, so blending sees the same sequence of triangles. Vanilla's own
+     * buffers stay filled: a frame where any visible section has no current copy draws the vanilla way.
+     */
+    public static final boolean TRANSLUCENT = !"false".equals(System.getProperty("lab.chunkmd.translucent"));
+    static volatile boolean translucentPatched;
+    public static long translucentDraws, translucentFallbacks, resorts;
+    private static ByteBuffer indexScratch = MemoryUtil.memAlloc(1 << 16);
+
+    /** LevelRenderer.renderSectionLayer: the translucent layer can take the multi-draw path now */
+    public static boolean translucentReady() {
+        return TRANSLUCENT && translucentPatched && ACTIVE && !dev.lull.shaders.ShaderPipeline.active && capable() && ssbo() && indirect();
+    }
+
+    private static void storeTranslucent(SectionRenderDispatcher.RenderSection section, RenderType layer, MeshData mesh) {
+        MeshData.DrawState ds = mesh.drawState();
+        release(section, layer);
+        if (!TRANSLUCENT || !translucentPatched || ds.mode() != VertexFormat.Mode.QUADS || ds.format() != DefaultVertexFormat.BLOCK || !capable()) return;
+        int verts = ds.vertexCount();
+        if (verts % 4 != 0 || verts == 0) return;
+        int li = layerIndex(layer);
+        if (li < 0) return;
+        Arena a = ARENAS[li].get(0L);
+        if (a == null) {
+            ARENAS[li].put(0L, a = new Arena(0L, layer, false));
+            a.indexed = true;
+        }
+        if (a.stride == 0) a.stride = ds.format().getVertexSize();
+        if (!a.indexed) return;
+        Entry e = new Entry();
+        java.util.Arrays.fill(e.bq, 0, 4, 0);   // no face buckets: the order is the section's indices
+        for (int k = 4; k < 8; k++) e.bq[k] = verts / 4;
+        e.origin = section.getOrigin().asLong();
+        uploads++;
+        put(a, e, mesh.vertexBuffer(), verts, section);
+        e.idx = e.start * 2;
+        e.indexCount = ds.indexCount();
+        writeIndices(a, e, mesh.indexBuffer(), ds.indexType(), ds.indexCount());
+    }
+
+    /** a section's indices (vanilla's sorted buffer; null: the sequential quad pattern) as ints at its index range */
+    private static void writeIndices(Arena a, Entry e, ByteBuffer src, VertexFormat.IndexType type, int count) {
+        if (count > e.vertices * 2) {   // (never for quads: 1.5 per vertex)
+            e.idx = -1;
+            return;
+        }
+        if (indexScratch.capacity() < 4 * count) {
+            MemoryUtil.memFree(indexScratch);
+            indexScratch = MemoryUtil.memAlloc(Math.max(4 * count, indexScratch.capacity() * 2));
+        }
+        long d = MemoryUtil.memAddress(indexScratch);
+        if (src == null) {
+            for (int q = 0, i = 0; i < count; q += 4, i += 6) {
+                MemoryUtil.memPutInt(d + 4L * i, q);
+                MemoryUtil.memPutInt(d + 4L * i + 4, q + 1);
+                MemoryUtil.memPutInt(d + 4L * i + 8, q + 2);
+                MemoryUtil.memPutInt(d + 4L * i + 12, q + 2);
+                MemoryUtil.memPutInt(d + 4L * i + 16, q + 3);
+                MemoryUtil.memPutInt(d + 4L * i + 20, q);
+            }
+        } else {
+            long sp = MemoryUtil.memAddress(src);
+            if (type == VertexFormat.IndexType.SHORT) {
+                if (src.remaining() < 2 * count) {
+                    e.idx = -1;
+                    return;
+                }
+                for (int i = 0; i < count; i++) MemoryUtil.memPutInt(d + 4L * i, Short.toUnsignedInt(MemoryUtil.memGetShort(sp + 2L * i)));
+            } else {
+                if (src.remaining() < 4 * count) {
+                    e.idx = -1;
+                    return;
+                }
+                MemoryUtil.memCopy(sp, d, 4L * count);
+            }
+        }
+        GL15C.glBindBuffer(GL31C.GL_COPY_WRITE_BUFFER, a.ibo);
+        GL15C.nglBufferSubData(GL31C.GL_COPY_WRITE_BUFFER, 4L * e.idx, 4L * count, d);
+    }
+
+    /** VertexBuffer.uploadIndexBuffer of a translucent section (a resort): its copy's indices replaced the same way */
+    public static void resorted(SectionRenderDispatcher.RenderSection section, ByteBuffer indices, VertexFormat.IndexType type) {
+        int li = LAYERS.indexOf(RenderType.translucent());
+        if (li < 0 || indices == null || type == null) return;
+        Entry e = (Entry) ((ChunkEntries) section).sleep$md()[2 * li];
+        if (e == null || e.idx < 0 || !e.arena.indexed) return;
+        int count = indices.remaining() / type.bytes;
+        if (count != e.indexCount) {   // another count than the copy: no longer the same mesh - vanilla draws it
+            release(section, RenderType.translucent());
+            return;
+        }
+        writeIndices(e.arena, e, indices, type, count);
+        resorts++;
+    }
+
+    /**
+     * The translucent layer's draw: the visible sections backwards (vanilla's order), one command each, one call.
+     * False (nothing drawn): a visible non-empty section has no current copy - the caller draws the vanilla way.
+     */
+    public static boolean drawTranslucent(it.unimi.dsi.fastutil.objects.ObjectArrayList<SectionRenderDispatcher.RenderSection> visible, double x, double y, double z,
+            net.minecraft.client.renderer.ShaderInstance shader) {
+        RenderType layer = RenderType.translucent();
+        int li = LAYERS.indexOf(layer);
+        if (li < 0) return false;
+        if (!PENDING_COMPILED.isEmpty()) drainCompiled();
+        int[] ps = programState(shader.getId());
+        if (ps == null) return false;
+        int cap = visible.size();
+        if (staging.capacity() < 16 * cap + 16) {
+            MemoryUtil.memFree(staging);
+            staging = MemoryUtil.memAlloc(Math.max(16 * cap + 16, staging.capacity() * 2));
+        }
+        if (cmdStaging.capacity() < 20 * cap) {
+            MemoryUtil.memFree(cmdStaging);
+            cmdStaging = MemoryUtil.memAlloc(Math.max(20 * cap, cmdStaging.capacity() * 2));
+        }
+        long st = MemoryUtil.memAddress(staging), c = MemoryUtil.memAddress(cmdStaging);
+        int n = 0;
+        Arena arena = null;
+        for (int i = cap - 1; i >= 0; i--) {
+            SectionRenderDispatcher.RenderSection s = visible.get(i);
+            if (s.getCompiled().isEmpty(layer)) continue;
+            Entry e = (Entry) ((ChunkEntries) s).sleep$md()[2 * li];
+            var o = s.getOrigin();
+            if (e == null || e.idx < 0 || e.origin != o.asLong() || !e.arena.indexed || (arena != null && e.arena != arena)) {
+                translucentFallbacks++;
+                return false;
+            }
+            arena = e.arena;
+            long p = st + 16L * n;
+            MemoryUtil.memPutFloat(p, (float) ((double) o.getX() - x));
+            MemoryUtil.memPutFloat(p + 4, (float) ((double) o.getY() - y));
+            MemoryUtil.memPutFloat(p + 8, (float) ((double) o.getZ() - z));
+            MemoryUtil.memPutFloat(p + 12, 0f);
+            long q = c + 20L * n;
+            MemoryUtil.memPutInt(q, e.indexCount);
+            MemoryUtil.memPutInt(q + 4, 1);
+            MemoryUtil.memPutInt(q + 8, e.idx);
+            MemoryUtil.memPutInt(q + 12, e.start);
+            MemoryUtil.memPutInt(q + 16, n);
+            n++;
+        }
+        if (n == 0) return true;   // nothing visible to draw, as vanilla
+        int buf = ssboBuffer();
+        GL15C.glBindBuffer(GL43C.GL_SHADER_STORAGE_BUFFER, buf);
+        GL15C.glBufferData(GL43C.GL_SHADER_STORAGE_BUFFER, 16L * n + 16, GL15C.GL_STREAM_DRAW);
+        GL15C.nglBufferSubData(GL43C.GL_SHADER_STORAGE_BUFFER, 0, 16L * n, st);
+        long cmdBase = COMMANDS.upload(c, 20L * n);
+        if (LightVolumes.ON && LightVolumes.translucentPatched) GL30C.glBindBufferBase(GL43C.GL_SHADER_STORAGE_BUFFER, LightVolumes.BINDING, LightVolumes.buffer());
+        if (arena.vaoStale || arena.vao == 0) setupVao(arena, layer);
+        GL30C.glBindVertexArray(arena.vao);
+        GL15C.glBindBuffer(GL15C.GL_ELEMENT_ARRAY_BUFFER, arena.ibo);
+        GL20C.glUniform1i(ps[0], 1);
+        GL30C.glBindBufferRange(GL43C.GL_SHADER_STORAGE_BUFFER, UBO_BINDING, buf, 0, 16L * n);
+        GL43C.glMultiDrawElementsIndirect(GL15C.GL_TRIANGLES, GL11C.GL_UNSIGNED_INT, cmdBase, n, 20);
+        GL20C.glUniform1i(ps[0], 0);
+        GL15C.glBindBuffer(GL40C.GL_DRAW_INDIRECT_BUFFER, 0);
+        multiDraws++;
+        translucentDraws++;
+        sectionsMulti += n;
+        return true;
+    }
+
     /** -Dlab.chunkmd.reuse=false: build the draws every frame. */
     private static final boolean REUSE = !"false".equals(System.getProperty("lab.chunkmd.reuse"));
     public static long drawReuses;
@@ -729,6 +1025,11 @@ public final class ChunkMultiDraw {
     static final class LayerCache {
         long ver = -1, sig;
         int faces;
+        /** -Dlab.chunkmd.stable: the kept draws' offsets and commands in the layer's own buffers, written once */
+        boolean stable;
+        int ssbo, cmd;
+        int[] uboOffs = new int[0];
+        long[] cmdOffs = new long[0];
         double x = Double.NaN, y, z;
         final List<Arena> arenas = new ArrayList<>();
     }
@@ -1211,6 +1512,8 @@ public final class ChunkMultiDraw {
         return String.format(java.util.Locale.ROOT, "chunk multidraw: reused draws %d, packed quads %.2f %%, patched %s, multi-draw calls %d, sections by multi-draw %d, by vanilla draws %d, skipped %d, quads drawn %.1f %% (face culling %s), uploads %d, arenas %d (%.1f MB), grows %d, vanilla buffers %s",
                 drawReuses, 100.0 * quadsPacked / Math.max(1, quadsPacked + quadsFull), PATCHED, multiDraws, sectionsMulti, sectionsVanilla, sectionsSkipped, 100.0 * quadsDrawn / Math.max(1, quadsTotal), FACE_CULL ? "on" : "off",
                 uploads, arenas, bytes / 1048576.0, grows,
-                KEEP_VANILLA || PATCHED.size() != SUPPORTED.size() ? "filled" : "not filled") + packReport();
+                KEEP_VANILLA || PATCHED.size() != SUPPORTED.size() ? "filled" : "not filled") + packReport()
+                + (TRANSLUCENT ? String.format(java.util.Locale.ROOT, "; translucent: patched %s, multi-draws %d, frames the vanilla way %d, resorts %d",
+                        translucentPatched, translucentDraws, translucentFallbacks, resorts) : "");
     }
 }
