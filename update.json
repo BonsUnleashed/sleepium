@@ -1,12 +1,13 @@
 {
   "homepage": "https://modrinth.com/mod/sleepium",
   "1.21.1": {
+    "1.0.3": "Works with Lithium, Moonrise, C2ME, ModernFix and Embeddium (they crashed with 1.0.2); water and glass in one draw (about 2x fps over water); water lit by light volumes.",
     "1.0.2": "A new settings screen with a live overview, presets and stats; shaderpack options screens; applying pack options without a break.",
     "1.0.1": "Shaderpacks prepared over frames (no freeze on a driver's first compile); the settings screen shows which flags switch which; the mod list's logo, links and update check.",
     "1.0.0": "The first public release."
   },
   "promos": {
-    "1.21.1-latest": "1.0.2",
-    "1.21.1-recommended": "1.0.2"
+    "1.21.1-latest": "1.0.3",
+    "1.21.1-recommended": "1.0.3"
   }
 }

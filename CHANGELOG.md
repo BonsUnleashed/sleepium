@@ -4,6 +4,24 @@ Versions follow [Semantic Versioning](https://semver.org): a patch release fixes
 release changes the API (`dev.lull.api`) or the settings in a way that needs attention. Jars are named
 `sleepium-<version>+mc<minecraft version>.jar`.
 
+## 1.0.3+mc1.21.1 - 2026-11-03
+
+- Compatibility with other optimisation mods. Tested together with 22 of them and a 13-mod pack (Sodium, Iris,
+  Embeddium, Lithium, Moonrise, C2ME, ModernFix, FerriteCore, ImmediatelyFast, EntityCulling, ScalableLux, Radium and
+  more). Five crashed or broke with 1.0.2 and run now: Embeddium (its mixins come from a plugin, not its config list),
+  ModernFix, Lithium, Moonrise and C2ME (a mixin of ours that gave way left out an interface other mixins of ours
+  used; a method another mod adds too; C2ME's random). Where another mod changes the same code, Sleepium steps aside
+  there and says so in the log. With Lithium or Moonrise installed, Sleepium's changes are still exact (world hashes).
+- Water, glass and ice are drawn in one multi-draw, in vanilla's order: the terrain view was bound by the graphics
+  driver's work for vanilla's per-section translucent draws. A view over a river: 1227-1383 -> 2635-2833 fps (RTX 4070
+  SUPER); on an Intel N100 the client's CPU use dropped from 1.67 to 0.52 cores. Frames unchanged (frame hashes).
+  Shaderpacks are unchanged (Complementary Reimagined: 604-638 fps on 1.0.2, 607-640 on 1.0.3).
+- Water takes light from the light volumes like the other blocks: a light change no longer rebuilds every section
+  with water (CPU 3.6 -> 2.6 cores on a scene of lights switching over water).
+- Item frames, chests and signs drawn from video memory (no per-frame copy); layers drawn again from kept lists keep
+  their draw data in place.
+- Players without Sleepium can join a server with it (tested).
+
 ## 1.0.2+mc1.21.1 - 2026-11-02
 
 - A new settings screen: a sidebar of pages (Overview, the feature groups, Shaders, All flags) and a panel describing
