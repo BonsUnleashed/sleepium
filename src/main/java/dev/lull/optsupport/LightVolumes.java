@@ -197,7 +197,7 @@ public final class LightVolumes {
 
     public static String patchTranslucent(String src) {
         String light = "vertexColor = Color * minecraft_sample_lightmap(Sampler2, UV2);";
-        if (!ON || !ChunkMultiDraw.ssbo() || !src.startsWith("#version 150") || !src.contains(light) || !src.contains("void main() {")) return src;
+        if (!ON || Boolean.getBoolean("lab.shaderlight.noTranslucent") || !ChunkMultiDraw.ssbo() || !src.startsWith("#version 150") || !src.contains(light) || !src.contains("void main() {")) return src;
         translucentPatched = true;
         return src.replaceFirst("#version 150", "#version 150\n#extension GL_ARB_explicit_attrib_location : require\n#extension GL_ARB_shader_storage_buffer_object : require")
                 .replace("void main() {", "uniform int ProbeVolume;\n" + glsl() + "\nvoid main() {")
@@ -231,6 +231,12 @@ public final class LightVolumes {
         }
         Sec sec = SECS.get(key(section));
         org.lwjgl.opengl.GL20C.glUniform1i(loc, sec != null && sec.vol >= 0 && sec.ready && sec.translucentRecipes ? sec.vol : -1);
+    }
+
+    /** ChunkMultiDraw's translucent multi-draw: the volume translucentDraw would set for this section's draw */
+    public static float translucentVolume(net.minecraft.client.renderer.chunk.SectionRenderDispatcher.RenderSection section) {
+        Sec sec = SECS.get(key(section));
+        return sec != null && sec.vol >= 0 && sec.ready && sec.translucentRecipes ? sec.vol : -1;
     }
 
     /** after the draw: the uniform back to -1 (the shader serves other translucent draws too) */

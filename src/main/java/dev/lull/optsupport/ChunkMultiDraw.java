@@ -69,9 +69,8 @@ public final class ChunkMultiDraw {
     /** Shader source patch: the vanilla chunk vertex shader, offset from the uniform block while multi-drawing. */
     public static String patch(String name, String src) {
         if ("rendertype_translucent".equals(name)) {
-            // (LightVolumes.patchTranslucent is not applied: ShaderPatches never sent this shader here before, so the
-            // translucent layer has always kept vanilla's baked light - the multi-draw keeps exactly that)
-            String lit = src;
+            // light volumes: the section's volume from the ProbeVolume uniform (vanilla's loop) or the draw's offset (ours)
+            String lit = LightVolumes.patchTranslucent(src);
             if (!TRANSLUCENT || !ssbo() || !indirect()) return lit;
             String d = "uniform vec3 ChunkOffset;", u = "vec3 pos = Position + ChunkOffset;", vol = "probeUV2(float(ProbeVolume))";
             if (!lit.startsWith("#version 150") || !lit.contains(d) || !lit.contains(u)) return lit;
@@ -987,7 +986,7 @@ public final class ChunkMultiDraw {
             MemoryUtil.memPutFloat(p, (float) ((double) o.getX() - x));
             MemoryUtil.memPutFloat(p + 4, (float) ((double) o.getY() - y));
             MemoryUtil.memPutFloat(p + 8, (float) ((double) o.getZ() - z));
-            MemoryUtil.memPutFloat(p + 12, 0f);
+            MemoryUtil.memPutFloat(p + 12, LightVolumes.translucentPatched ? LightVolumes.translucentVolume(s) : 0f);
             long q = c + 20L * n;
             MemoryUtil.memPutInt(q, e.indexCount);
             MemoryUtil.memPutInt(q + 4, 1);
