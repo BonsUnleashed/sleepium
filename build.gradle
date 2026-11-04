@@ -35,6 +35,7 @@ sourceSets.main.java {
 }
 
 repositories {
+    if (project.hasProperty('testMods')) flatDir { dirs project.property('testMods') }
     // GeckoLib, for the engine's GeckoLib mixins (applied only when GeckoLib is installed)
     maven {
         url = 'https://dl.cloudsmith.io/public/geckolib3/geckolib/maven/'
@@ -88,6 +89,11 @@ dependencies {
     compileOnly(annotationProcessor('io.github.llamalad7:mixinextras-common:0.4.1'))
     implementation(jarJar('io.github.llamalad7:mixinextras-forge:0.4.1'))
     compileOnly "software.bernie.geckolib:geckolib-forge-${minecraft_version}:${geckolib_version}"
+    // -PtestMods=<folder>: every jar there (released mods: SRG member names) remapped onto the dev runs' classpath -
+    // the Cursed Fate set (GeckoLib, Photon + LDLib, Kleiders Custom Renderer, playerAnimator) for the client tests
+    if (project.hasProperty('testMods')) file(project.property('testMods')).listFiles().findAll { it.name.endsWith('.jar') }.each {
+        modRuntimeOnly "testmods:${it.name - '.jar'}:0"   // the remapping wants module notation: a flat repository (below) serves the file
+    }
 }
 
 var generateModMetadata = tasks.register('generateModMetadata', ProcessResources) {

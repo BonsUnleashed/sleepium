@@ -29,6 +29,7 @@ ap.add_argument('--heap', default='3G')
 ap.add_argument('--flags', default='')
 ap.add_argument('--world', help='a saved world to open (copied to run/saves) instead of a scene in a fresh world')
 ap.add_argument('--tp', help='where to look from in the saved world: "x y z yaw pitch"')
+ap.add_argument('--mods', help='a folder of released mods put on the dev run (build.gradle -PtestMods: remapped), e.g. F:/compat/jars-1.20.1')
 a = ap.parse_args()
 name = os.path.basename(os.path.normpath(a.world)).replace(' ', '_') if a.world else None   # JVM flags split on spaces
 label = a.label or '%s-%s' % ((name or a.scene).replace(' ', '_'), a.mode)
@@ -44,7 +45,7 @@ if a.world:
 else:
     jvm.append('-Dsleep.clientAuto.scene=' + a.scene)
 jvm += (['-Dlab.opt.defaults=true'] if a.mode == 'on' else []) + a.flags.split()
-p = subprocess.run([GRADLEW, 'runClient', '--console=plain', '-q', '-PrunJvmArgs=' + ' '.join(jvm), '-PrunArgs=--width 1280 --height 720'],
+p = subprocess.run([GRADLEW, 'runClient', '--console=plain', '-q', '-PrunJvmArgs=' + ' '.join(jvm), '-PrunArgs=--width 1280 --height 720'] + (['-PtestMods=' + a.mods] if a.mods else []),
                    cwd=ROOT, capture_output=True, text=True, encoding='utf-8', errors='replace')
 out = p.stdout + p.stderr
 with open(os.path.join(ROOT, 'run', 'client-bench-%s.out' % label), 'w', encoding='utf-8') as f:   # the run's whole console
