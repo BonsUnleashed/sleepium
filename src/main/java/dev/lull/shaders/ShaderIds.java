@@ -2,7 +2,7 @@ package dev.lull.shaders;
 
 import com.mojang.blaze3d.vertex.BufferBuilder;
 import com.mojang.blaze3d.vertex.DefaultVertexFormat;
-import dev.lull.opt.BufferBuilderAccessor;
+import dev.lull.shadermixin.ShaderBuilderAccessor;
 import net.minecraft.world.level.block.state.BlockState;
 import org.lwjgl.system.MemoryUtil;
 
@@ -58,7 +58,7 @@ public final class ShaderIds {
         blocks++;
         int id = m.block(state) + 1;
         p.builder = builder;
-        p.from = ((BufferBuilderAccessor) builder).sleep$vertices();
+        p.from = ((ShaderBuilderAccessor) builder).sleep$shVertices();
         p.value = (id & 0xFFFF) | (state.getLightEmission() & 15) << 16 | (fluid ? 1 : 0) << 20;
     }
 
@@ -71,11 +71,12 @@ public final class ShaderIds {
         BufferBuilder b = p.builder;
         if (b == null) return;
         p.builder = null;
-        BufferBuilderAccessor a = (BufferBuilderAccessor) b;
-        if (a.sleep$format() != DefaultVertexFormat.BLOCK || !a.sleep$building()) return;
-        int n = a.sleep$vertices() - p.from;
+        ShaderBuilderAccessor a = (ShaderBuilderAccessor) b;
+        if (a.sleep$shFormat() != DefaultVertexFormat.BLOCK || !a.sleep$shBuilding()) return;
+        int n = a.sleep$shVertices() - p.from;
         if (n <= 0) return;
-        long last = a.sleep$vertexPointer();
+        // the last vertex's address (1.21.1: BufferBuilder's vertexPointer; 1.20.1: the write offset after it)
+        long last = MemoryUtil.memAddress0(a.sleep$shBuffer()) + a.sleep$shNext() - 32;
         patched += n;
         if (p.value != 0 && (p.value & 0xFFFF) != 0) patchedWithId += n;
         int id = p.value & 0xFFFF;

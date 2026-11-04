@@ -11,8 +11,6 @@ dev/lull/flwmixin/**
 dev/lull/geomixin/GeoCubesMixin.java
 dev/lull/geomixin/MolangJitMixin.java
 # the shaderpack pipeline and the settings screen
-dev/lull/shaders/**
-dev/lull/shadermixin/**
 # diagnostics and benchmarks of the 1.21.1 work
 dev/lull/ScaleListeners.java
 dev/lull/BusEquivalence.java
@@ -53,7 +51,6 @@ dev/lull/opt/PartFrameMixin.java
 # the renderer (stage 3): parts used only by pending renderer classes (chunk multi-draw's shader patches, occlusion
 # culling and indirect commands, part batching's materials / coatings, the 1.21 VertexConsumer recorder, light boxes,
 # the bulk vertex path), and the mixins of pending renderer parts (QuadSort, ParallelRender)
-dev/lull/optsupport/ProgramCaches.java
 dev/lull/optsupport/Materials.java
 dev/lull/optsupport/LightBoxes.java
 # the event bus step: the event-site rewrite (its mixins are pending above)

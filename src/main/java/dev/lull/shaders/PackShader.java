@@ -1,6 +1,5 @@
 package dev.lull.shaders;
 
-import com.mojang.blaze3d.platform.Window;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.VertexFormat;
 import java.io.ByteArrayInputStream;
@@ -17,7 +16,7 @@ import org.lwjgl.opengl.GL30;
 
 /**
  * A pack's gbuffers / shadow program as a vanilla ShaderInstance, so every vanilla draw path (RenderType -> shader ->
- * setDefaultUniforms -> apply) runs it: built from in-memory resources (a JSON naming the samplers and vanilla's per-draw
+ * uniforms -> apply) runs it: built from in-memory resources (a JSON naming the samplers and vanilla's per-draw
  * uniforms, the translated sources); its va* attributes bound to the vertex format's element order; after vanilla's
  * apply it binds the pack framebuffer for its draw buffers and uploads the pack uniforms (frame values once per frame,
  * ids / stage / derived matrices per draw).
@@ -26,7 +25,6 @@ public final class PackShader extends ShaderInstance {
     final ProgramSet.Program program;
     final PackUniforms.Binding binding;
     private final Matrix4f mv = new Matrix4f(), proj = new Matrix4f();
-    private boolean haveMatrices;
 
     /** the vertex prologue reads the quad's vertices (the drawn buffer must be bound at binding 9) */
     final boolean fetch;
@@ -194,14 +192,6 @@ public final class PackShader extends ShaderInstance {
     }
 
     @Override
-    public void setDefaultUniforms(VertexFormat.Mode mode, Matrix4f frustumMatrix, Matrix4f projectionMatrix, Window window) {
-        super.setDefaultUniforms(mode, frustumMatrix, projectionMatrix, window);
-        mv.set(frustumMatrix);
-        proj.set(projectionMatrix);
-        haveMatrices = true;
-    }
-
-    @Override
     public void apply() {
         super.apply();
         ShaderPipeline pl = ShaderPipeline.current();
@@ -212,12 +202,14 @@ public final class PackShader extends ShaderInstance {
             RenderSystem.disableBlend();   // shadow programs never blend (Iris)
         } else GL30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, pl.targets.framebuffer(program.drawBuffers, false, true));
         pl.uniforms.uploadFrame(binding);
-        if (!haveMatrices) {
-            mv.set(RenderSystem.getModelViewMatrix());
-            proj.set(RenderSystem.getProjectionMatrix());
-        }
+        // the draw's matrices: 1.21.1 kept setDefaultUniforms' arguments; 1.20.1's draw paths set ModelViewMat / ProjMat
+        // themselves (renderChunkLayer from its PoseStack, _drawWithShader from RenderSystem), so they are read back from
+        // those uniforms; a program without them takes RenderSystem's
+        if (MODEL_VIEW_MATRIX != null) mv.set(0, MODEL_VIEW_MATRIX.getFloatBuffer());
+        else mv.set(RenderSystem.getModelViewMatrix());
+        if (PROJECTION_MATRIX != null) proj.set(0, PROJECTION_MATRIX.getFloatBuffer());
+        else proj.set(RenderSystem.getProjectionMatrix());
         pl.uniforms.uploadDraw(binding, mv, proj);
-        haveMatrices = false;
         if (!pl.shadowPhase) pl.applyBlend(program.name);
     }
 

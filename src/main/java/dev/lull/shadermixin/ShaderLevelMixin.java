@@ -2,7 +2,7 @@ package dev.lull.shadermixin;
 
 import dev.lull.shaders.ShaderPipeline;
 import net.minecraft.client.Camera;
-import net.minecraft.client.DeltaTracker;
+import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.client.renderer.GameRenderer;
 import net.minecraft.client.renderer.LevelRenderer;
 import net.minecraft.client.renderer.LightTexture;
@@ -17,9 +17,10 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(LevelRenderer.class)
 public class ShaderLevelMixin {
     @Inject(method = "renderLevel", at = @At(value = "INVOKE", target = "Lcom/mojang/blaze3d/systems/RenderSystem;clear(IZ)V", shift = At.Shift.AFTER, ordinal = 0))
-    private void sleep$beginLevel(DeltaTracker deltaTracker, boolean renderBlockOutline, Camera camera, GameRenderer gameRenderer, LightTexture lightTexture,
-            Matrix4f frustumMatrix, Matrix4f projectionMatrix, CallbackInfo ci) {
-        if (ShaderPipeline.active) ShaderPipeline.current().beginLevel(camera, frustumMatrix, projectionMatrix, deltaTracker.getGameTimeDeltaPartialTick(false));
+    private void sleep$beginLevel(PoseStack poseStack, float partialTick, long finishNanoTime, boolean renderBlockOutline, Camera camera, GameRenderer gameRenderer,
+            LightTexture lightTexture, Matrix4f projectionMatrix, CallbackInfo ci) {
+        // 1.20.1: the view (1.21.1's frustumMatrix) is the PoseStack's top: the camera's rotation, as GameRenderer set it
+        if (ShaderPipeline.active) ShaderPipeline.current().beginLevel(camera, poseStack.last().pose(), projectionMatrix, partialTick);
     }
 
     @ModifyArg(method = "renderLevel", at = @At(value = "INVOKE", target = "Lnet/minecraft/util/profiling/ProfilerFiller;popPush(Ljava/lang/String;)V"))

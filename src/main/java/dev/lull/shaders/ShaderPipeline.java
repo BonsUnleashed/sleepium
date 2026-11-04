@@ -221,9 +221,18 @@ public final class ShaderPipeline {
         ShaderPipelineHooks.resetProgramCache();
     }
 
+    private static boolean otherModWarned;
+
     private static void load() {
         String name = System.getProperty("sleep.shaders");
         if (name == null || name.isBlank() || current != null) return;
+        if (OtherShaderMods.present()) {
+            // the hooks were not applied (sleepium-shaders.mixins.json gives way to Oculus / Iris / OptiFine): a pack
+            // switched on without them would only make the core's paths stand down
+            if (!otherModWarned) System.out.println("[sleep/shaders] " + name + " not loaded: another shader mod (Oculus / Iris / OptiFine) runs packs");
+            otherModWarned = true;
+            return;
+        }
         try {
             current = new ShaderPipeline(Minecraft.getInstance().gameDirectory.toPath(), name);   // on once prepared (loadConfigured)
             ShaderIds.maps = current.ids;
@@ -249,7 +258,7 @@ public final class ShaderPipeline {
         ids = IdMaps.load(src, withOptions);
         System.out.println("[sleep/shaders] ids: oak_leaves " + ids.block(net.minecraft.world.level.block.Blocks.OAK_LEAVES.defaultBlockState())
                 + ", grass_block " + ids.block(net.minecraft.world.level.block.Blocks.GRASS_BLOCK.defaultBlockState())
-                + ", short_grass " + ids.block(net.minecraft.world.level.block.Blocks.SHORT_GRASS.defaultBlockState())
+                + ", short_grass " + ids.block(net.minecraft.world.level.block.Blocks.GRASS.defaultBlockState())
                 + ", water " + ids.block(net.minecraft.world.level.block.Blocks.WATER.defaultBlockState())
                 + ", stone " + ids.block(net.minecraft.world.level.block.Blocks.STONE.defaultBlockState())
                 + "; " + ids.blocks.size() + " states mapped");
@@ -500,7 +509,6 @@ public final class ShaderPipeline {
             deferredDone = true;
             targets.copyDepth(targets.depthTex1);
             for (CompositeProgram cp : deferred) runPass(cp, "deferred", false);
-            if (dev.lull.DrawStats.ON) dev.lull.DrawStats.section("translucent");
             afterPasses();
             bindTextures("gbuffers");
             bindGbuffers(BUFFER0);
@@ -538,7 +546,6 @@ public final class ShaderPipeline {
         if (finalPass != null && finalPass.id != 0) runPass(finalPass, "composite", true);
         else blitToMain();
         restoreVanillaState();
-        if (dev.lull.DrawStats.ON) dev.lull.DrawStats.section("(after passes)");
     }
 
     /** -Dsleep.shaders.show=gbuffers|<pass> (+ showBuffer=N): colortex N as it is after that point, on the screen */
@@ -562,7 +569,6 @@ public final class ShaderPipeline {
     }
 
     private void runPass(CompositeProgram cp, String stage, boolean isFinal) {
-        if (dev.lull.DrawStats.ON) dev.lull.DrawStats.section("pass/" + cp.program.name);   // GPU time per pass (string only with drawStats)
         for (int i = 0; i < RenderTargets.COLOR_TEX; i++) if (cp.wantsMipmap[i]) targets.generateMipmap(i);
         bindTextures(stage, cp.wantsMipmap);
         int[] db = cp.program.drawBuffers;

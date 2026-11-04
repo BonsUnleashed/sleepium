@@ -12,8 +12,7 @@ import org.spongepowered.asm.mixin.extensibility.IMixinInfo;
  */
 public final class ShaderMixinPlugin implements IMixinConfigPlugin {
     static boolean otherShaderMod() {
-        var mods = net.neoforged.fml.loading.LoadingModList.get();
-        return mods != null && (mods.getModFileById("iris") != null || mods.getModFileById("oculus") != null || mods.getModFileById("optifine") != null);
+        return dev.lull.shaders.OtherShaderMods.present();
     }
 
     @Override public void onLoad(String mixinPackage) {}

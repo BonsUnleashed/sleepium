@@ -13,22 +13,24 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-/** An armour piece's item id (currentRenderedItemId) on its vertices, as Iris gives it (packs pick armour materials by it). */
+/**
+ * An armour piece's item id (currentRenderedItemId) on its vertices, as Iris gives it (packs pick armour materials by it).
+ * (1.20.1's renderArmorPiece has no animation floats.)
+ */
 @Mixin(HumanoidArmorLayer.class)
 public class ShaderArmorIdsMixin<T extends LivingEntity, M extends HumanoidModel<T>, A extends HumanoidModel<T>> {
     @Unique
     private static int sleep$saved;
 
-    @Inject(method = "renderArmorPiece(Lcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/MultiBufferSource;Lnet/minecraft/world/entity/LivingEntity;Lnet/minecraft/world/entity/EquipmentSlot;ILnet/minecraft/client/model/HumanoidModel;FFFFFF)V",
+    @Inject(method = "renderArmorPiece(Lcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/MultiBufferSource;Lnet/minecraft/world/entity/LivingEntity;Lnet/minecraft/world/entity/EquipmentSlot;ILnet/minecraft/client/model/HumanoidModel;)V",
             at = @At("HEAD"))
-    private void sleep$armorId(PoseStack pose, MultiBufferSource buffers, T entity, EquipmentSlot slot, int light, A model, float a, float b, float c, float d,
-            float e, float f, CallbackInfo ci) {
+    private void sleep$armorId(PoseStack pose, MultiBufferSource buffers, T entity, EquipmentSlot slot, int light, A model, CallbackInfo ci) {
         if (!ShaderIds.on) return;
         sleep$saved = ShaderIds.item1;
         ShaderIds.item1 = ShaderIds.maps.item(entity.getItemBySlot(slot).getItem()) + 1;
     }
 
-    @Inject(method = "renderArmorPiece(Lcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/MultiBufferSource;Lnet/minecraft/world/entity/LivingEntity;Lnet/minecraft/world/entity/EquipmentSlot;ILnet/minecraft/client/model/HumanoidModel;FFFFFF)V",
+    @Inject(method = "renderArmorPiece(Lcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/MultiBufferSource;Lnet/minecraft/world/entity/LivingEntity;Lnet/minecraft/world/entity/EquipmentSlot;ILnet/minecraft/client/model/HumanoidModel;)V",
             at = @At("RETURN"))
     private void sleep$armorIdEnd(CallbackInfo ci) {
         if (ShaderIds.on) ShaderIds.item1 = sleep$saved;

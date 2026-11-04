@@ -50,7 +50,7 @@ public final class ProgramBinaryCache {
                     && Boolean.getBoolean("sleep.shaders.binaryCache");
             if (o) {
                 driver = GL11.glGetString(GL11.GL_VENDOR) + "|" + GL11.glGetString(GL11.GL_RENDERER) + "|" + GL11.glGetString(GL11.GL_VERSION);
-                dir = net.neoforged.fml.loading.FMLPaths.GAMEDIR.get().resolve(dev.lull.SleepOut.ROOT).resolve("shader-cache");
+                dir = net.minecraftforge.fml.loading.FMLPaths.GAMEDIR.get().resolve(dev.lull.SleepOut.ROOT).resolve("shader-cache");
             }
             on = o;
         }

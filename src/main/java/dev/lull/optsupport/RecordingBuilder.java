@@ -158,10 +158,35 @@ public final class RecordingBuilder extends DefaultedVertexConsumer implements B
         }
     }
 
+    /** a shaderpack's ids, as BufferBuilder gets them (ShaderVertexIdsMixin) */
+    @Override
+    public VertexConsumer overlayCoords(int u, int v) {
+        if (dev.lull.shaders.ShaderIds.on && format == com.mojang.blaze3d.vertex.DefaultVertexFormat.NEW_ENTITY) {
+            int id = dev.lull.shaders.ShaderIds.slot1;
+            u = u & 0xFF | (id & 0xFF) << 8;
+            v = v & 0xFF | (id >> 8 & 0xFF) << 8;
+        }
+        return BufferVertexConsumer.super.overlayCoords(u, v);
+    }
+
+    @Override
+    public VertexConsumer uv2(int u, int v) {
+        if (dev.lull.shaders.ShaderIds.on && format == com.mojang.blaze3d.vertex.DefaultVertexFormat.NEW_ENTITY) {
+            int id = dev.lull.shaders.ShaderIds.item1;
+            u = u & 0xFF | (id & 0xFF) << 8;
+            v = v & 0xFF | (id >> 8 & 0xFF) << 8;
+        }
+        return BufferVertexConsumer.super.uv2(u, v);
+    }
+
     @Override
     public void vertex(float x, float y, float z, float red, float green, float blue, float alpha, float texU, float texV, int overlayUV, int lightmapUV,
             float normalX, float normalY, float normalZ) {   // BufferBuilder's fast path
         if (defaultColorSet) throw new IllegalStateException();
+        if (dev.lull.shaders.ShaderIds.on && format == com.mojang.blaze3d.vertex.DefaultVertexFormat.NEW_ENTITY) {
+            overlayUV = dev.lull.shaders.ShaderIds.overlay(overlayUV);
+            lightmapUV = dev.lull.shaders.ShaderIds.light(lightmapUV);
+        }
         if (!fastFormat) {
             super.vertex(x, y, z, red, green, blue, alpha, texU, texV, overlayUV, lightmapUV, normalX, normalY, normalZ);
             return;

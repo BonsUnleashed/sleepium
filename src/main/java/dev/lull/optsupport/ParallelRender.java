@@ -425,7 +425,7 @@ public final class ParallelRender {
 
     private static boolean eligible(Entity e, MultiBufferSource buffers) {
         if (!DISPATCH_UNTOUCHED) return no(0);
-        // (1.21.1: no(1) under sleep's shaderpack pipeline - its vertex ids are render-thread state; not on 1.20.1 yet)
+        if (dev.lull.shaders.ShaderPipeline.active) return no(1);   // the shaderpack's vertex ids are render-thread state
         if (!WORKER_REFUSED.isEmpty() && WORKER_REFUSED.contains(e.getType())) return no(2);
         Minecraft mc = Minecraft.getInstance();
         EntityRenderDispatcher d = mc.getEntityRenderDispatcher();

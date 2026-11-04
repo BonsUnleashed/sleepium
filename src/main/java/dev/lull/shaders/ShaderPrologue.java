@@ -70,9 +70,11 @@ final class ShaderPrologue {
         if (attrs.isEmpty() && !raw[1] && !raw[2] && !idsVs && !idsFs && !multi && !parts) return new String[] {vsh, fsh};
         // the vertex prologue
         int stride = format.getVertexSize() / 4;
-        int pos = format.contains(VertexFormatElement.POSITION) ? format.getOffset(VertexFormatElement.POSITION) / 4 : -1;
-        int uv = format.contains(VertexFormatElement.UV0) ? format.getOffset(VertexFormatElement.UV0) / 4 : -1;
-        int nrm = format.contains(VertexFormatElement.NORMAL) ? format.getOffset(VertexFormatElement.NORMAL) : -1;
+        int pos = offset(format, com.mojang.blaze3d.vertex.DefaultVertexFormat.ELEMENT_POSITION);
+        pos = pos >= 0 ? pos / 4 : -1;
+        int uv = offset(format, com.mojang.blaze3d.vertex.DefaultVertexFormat.ELEMENT_UV0);
+        uv = uv >= 0 ? uv / 4 : -1;
+        int nrm = offset(format, com.mojang.blaze3d.vertex.DefaultVertexFormat.ELEMENT_NORMAL);
         boolean quads = pos >= 0 && uv >= 0 && needFetch;
         globals.append("in ivec2 sl_rawUV1;\nin ivec2 sl_rawUV2;\nflat out ivec3 sl_ids;\n");
         if (quads) {
@@ -171,5 +173,11 @@ final class ShaderPrologue {
         }
         for (; i < lines.length; i++) rest.append(lines[i]).append(i + 1 < lines.length ? "\n" : "");
         return head + lead + globals + rest;
+    }
+
+    /** an element's byte offset in the format, -1 if absent (1.20.1's VertexFormat finds offsets by element index) */
+    private static int offset(VertexFormat format, VertexFormatElement e) {
+        int i = format.getElements().indexOf(e);
+        return i < 0 ? -1 : format.getOffset(i);
     }
 }

@@ -10,7 +10,6 @@ public final class ProgramCaches {
     public static void forget(int program) {
         ChunkMultiDraw.forgetProgram(program);
         LightVolumes.forgetProgram(program);
-        Materials.forgetProgram(program);
-        PartBatch.forgetProgram(program);
+        // (Materials / PartBatch forget theirs here too, with part batching's port: port-pending.txt)
     }
 }

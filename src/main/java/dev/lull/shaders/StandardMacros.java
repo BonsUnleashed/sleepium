@@ -21,7 +21,7 @@ public final class StandardMacros {
     /** render thread (GL strings); features: the IRIS_FEATURE_ flags this engine has */
     public static List<String> build(List<String> features) {
         List<String> m = new ArrayList<>();
-        m.add("MC_VERSION 12101");
+        m.add("MC_VERSION 12001");   // Minecraft 1.20.1 (packs pick version-specific block names and features by it)
         int glMajor = GL11.glGetInteger(GL30.GL_MAJOR_VERSION), glMinor = GL11.glGetInteger(GL30.GL_MINOR_VERSION);
         m.add("MC_GL_VERSION " + (glMajor * 100 + glMinor * 10));
         String glsl = GL11.glGetString(0x8B8C);   // GL_SHADING_LANGUAGE_VERSION, "4.60 NVIDIA"

@@ -31,7 +31,7 @@ public class ShaderGameRendererMixin {
     }
 
     @Inject(method = "renderLevel", at = @At("TAIL"))
-    private void sleep$endLevel(net.minecraft.client.DeltaTracker deltaTracker, CallbackInfo ci) {
+    private void sleep$endLevel(float partialTicks, long finishTimeNano, com.mojang.blaze3d.vertex.PoseStack poseStack, CallbackInfo ci) {
         if (ShaderPipeline.active) ShaderPipeline.current().endLevel();
     }
 }

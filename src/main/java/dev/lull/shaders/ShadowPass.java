@@ -12,7 +12,7 @@ import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.client.renderer.ShaderInstance;
 import net.minecraft.client.renderer.ViewArea;
-import net.minecraft.client.renderer.chunk.SectionRenderDispatcher;
+import net.minecraft.client.renderer.chunk.ChunkRenderDispatcher;
 import net.minecraft.core.BlockPos;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Entity;
@@ -28,11 +28,14 @@ import org.lwjgl.opengl.GL30;
  * built sections in the shadow box (opaque layers, then shadowtex1 copied, then the translucent layer), the entities
  * within entityShadowDistanceMul x shadowDistance and the sections' block entities (through the same dispatchers, so
  * the render cache replays them). The section list is a reused array.
+ *
+ * <p>1.20.1: the sections are ChunkRenderDispatcher.RenderChunk (ViewArea.chunks), the model-view stack is a PoseStack
+ * (1.21.1: a Matrix4fStack), and a layer's shader setup is renderChunkLayer's own (no setDefaultUniforms).
  */
 final class ShadowPass {
     private final ShaderPipeline pl;
     final ShadowTargets targets;
-    private SectionRenderDispatcher.RenderSection[] list = new SectionRenderDispatcher.RenderSection[1024];
+    private ChunkRenderDispatcher.RenderChunk[] list = new ChunkRenderDispatcher.RenderChunk[1024];
     private int count;
     private final PoseStack pose = new PoseStack();
     private final Matrix4f mvp = new Matrix4f();
@@ -40,7 +43,7 @@ final class ShadowPass {
     long sections, draws, entities, blockEntities, nanos, multiLayers, collectNanos, opaqueNanos, entityNanos, translucentNanos, drawCallNanos, setupNanos;
 
     /** the collected sections as an Iterable (one object, reused) */
-    private final Iterable<SectionRenderDispatcher.RenderSection> view = () -> new java.util.Iterator<>() {
+    private final Iterable<ChunkRenderDispatcher.RenderChunk> view = () -> new java.util.Iterator<>() {
         int i;
 
         @Override
@@ -49,7 +52,7 @@ final class ShadowPass {
         }
 
         @Override
-        public SectionRenderDispatcher.RenderSection next() {
+        public ChunkRenderDispatcher.RenderChunk next() {
             return list[i++];
         }
     };
@@ -69,9 +72,10 @@ final class ShadowPass {
         targets.clear();
         Matrix4f savedProj = new Matrix4f(RenderSystem.getProjectionMatrix());
         VertexSorting savedSorting = RenderSystem.getVertexSorting();
-        var mvs = RenderSystem.getModelViewStack();
-        mvs.pushMatrix();
-        mvs.set(u.shadowModelView);
+        PoseStack mvs = RenderSystem.getModelViewStack();
+        mvs.pushPose();
+        mvs.setIdentity();
+        mvs.mulPoseMatrix(u.shadowModelView);
         RenderSystem.applyModelViewMatrix();
         RenderSystem.setProjectionMatrix(new Matrix4f(u.shadowProjection), VertexSorting.ORTHOGRAPHIC_Z);
         GL11.glViewport(0, 0, targets.size, targets.size);
@@ -102,7 +106,7 @@ final class ShadowPass {
             dev.lull.optsupport.ChunkMultiDraw.endOtherLists();
             pl.shadowPhase = false;
             pl.shadowBlockEntitiesPhase = false;
-            mvs.popMatrix();
+            mvs.popPose();
             RenderSystem.applyModelViewMatrix();
             RenderSystem.setProjectionMatrix(savedProj, savedSorting);
         }
@@ -116,8 +120,8 @@ final class ShadowPass {
         mvp.set(pl.uniforms.shadowProjection).mul(pl.uniforms.shadowModelView);
         float dist = pl.uniforms.shadowDistance;
         float r = 14f / dist;   // a section's half diagonal in the shadow box's units
-        for (SectionRenderDispatcher.RenderSection s : va.sections) {
-            if (s == null || s.getCompiled() == SectionRenderDispatcher.CompiledSection.UNCOMPILED) continue;
+        for (ChunkRenderDispatcher.RenderChunk s : va.chunks) {
+            if (s == null || s.getCompiledChunk() == ChunkRenderDispatcher.CompiledChunk.UNCOMPILED) continue;
             BlockPos o = s.getOrigin();
             float cx = (float) (o.getX() + 8 - cam.x), cy = (float) (o.getY() + 8 - cam.y), cz = (float) (o.getZ() + 8 - cam.z);
             if (cx * cx + cz * cz > (dist + 16) * (dist + 16)) continue;
@@ -131,7 +135,7 @@ final class ShadowPass {
         sections += count;
     }
 
-    /** one terrain layer, the way LevelRenderer.renderSectionLayer draws it */
+    /** one terrain layer, the way LevelRenderer.renderChunkLayer draws it */
     private void layer(RenderType type, Vec3 cam) {
         long s0 = System.nanoTime();
         type.setupRenderState();
@@ -140,7 +144,7 @@ final class ShadowPass {
             type.clearRenderState();
             return;
         }
-        sh.setDefaultUniforms(VertexFormat.Mode.QUADS, pl.uniforms.shadowModelView, pl.uniforms.shadowProjection, Minecraft.getInstance().getWindow());
+        uniforms(sh, pl.uniforms.shadowModelView, pl.uniforms.shadowProjection);
         sh.apply();
         Uniform off = sh.CHUNK_OFFSET;
         setupNanos += System.nanoTime() - s0;
@@ -159,8 +163,8 @@ final class ShadowPass {
             if (multi) multiLayers++;
         }
         for (int i = 0; i < count && !multi; i++) {
-            SectionRenderDispatcher.RenderSection s = list[i];
-            if (s.getCompiled().isEmpty(type)) continue;
+            ChunkRenderDispatcher.RenderChunk s = list[i];
+            if (s.getCompiledChunk().isEmpty(type)) continue;
             VertexBuffer vb = s.getBuffer(type);
             BlockPos o = s.getOrigin();
             if (off != null) {
@@ -178,6 +182,25 @@ final class ShadowPass {
         VertexBuffer.unbind();
         type.clearRenderState();
     }
+
+    /** renderChunkLayer's sampler and uniform setup (1.21.1: ShaderInstance.setDefaultUniforms) */
+    private static void uniforms(ShaderInstance sh, Matrix4f modelView, Matrix4f projection) {
+        for (int i = 0; i < 12; ++i) sh.setSampler(SAMPLERS[i], RenderSystem.getShaderTexture(i));
+        if (sh.MODEL_VIEW_MATRIX != null) sh.MODEL_VIEW_MATRIX.set(modelView);
+        if (sh.PROJECTION_MATRIX != null) sh.PROJECTION_MATRIX.set(projection);
+        if (sh.COLOR_MODULATOR != null) sh.COLOR_MODULATOR.set(RenderSystem.getShaderColor());
+        if (sh.GLINT_ALPHA != null) sh.GLINT_ALPHA.set(RenderSystem.getShaderGlintAlpha());
+        if (sh.FOG_START != null) sh.FOG_START.set(RenderSystem.getShaderFogStart());
+        if (sh.FOG_END != null) sh.FOG_END.set(RenderSystem.getShaderFogEnd());
+        if (sh.FOG_COLOR != null) sh.FOG_COLOR.set(RenderSystem.getShaderFogColor());
+        if (sh.FOG_SHAPE != null) sh.FOG_SHAPE.set(RenderSystem.getShaderFogShape().getIndex());
+        if (sh.TEXTURE_MATRIX != null) sh.TEXTURE_MATRIX.set(RenderSystem.getTextureMatrix());
+        if (sh.GAME_TIME != null) sh.GAME_TIME.set(RenderSystem.getShaderGameTime());
+        RenderSystem.setupShaderLights(sh);
+    }
+
+    private static final String[] SAMPLERS = {"Sampler0", "Sampler1", "Sampler2", "Sampler3", "Sampler4", "Sampler5", "Sampler6", "Sampler7", "Sampler8",
+            "Sampler9", "Sampler10", "Sampler11"};
 
     private void entities(Minecraft mc, Vec3 cam, float pt, MultiBufferSource.BufferSource buffers) {
         var d = mc.getEntityRenderDispatcher();
@@ -206,7 +229,7 @@ final class ShadowPass {
         double max2 = (double) pl.uniforms.shadowDistance * pl.uniforms.shadowDistance;
         pl.shadowBlockEntitiesPhase = true;
         for (int i = 0; i < count; i++) {
-            for (BlockEntity be : list[i].getCompiled().getRenderableBlockEntities()) {
+            for (BlockEntity be : list[i].getCompiledChunk().getRenderableBlockEntities()) {
                 BlockPos p = be.getBlockPos();
                 double x = p.getX() - cam.x, y = p.getY() - cam.y, z = p.getZ() - cam.z;
                 if (x * x + z * z > max2) continue;

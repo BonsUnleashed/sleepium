@@ -680,12 +680,9 @@ public final class ChunkMultiDraw {
         return !els.isEmpty() && els.get(0) == DefaultVertexFormat.ELEMENT_POSITION;
     }
 
-    /**
-     * The shaderpack pipeline (dev/lull/shaders) is not on 1.20.1 yet (port-pending.txt): its paths here (the shadow
-     * pass's copies of the translucent layer, the vertex prologue's arena binding) stay unused until it comes over.
-     */
+    /** sleep's shaderpack pipeline runs a pack (dev/lull/shaders): its shadow pass's copies, the prologue's arena binding */
     private static boolean shaderPipeline() {
-        return false;
+        return dev.lull.shaders.ShaderPipeline.active;
     }
 
     private static boolean draw0(RenderType layer, Iterable<?> visible, double x, double y, double z,
