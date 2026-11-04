@@ -1,24 +1,24 @@
 package dev.lull.geomixin;
 
 import dev.lull.optsupport.ParallelRender;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.DoubleSupplier;
-import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Overwrite;
 import org.spongepowered.asm.mixin.Shadow;
-import software.bernie.geckolib.GeckoLibConstants;
-import software.bernie.geckolib.loading.math.value.Variable;
+import software.bernie.geckolib.core.molang.LazyVariable;
 
 /**
- * GeckoLib's Molang variables are global (query.anim_time is set by every controller before its keyframes are read):
- * inside a ParallelRender job a set goes to the job's own values and a get reads them first, then the global one
- * (what was set outside rendering). Outside jobs exactly GeckoLib's code.
+ * GeckoLib's Molang variables are global (query.anim_time is set by every controller before its keyframes are read,
+ * GeoModel.applyMolangQueries sets the entity's queries before each render): inside a ParallelRender job a set goes to
+ * the job's own values and a get reads them first, then the global one (what was set outside rendering). Outside jobs
+ * exactly GeckoLib's code.
+ * <p>
+ * GeckoLib 4.8.4: the variables are LazyVariable (a supplier over mclib's Variable, which it overrides whole: get and
+ * both sets); expressions hold them directly, compound expressions' temporaries included.
  */
-@Mixin(value = Variable.class, remap = false)
+@Mixin(value = LazyVariable.class, remap = false)
 public abstract class MolangVariableMixin {
-    @Shadow @Final private String name;
-    @Shadow @Final private AtomicReference<DoubleSupplier> value;
+    @Shadow private DoubleSupplier valueSupplier;
 
     /**
      * @author probe
@@ -28,12 +28,7 @@ public abstract class MolangVariableMixin {
     public double get() {
         var locals = ParallelRender.jobLocals();
         DoubleSupplier s = locals != null ? (DoubleSupplier) locals.get(this) : null;
-        try {
-            return (s != null ? s : this.value.get()).getAsDouble();
-        } catch (Exception ex) {
-            GeckoLibConstants.LOGGER.error("Attempted to use Molang variable for incompatible animatable type (" + this.name + "). An animation json needs to be fixed", ex.getMessage());
-            return 0;
-        }
+        return (s != null ? s : this.valueSupplier).getAsDouble();
     }
 
     /**
@@ -41,7 +36,7 @@ public abstract class MolangVariableMixin {
      * @reason job-local values (class comment)
      */
     @Overwrite
-    public void set(final double v) {
+    public void set(double v) {
         set(() -> v);
     }
 
@@ -50,9 +45,9 @@ public abstract class MolangVariableMixin {
      * @reason job-local values (class comment)
      */
     @Overwrite
-    public void set(final DoubleSupplier v) {
+    public void set(DoubleSupplier v) {
         var locals = ParallelRender.jobLocals();
         if (locals != null) locals.put(this, v);
-        else this.value.set(v);
+        else this.valueSupplier = v;
     }
 }

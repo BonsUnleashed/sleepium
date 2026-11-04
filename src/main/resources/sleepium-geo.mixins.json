@@ -6,7 +6,12 @@
   "compatibilityLevel": "JAVA_17",
   "refmap": "sleepium.refmap.json",
   "client": [
-    "AnimStreamMixin"
+    "AnimStreamMixin",
+    "GeoModelWorkerMixin",
+    "MolangActorMixin",
+    "MolangVariableMixin",
+    "KeyframeJournalMixin",
+    "GeoTextureDimsMixin"
   ],
   "injectors": {
     "defaultRequire": 1

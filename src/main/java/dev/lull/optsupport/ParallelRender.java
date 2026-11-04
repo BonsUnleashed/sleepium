@@ -181,6 +181,10 @@ public final class ParallelRender {
          */
         final org.joml.Matrix4f basePose = new org.joml.Matrix4f();
         final org.joml.Matrix3f baseNormal = new org.joml.Matrix3f();
+        /** what the worker passed for renderEntity's dispatcher call (merge compares the real call's with them) */
+        double x, y, z;
+        float yaw;
+        int light;
         MultiBufferSource buffers;
         boolean parallel;
         volatile boolean done, ok;
@@ -360,12 +364,53 @@ public final class ParallelRender {
     }
 
     /**
-     * A job renders the way renderEntity + EntityRenderDispatcher.render do, without calling them: what another mod's
-     * mixin adds there (Iris: the entity id its shaders read, its per-entity render type wrap) would be lost on a
-     * worker. Such a mod changes them: every entity stays on the render thread.
+     * A job renders the way EntityRenderDispatcher.render does, without calling it: what another mod's mixin adds there
+     * (Iris: the entity id its shaders read, its per-entity render type wrap) would be lost on a worker. Such a mod
+     * changes it: every entity stays on the render thread.
+     * <p>
+     * LevelRenderer.renderEntity is not repeated on a worker: a job is merged through it on the render thread
+     * ({@link #merge}), so a mod's injections there run in place, in entity order (playerAnimator's TAIL inject on
+     * 1.20.1). Only an overwrite of it, or a redirect of its dispatcher call (where the merge hooks in), keeps every
+     * entity on the render thread; a mod that changes the call's arguments is caught by the merge's argument check.
      */
     static final boolean DISPATCH_UNTOUCHED = !MixinTouch.touched("net/minecraft/client/renderer/entity/EntityRenderDispatcher", "render")
-            && !MixinTouch.touched("net/minecraft/client/renderer/LevelRenderer", "renderEntity");
+            && !MixinTouch.overwritten("net/minecraft/client/renderer/LevelRenderer", "renderEntity")
+            && !MixinTouch.redirected("net/minecraft/client/renderer/LevelRenderer", "renderEntity", "render");
+
+    /** the job being merged through renderEntity (render thread), and whether its dispatcher call took the job's bytes */
+    private static Job merging;
+    private static boolean merged;
+    public static long mergeFallbacks;
+
+    /**
+     * ParallelEntitiesMixin, in place of renderEntity's dispatcher call: while a job is merged and the call is the one
+     * the worker repeated (same entity, coordinates, yaw, partial tick, light, buffers and pose - a mod's injection
+     * before it may have changed them), the job's side effects and bytes go in here; false: the caller renders it.
+     */
+    public static boolean merge(Entity e, double x, double y, double z, float yaw, float pt, PoseStack pose, MultiBufferSource buffers, int light) {
+        Job j = merging;
+        if (j == null || j.entity != e) return false;
+        merging = null;
+        if (x != j.x || y != j.y || z != j.z || yaw != j.yaw || pt != j.pt || light != j.light || buffers != j.buffers
+                || !pose.last().pose().equals(j.basePose) || !pose.last().normal().equals(j.baseNormal)) {
+            mergeFallbacks++;   // the worker's bytes are not this call's: the render thread renders it (its journal dropped)
+            j.calls.clear();
+            return false;
+        }
+        for (int c = 0; c < j.calls.size(); c++) j.calls.get(c).execute();   // the job's deferred side effects, in place
+        journaled += j.calls.size();
+        j.calls.clear();
+        RenderCache.append(j.out, j.buffers);
+        merged = true;
+        return true;
+    }
+
+    /**
+     * -Dlab.prender.listenersOnWorkers=true (experiment, not safe in general): entities go to workers although an
+     * entity render event has listeners - the listeners then run on the worker. For measuring the GeckoLib adapter
+     * under mods whose RenderLivingEvent listeners act on players only (Cursed Fate's / KCR's MCreator procedures).
+     */
+    private static final boolean LISTENERS_ON_WORKERS = Boolean.getBoolean("lab.prender.listenersOnWorkers");
 
     /** -Dlab.prender.why=true: why entities stayed on the render thread (counts in the report) */
     private static final boolean WHY = Boolean.getBoolean("lab.prender.why");
@@ -387,7 +432,7 @@ public final class ParallelRender {
         if (LIB_UNSAFE.get(d.getRenderer(e).getClass())) return no(3);
         if (buffers != mc.renderBuffers().bufferSource() || e instanceof AbstractClientPlayer || e.hasCustomName() || e.displayFireAnimation()
                 || d.shouldRenderHitBoxes()) return no(4);
-        if (listened) return no(5);
+        if (listened && !LISTENERS_ON_WORKERS) return no(5);
         if (dev.lull.api.Compat.parallelRenderExcluded(e)) return no(6);
         if (!(!Boolean.getBoolean("lab.opt.RenderCacheMixin") || RenderCache.animated(e) || dev.lull.api.Compat.renderCacheExcluded(e))) return no(7);
         // with the render cache on: what it draws the vanilla way (animated, or excluded from it by Compat)
@@ -413,11 +458,16 @@ public final class ParallelRender {
                 j.await();
                 if (j.ok) {
                     if (VERIFY) verify(inv, j);
-                    for (int c = 0; c < j.calls.size(); c++) j.calls.get(c).execute();   // the job's deferred side effects, in place
-                    journaled += j.calls.size();
-                    j.calls.clear();
-                    RenderCache.append(j.out, j.buffers);
-                    parallel++;
+                    // through vanilla's renderEntity: its dispatcher call takes the job's bytes (merge)
+                    merging = j;
+                    merged = false;
+                    try {
+                        inv.sleep$renderEntity(j.entity, j.camX, j.camY, j.camZ, j.pt, j.pose, j.buffers);
+                    } finally {
+                        merging = null;
+                    }
+                    if (merged) parallel++;
+                    else sequential++;
                     j.entity = null;
                     continue;
                 }
@@ -451,6 +501,8 @@ public final class ParallelRender {
         for (int i = 0; i < Math.max(a.types.size(), b.types.size()); i++)
             sb.append("\n    ").append(i < a.types.size() ? a.types.get(i).toString().substring(0, Math.min(60, a.types.get(i).toString().length())) + " x" + a.counts[i] : "-")
                     .append(" | ").append(i < b.types.size() ? b.types.get(i).toString().substring(0, Math.min(60, b.types.get(i).toString().length())) + " x" + b.counts[i] : "-");
+        for (int i = 0; i < Math.min(a.types.size(), b.types.size()); i++)
+            if (a.types.get(i) != b.types.get(i)) sb.append("\n    type ").append(i).append(" is another object (a render type made per call)");
         int n = Math.min(a.size, b.size);
         for (int i = 0; i < n; i++) {
             byte x = org.lwjgl.system.MemoryUtil.memGetByte(a.mem + i), y = org.lwjgl.system.MemoryUtil.memGetByte(b.mem + i);
@@ -473,6 +525,11 @@ public final class ParallelRender {
         double z = Mth.lerp((double) pt, e.zOld, e.getZ()) - j.camZ;
         float yaw = Mth.lerp(pt, e.yRotO, e.getYRot());
         int light = r.getPackedLightCoords(e, pt);
+        j.x = x;   // the dispatcher call's arguments, checked at the merge
+        j.y = y;
+        j.z = z;
+        j.yaw = yaw;
+        j.light = light;
         RenderCache.Recorder rec = s.recorder;
         rec.reset();
         PoseStack pose = s.pose;   // one per renderer set (a set serves one job at a time): its pose pool persists
@@ -504,7 +561,7 @@ public final class ParallelRender {
             for (int i = 0; i < WHY_N.length; i++) if (WHY_N[i] > 0) w.append(' ').append(WHY_NAMES[i]).append(' ').append(WHY_N[i]).append(';');
             System.out.println(w);
         }
-        return String.format(java.util.Locale.ROOT, "parallel render: %d workers, jobs %d, on workers %d (render thread helped %d), on the render thread %d, failed %d, refused %d, journaled calls %d%s", THREADS, jobs, parallel,
-                helped, sequential, failed, refused, journaled, (WORKER_REFUSED.isEmpty() ? "" : ", kept on the render thread " + WORKER_REFUSED) + (VERIFY ? ", verified " + verified + ", mismatches " + mismatches : ""));
+        return String.format(java.util.Locale.ROOT, "parallel render: %d workers, jobs %d, on workers %d (render thread helped %d), on the render thread %d (of them merges that fell back %d), failed %d, refused %d, journaled calls %d%s", THREADS, jobs, parallel,
+                helped, sequential, mergeFallbacks, failed, refused, journaled, (WORKER_REFUSED.isEmpty() ? "" : ", kept on the render thread " + WORKER_REFUSED) + (VERIFY ? ", verified " + verified + ", mismatches " + mismatches : ""));
     }
 }

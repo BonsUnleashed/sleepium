@@ -1,31 +1,34 @@
 package dev.lull.geomixin;
 
-import dev.lull.optsupport.GeoParallel;
 import dev.lull.optsupport.ParallelRender;
-import org.objectweb.asm.Opcodes;
+import java.util.Map;
+import java.util.function.Function;
 import org.spongepowered.asm.mixin.Mixin;
-import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Redirect;
-import software.bernie.geckolib.loading.math.MolangQueries;
+import software.bernie.geckolib.core.molang.MolangParser;
 
-/** GeckoLib's Molang actor (the object being animated, one static field): per job inside ParallelRender jobs. */
-@Mixin(value = MolangQueries.class, remap = false)
+/**
+ * GeckoLib's Molang state outside the variables' values, inside ParallelRender jobs. 1.21's GeckoLib (4.9) keeps the
+ * actor (the object being animated) in one static field, made per job here; 4.8.4 has no actor - its queries are
+ * suppliers set into the variables (job-local: MolangVariableMixin) - but looks every variable up by name in one static
+ * map (MolangParser.VARIABLES, a fastutil hash map, not safe for a write beside reads) and adds a name it does not know
+ * yet. Lookups are made under the map's lock; a name not there yet inside a job hands the job to the render thread,
+ * which adds it (from then on workers find it).
+ */
+@Mixin(value = MolangParser.class, remap = false)
+@SuppressWarnings({"rawtypes", "unchecked"})
 public abstract class MolangActorMixin {
-    @Shadow private static MolangQueries.Actor<?> ACTOR;
-
-    @Redirect(method = {"updateActor", "clearActor"}, at = @At(value = "FIELD", opcode = Opcodes.PUTSTATIC,
-            target = "Lsoftware/bernie/geckolib/loading/math/MolangQueries;ACTOR:Lsoftware/bernie/geckolib/loading/math/MolangQueries$Actor;"))
-    private static void sleep$put(MolangQueries.Actor<?> actor) {
-        var locals = ParallelRender.jobLocals();
-        if (locals != null) locals.put(GeoParallel.ACTOR_KEY, actor);
-        else ACTOR = actor;
-    }
-
-    @Redirect(method = "getActor", at = @At(value = "FIELD", opcode = Opcodes.GETSTATIC,
-            target = "Lsoftware/bernie/geckolib/loading/math/MolangQueries;ACTOR:Lsoftware/bernie/geckolib/loading/math/MolangQueries$Actor;"))
-    private static MolangQueries.Actor<?> sleep$get() {
-        var locals = ParallelRender.jobLocals();
-        return locals != null ? (MolangQueries.Actor<?>) locals.get(GeoParallel.ACTOR_KEY) : ACTOR;
+    @Redirect(method = "getVariable(Ljava/lang/String;)Lsoftware/bernie/geckolib/core/molang/LazyVariable;", at = @At(value = "INVOKE",
+            target = "Ljava/util/Map;computeIfAbsent(Ljava/lang/Object;Ljava/util/function/Function;)Ljava/lang/Object;"))
+    private Object sleep$lookup(Map map, Object name, Function make) {
+        synchronized (map) {
+            Object v = map.get(name);
+            if (v != null) return v;
+            if (ParallelRender.inJob()) throw ParallelRender.REFUSE_NOT_READY;
+            v = make.apply(name);
+            map.put(name, v);
+            return v;
+        }
     }
 }

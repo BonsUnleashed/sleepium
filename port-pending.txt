@@ -5,14 +5,9 @@
 dev/lull/catmixin/**
 dev/lull/veilmixin/**
 dev/lull/flwmixin/**
-# GeckoLib (4.8.4 on 1.20.1): AnimStreamMixin + GeoMixinPlugin ported; the parallel-render ones wait for ParallelRender,
-# MolangJit for GeckoLib 4.8.4's Molang (mclib's IValue tree, not 4.9's MathValue: a rewrite, and Molang is not in the
+# GeckoLib (4.8.4 on 1.20.1): AnimStreamMixin, GeoMixinPlugin and the parallel-render ones ported; GeoCubes waits for
+# PartBatch (bones from VRAM), MolangJit for GeckoLib 4.8.4's Molang (mclib's IValue tree, not 4.9's MathValue: a rewrite, and Molang is not in the
 # Cursed Fate profile)
-dev/lull/geomixin/GeoModelWorkerMixin.java
-dev/lull/geomixin/MolangActorMixin.java
-dev/lull/geomixin/MolangVariableMixin.java
-dev/lull/geomixin/KeyframeJournalMixin.java
-dev/lull/geomixin/GeoTextureDimsMixin.java
 dev/lull/geomixin/GeoCubesMixin.java
 dev/lull/geomixin/MolangJitMixin.java
 # the shaderpack pipeline and the settings screen
@@ -32,7 +27,6 @@ dev/lull/optsupport/SectionLists.java
 dev/lull/optsupport/LightVolumes.java
 dev/lull/optsupport/QuadSort.java
 dev/lull/optsupport/ChunkBufferTag.java
-dev/lull/optsupport/GeoParallel.java
 dev/lull/optsupport/MolangJit.java
 dev/lull/optsupport/KineticMemo.java
 dev/lull/optsupport/KineticResident.java

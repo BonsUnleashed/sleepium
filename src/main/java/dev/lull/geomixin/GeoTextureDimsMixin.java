@@ -6,7 +6,7 @@ import java.util.function.Function;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Redirect;
-import software.bernie.geckolib.renderer.specialty.DynamicGeoEntityRenderer;
+import software.bernie.geckolib.renderer.DynamicGeoEntityRenderer;   // (4.8.4: not in renderer.specialty yet)
 
 /**
  * DynamicGeoEntityRenderer's texture size cache is a static HashMap filled lazily, and the fill waits for the render

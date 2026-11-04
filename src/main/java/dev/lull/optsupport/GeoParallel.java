@@ -6,7 +6,7 @@ import java.util.ArrayList;
 import java.util.List;
 import org.joml.Matrix3f;
 import org.joml.Matrix4f;
-import software.bernie.geckolib.animation.state.BoneSnapshot;
+import software.bernie.geckolib.core.state.BoneSnapshot;   // (4.8.4: GeckoLib's core package)
 import software.bernie.geckolib.cache.object.BakedGeoModel;
 import software.bernie.geckolib.cache.object.GeoBone;
 
@@ -17,7 +17,8 @@ import software.bernie.geckolib.cache.object.GeoBone;
  *   <li>bones: GeckoLib animates a model by writing into the GeoBones of the one BakedGeoModel in GeckoLibCache, shared
  *       by every renderer of that model. A GeoModel built for a worker set gets its own copy ({@link #copy}): same
  *       geometry (cubes shared, immutable), own bones in their rest pose;</li>
- *   <li>the Molang actor and variables: per job ({@link ParallelRender#jobLocals}, key {@link #ACTOR_KEY} for the actor).</li>
+ *   <li>the Molang variables: per job ({@link ParallelRender#jobLocals}). GeckoLib 4.8.4 has no actor object (4.9's
+ *       MolangQueries.Actor, key {@link #ACTOR_KEY}): its queries are suppliers set into the variables.</li>
  * </ul>
  */
 public final class GeoParallel {
