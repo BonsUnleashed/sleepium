@@ -145,7 +145,8 @@
     "AsyncChunkSaveMixin",
     "AsyncChunkSaveEncodeMixin",
     "AsyncChunkSaveStorageMixin",
-    "EntityDataNoLockMixin"
+    "EntityDataNoLockMixin",
+    "EntityFluidLoopMixin"
   ],
   "client": [
     "SectionLayerMaskMixin",
