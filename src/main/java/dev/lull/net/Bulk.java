@@ -20,7 +20,6 @@ import java.util.function.Consumer;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
-import net.neoforged.neoforge.network.PacketDistributor;
 
 /**
  * Content-addressed bulk transfer (network engine stage D). A content set is a map name → bytes that the server
@@ -38,7 +37,9 @@ import net.neoforged.neoforge.network.PacketDistributor;
  *       on its main thread at once.</li>
  * </ul>
  * A player without the channel (no probe on the client), or on an in-memory connection (singleplayer: no bytes to
- * save), is not served: {@link #sendTo} returns false and the content sends its own way.
+ * save), is not served: {@link #sendTo} returns false and the content sends its own way. On 1.20.1 the messages go on
+ * Forge's optional channel {@code sleepium:bulk} (BulkPayloads); "has the channel" is Forge's view of the remote side's
+ * channel list from the login handshake.
  */
 public final class Bulk {
     public static final boolean ENABLED = Boolean.getBoolean("lab.opt.all") || Boolean.getBoolean("lab.opt.NetBulk");
@@ -114,7 +115,7 @@ public final class Bulk {
 
     /** whether this player is served by the bulk path */
     public static boolean capable(ServerPlayer p) {
-        return ENABLED && p.connection != null && !p.connection.getConnection().isMemoryConnection() && p.connection.hasChannel(Manifest.TYPE);
+        return ENABLED && p.connection != null && !p.connection.connection.isMemoryConnection() && BulkPayloads.CHANNEL.isRemotePresent(p.connection.connection);
     }
 
     /**
@@ -146,11 +147,11 @@ public final class Bulk {
             }
             org.slf4j.LoggerFactory.getLogger("sleep").info("[sleep/net] bulk {} v{}: {} entries, {} KB raw, {} KB packed, built in {} ms",
                     set, m.version(), list.size(), raw / 1024, packed / 1024, (System.nanoTime() - t0) / 1_000_000);
-            MinecraftServer server = net.neoforged.neoforge.server.ServerLifecycleHooks.getCurrentServer();
+            MinecraftServer server = net.minecraftforge.server.ServerLifecycleHooks.getCurrentServer();
             if (server != null) server.execute(() -> {
                 for (ServerPlayer p : server.getPlayerList().getPlayers()) {
                     List<ResourceLocation> w = WAITING.get(p.getUUID());
-                    if (capable(p)) PacketDistributor.sendToPlayer(p, m);
+                    if (capable(p)) BulkPayloads.send(p, m);
                     if (w != null) w.remove(set);
                 }
             });
@@ -170,7 +171,7 @@ public final class Bulk {
             m = s.manifest;
         }
         if (m == null) WAITING.computeIfAbsent(p.getUUID(), k -> new ArrayList<>()).add(set);   // sent when published
-        else PacketDistributor.sendToPlayer(p, m);
+        else BulkPayloads.send(p, m);
         return true;
     }
 
@@ -200,7 +201,7 @@ public final class Bulk {
                 PACES.remove(e.getKey());
                 continue;
             }
-            Channel ch = p.connection.getConnection().channel();
+            Channel ch = p.connection.connection.channel();
             long pendingNow = pending(ch), inFlight = pendingNow;
             Pace pace = PACES.computeIfAbsent(e.getKey(), k -> new Pace());
             long window = pace.window(pendingNow);
@@ -213,7 +214,7 @@ public final class Bulk {
                 }
                 Send s = q.peek();
                 byte[] data = s.blob.chunks()[s.next];
-                PacketDistributor.sendToPlayer(p, new Chunk(s.blob.hash(), s.next, s.blob.chunks().length, data));
+                BulkPayloads.sendChunk(p, new Chunk(s.blob.hash(), s.next, s.blob.chunks().length, data));
                 inFlight += data.length;   // queued in this tick's batch, not yet in the outbound buffer
                 sent += data.length;
                 CHUNKS.increment();
@@ -267,7 +268,7 @@ public final class Bulk {
 
     // ------------------------------------------------------------------ client side (network thread → BulkClient)
 
-    static void clientManifest(Manifest m, java.util.function.Consumer<net.minecraft.network.protocol.common.custom.CustomPacketPayload> reply) {
+    static void clientManifest(Manifest m, java.util.function.Consumer<Want> reply) {
         dev.lull.net.client.BulkClient.onManifest(m, reply);
     }
 

@@ -121,10 +121,12 @@ public final class OptMixinPlugin implements IMixinConfigPlugin {
         if (simple.startsWith("MainReactor") || simple.equals("EventLoopQueueAccessor") || simple.equals("ChunkCacheExecutorAccessor"))
             on = Boolean.getBoolean("lab.opt.all") || Boolean.getBoolean("lab.opt.MainReactor");
         if (simple.startsWith("MainReactorScout")) on = Boolean.getBoolean("lab.reactor.scout");   // measurement only
+        if (simple.equals("BulkDataArraysBlocksMixin"))   // 1.20.1: the block half of BulkDataArraysMixin (SRG names differ)
+            on = Boolean.getBoolean("lab.opt.all") || Boolean.getBoolean("lab.opt.BulkDataArraysMixin");
         if (simple.startsWith("NetReactor"))
             on = Boolean.getBoolean("lab.opt.all") || Boolean.getBoolean("lab.opt.NetReactor");
-        if (simple.equals("NetReactorWaitMixin"))   // MainReactor's waitForTasks overwrite flushes by itself
-            on = on && !(Boolean.getBoolean("lab.opt.all") || Boolean.getBoolean("lab.opt.MainReactor"));
+        // (1.21.1 turned NetReactorWaitMixin off with MainReactor, whose waitForTasks overwrite flushed; 1.20.1's MainReactor
+        // only replaces BlockableEventLoop's park, so the flush before the wait stays this mixin's)
         if (simple.equals("StructurePlaceLockMixin") || simple.equals("StructurePaletteCacheMixin"))   // parallel generation's guards
             on = Boolean.getBoolean("lab.opt.all") || Boolean.getBoolean("lab.opt.ParallelWorldgenMixin");
         if (simple.equals("LightRecipeVerifyMixin")) on = Boolean.getBoolean("lab.lightrecipe.verify");   // measurement only

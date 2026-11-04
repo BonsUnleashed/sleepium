@@ -137,6 +137,9 @@ tasks.withType(JavaCompile).configureEach {
     options.encoding = 'UTF-8'
 }
 
+// -PclientRunDir=run-client: the dev client in a folder of its own, beside a dev server of this copy in run/ (tools/mp_test.py)
+if (project.hasProperty('clientRunDir')) legacyForge.runs.client.gameDirectory = file(project.property('clientRunDir'))
+
 // the dedicated server reads its console from this build's standard input: the tools drive it with commands
 tasks.named('runServer') { standardInput = System.in }
 

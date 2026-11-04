@@ -9,7 +9,7 @@ import org.lwjgl.opengl.GL11;
 /**
  * Live numbers for the settings screen's overview and the optional in-game corner: frame times from a ring of the
  * last 240 frames (render thread), the integrated server's tick time and the sleep engine's snapshot (server thread,
- * once a second, published through volatiles), the shaderpack's state.
+ * once a second, published through volatiles), the shaderpack's state (none on 1.20.1 yet: the pipeline is pending).
  */
 public final class SleepStats {
     private SleepStats() {}
@@ -43,10 +43,10 @@ public final class SleepStats {
     static volatile long tracked, asleep, skippedPerSecond;
     private static long lastSkipped = -1, serverTicks;
 
-    /** server thread, every tick (ServerTickEvent.Post) */
+    /** server thread, every tick (ServerTickEvent, END) */
     static void serverTick(net.minecraft.server.MinecraftServer server) {
         if (++serverTicks % 20 != 0) return;
-        mspt = server.getAverageTickTimeNanos() / 1e6;
+        mspt = server.getAverageTickTime();   // 1.20.1: milliseconds already (1.21: getAverageTickTimeNanos)
         if (dev.lull.optsupport.sleep.SleepEngine.ON) {
             long[] s = dev.lull.optsupport.sleep.SleepEngine.snapshot();
             tracked = s[0];
@@ -67,11 +67,9 @@ public final class SleepStats {
         return gpu;
     }
 
+    /** 1.20.1: no shaderpack pipeline yet (port-pending.txt) - always "no pack" (1.21.1: preparing / the pack's name) */
     static String shaderState() {
-        String preparing = dev.lull.shaders.ShaderPipeline.preparing();
-        if (preparing != null) return Component.translatable("sleepium.ui.stats.preparing", preparing).getString();
-        String name = dev.lull.shaders.ShaderPipeline.currentName();
-        return name == null ? Component.translatable("sleepium.ui.stats.nopack").getString() : name;
+        return Component.translatable("sleepium.ui.stats.nopack").getString();
     }
 
     /** the lines of the overview's live block */
@@ -94,12 +92,12 @@ public final class SleepStats {
     static volatile boolean hud = Boolean.getBoolean("sleep.ui.hud");
 
     static void drawHud(GuiGraphics g) {
-        if (!hud || Minecraft.getInstance().getDebugOverlay().showDebugScreen()) return;
+        if (!hud || Minecraft.getInstance().options.renderDebug) return;   // 1.20.1: the F3 screen is an option
         double[] f = frameMs();
         String a = String.format(Locale.ROOT, "Sleepium  FPS %d  p99 %.1f ms", Minecraft.getInstance().getFps(), f[1]);
         String b = singleplayer() && mspt >= 0 ? String.format(Locale.ROOT, "MSPT %.1f  asleep %d", mspt, asleep) : null;
         var font = Minecraft.getInstance().font;
-        int y = dev.lull.shaders.ShaderPipeline.preparing() != null ? 16 : 4;
+        int y = 4;   // (1.21.1: lower while a shaderpack is being prepared, its progress line above)
         g.drawString(font, a, 4, y, 0xFFDDE4FF, true);
         if (b != null) g.drawString(font, b, 4, y + 10, 0xFFB8C2E8, true);
     }

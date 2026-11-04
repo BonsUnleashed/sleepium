@@ -3,8 +3,6 @@ package dev.lull.net;
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.Channel;
 import java.util.concurrent.atomic.LongAdder;
-import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
-import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
 
 /**
@@ -19,8 +17,11 @@ import net.minecraft.server.level.ServerPlayer;
  * frame splitter, installed on every non-memory client connection) turns it back into the plain frames the splitter
  * expects. The switch point is a marker frame no real packet can be (its content starts with a 6-byte VarInt, which
  * vanilla rejects), written on the event loop right after the server's handler is added: both ends change at one byte
- * of the stream. The server switches only for a client that registered {@link #HELLO} (a probe client, whose decoder is
- * always there); in-memory connections (singleplayer) carry objects, not bytes, and are left alone.
+ * of the stream. The server switches only for a client that registered {@link BulkPayloads#HELLO} (a probe client, whose
+ * decoder is always there); in-memory connections (singleplayer) carry objects, not bytes, and are left alone.
+ * <p>
+ * 1.20.1: the capability is Forge's optional channel {@code sleepium:coalesce_z1} (1.21.1: a NeoForge payload type that
+ * is never sent). The pipeline names are vanilla's on both versions ("prepender", "splitter", "encrypt" / "decrypt").
  */
 public final class Coalesce {
     public static final boolean ENABLED = Boolean.getBoolean("lab.opt.all") || Boolean.getBoolean("lab.opt.NetCoalesce");
@@ -35,27 +36,16 @@ public final class Coalesce {
     public static final LongAdder FRAME_BYTES = new LongAdder(), WIRE_BYTES = new LongAdder(), CONTAINERS = new LongAdder(), STORED = new LongAdder(),
             SWITCHED = new LongAdder();
 
-    /** the capability marker: registered by every probe client (its decoder is always installed); never sent */
-    public record Hello() implements CustomPacketPayload {
-        public static final Type<Hello> TYPE = new Type<>(ResourceLocation.fromNamespaceAndPath(dev.lull.SleepMod.MOD_ID, "coalesce_z1"));
-        public static final net.minecraft.network.codec.StreamCodec<ByteBuf, Hello> CODEC = net.minecraft.network.codec.StreamCodec.unit(new Hello());
-
-        @Override
-        public Type<? extends CustomPacketPayload> type() {
-            return TYPE;
-        }
-    }
-
     private Coalesce() {}
 
     public static boolean capable(ServerPlayer p) {
-        return ENABLED && p.connection != null && !p.connection.getConnection().isMemoryConnection() && p.connection.hasChannel(Hello.TYPE);
+        return ENABLED && p.connection != null && !p.connection.connection.isMemoryConnection() && BulkPayloads.HELLO.isRemotePresent(p.connection.connection);
     }
 
     /** server thread, a player in PLAY: switch the connection's outbound stream to containers */
     public static void enable(ServerPlayer p) {
         if (!capable(p)) return;
-        Channel ch = p.connection.getConnection().channel();
+        Channel ch = p.connection.connection.channel();
         ch.eventLoop().execute(() -> {
             var pipe = ch.pipeline();
             if (pipe.get(SERVER_HANDLER) != null || pipe.get("prepender") == null) return;

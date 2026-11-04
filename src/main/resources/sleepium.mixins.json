@@ -46,6 +46,8 @@
     "BlockableEventLoopMixin",
     "ProcessorMailboxMixin",
     "DataLayerMapAccessor",
+    "NetCoalesceClientMixin",
+    "NetStatsSendMixin",
     "NetStatsBytesMixin",
     "EventSourcesMixin",
     "TickSourcesMixin",

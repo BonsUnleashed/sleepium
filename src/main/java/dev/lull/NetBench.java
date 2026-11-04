@@ -29,7 +29,7 @@ final class NetBench {
         endNanos = startNanos + seconds * 1_000_000_000L;
     }
 
-    /** server thread, start of every tick (ServerTickEvent.Pre) */
+    /** server thread, start of every tick (Forge's ServerTickEvent, phase START; 1.21.1: ServerTickEvent.Pre) */
     static void onTickStart() {
         NetStats.serverThread = Thread.currentThread();
         tickStart = System.nanoTime();

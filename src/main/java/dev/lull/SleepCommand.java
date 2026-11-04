@@ -2,6 +2,7 @@ package dev.lull;
 
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
+import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.context.CommandContext;
 import java.util.Locale;
 import net.minecraft.commands.CommandSourceStack;
@@ -11,9 +12,9 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraftforge.event.RegisterCommandsEvent;
 
 /**
- * /sleep on 1.20.1: what the test tools use so far - reseed and the region hash (tools/exactness.py) - and, in dev
- * runs or with -Dsleep.tickCommand=true, the test tools' /tick (TickControl). More of the 1.21.1 engine's subcommands
- * come over with the features they report on.
+ * /sleep on 1.20.1: what the test tools use so far - reseed and the region hash (tools/exactness.py), the network
+ * measurement and the bulk transfer's self test - and, in dev runs or with -Dsleep.tickCommand=true, the test tools'
+ * /tick (TickControl). More of the 1.21.1 engine's subcommands come over with the features they report on.
  */
 public final class SleepCommand {
     private SleepCommand() {}
@@ -59,6 +60,29 @@ public final class SleepCommand {
                             + ", idle " + Integer.toHexString(System.identityHashCode(net.minecraft.world.entity.schedule.Activity.IDLE)) + ")");
                     return 1;
                 }))
+                .then(Commands.literal("bulktest")
+                        .then(Commands.argument("entries", IntegerArgumentType.integer(1, 4096))
+                        .then(Commands.argument("kb", IntegerArgumentType.integer(1, 8192))
+                        .then(Commands.argument("changed", IntegerArgumentType.integer(0, 4096))
+                        .then(Commands.argument("seed", IntegerArgumentType.integer()).executes(ctx -> {
+                            String r = dev.lull.net.BulkSelfTest.publish(IntegerArgumentType.getInteger(ctx, "entries"), IntegerArgumentType.getInteger(ctx, "kb"),
+                                    IntegerArgumentType.getInteger(ctx, "changed"), IntegerArgumentType.getInteger(ctx, "seed"));
+                            SleepMod.LOGGER.info("sleep: bulktest published: {}", r);
+                            say(ctx, "sleep: bulktest published: " + r);
+                            for (var p : ctx.getSource().getServer().getPlayerList().getPlayers()) {
+                                boolean served = dev.lull.net.Bulk.capable(p);
+                                SleepMod.LOGGER.info("sleep: bulktest: {} {}", p.getScoreboardName(), served ? "is on the bulk path" : "is not on the bulk path");
+                                if (!served) say(ctx, "sleep: bulktest: " + p.getScoreboardName() + " is not on the bulk path");
+                            }
+                            return 1;
+                        }))))))
+                .then(Commands.literal("net")
+                        .then(Commands.argument("seconds", IntegerArgumentType.integer(1, 600))
+                                .then(Commands.argument("label", StringArgumentType.word()).executes(ctx -> {
+                                    NetBench.start(IntegerArgumentType.getInteger(ctx, "seconds"), StringArgumentType.getString(ctx, "label"));
+                                    say(ctx, "sleep: net measurement started");
+                                    return 1;
+                                }))))
                 .then(Commands.literal("hash")
                         .then(Commands.argument("x1", IntegerArgumentType.integer()).then(Commands.argument("y1", IntegerArgumentType.integer())
                         .then(Commands.argument("z1", IntegerArgumentType.integer()).then(Commands.argument("x2", IntegerArgumentType.integer())
@@ -94,12 +118,13 @@ public final class SleepCommand {
     }
 
     /**
-     * The end of every server tick (TickTimer, LOWEST): the benches' clocks. On 1.21.1 also NetBench (networking) - not
-     * ported yet - and the auto-stop of /sleep run (its report commands come over with the event counter).
+     * The end of every server tick (TickTimer, LOWEST): the benches' clocks. On 1.21.1 also the auto-stop of /sleep run
+     * (its report commands come over with the event counter).
      */
     static void onTickEnd(net.minecraft.server.MinecraftServer server) {
         IdleBench.onTickEnd(server);
         GenBench.onTickEnd(server);
+        NetBench.onTickEnd(server);
     }
 
     private static void say(CommandContext<CommandSourceStack> ctx, String msg) {

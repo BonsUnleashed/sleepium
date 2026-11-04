@@ -13,7 +13,6 @@ dev/lull/geomixin/MolangJitMixin.java
 # the shaderpack pipeline and the settings screen
 dev/lull/shaders/**
 dev/lull/shadermixin/**
-dev/lull/ui/**
 # diagnostics and benchmarks of the 1.21.1 work
 dev/lull/ScaleListeners.java
 dev/lull/BusEquivalence.java
@@ -36,11 +35,6 @@ dev/lull/opt/LightScoutMixin.java
 dev/lull/optsupport/PartBatch.java
 # the event bus (Forge's eventbus 6 differs from NeoForge's): its own step
 # networking (1.20.1 has no CustomPacketPayload / StreamCodec): its own step
-dev/lull/net/**
-dev/lull/opt/NetReactorConnectionMixin.java
-dev/lull/opt/BulkDataArraysMixin.java
-dev/lull/mixin/NetStatsSendMixin.java
-dev/lull/mixin/NetCoalesceClientMixin.java
 
 # --- the 11-04 compile pass: files that reference pending parts or 1.21-only systems ---
 # the event bus step: Forge's eventbus 6 keeps one static ListenerList per event class, no per-bus listenerLists map
@@ -56,18 +50,12 @@ dev/lull/optsupport/GeoParts.java
 dev/lull/opt/PartDrawMixin.java
 dev/lull/opt/PartFrameMixin.java
 # networking: they drive dev/lull/net (NetLag, NetReactor, Bulk, Coalesce)
-dev/lull/NetBench.java
-dev/lull/api/NetContent.java
-dev/lull/opt/NetLagMixin.java
-dev/lull/opt/NetReactorTickMixin.java
-dev/lull/opt/NetReactorWaitMixin.java
 # the renderer (stage 3): parts used only by pending renderer classes (chunk multi-draw's shader patches, occlusion
 # culling and indirect commands, part batching's materials / coatings, the 1.21 VertexConsumer recorder, light boxes,
 # the bulk vertex path), and the mixins of pending renderer parts (QuadSort, ParallelRender)
 dev/lull/optsupport/ProgramCaches.java
 dev/lull/optsupport/Materials.java
 dev/lull/optsupport/LightBoxes.java
-dev/lull/optsupport/BulkData.java
 # the event bus step: the event-site rewrite (its mixins are pending above)
 # 1.21-only target: NeoForge's ClientHooks.isBlockEntityRendererVisible (the default box new AABB(pos)); Forge 1.20.1
 # tests frustum.isVisible(be.getRenderBoundingBox()), whose default box comes from the collision shape: another check
@@ -86,3 +74,6 @@ dev/lull/mixin/GenProfileServerWaitMixin.java
 
 
 # 1.21-only: MeshData (the 1.21 buffer API) - QuadSort's direct sort is on BufferBuilder on 1.20.1 (VertexSortDirectMixin)
+
+# the shaderpack pipeline (and the settings screen's pack options: its screens follow the pack's shaders.properties)
+dev/lull/ui/PackOptionsScreen.java

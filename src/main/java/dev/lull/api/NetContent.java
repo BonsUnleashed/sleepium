@@ -18,7 +18,7 @@ import net.minecraft.server.level.ServerPlayer;
  * // server, on load and after every reload
  * NetContent.publish(MY_SET, Map.of("a.json", bytesA, "b.json", bytesB));
  * // server, a player joined
- * if (!NetContent.sendTo(player, MY_SET)) PacketDistributor.sendToPlayer(player, new MyFullPayload(...));
+ * if (!NetContent.sendTo(player, MY_SET)) MY_CHANNEL.send(PacketDistributor.PLAYER.with(() -> player), new MyFullMessage(...));
  * }</pre>
  */
 public final class NetContent {

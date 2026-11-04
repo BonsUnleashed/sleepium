@@ -41,11 +41,11 @@ public final class BulkClient {
     private BulkClient() {}
 
     private static Path dir() {
-        return net.neoforged.fml.loading.FMLPaths.GAMEDIR.get().resolve("sleep-cache").resolve("bulk");
+        return net.minecraftforge.fml.loading.FMLPaths.GAMEDIR.get().resolve("sleep-cache").resolve("bulk");
     }
 
     /** reply: sends on the connection the manifest came by (the client's player may not exist yet at login) */
-    public static void onManifest(Manifest m, java.util.function.Consumer<net.minecraft.network.protocol.common.custom.CustomPacketPayload> reply) {
+    public static void onManifest(Manifest m, java.util.function.Consumer<Want> reply) {
         IO.execute(() -> {
             try {
                 Files.createDirectories(dir());
