@@ -7,7 +7,15 @@
   "refmap": "sleepium.refmap.json",
   "client": [
     "SbbCacheWorkerMixin",
-    "CreateTimeTestMixin"
+    "CreateTimeTestMixin",
+    "SbbPartsMixin",
+    "KineticRotationMixin",
+    "KineticBeMixin",
+    "OverStressAccessor",
+    "ChainConveyorMemoMixin",
+    "KineticLevelMixin",
+    "ViewAreaInvoker",
+    "RenderSystemLightAccessor"
   ],
   "injectors": {
     "defaultRequire": 1

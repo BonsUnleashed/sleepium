@@ -19,6 +19,9 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
  * (PartBatch.captureSbb: matrices, colour, light, overlay, diffuse on the GPU) when it can be: no UV shift (scrolling
  * belts), no light from the level (contraptions), a plain template, a batched BLOCK-format quad buffer - else the CPU
  * path as before. reset() as renderInto ends.
+ * <p>
+ * Ponder 1.0.91 (1.20.1): no invertFakeDiffuseNormal - renderInto's fake normal for unshaded vertices is always
+ * (0, 1, 0); the template is emitted with 1.20.1's vertex calls.
  */
 @Mixin(value = ShadeSeparatingSuperByteBuffer.class, remap = false)
 public abstract class SbbPartsMixin implements PartBatch.GeometrySource, dev.lull.optsupport.SbbLocal {
@@ -38,7 +41,6 @@ public abstract class SbbPartsMixin implements PartBatch.GeometrySource, dev.lul
     @Shadow private boolean useLevelLight;
     @Shadow private net.minecraft.world.level.BlockAndTintGetter levelWithLight;
     @Shadow private org.joml.Matrix4f lightTransform;
-    @Shadow @Final private boolean invertFakeDiffuseNormal;
 
     @Shadow
     public abstract SuperByteBuffer reset();
@@ -70,7 +72,7 @@ public abstract class SbbPartsMixin implements PartBatch.GeometrySource, dev.lul
     /** KineticMemo (Create's rotating parts without their renderer), opt-in, installed once Create is known to be there. */
     private static void sleep$memo() {
         memoChecked = true;
-        var mods = net.neoforged.fml.loading.LoadingModList.get();
+        var mods = net.minecraftforge.fml.loading.LoadingModList.get();
         if (!Boolean.getBoolean("lab.opt.KineticMemoMixin") || mods == null || mods.getModFileById("create") == null) return;
         try {
             Class.forName("dev.lull.optsupport.KineticMemo").getMethod("install").invoke(null);
@@ -97,7 +99,7 @@ public abstract class SbbPartsMixin implements PartBatch.GeometrySource, dev.lul
             boolean diffuse = !disableDiffuse && !dev.engine_room.flywheel.lib.util.ShadersModHelper.isShaderPackInUse();
             int light = hasCustomLight ? packedLight : 0;
             int ov = hasCustomOverlay ? overlay : net.minecraft.client.renderer.texture.OverlayTexture.NO_OVERLAY;
-            rcd.capturedShifted(this, input.last(), transforms.last(), r, g, b, a, diffuse, invertFakeDiffuseNormal ? -1.0F : 1.0F, light, ov,
+            rcd.capturedShifted(this, input.last(), transforms.last(), r, g, b, a, diffuse, 1.0F, light, ov,
                     PartBatch.lastSbbType, PartBatch.lastSbbGeo, sleep$shift, sleep$shiftU, sleep$shiftV, template.vertexCount());
             return;
         }
@@ -113,7 +115,7 @@ public abstract class SbbPartsMixin implements PartBatch.GeometrySource, dev.lul
             boolean diffuse = !disableDiffuse && !dev.engine_room.flywheel.lib.util.ShadersModHelper.isShaderPackInUse();
             int light = hasCustomLight ? packedLight : 0;
             if (PartBatch.captureLit(template, this, input.last(), transforms.last(), lightTransform, levelWithLight, r, g, b, a, diffuse,
-                    invertFakeDiffuseNormal ? -1.0F : 1.0F, light, 0, builder)) {
+                    1.0F, light, 0, builder)) {
                 reset();
                 ci.cancel();
             }
@@ -127,7 +129,7 @@ public abstract class SbbPartsMixin implements PartBatch.GeometrySource, dev.lul
         boolean diffuse = !disableDiffuse && !dev.engine_room.flywheel.lib.util.ShadersModHelper.isShaderPackInUse();
         int light = hasCustomLight ? packedLight : 0;
         int ov = hasCustomOverlay ? overlay : net.minecraft.client.renderer.texture.OverlayTexture.NO_OVERLAY;
-        float fake = invertFakeDiffuseNormal ? -1.0F : 1.0F;
+        float fake = 1.0F;
         if (PartBatch.captureSbb(template, this, null, input.last(), transforms.last(), r, g, b, a, diffuse, fake, light, ov, builder)) {
             if (rcd != null && rcd.recording())
                 rcd.captured(this, input.last(), transforms.last(), r, g, b, a, diffuse, fake, light, ov, PartBatch.lastSbbType, PartBatch.lastSbbGeo);
@@ -152,11 +154,12 @@ public abstract class SbbPartsMixin implements PartBatch.GeometrySource, dev.lul
             }
             if (consumer instanceof PartBatch.Flagged f) f.sleep$flags(shaded ? 0 : 8);
             int pn = template.normal(i);
-            consumer.addVertex(template.x(i), template.y(i), template.z(i));
+            consumer.vertex(template.x(i), template.y(i), template.z(i));
             if (consumer instanceof PartBatch.Flagged f) f.sleep$rawColor(template.color(i));   // bytes R, G, B, A as renderInto reads them
             int tl = template.light(i);   // its own light (catnip takes the max with the custom / level light)
-            consumer.setUv(template.u(i), template.v(i)).setUv2(tl & 0xFFFF, tl >>> 16)
-                    .setNormal((byte) (pn & 0xFF) / 127.0F, (byte) (pn >>> 8 & 0xFF) / 127.0F, (byte) (pn >>> 16 & 0xFF) / 127.0F);
+            consumer.uv(template.u(i), template.v(i)).uv2(tl & 0xFFFF, tl >>> 16)
+                    .normal((byte) (pn & 0xFF) / 127.0F, (byte) (pn >>> 8 & 0xFF) / 127.0F, (byte) (pn >>> 16 & 0xFF) / 127.0F);
+            consumer.endVertex();
         }
         return true;
     }

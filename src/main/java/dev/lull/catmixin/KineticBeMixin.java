@@ -23,8 +23,8 @@ public abstract class KineticBeMixin implements KineticMemo.Effects {
     }
 
     @org.spongepowered.asm.mixin.injection.Inject(method = "read", at = @org.spongepowered.asm.mixin.injection.At("HEAD"))
-    private void sleep$read(net.minecraft.nbt.CompoundTag tag, net.minecraft.core.HolderLookup.Provider registries, boolean clientPacket,
-            org.spongepowered.asm.mixin.injection.callback.CallbackInfo ci) {
+    private void sleep$read(net.minecraft.nbt.CompoundTag tag, boolean clientPacket,
+            org.spongepowered.asm.mixin.injection.callback.CallbackInfo ci) {   // (1.20.1: no registries argument)
         sleep$version++;
     }
 

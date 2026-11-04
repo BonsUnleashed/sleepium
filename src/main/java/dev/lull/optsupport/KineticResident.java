@@ -11,7 +11,7 @@ import net.minecraft.client.Camera;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.client.renderer.blockentity.BlockEntityRenderer;
-import net.minecraft.client.renderer.chunk.SectionRenderDispatcher;
+import net.minecraft.client.renderer.chunk.ChunkRenderDispatcher;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntity;
@@ -114,7 +114,7 @@ public final class KineticResident implements NoAllocChecks.Resident {
     }
 
     /** renderLevel's section loop: the section whose block entities follow. */
-    public static void section(SectionRenderDispatcher.RenderSection s) {
+    public static void section(ChunkRenderDispatcher.RenderChunk s) {
         INSTANCE.section = s;
     }
 
@@ -128,7 +128,7 @@ public final class KineticResident implements NoAllocChecks.Resident {
     private Object sectionOf(BlockEntity be) {
         BlockPos p = be.getBlockPos();
         if (section != null) {
-            BlockPos o = ((SectionRenderDispatcher.RenderSection) section).getOrigin();
+            BlockPos o = ((ChunkRenderDispatcher.RenderChunk) section).getOrigin();
             if (p.getX() >> 4 == o.getX() >> 4 && p.getY() >> 4 == o.getY() >> 4 && p.getZ() >> 4 == o.getZ() >> 4) return section;
         }
         Object va = viewArea;
@@ -221,15 +221,25 @@ public final class KineticResident implements NoAllocChecks.Resident {
      * keeps the default shouldRender and the dispatcher's pose is the loop's plain translation to it; true: it is, and
      * drawn this frame.
      */
+    private static final Matrix4f VIEW_INV = new Matrix4f(), REL = new Matrix4f();
+
+    /** a translation (the rotation undone: the 3x3 part the identity, but for float rounding) */
+    private static boolean plainTranslation(Matrix4f d) {
+        return Math.abs(d.m00() - 1) < 1e-4f && Math.abs(d.m11() - 1) < 1e-4f && Math.abs(d.m22() - 1) < 1e-4f && Math.abs(d.m01()) < 1e-4f
+                && Math.abs(d.m02()) < 1e-4f && Math.abs(d.m10()) < 1e-4f && Math.abs(d.m12()) < 1e-4f && Math.abs(d.m20()) < 1e-4f && Math.abs(d.m21()) < 1e-4f
+                && Math.abs(d.m03()) < 1e-6f && Math.abs(d.m13()) < 1e-6f && Math.abs(d.m23()) < 1e-6f;
+    }
+
     static boolean offer(KineticMemo.Memo m, KineticBlockEntity be, PoseStack.Pose disp, Class<?> rendererClass) {
         KineticResident k = INSTANCE;
         if (be != k.candidate || !(k.candSection instanceof ChunkMultiDraw.ChunkEntries)) return false;
         k.candidate = null;
         BlockPos pos = be.getBlockPos();
-        BlockPos o = ((SectionRenderDispatcher.RenderSection) k.candSection).getOrigin();
-        Matrix4f d = disp.pose();
+        BlockPos o = ((ChunkRenderDispatcher.RenderChunk) k.candSection).getOrigin();
+        // the dispatcher's pose: the camera-relative translation (1.20.1: after the level pose's rotation, PartBatch.persistView)
+        Matrix4f d = VIEW_INV.set(PartBatch.persistView).invert().mul(disp.pose(), REL);
         if (pos.getX() >> 4 != o.getX() >> 4 || pos.getY() >> 4 != o.getY() >> 4 || pos.getZ() >> 4 != o.getZ() >> 4
-                || (d.properties() & Matrix4f.PROPERTY_TRANSLATION) == 0
+                || !plainTranslation(d)
                 || Math.abs(d.m30() - (float) (pos.getX() - k.camX)) > 1e-3f || Math.abs(d.m31() - (float) (pos.getY() - k.camY)) > 1e-3f
                 || Math.abs(d.m32() - (float) (pos.getZ() - k.camZ)) > 1e-3f || !PLAIN_SHOULD_RENDER.get(rendererClass)) {
             notMade++;

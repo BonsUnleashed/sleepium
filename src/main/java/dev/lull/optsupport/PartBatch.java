@@ -113,6 +113,7 @@ public final class PartBatch {
             pre.append("struct ProbeSpin { vec4 turn; vec4 sprites; vec4 scroll; };\n");
             pre.append("layout(std430) buffer ProbeSpins { ProbeSpin probeSpins[]; };\n");
             pre.append("uniform vec3 ProbeCam;\nuniform float ProbeTime;\n");
+            pre.append("uniform mat3 ProbeView;\n");   // 1.20.1: the camera rotation, which vertex data carries there (persistent records do not)
             if (LIT_ON) pre.append(LightBoxes.GLSL);
         }
         pre.append("layout(location = 15) in float ProbeFlags;\n\n");   // part geometry's 4th normal byte (GeckoLib flat cubes)
@@ -158,8 +159,9 @@ public final class PartBatch {
             }
             pre.append("        }\n");
             pre.append("        probe_Position = (probe_d.pose * vec4(probe_p, 1.0)).xyz;\n");
-            pre.append("        if (ProbePartMode == 5) probe_Position += ProbeCam;\n");
+            pre.append("        if (ProbePartMode == 5) probe_Position = ProbeView * (probe_Position + ProbeCam);\n");
             pre.append("        vec3 probe_n = mat3(probe_d.n0.xyz, probe_d.n1.xyz, probe_d.n2.xyz) * probe_nin;\n");
+            pre.append("        if (ProbePartMode == 5) probe_n = ProbeView * probe_n;\n");
         } else {
             pre.append("        ProbePart probe_d = probeParts[gl_DrawIDARB];\n");
             pre.append("        probe_Position = (probe_d.pose * vec4(Position, 1.0)).xyz;\n");
@@ -748,6 +750,13 @@ public final class PartBatch {
     private static final long SPIN_BYTES = 48;
     /** the frame's anchor-to-camera offset and Create's render time (set before the level's block entities) */
     public static float persistCamX, persistCamY, persistCamZ, persistTime;
+    /**
+     * 1.20.1: the level pose's rotation (the camera's), set before the level's block entities: vertex data is in view
+     * space there (1.21's pose stack is the identity, the rotation in the model-view matrix), the persistent records
+     * are not - mode 5 turns their positions and normals by it
+     */
+    public static final Matrix3f persistView = new Matrix3f();
+    private static final java.nio.FloatBuffer VIEW_BUF = MemoryUtil.memAllocFloat(9);
     public static long persistDraws, persistUploads;
 
     static final class PQueue {
@@ -887,6 +896,10 @@ public final class PartBatch {
         lightUniforms(st);
         GL20C.glUniform3f(st[4], persistCamX, persistCamY, persistCamZ);
         GL20C.glUniform1f(st[5], persistTime);
+        if (st[7] >= 0) {
+            persistView.get(VIEW_BUF.clear());
+            GL20C.glUniformMatrix3fv(st[7], false, VIEW_BUF);
+        }
         RenderSystem.AutoStorageIndexBuffer seq = RenderSystem.getSequentialBuffer(VertexFormat.Mode.QUADS);
         seq.bind(q.maxIndices);
         GL20C.glUniform1i(st[0], 5);
@@ -1176,7 +1189,7 @@ public final class PartBatch {
             int f = GL20C.glGetUniformLocation(id, "ProbePartMode");
             int b = GL43C.glGetProgramResourceIndex(id, GL43C.GL_SHADER_STORAGE_BLOCK, "ProbeParts");
             if (f >= 0 && b != GL31C.GL_INVALID_INDEX) GL43C.glShaderStorageBlockBinding(id, b, SSBO_BINDING);
-            int cam = -1, time = -1, boxes = GL31C.GL_INVALID_INDEX;
+            int cam = -1, time = -1, view = -1, boxes = GL31C.GL_INVALID_INDEX;
             if (LIT_ON) {
                 boxes = GL43C.glGetProgramResourceIndex(id, GL43C.GL_SHADER_STORAGE_BLOCK, "ProbeBoxes");
                 int sp = GL43C.glGetProgramResourceIndex(id, GL43C.GL_SHADER_STORAGE_BLOCK, "ProbeSpins");
@@ -1191,9 +1204,10 @@ public final class PartBatch {
                     GL43C.glShaderStorageBlockBinding(id, s, SPIN_BINDING);
                     cam = GL20C.glGetUniformLocation(id, "ProbeCam");
                     time = GL20C.glGetUniformLocation(id, "ProbeTime");
+                    view = GL20C.glGetUniformLocation(id, "ProbeView");
                 }
             }
-            return new int[] {f, b, GL20C.glGetUniformLocation(id, "ProbeLight0"), GL20C.glGetUniformLocation(id, "ProbeLight1"), cam, time, boxes};
+            return new int[] {f, b, GL20C.glGetUniformLocation(id, "ProbeLight0"), GL20C.glGetUniformLocation(id, "ProbeLight1"), cam, time, boxes, view};
         });
     }
 
