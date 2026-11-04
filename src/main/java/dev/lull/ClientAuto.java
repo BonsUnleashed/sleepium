@@ -406,6 +406,14 @@ public final class ClientAuto {
                     log("loading warnings screen dismissed (a player would click Proceed)");
                     mc.setScreen(new TitleScreen());
                 }
+                if (mc.screen instanceof net.minecraft.client.gui.screens.AccessibilityOnboardingScreen) {
+                    // 1.20.1's first start in a fresh game folder (every new copy's run/): the accessibility choices a
+                    // player would skip; remembered as done, as the screen's own Continue does
+                    log("accessibility onboarding screen skipped");
+                    mc.options.onboardAccessibility = false;
+                    mc.options.save();
+                    mc.setScreen(new TitleScreen());
+                }
                 if (mc.screen instanceof TitleScreen) {
                     log(String.format(Locale.ROOT, "title screen at %.1f s since JVM start", sinceJvm()));
                     // remember what we change, restored before the client closes (options.txt is shared with manual play)
