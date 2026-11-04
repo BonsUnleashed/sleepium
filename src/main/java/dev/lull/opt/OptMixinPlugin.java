@@ -104,7 +104,7 @@ public final class OptMixinPlugin implements IMixinConfigPlugin {
             on = Boolean.getBoolean("lab.opt.all") || Boolean.getBoolean("lab.opt.ClientLightAsyncMixin");
         if (simple.equals("ShaderLightCompileMixin") || simple.equals("ShaderLightMeshMixin") || simple.equals("ShaderLightChunkCacheMixin") || simple.equals("ShaderLightFrameMixin") || simple.equals("ShaderLightFluidMixin") || simple.equals("ShaderLightTranslucentMixin"))
             on = Boolean.getBoolean("lab.opt.all") || Boolean.getBoolean("lab.opt.ShaderLightMixin");
-        if (simple.startsWith("WorldgenAlloc") || simple.equals("SurfaceRuleInvoker") || simple.startsWith("Xoroshiro"))
+        if (simple.startsWith("WorldgenAlloc") || simple.startsWith("Xoroshiro"))
             on = Boolean.getBoolean("lab.opt.all") || Boolean.getBoolean("lab.opt.WorldgenAlloc");
         if (simple.startsWith("WorldgenSkip") || simple.equals("FluidStatusAccessor") || simple.equals("NoiseChunkStateInvoker"))
             on = Boolean.getBoolean("lab.opt.all") || Boolean.getBoolean("lab.opt.WorldgenSkip");

@@ -21,7 +21,6 @@
     "GenScoutBeardMixin",
     "GenScoutFluidMixin",
     "GenScoutSurfaceMixin",
-    "SurfaceRuleInvoker",
     "WorldgenAllocSequenceMixin",
     "WorldgenAllocMaterialMixin",
     "WorldgenAllocSurfaceContextMixin",

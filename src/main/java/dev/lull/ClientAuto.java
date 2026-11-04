@@ -454,6 +454,10 @@ public final class ClientAuto {
                     for (Runnable r : READY) r.run();   // other mods' work once the world is up (the framework's bake)
                     joinedAt = System.nanoTime();
                     log(String.format(Locale.ROOT, "joined: %.1f s after world creation started, %.1f s since JVM start", since(phaseStart), sinceJvm()));
+                    if (Boolean.getBoolean("sleep.clientAuto.audit")) {   // every mixin applied now, client classes too (tools/audit.py)
+                        org.spongepowered.asm.mixin.MixinEnvironment.getCurrentEnvironment().audit();
+                        log("mixin audit done");
+                    }
                     if (HAS_SCENE) command(mc, SCENE_TP);   // go there first: the scene's chunks must be loaded before it is built
                     else if (OPEN != null && System.getProperty("sleep.clientAuto.tp") != null) command(mc, SCENE_TP);   // a saved world: the view to measure
                     enter(Phase.SETTLE);

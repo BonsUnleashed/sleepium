@@ -24,18 +24,29 @@ public abstract class ClientBiomeMemoMixin implements LevelReader, dev.lull.opts
 
     @Override
     public Holder<Biome> getNoiseBiome(int x, int y, int z) {
-        if (!RenderSystem.isOnRenderThread()) return LevelReader.super.getNoiseBiome(x, y, z);
+        if (!RenderSystem.isOnRenderThread()) return sleep$vanillaBiome(x, y, z);
         long k = BlockPos.asLong(x, y, z);
         Holder<Biome> h = sleep$biomes.get(k);
         if (h != null) {
             sleep$hits++;
             return h;
         }
-        h = LevelReader.super.getNoiseBiome(x, y, z);
+        h = sleep$vanillaBiome(x, y, z);
         if (sleep$biomes.size() >= 65536) sleep$biomes.clear();
         sleep$biomes.put(k, h);
         sleep$misses++;
         return h;
+    }
+
+    /**
+     * LevelReader's default getNoiseBiome, as it reads: Forge 1.20.1's Mixin (0.8.5) turns LevelReader.super.x() in a
+     * mixin into a class method reference (IncompatibleClassChangeError at the first call)
+     */
+    @Unique
+    private Holder<Biome> sleep$vanillaBiome(int x, int y, int z) {
+        net.minecraft.world.level.chunk.ChunkAccess c = this.getChunk(net.minecraft.core.QuartPos.toSection(x), net.minecraft.core.QuartPos.toSection(z),
+                net.minecraft.world.level.chunk.ChunkStatus.BIOMES, false);
+        return c != null ? c.getNoiseBiome(x, y, z) : this.getUncachedNoiseBiome(x, y, z);
     }
 
     @Override
