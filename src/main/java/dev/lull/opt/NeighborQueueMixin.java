@@ -37,7 +37,7 @@ public abstract class NeighborQueueMixin {
     @Unique private static final Direction[] ORDER = NeighborUpdater.UPDATE_ORDER;
     @Unique private static final Direction[] DIRS = Direction.values();
     /** NeighborReactMixin's skip (its redirects sit in the record classes this queue no longer uses) */
-    @Unique private static final boolean REACT = Boolean.getBoolean("lab.opt.all") || Boolean.getBoolean("lab.opt.NeighborReactMixin");
+    @Unique private static final boolean REACT = dev.lull.optsupport.MixinInit.anyFlag("lab.opt.all", "lab.opt.NeighborReactMixin");   // (no jump in a mixin initialiser on 1.20.1)
 
     @Unique private int sleep$count;
 

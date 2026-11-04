@@ -144,3 +144,12 @@ if (project.hasProperty('runJvmArgs')) {
     if (!extra.isEmpty()) legacyForge.runs.configureEach { jvmArguments.addAll(extra.split(/\s+/) as List) }
 }
 tasks.withType(JavaCompile).configureEach { options.compilerArgs += ['-Xmaxerrs', '20000', '-Xmaxwarns', '20000'] }
+
+// the engine's default flags (defaults.txt) in the jar: on in production unless -Dlab.opt.defaults=false
+// (dev.lull.optsupport.GameDefaults); the network lag simulator stays a test tool
+processResources {
+    from('defaults.txt') {
+        into 'sleepium'
+        filter { line -> line.contains('NetLagMixin') ? null : line }
+    }
+}

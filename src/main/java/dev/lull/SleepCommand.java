@@ -24,6 +24,12 @@ public final class SleepCommand {
     static void register(RegisterCommandsEvent event) {
         CommandDispatcher<CommandSourceStack> d = event.getDispatcher();
         d.register(Commands.literal("sleep").requires(s -> s.hasPermission(2))
+                .then(Commands.literal("audit").executes(ctx -> {
+                    // every mixin applied now (Mixin loads each target): apply failures show at once, not when a class first loads
+                    org.spongepowered.asm.mixin.MixinEnvironment.getCurrentEnvironment().audit();
+                    say(ctx, "mixin audit done");
+                    return 1;
+                }))
                 .then(Commands.literal("reseed").executes(ctx -> {
                     // exactness tests: vanilla's clock-seeded randoms to fixed seeds, right before a scene is built
                     TestSeeds.reseed(ctx.getSource().getServer());

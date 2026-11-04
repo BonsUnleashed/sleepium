@@ -48,7 +48,7 @@ public abstract class ChunkIoWorkerMixin {
     /** encodes started on the pool whose result has not reached the mailbox yet */
     @Unique private final AtomicInteger sleep$inFlight = new AtomicInteger();
     @Unique private final Map<Long, CompletableFuture<Void>> sleep$encodes = new ConcurrentHashMap<>();
-    @Unique private final Map<Long, Map<String, String>> sleep$verify = ChunkIo.VERIFY ? new ConcurrentHashMap<>() : null;
+    @Unique private final Map<Long, Map<String, String>> sleep$verify = dev.lull.optsupport.MixinInit.mapIf(ChunkIo.VERIFY);   // (no jump in a mixin initialiser on 1.20.1)
     /** the worker's storage kind ("chunk", "entities", "poi"): its name on 1.20.1 (1.21: storage.info().type()) */
     @Unique private String sleep$type = "?";
 
