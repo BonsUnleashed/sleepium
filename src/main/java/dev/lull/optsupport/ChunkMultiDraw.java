@@ -662,8 +662,16 @@ public final class ChunkMultiDraw {
      */
     public static boolean draw(RenderType layer, Iterable<?> visible, double x, double y, double z,
             net.minecraft.client.renderer.ShaderInstance shader) {
-        // (1.21.1 timed the layer here as a DrawStats section: DrawStats comes over with the renderer's measurements)
-        return draw0(layer, visible, x, y, z, shader);
+        if (dev.lull.DrawStats.ON) {
+            dev.lull.DrawStats.phaseBegin(4);
+            // the camera's layers as their own sections (GPU time, pipeline statistics per layer)
+            if (!allFaces) dev.lull.DrawStats.section(layer == RenderType.solid() ? "terrain/solid" : layer == RenderType.cutoutMipped() ? "terrain/cutout_mipped" : "terrain/cutout");
+        }
+        try {
+            return draw0(layer, visible, x, y, z, shader);
+        } finally {
+            if (dev.lull.DrawStats.ON) dev.lull.DrawStats.phaseEnd(4);
+        }
     }
 
     /**
@@ -1205,6 +1213,7 @@ public final class ChunkMultiDraw {
                 // a shaderpack's vertex prologue reads the quad's other vertices from the arena
                 if (shaderPipeline()) GL30C.glBindBufferBase(GL43C.GL_SHADER_STORAGE_BUFFER, 9, a.vbo);
                 GL30C.glBindBufferRange(target, UBO_BINDING, buf, a.uboOffset, sb ? 16L * a.n : 16L * MAX_DRAWS);
+                if (dev.lull.DrawStats.ON) dev.lull.DrawStats.phaseBegin(3);
                 if (phase > 0)   // the layer's commands, those this phase does not draw with no instance (the order kept)
                     OcclusionCull.draw(phase, LISTED.indexOf(a), seq.type().asGLType, a.n, (int) (a.cmdOffset / 20));
                 else if (indirect) {
@@ -1213,6 +1222,7 @@ public final class ChunkMultiDraw {
                     drawNanos += System.nanoTime() - tD;
                     if (IndirectDiag.ON) IndirectDiag.after("chunks", seq.type().asGLType, cmdBase + a.cmdOffset, a.n, 20);
                 } else GL32C.nglMultiDrawElementsBaseVertex(GL15C.GL_TRIANGLES, a.counts, seq.type().asGLType, a.indices, a.n, a.bases);
+                if (dev.lull.DrawStats.ON) dev.lull.DrawStats.phaseEnd(3);
                 multiDraws++;
                 if (!keep) {
                     a.n = 0;

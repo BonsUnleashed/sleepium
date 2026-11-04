@@ -177,7 +177,7 @@ public final class ClientAuto {
 
     private static void startMeasuring() {
         log("measuring started");   // the marker external profilers wait for (uprof_run.sh)
-        // (DrawStats: the renderer's measurement, not on 1.20.1 yet - stage 3, port-pending.txt)
+        if (DrawStats.ON) DrawStats.start();
         dev.lull.optsupport.RenderCache.timeReset();
         if (SERVER_PROBE) command(Minecraft.getInstance(), "sleep run 30 " + LABEL + "-srv");
         if (SERVER != null && !"false".equals(System.getProperty("sleep.clientAuto.netBench"))) command(Minecraft.getInstance(), "sleep net " + (STEADY ? Integer.getInteger("sleep.clientAuto.steadySeconds", 30) : 40) + " " + LABEL);
@@ -545,7 +545,7 @@ public final class ClientAuto {
                     if (dev.lull.optsupport.LightScout.ON) log(dev.lull.optsupport.LightScout.report());
                     if (dev.lull.optsupport.LightRecipe.VERIFY) log(dev.lull.optsupport.LightRecipe.report());
                     if (Boolean.getBoolean("lab.shaderlight.diag")) log(dev.lull.optsupport.LightVolumes.diagReport());
-                    // (DrawStats' report: the renderer's measurement, not on 1.20.1 yet)
+                    if (DrawStats.ON) log(DrawStats.report());
                     if (Boolean.getBoolean("lab.geoparts.verify")) log(dev.lull.optsupport.GeoParts.report());   // GeckoLib loaded then
                     for (java.util.function.Function<String, String> r : REPORTS) {   // other mods' reports (the label of the run given)
                         String x = r.apply(LABEL);

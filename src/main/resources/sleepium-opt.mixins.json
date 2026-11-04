@@ -207,6 +207,7 @@
     "ClientLightJoinMixin",
     "BlockMeshMemoMixin",
     "BlockMeshDirtyMixin",
+    "LightScoutMixin",
     "LightScoutAoMixin",
     "LightScoutFlatMixin",
     "LightScoutFluidMixin",

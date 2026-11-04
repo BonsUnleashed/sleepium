@@ -23,6 +23,7 @@ import net.minecraft.util.FormattedCharSequence;
  * A shaderpack's own settings, laid out as the pack asks (shaders.properties: screens, columns, sliders, profiles),
  * labelled from its language files. A button steps through an option's values (shift: backwards), a slider drags them;
  * [screens] open below, Back returns. Apply writes shaderpacks/<pack>.txt and, if the pack is on, prepares it again.
+ * 1.20.1: the list is 1.20.1's (top and bottom edges; no background of its own: the screen draws it), as SleepScreen's.
  */
 public final class PackOptionsScreen extends Screen {
     private static final int TOP = 26, BOTTOM = 30, DESC_H = 42;
@@ -178,6 +179,7 @@ public final class PackOptionsScreen extends Screen {
         hoverTip = null;
         // the buttons' texts follow the model (a profile changes many at once)
         for (Cells c : grid.children()) c.refresh();
+        renderBackground(g);   // 1.20.1: the screen's own (1.21's super.render draws it)
         super.render(g, mouseX, mouseY, partialTick);
         g.drawCenteredString(font, Component.literal(model.screenLabel(screen)), width / 2, 9, 0xFFFFFF);
         int x0 = Math.max(10, width / 2 - grid.getRowWidth() / 2), y0 = height - BOTTOM - DESC_H + 4, w = Math.min(grid.getRowWidth(), width - 20);
@@ -236,7 +238,9 @@ public final class PackOptionsScreen extends Screen {
         private final int rowWidth;
 
         Grid(Minecraft mc, int width, int height, int y, int itemHeight, int rowWidth) {
-            super(mc, width, height, y, itemHeight);
+            super(mc, width, height, y, y + height, itemHeight);   // 1.20.1: top and bottom edges
+            setRenderBackground(false);   // 1.20.1 lists paint dirt over the world: the screen's background shows instead
+            setRenderTopAndBottom(false);
             this.rowWidth = rowWidth;
         }
 
@@ -256,7 +260,7 @@ public final class PackOptionsScreen extends Screen {
 
         @Override
         protected int getScrollbarPosition() {
-            return getX() + width / 2 + rowWidth / 2 + 8;
+            return x0 + width / 2 + rowWidth / 2 + 8;
         }
     }
 

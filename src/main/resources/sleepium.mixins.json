@@ -99,6 +99,13 @@
   ],
   "client": [
     "FrameHashFreezeMixin",
+    "DrawStatsMixin",
+    "DrawStatsObjectsMixin",
+    "DrawStatsEntitiesMixin",
+    "DrawStatsDispatchMixin",
+    "DrawStatsFrameMixin",
+    "DrawStatsLevelMixin",
+    "DrawStatsPhasesMixin",
     "ClientAutoMouseMixin",
     "ClientAutoFlickerMixin",
     "TextureMipsFlagMixin",

@@ -21,12 +21,12 @@ dev/lull/optsupport/KineticMemo.java
 dev/lull/optsupport/KineticResident.java
 dev/lull/optsupport/FlwLabExecutor.java
 dev/lull/opt/MeshDataAccessor.java
+# 1.21-only: LevelRenderer.visibleSections (1.21.1's SectionListsMixin read it through this); 1.20.1's SectionListsMixin
+# shadows renderChunksInFrustum itself, and DrawStats does not need it
 dev/lull/opt/LevelRendererVisibleAccessor.java
-dev/lull/mixin/DrawStats*.java
 # world generation and the chunk reactors (stage 2b) are ported; left of that list: the client's (renderer, stage 3) -
 # LightScoutMixin (measurement: 1.21's SectionCompiler.compile; 1.20.1 compiles in RenderChunk's RebuildTask), the
 # render cache, ParallelEntities / ParallelReload (EntityRenderDispatcher) and their supports
-dev/lull/opt/LightScoutMixin.java
 # the event bus (Forge's eventbus 6 differs from NeoForge's): its own step
 # networking (1.20.1 has no CustomPacketPayload / StreamCodec): its own step
 
@@ -38,8 +38,6 @@ dev/lull/EventCounter.java
 # fullPosts); without it NeighborNotifySkip and AsyncChunkSave never apply, and MoveMemo could skip a move that posted an
 # event somebody listens to (MoveMemo.java stays: its epochs are shared with mob sleep; only the skipping mixin waits)
 # the renderer (stage 3): measurement of its parts (DrawStats* mixins, ChunkMultiDraw counters) and their users
-dev/lull/DrawStats.java
-dev/lull/GpuTimer.java
 # networking: they drive dev/lull/net (NetLag, NetReactor, Bulk, Coalesce)
 # the renderer (stage 3): parts used only by pending renderer classes (chunk multi-draw's shader patches, occlusion
 # culling and indirect commands, part batching's materials / coatings, the 1.21 VertexConsumer recorder, light boxes,
@@ -64,4 +62,3 @@ dev/lull/mixin/GenProfileServerWaitMixin.java
 # 1.21-only: MeshData (the 1.21 buffer API) - QuadSort's direct sort is on BufferBuilder on 1.20.1 (VertexSortDirectMixin)
 
 # the shaderpack pipeline (and the settings screen's pack options: its screens follow the pack's shaders.properties)
-dev/lull/ui/PackOptionsScreen.java

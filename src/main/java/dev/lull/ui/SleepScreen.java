@@ -1,6 +1,10 @@
 package dev.lull.ui;
 
 import dev.lull.optsupport.SleepConfig;
+import dev.lull.shaders.ShaderPipeline;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -9,8 +13,10 @@ import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.function.Supplier;
+import java.util.stream.Stream;
 import net.minecraft.ChatFormatting;
 import net.minecraft.SharedConstants;
+import net.minecraft.Util;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.AbstractWidget;
@@ -32,12 +38,11 @@ import net.minecraft.util.FormattedCharSequence;
  * config/sleepium.properties on Done; flags read at start say "restart". Launch flags are shown locked; flags a
  * plugin switches by another flag are shown as part of it.
  * <p>
- * 1.20.1: no shaderpacks page yet (the pipeline is pending, port-pending.txt; a pack saved by the 1.21.1 screen stays in
- * the file untouched); the lists are 1.20.1's (top and bottom edges instead of a position and height; they draw no
+ * 1.20.1: the lists are 1.20.1's (top and bottom edges instead of a position and height; they draw no
  * background of their own here: the screen's, which 1.20.1's Screen.render leaves to the screen).
  */
 public final class SleepScreen extends Screen {
-    private static final int OVERVIEW = 0, FLAGS = 101;
+    private static final int OVERVIEW = 0, SHADERS = 100, FLAGS = 101;
     private static final int SIDEBAR_W = 116, TOP = 26, BOTTOM = 30, DESC_H = 42;
     private static int page = OVERVIEW;   // remembered while the game runs
     private final Screen parent;
@@ -46,18 +51,27 @@ public final class SleepScreen extends Screen {
     private OptList side, list;
     private Component hoverTip, flash;
     private long flashUntil;
+    private String pack;
+    private final String packAtOpen;
 
     public SleepScreen(Screen parent) {
         super(Component.translatable("sleepium.ui.title"));
         this.parent = parent;
         for (SleepOptions.Option o : SleepOptions.all()) desired.put(o.key(), Boolean.parseBoolean(System.getProperty(o.key())));
+        pack = ShaderPipeline.currentName();
+        if (pack == null) {
+            String p = System.getProperty("sleep.shaders");
+            pack = p == null || p.isBlank() ? null : p;
+        }
+        packAtOpen = pack;
     }
 
-    /** opened on a page (the dev shots: 0 overview, 1 the first group, 3 flags; 1.21.1's 2 is the shaders page) */
+    /** opened on a page (the dev shots: 0 overview, 1 the first group, 2 shaders, 3 flags) */
     SleepScreen(Screen parent, int shot) {
         this(parent);
         page = switch (shot) {
             case 1 -> 1;
+            case 2 -> SHADERS;
             case 3 -> FLAGS;
             default -> OVERVIEW;
         };
@@ -74,6 +88,18 @@ public final class SleepScreen extends Screen {
         preset(p);
         onClose();
     }
+
+    /** the dev probe (-Dsleep.ui.packUseTest): the pack's Use button on the shaders page pressed, then Done */
+    boolean probeUsePackAndClose(String name) {
+        Button b = useButtons.get(name);
+        if (b == null) return false;
+        b.onPress();
+        onClose();
+        return true;
+    }
+
+    /** the shaders page's Use buttons by pack (null: none), for the probe */
+    private final Map<String, Button> useButtons = new HashMap<>();
 
     Screen parent() {
         return parent;
@@ -120,6 +146,7 @@ public final class SleepScreen extends Screen {
             int p = i++;
             if (!groups.get(g).isEmpty()) sideEntry(p, Component.translatable("sleepium.ui.side." + g));   // 1.20.1: animation waits for GeckoLib's port
         }
+        sideEntry(SHADERS, Component.translatable("sleepium.ui.side.shaders"));
         sideEntry(FLAGS, Component.translatable("sleepium.ui.side.flags"));
     }
 
@@ -135,6 +162,7 @@ public final class SleepScreen extends Screen {
     private void fill() {
         list.clear();
         if (page == OVERVIEW) fillOverview();
+        else if (page == SHADERS) fillShaders();
         else if (page == FLAGS) fillFlags(null);
         else fillFlags(SleepOptions.GROUPS[page - 1]);
     }
@@ -289,6 +317,62 @@ public final class SleepScreen extends Screen {
         }
     }
 
+    // ------------------------------------------------------------------ shaderpacks
+
+    private void fillShaders() {
+        Path dir = minecraft.gameDirectory.toPath().resolve("shaderpacks");
+        List<String> packs = new ArrayList<>();
+        try (Stream<Path> s = Files.isDirectory(dir) ? Files.list(dir) : Stream.empty()) {
+            s.filter(p -> Files.isDirectory(p) || p.getFileName().toString().toLowerCase(Locale.ROOT).endsWith(".zip"))
+                    .map(p -> p.getFileName().toString()).sorted(String.CASE_INSENSITIVE_ORDER).forEach(packs::add);
+        } catch (IOException e) {
+            System.out.println("[sleep/ui] shaderpacks: " + e);
+        }
+        list.add(packRow(null, Component.translatable("sleepium.ui.shaders.none")));
+        for (String p : packs) list.add(packRow(p, Component.literal(p)));
+        Button folder = Button.builder(Component.translatable("sleepium.ui.shaders.folder"), x -> {
+            try {
+                Files.createDirectories(dir);
+            } catch (IOException ignored) {
+            }
+            Util.getPlatform().openFile(dir.toFile());   // (1.21: openPath)
+        }).size(150, 20).build();
+        list.add(new Row(() -> packs.isEmpty() ? Component.translatable("sleepium.ui.shaders.empty").withStyle(ChatFormatting.GRAY) : Component.empty(), null,
+                Component.translatable("sleepium.ui.shaders.note"), folder));
+    }
+
+    private Row packRow(String name, Component label) {
+        Button use = Button.builder(Component.empty(), x -> {
+            pack = name;
+            ShaderPipeline.request(name);   // live: prepared over frames, then on
+        }).size(80, 20).build();
+        useButtons.put(name, use);
+        if (name != null) {
+            Button opts = Button.builder(Component.translatable("sleepium.ui.packopts.open"), x -> {
+                try {
+                    minecraft.setScreen(new PackOptionsScreen(this, dev.lull.shaders.PackScreenModel.load(minecraft.gameDirectory.toPath(), name,
+                            minecraft.getLanguageManager().getSelected())));
+                } catch (Exception ex) {
+                    System.out.println("[sleep/ui] pack options of " + name + ": " + ex);
+                }
+            }).size(70, 20).build();
+            return new Row(() -> label, () -> {
+                boolean selected = name.equals(pack);
+                use.active = !selected;
+                use.setMessage(selected ? Component.translatable("sleepium.ui.shaders.selected").withStyle(ChatFormatting.GREEN)
+                        : Component.translatable("sleepium.ui.shaders.use"));
+                return null;
+            }, Component.translatable("sleepium.ui.shaders.note"), opts, use);
+        }
+        return new Row(() -> label, () -> {
+            boolean selected = name == null ? pack == null : name.equals(pack);
+            use.active = !selected;
+            use.setMessage(selected ? Component.translatable("sleepium.ui.shaders.selected").withStyle(ChatFormatting.GREEN)
+                    : Component.translatable("sleepium.ui.shaders.use"));
+            return null;
+        }, Component.translatable("sleepium.ui.shaders.note"), use);
+    }
+
     private static Component on(boolean on) {
         return on ? CommonComponents.OPTION_ON.copy().withStyle(ChatFormatting.GREEN) : CommonComponents.OPTION_OFF.copy().withStyle(ChatFormatting.RED);
     }
@@ -343,6 +427,8 @@ public final class SleepScreen extends Screen {
             if (v != o.byDefault() || v != Boolean.parseBoolean(SleepConfig.startup(o.key()))) out.put(o.key(), Boolean.toString(v));
             else out.remove(o.key());
         }
+        if (pack != null) out.put("sleep.shaders", pack);
+        else out.remove("sleep.shaders");
         if (SleepStats.hud) out.put("sleep.ui.hud", "true");
         else out.remove("sleep.ui.hud");
         SleepConfig.save(out);
