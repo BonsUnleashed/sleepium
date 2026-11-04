@@ -5,7 +5,6 @@ import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import dev.lull.optsupport.GenTrace;
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.HolderLookup;
 import net.minecraft.core.SectionPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.level.ServerLevel;
@@ -41,11 +40,11 @@ public abstract class GenTraceSaveMixin {
     }
 
     @WrapOperation(method = "write", at = @At(value = "INVOKE",
-            target = "Lnet/minecraft/world/level/chunk/ChunkAccess;getBlockEntityNbtForSaving(Lnet/minecraft/core/BlockPos;Lnet/minecraft/core/HolderLookup$Provider;)Lnet/minecraft/nbt/CompoundTag;"))
-    private static CompoundTag sleep$be(ChunkAccess c, BlockPos pos, HolderLookup.Provider p, Operation<CompoundTag> original) {
+            target = "Lnet/minecraft/world/level/chunk/ChunkAccess;getBlockEntityNbtForSaving(Lnet/minecraft/core/BlockPos;)Lnet/minecraft/nbt/CompoundTag;"))
+    private static CompoundTag sleep$be(ChunkAccess c, BlockPos pos, Operation<CompoundTag> original) {
         long t = System.nanoTime();
         try {
-            return original.call(c, pos, p);
+            return original.call(c, pos);
         } finally {
             GenTrace.part("block entities", System.nanoTime() - t);
         }
@@ -76,13 +75,13 @@ public abstract class GenTraceSaveMixin {
     }
 
     @WrapOperation(method = "write", at = @At(value = "INVOKE",
-            target = "Lnet/minecraft/world/level/chunk/ChunkAccess;writeAttachmentsToNBT(Lnet/minecraft/core/HolderLookup$Provider;)Lnet/minecraft/nbt/CompoundTag;"))
-    private static CompoundTag sleep$attachments(ChunkAccess c, HolderLookup.Provider p, Operation<CompoundTag> original) {
+            target = "Lnet/minecraft/world/level/chunk/LevelChunk;writeCapsToNBT()Lnet/minecraft/nbt/CompoundTag;"))
+    private static CompoundTag sleep$attachments(net.minecraft.world.level.chunk.LevelChunk c, Operation<CompoundTag> original) {
         long t = System.nanoTime();
         try {
-            return original.call(c, p);
+            return original.call(c);
         } finally {
-            GenTrace.part("attachments", System.nanoTime() - t);
+            GenTrace.part("capabilities", System.nanoTime() - t);
         }
     }
 }

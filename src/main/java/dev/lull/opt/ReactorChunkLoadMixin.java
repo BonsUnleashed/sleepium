@@ -1,5 +1,6 @@
 package dev.lull.opt;
 
+import com.mojang.datafixers.util.Either;
 import it.unimi.dsi.fastutil.longs.Long2ByteMap;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
@@ -7,15 +8,16 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 import net.minecraft.Util;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.server.level.ChunkHolder;
 import net.minecraft.server.level.ChunkMap;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.util.thread.BlockableEventLoop;
 import net.minecraft.world.entity.ai.village.poi.PoiManager;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.chunk.ChunkAccess;
+import net.minecraft.world.level.chunk.ChunkStatus;
 import net.minecraft.world.level.chunk.ProtoChunk;
 import net.minecraft.world.level.chunk.UpgradeData;
-import net.minecraft.world.level.chunk.status.ChunkType;
 import net.minecraft.world.level.chunk.storage.ChunkSerializer;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
@@ -33,8 +35,11 @@ import org.spongepowered.asm.mixin.Unique;
  * chunkTypeCache mark (a main-thread map) goes into a queue the main thread drains at its next executor poll — until then
  * the only reader, isExistingChunkFull, reads the disk and finds nothing: the same answer ("not full"). Saved data is
  * deserialized on the pool by vanilla's read, its shared-state calls replayed on the main thread in order before the
- * chunk is published (ReadJournal; a tag with mod attachments reads on main as in vanilla); failures go to vanilla's
- * handler on the main thread; a normal result does not hop.
+ * chunk is published (ReadJournal); failures go to vanilla's handler on the main thread; a normal result does not hop.
+ *
+ * <p>1.20.1 / Forge: what runs mod code inside the read stays on the main thread as in vanilla - a tag with Forge
+ * capabilities ("ForgeCaps": their deserializers), and a full chunk (LevelChunk's constructor gathers its capabilities:
+ * AttachCapabilitiesEvent) whenever anybody may listen to AttachCapabilitiesEvent.
  */
 @Mixin(ChunkMap.class)
 public abstract class ReactorChunkLoadMixin implements dev.lull.optsupport.ChunkLoadMarks {
@@ -54,12 +59,12 @@ public abstract class ReactorChunkLoadMixin implements dev.lull.optsupport.Chunk
     }
 
     @Shadow
-    private ChunkAccess handleChunkLoadFailure(Throwable exception, ChunkPos chunkPos) {
+    private Either<ChunkAccess, ChunkHolder.ChunkLoadingFailure> handleChunkLoadFailure(Throwable exception, ChunkPos chunkPos) {
         throw new AssertionError();
     }
 
     @Shadow
-    private byte markPosition(ChunkPos chunkPos, ChunkType chunkType) {
+    private byte markPosition(ChunkPos chunkPos, ChunkStatus.ChunkType chunkType) {
         throw new AssertionError();
     }
 
@@ -71,12 +76,21 @@ public abstract class ReactorChunkLoadMixin implements dev.lull.optsupport.Chunk
         while ((p = sleep$replaceable.poll()) != null) this.chunkTypeCache.put(p.longValue(), (byte) -1);   // markPositionReplaceable
     }
 
+    /** whether the read of this tag runs mod code (see class doc): then it stays on the main thread */
+    @Unique
+    private static boolean sleep$modCodeInRead(CompoundTag saved) {
+        if (saved.contains("ForgeCaps")) return true;
+        if (ChunkSerializer.getChunkTypeFromTag(saved) != ChunkStatus.ChunkType.LEVELCHUNK) return false;
+        return !(net.minecraftforge.common.MinecraftForge.EVENT_BUS instanceof dev.lull.optsupport.CompositeEventBus cb)
+                || cb.mayHaveListeners(net.minecraftforge.event.AttachCapabilitiesEvent.class);
+    }
+
     /**
      * @author probe
      * @reason new chunks are created off the main thread, and a normal result does not hop to it (see class doc)
      */
     @Overwrite
-    private CompletableFuture<ChunkAccess> scheduleChunkLoad(ChunkPos chunkPos) {
+    private CompletableFuture<Either<ChunkAccess, ChunkHolder.ChunkLoadingFailure>> scheduleChunkLoad(ChunkPos chunkPos) {
         return this.readChunk(chunkPos).thenApply(p_214925_ -> p_214925_.filter(p_214928_ -> {
             boolean flag = isChunkDataValid(p_214928_);
             if (!flag) {
@@ -87,28 +101,28 @@ public abstract class ReactorChunkLoadMixin implements dev.lull.optsupport.Chunk
             if (tag.isEmpty()) {
                 return CompletableFuture.supplyAsync(() -> {
                     sleep$replaceable.add(chunkPos.toLong());
-                    return (ChunkAccess) new ProtoChunk(chunkPos, UpgradeData.EMPTY, this.level, this.level.registryAccess().registryOrThrow(Registries.BIOME), null);
+                    return Either.<ChunkAccess, ChunkHolder.ChunkLoadingFailure>left(
+                            new ProtoChunk(chunkPos, UpgradeData.EMPTY, this.level, this.level.registryAccess().registryOrThrow(Registries.BIOME), null));
                 }, Util.backgroundExecutor());
             }
             CompoundTag saved = tag.get();
-            if (!dev.lull.optsupport.ReadJournal.ENABLED
-                    || saved.contains(net.neoforged.neoforge.attachment.AttachmentHolder.ATTACHMENTS_NBT_KEY, 10)) {
-                // mod attachment deserializers run in the read: keep it on the main thread
+            if (!dev.lull.optsupport.ReadJournal.ENABLED || sleep$modCodeInRead(saved)) {
+                // mod code runs in the read: keep it on the main thread
                 return CompletableFuture.supplyAsync(() -> {
                     this.level.getProfiler().incrementCounter("chunkLoad");
                     dev.lull.optsupport.ReadJournal.ON_MAIN.increment();
-                    ChunkAccess chunkaccess = ChunkSerializer.read(this.level, this.poiManager, ((ReactorStorageAccessor) (Object) this).sleep$storageInfo(), chunkPos, saved);
-                    this.markPosition(chunkPos, chunkaccess.getPersistedStatus().getChunkType());
-                    return chunkaccess;
+                    ChunkAccess chunkaccess = ChunkSerializer.read(this.level, this.poiManager, chunkPos, saved);
+                    this.markPosition(chunkPos, chunkaccess.getStatus().getChunkType());
+                    return Either.<ChunkAccess, ChunkHolder.ChunkLoadingFailure>left(chunkaccess);
                 }, this.mainThreadExecutor);
             }
             // saved data: the read runs on the pool over the saved tag; its shared-state calls replay on main (ReadJournal)
             return CompletableFuture.supplyAsync(() -> dev.lull.optsupport.ReadJournal.read(() -> ChunkSerializer.read(this.level, this.poiManager,
-                    ((ReactorStorageAccessor) (Object) this).sleep$storageInfo(), chunkPos, saved)), Util.backgroundExecutor()).thenApplyAsync(journal -> {
+                    chunkPos, saved)), Util.backgroundExecutor()).thenApplyAsync(journal -> {
                 this.level.getProfiler().incrementCounter("chunkLoad");
                 ChunkAccess chunkaccess = journal.publish();
-                this.markPosition(chunkPos, chunkaccess.getPersistedStatus().getChunkType());
-                return chunkaccess;
+                this.markPosition(chunkPos, chunkaccess.getStatus().getChunkType());
+                return Either.<ChunkAccess, ChunkHolder.ChunkLoadingFailure>left(chunkaccess);
             }, this.mainThreadExecutor);
         }).handle((chunk, error) -> error == null ? CompletableFuture.completedFuture(chunk)
                 : CompletableFuture.supplyAsync(() -> this.handleChunkLoadFailure(error, chunkPos), this.mainThreadExecutor))

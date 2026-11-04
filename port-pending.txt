@@ -19,8 +19,6 @@ dev/lull/ScaleListeners.java
 dev/lull/BusEquivalence.java
 dev/lull/BusAnatomy.java
 dev/lull/EventBench.java
-dev/lull/mixin/GenProfile*.java
-dev/lull/mixin/GenTrace*.java
 # the client renderer (1.20.1 has the old buffer API and section renderer): stage 3
 dev/lull/optsupport/ChunkMultiDraw.java
 dev/lull/optsupport/SectionLists.java
@@ -44,19 +42,9 @@ dev/lull/opt/LevelRendererVisibleAccessor.java
 dev/lull/opt/PartTypeMixin.java
 dev/lull/opt/PartBatchMixin.java
 dev/lull/mixin/DrawStats*.java
-# world generation and the chunk reactors (1.20.1's chunk pipeline differs): stage 2b
-dev/lull/opt/WorldgenShareRegionMixin.java
-dev/lull/opt/ReactorReadJournalMixin.java
-dev/lull/opt/ReactorFullMixin.java
-dev/lull/opt/ReactorStorageAccessor.java
-dev/lull/opt/ReactorChunkLoadMixin.java
-dev/lull/opt/ParallelWorldgenMixin.java
-dev/lull/opt/WorldgenReactorMixin.java
-dev/lull/optsupport/ParallelGen.java
-dev/lull/mixin/ChunkStepHashMixin.java
-dev/lull/GenBench.java
-dev/lull/GenBenchHooks.java
-dev/lull/mixin/IoScout*.java
+# world generation and the chunk reactors (stage 2b) are ported; left of that list: the client's (renderer, stage 3) -
+# LightScoutMixin (measurement: 1.21's SectionCompiler.compile; 1.20.1 compiles in RenderChunk's RebuildTask), the
+# render cache, ParallelEntities / ParallelReload (EntityRenderDispatcher) and their supports
 dev/lull/opt/LightScoutMixin.java
 dev/lull/optsupport/PartBatch.java
 # the event bus (Forge's eventbus 6 differs from NeoForge's): its own step
@@ -103,17 +91,14 @@ dev/lull/opt/VertexSortRadixMixin.java
 # 1.21-only target: NeoForge's ClientHooks.isBlockEntityRendererVisible (the default box new AABB(pos)); Forge 1.20.1
 # tests frustum.isVisible(be.getRenderBoundingBox()), whose default box comes from the collision shape: another check
 dev/lull/opt/BlockEntityCullNoAllocMixin.java
-# world generation (stage 2b): its measurements, driven by GenBench / the pending GenProfile* / GenTrace* mixins and ParallelGen
-dev/lull/GenProfile.java
-dev/lull/optsupport/GenTrace.java
-# world generation (stage 2b): the rest of WorldgenReactor - its core (WorldgenReactorMixin, ReactorFull / ChunkLoad /
-# Storage / ReadJournal) is pending above, these parts alone would be half a feature behind the same flag
-# (ReactorTickMixin is already ported to 1.20.1's millisecond tick schedule)
-dev/lull/opt/ReactorExecutorMixin.java
-dev/lull/opt/ReactorIOWorkerInvoker.java
-dev/lull/opt/ReactorMainDrainMixin.java
-dev/lull/opt/ReactorRingsAccessor.java
-dev/lull/opt/ReactorTickMixin.java
 # 1.21-only target: UnloadRecheckMixin fixes 1.21's stop-time spin (isReadyForSaving re-queued at once); 1.20.1's
 # scheduleUnload re-attaches to the new getChunkToSave() future, no spin - on 1.20.1 it would only defer unloads
 dev/lull/opt/UnloadRecheckMixin.java
+# 1.21-only target: WorldgenShareRegionMixin memoizes 1.21's per-access lookup (StaticCache2D, the holder's futures,
+# getNow: volatile reads); 1.20.1's WorldGenRegion.getChunk is already a plain index into its List<ChunkAccess>
+dev/lull/opt/WorldgenShareRegionMixin.java
+# measurement (-Dlab.pgen.trace): its targets on 1.20.1 are inside scheduleUnload's lambda (no stable name across the dev
+# and SRG names); the rest of GenTrace* is ported
+dev/lull/mixin/GenTraceUnloadMixin.java
+# 1.21-only target: MinecraftServer.waitForTasks (1.20.1 inherits BlockableEventLoop's; GenProfileWaitMixin times both)
+dev/lull/mixin/GenProfileServerWaitMixin.java

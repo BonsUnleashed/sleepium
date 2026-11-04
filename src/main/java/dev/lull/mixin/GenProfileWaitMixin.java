@@ -9,7 +9,10 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-/** Measurement only (genbench): event-loop waits (waitForTasks) on the server thread, outside and inside the idle phase. */
+/**
+ * Measurement only (genbench): event-loop waits (waitForTasks) on the server thread, outside and inside the idle phase.
+ * 1.20.1's MinecraftServer has no waitForTasks of its own (1.21.1's GenProfileServerWaitMixin): its waits come here too.
+ */
 @Mixin(BlockableEventLoop.class)
 public abstract class GenProfileWaitMixin {
     /** event-to-wake latency of the server reactor: a task posted to an event loop while the server thread is parked */
@@ -23,6 +26,6 @@ public abstract class GenProfileWaitMixin {
         if (!GenProfile.active() || !Thread.currentThread().getName().startsWith("Server thread")) { original.call(); return; }
         long t = System.nanoTime();
         original.call();
-        GenProfile.add("main: wait, " + (dev.lull.optsupport.MainReactor.idle ? "idle phase" : "blocking") + ", chunk executor", System.nanoTime() - t, 0);
+        GenProfile.add("main: wait, " + (dev.lull.optsupport.MainReactor.idle ? "idle phase" : "blocking") + (((Object) this) instanceof net.minecraft.server.MinecraftServer ? ", server" : ", chunk executor"), System.nanoTime() - t, 0);
     }
 }

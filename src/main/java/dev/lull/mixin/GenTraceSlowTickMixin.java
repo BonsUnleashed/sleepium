@@ -23,12 +23,15 @@ public abstract class GenTraceSlowTickMixin {
     @Shadow private ProfilerFiller profiler;
     @Shadow private int tickCount;
     @Unique private ActiveProfiler sleep$active;
+    /** the profiler before the tee: 1.20.1 keeps the field between ticks (work outside a tick must not reach ours) */
+    @Unique private ProfilerFiller sleep$prev;
     @Unique private static final long sleep$THRESHOLD = Long.getLong("lab.slowtick.ms", 50L) * 1_000_000L;
 
     @Inject(method = "startMetricsRecordingTick", at = @At("TAIL"))
     private void sleep$start(CallbackInfo ci) {
         sleep$active = new ActiveProfiler(net.minecraft.Util.timeSource, () -> this.tickCount, false);
         sleep$active.startTick();
+        sleep$prev = profiler;
         profiler = ProfilerFiller.tee(sleep$active, profiler);
     }
 
@@ -37,6 +40,7 @@ public abstract class GenTraceSlowTickMixin {
         ActiveProfiler a = sleep$active;
         sleep$active = null;
         if (a == null) return;
+        profiler = sleep$prev;   // (vanilla's endTick above reached ours through the tee)
         ProfileResults r = a.getResults();
         long ns = r.getNanoDuration();
         String samples = dev.lull.optsupport.TickSampler.lastTick();

@@ -16,8 +16,10 @@ import net.minecraft.world.level.ChunkPos;
  * how long until every one is a FULL LevelChunk. Exercises the worldgen / light / sorter mailboxes, IO and the
  * chunk-source main executor — the cross-thread paths that stay idle in the static lag scenes.
  *
- * <p>{@code /sleep genbench <side> <label>}: side x side chunks (e.g. 24 -> 576 chunks). Tick stats, event and task
- * counters run for the whole generation and are written as a normal report plus a row in genbench.csv.
+ * <p>{@code /sleep genbench <side> <label>}: side x side chunks (e.g. 24 -> 576 chunks). Written: a report
+ * (genbench-<label>.txt: speed, CPU, generation phases), a row in genbench.csv, the per-chunk hashes and, with
+ * "steps" in -Dsleep.genbench.hash, every step's input / output hash (genstep-<label>.txt, tools/genstep.py compares
+ * two runs). 1.20.1: no /sleep recording of tick and event counters yet (the 1.21.1 report had them).
  */
 final class GenBench {
     private static ServerLevel level;
@@ -32,12 +34,13 @@ final class GenBench {
     private static final it.unimi.dsi.fastutil.longs.Long2LongOpenHashMap loadHashes = new it.unimi.dsi.fastutil.longs.Long2LongOpenHashMap();
 
     /**
-     * -Dsleep.genbench.hash: "carvers,full" (default), "carvers", "full" or "none". Hashing reads all ~98k block states
-     * of a chunk: the FULL hash runs on the server thread (a quarter of its time at 140 chunks/s, inflating MSPT), the
-     * CARVERS hash on the worker that finished the step. Throughput runs use "none".
+     * -Dsleep.genbench.hash: "carvers,full" (default), "carvers", "full", "steps" (with the others or alone) or "none".
+     * Hashing reads all ~98k block states of a chunk: the FULL hash runs on the server thread (a quarter of its time at
+     * 140 chunks/s, inflating MSPT), the CARVERS hash on the worker that finished the step; "steps" hashes every step's
+     * window twice (GenBenchHooks). Throughput runs use "none".
      */
     static final String HASH = System.getProperty("sleep.genbench.hash", "carvers,full");
-    static final boolean HASH_FULL = HASH.contains("full"), HASH_CARVERS = HASH.contains("carvers");
+    static final boolean HASH_FULL = HASH.contains("full"), HASH_CARVERS = HASH.contains("carvers"), HASH_STEPS = HASH.contains("steps");
 
     /** chunks of this level that reached FULL (ChunkEvent.Load) during the current tick, any position */
     private static int loadsThisTick;
@@ -46,7 +49,7 @@ final class GenBench {
     private static final it.unimi.dsi.fastutil.longs.LongArrayList TICK_NANOS = new it.unimi.dsi.fastutil.longs.LongArrayList();
     private static long lastTickEnd;
 
-    static void onChunkLoad(net.neoforged.neoforge.event.level.ChunkEvent.Load e) {
+    static void onChunkLoad(net.minecraftforge.event.level.ChunkEvent.Load e) {
         if (active && e.getLevel() == level) loadsThisTick++;
         if (!active || !HASH_FULL || e.getLevel() != level) return;
         ChunkPos p = e.getChunk().getPos();
@@ -73,8 +76,81 @@ final class GenBench {
 
     private GenBench() {}
 
+    /** the game directory's measurement folder (1.20.1's getServerDirectory is a File) */
+    private static Path out(MinecraftServer server) {
+        return server.getServerDirectory().toPath().resolve(dev.lull.SleepOut.ROOT);
+    }
+
+    /**
+     * Every recorded step of the area's chunks as "cx cz status input output" (genstep-<label>.txt), statuses in
+     * generation order; a step that never ran here (a chunk loaded instead of generated) is absent.
+     */
+    private static void writeStepHashes(MinecraftServer server) {
+        StringBuilder b = new StringBuilder();
+        for (net.minecraft.world.level.chunk.ChunkStatus st : net.minecraft.world.level.chunk.ChunkStatus.getStatusList())
+            for (int dx = 0; dx < side; dx++)
+                for (int dz = 0; dz < side; dz++) {
+                    long[] io = GenBenchHooks.STEPS.get(GenBenchHooks.stepKey(st.getIndex(), new ChunkPos(x0 + dx, z0 + dz)));
+                    if (io == null) continue;
+                    b.append(x0 + dx).append(' ').append(z0 + dz).append(' ').append(st).append(' ')
+                            .append(Long.toHexString(io[0])).append(' ').append(Long.toHexString(io[1])).append('\n');
+                }
+        Path f = out(server).resolve("genstep-" + label + ".txt");
+        try {
+            Files.createDirectories(f.getParent());
+            Files.writeString(f, b.toString());
+        } catch (IOException e) {
+            SleepMod.LOGGER.error("Cannot write {}", f, e);
+        }
+        GenBenchHooks.STEPS.clear();
+    }
+
     static boolean active() {
         return active;
+    }
+
+    /**
+     * -Dsleep.genbench.ordered=true (exactness runs, tools/genstep.py): FEATURES in one fixed order. On 1.20.1 the order
+     * neighbours run FEATURES in decides each 3x3's input, so with the vanilla schedule most FEATURES steps cannot be
+     * compared between two runs. Here the area and the 3 rings its forced chunks generate to FEATURES (ticket level 31:
+     * rings 0..2 FULL, ring 3 INITIALIZE_LIGHT) are first taken to FEATURES one chunk at a time, row by row: a ticket of
+     * level 34 (byStatus(FEATURES): the chunk itself to INITIALIZE_LIGHT, its ring to CARVERS) runs that chunk's
+     * FEATURES and no other, and the next chunk starts only when it is done. Then the area is forced as usual (no
+     * FEATURES left to run). The time measured is then meaningless; every step is comparable.
+     */
+    static final boolean ORDERED = Boolean.getBoolean("sleep.genbench.ordered");
+    private static final net.minecraft.server.level.TicketType<ChunkPos> ORDER_TICKET =
+            net.minecraft.server.level.TicketType.create("sleep_genbench", java.util.Comparator.comparingLong(ChunkPos::toLong));
+    private static final int ORDER_MARGIN = 3;
+    private static final java.util.ArrayList<ChunkPos> ORDER = new java.util.ArrayList<>();
+    /** the next chunk of ORDER to take to FEATURES; -1 = no ordered pass running */
+    private static int orderNext = -1;
+
+    /** server thread, end of a tick: the ordered pass, chunk by chunk (each getChunk waits for its FEATURES) */
+    private static boolean orderedPass() {
+        if (orderNext < 0) return false;
+        long until = System.nanoTime() + 40_000_000L;
+        while (orderNext < ORDER.size() && System.nanoTime() < until) {
+            ChunkPos p = ORDER.get(orderNext++);
+            level.getChunkSource().addRegionTicket(ORDER_TICKET, p, -1, p);   // level 33 - (-1) = 34
+            level.getChunkSource().getChunk(p.x, p.z, net.minecraft.world.level.chunk.ChunkStatus.FEATURES, true);
+        }
+        if (orderNext < ORDER.size()) return true;
+        orderNext = -1;
+        SleepMod.LOGGER.info("sleep: genbench '{}' ordered FEATURES pass done ({} chunks), forcing the area", label, ORDER.size());
+        force(true);
+        return true;
+    }
+
+    private static void force(boolean on) {
+        for (int dx = 0; dx < side; dx++) {
+            for (int dz = 0; dz < side; dz++) {
+                // Async FORCED ticket (ticket level 31). NOT level.setChunkForced(): that also calls getChunk()
+                // synchronously, i.e. generates one chunk at a time on the server thread (the /forceload command
+                // does the same and freezes the server: 256 chunks = 7.6 s in one tick).
+                level.getChunkSource().updateChunkForced(new ChunkPos(x0 + dx, z0 + dz), on);
+            }
+        }
     }
 
     static void start(MinecraftServer server, int sideChunks, String l) {
@@ -82,7 +158,7 @@ final class GenBench {
         String dim = System.getProperty("sleep.genbench.dim");
         level = dim == null ? server.overworld()
                 : server.getLevel(net.minecraft.resources.ResourceKey.create(net.minecraft.core.registries.Registries.DIMENSION,
-                        net.minecraft.resources.ResourceLocation.parse(dim)));
+                        new net.minecraft.resources.ResourceLocation(dim)));
         if (level == null) level = server.overworld();
         side = sideChunks;
         total = side * side;
@@ -92,21 +168,21 @@ final class GenBench {
         z0 = 4000;
         loadHashes.clear();
         GenBenchHooks.CARVERS.clear();
+        GenBenchHooks.STEPS.clear();
         GenBenchHooks.x0 = x0;
         GenBenchHooks.z0 = z0;
         GenBenchHooks.side = side;
         GenBenchHooks.active = true;
-        SleepCommand.startRecording();
         startTick = TickTimer.INSTANCE.ticks();
         startNanos = System.nanoTime();
         cpu = new CpuWindow();
-        for (int dx = 0; dx < side; dx++) {
-            for (int dz = 0; dz < side; dz++) {
-                // Async FORCED ticket (ticket level 31). NOT level.setChunkForced(): that also calls getChunk()
-                // synchronously, i.e. generates one chunk at a time on the server thread (the /forceload command
-                // does the same and freezes the server: 256 chunks = 7.6 s in one tick).
-                level.getChunkSource().updateChunkForced(new ChunkPos(x0 + dx, z0 + dz), true);
-            }
+        if (ORDERED) {
+            ORDER.clear();
+            for (int z = z0 - ORDER_MARGIN; z < z0 + side + ORDER_MARGIN; z++)
+                for (int x = x0 - ORDER_MARGIN; x < x0 + side + ORDER_MARGIN; x++) ORDER.add(new ChunkPos(x, z));
+            orderNext = 0;
+        } else {
+            force(true);
         }
         active = true;
         SleepMod.LOGGER.info("sleep: genbench '{}' started, {} chunks at chunk {},{}", label, total, x0, z0);
@@ -133,11 +209,13 @@ final class GenBench {
                 carv.append(x0 + dx).append(' ').append(z0 + dz).append(' ').append(c == null ? "0" : Long.toHexString(c)).append('\n');
             }
         try {
-            Files.writeString(server.getServerDirectory().resolve(dev.lull.SleepOut.ROOT).resolve("genhash-" + label + "-carvers.txt"), carv.toString());
+            Files.createDirectories(out(server));
+            Files.writeString(out(server).resolve("genhash-" + label + "-carvers.txt"), carv.toString());
         } catch (IOException e) {
             SleepMod.LOGGER.error("Cannot write carvers hashes", e);
         }
-        Path f = server.getServerDirectory().resolve(dev.lull.SleepOut.ROOT).resolve("genhash-" + label + ".txt");
+        if (HASH_STEPS) writeStepHashes(server);
+        Path f = out(server).resolve("genhash-" + label + ".txt");
         try {
             Files.createDirectories(f.getParent());
             Files.writeString(f, out.toString());
@@ -182,6 +260,7 @@ final class GenBench {
         if (!active) {
             return;
         }
+        if (orderedPass()) return;
         long now = System.nanoTime();
         TICK_LOADS.add(loadsThisTick);
         TICK_NANOS.add(lastTickEnd == 0 ? 0 : now - lastTickEnd);
@@ -208,13 +287,16 @@ final class GenBench {
                 + (Boolean.getBoolean("lab.genscout") ? System.lineSeparator() + dev.lull.optsupport.GenScout.reportAndReset() + System.lineSeparator() + dev.lull.optsupport.GenScout.perlinBench()
                         + System.lineSeparator() + dev.lull.optsupport.ColumnBound.report() : "");
         String hashLine = writeChunkHashes(server) + "\n" + cpuLine;
-        Path report = SleepCommand.finishRecording(server, "genbench-" + label, line + "\n" + hashLine);
-        for (int dx = 0; dx < side; dx++) {
-            for (int dz = 0; dz < side; dz++) {
-                level.getChunkSource().updateChunkForced(new ChunkPos(x0 + dx, z0 + dz), false);
-            }
+        Path report = out(server).resolve("genbench-" + label + ".txt");
+        try {
+            Files.writeString(report, line + "\n" + hashLine + "\n");
+        } catch (IOException e) {
+            SleepMod.LOGGER.error("Cannot write {}", report, e);
         }
-        Path csv = server.getServerDirectory().resolve(dev.lull.SleepOut.ROOT).resolve("genbench.csv");
+        force(false);
+        for (ChunkPos p : ORDER) level.getChunkSource().removeRegionTicket(ORDER_TICKET, p, -1, p);
+        ORDER.clear();
+        Path csv = out(server).resolve("genbench.csv");
         try {
             if (!Files.exists(csv)) {
                 Files.writeString(csv, "time,label,chunks,seconds,chunks_per_s,ticks\n");

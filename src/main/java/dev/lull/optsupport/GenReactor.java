@@ -21,6 +21,12 @@ import net.minecraft.Util;
  * background pool (a LabRuntime with LabPoolsMixin: a worker's own deque, stolen by idle ones); a drain job runs the
  * most urgent queued task (lowest level first, as ChunkTaskPriorityQueueSorter would). A continuation posts from the
  * thread that completed the future, so the next layer starts where the data is.
+ *
+ * <p>1.20.1 (WorldgenReactorMixin): the actor runs scheduleChunkGeneration's composes, one per (chunk, status) -
+ * ChunkHolder keeps one future per status, so a step is scheduled once and never overlaps itself; what runs
+ * concurrently now besides ParallelGen's steps is structure starts / references, spawn and the light initialisation,
+ * as above. Shared state they read that 1.20.1 left unsynchronised: a structure template palette's block cache
+ * (StructurePaletteCacheMixin, on with ParallelWorldgenMixin).
  */
 public final class GenReactor {
     public static final boolean ENABLED = Boolean.getBoolean("lab.opt.all") || Boolean.getBoolean("lab.opt.WorldgenReactor");

@@ -6,29 +6,40 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.LongAdder;
 import java.util.function.Supplier;
+import net.minecraft.CrashReport;
+import net.minecraft.CrashReportCategory;
+import net.minecraft.ReportedException;
 import net.minecraft.Util;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.ChunkPos;
-import net.minecraft.world.level.chunk.ChunkAccess;
-import net.minecraft.world.level.chunk.status.ChunkStatus;
-import net.minecraft.world.level.chunk.status.ChunkStep;
+import net.minecraft.world.level.chunk.ChunkGenerator;
+import net.minecraft.world.level.chunk.ChunkStatus;
 
 /**
  * exp/parallel-worldgen: the worldgen actor schedules, the pool computes.
  *
- * <p>Vanilla already has one owner of generation state: the `worldgen` mailbox runs every ChunkGenerationTask, which
- * walks ChunkPyramid layer by layer (acquireStatusBump makes each (chunk, status) step run once). But it also runs
- * SURFACE, CARVERS and FEATURES inline, one chunk at a time for the whole level. Here those step bodies go to the
- * server's one background pool (Util.backgroundExecutor, the pool NOISE and BIOMES already use; a LabRuntime with
- * LabPoolsMixin), so the actor only schedules. No pool of our own: one set of workers sized to the machine.
+ * <p>Vanilla already has one owner of generation state: the `worldgen` mailbox (1.20.1: behind
+ * ChunkTaskPriorityQueueSorter) runs every step of ChunkMap.scheduleChunkGeneration once its chunk's range is ready
+ * (ChunkHolder keeps one future per status, so each (chunk, status) step runs once). But it also runs SURFACE, CARVERS
+ * and FEATURES inline - ChunkStatus.SimpleGenerationTask, synchronous - one chunk at a time for the whole level. Here
+ * those step bodies go to the server's one background pool (Util.backgroundExecutor, the pool NOISE and BIOMES already
+ * use; a LabRuntime with LabPoolsMixin), so the actor only schedules: a step returning an unfinished future lets the
+ * mailbox go on with the next task, as NOISE's does. No pool of our own: one set of workers sized to the machine.
  *
- * <p>Write radii from ChunkPyramid:
+ * <p>Write radii (1.20.1: the WorldGenRegion each step builds, its writeRadiusCutoff; the same as 1.21's ChunkPyramid):
  * <ul>
  *   <li>SURFACE, CARVERS: 0, they write only their own chunk → any number at once;</li>
  *   <li>FEATURES: 1, it writes the 3x3 neighbourhood → a job claims its 9 chunks in a claims table. A job whose window
  *       overlaps a running one does not block a worker: it waits in a FIFO and is started by the job that frees its
  *       window. Earlier waiters reserve their windows during a scan, so a later job cannot overtake them forever.</li>
  * </ul>
- * The claims table is guarded by one monitor held for a few hash lookups (never while generating).
+ * The claims table is guarded by one monitor held for a few hash lookups (never while generating). A neighbour's
+ * FEATURES needs this chunk past CARVERS (1.20.1's getDependencyStatus: CARVERS at distance 1), so SURFACE and CARVERS
+ * never overlap a neighbour's writes.
+ *
+ * <p>Failures: vanilla catches an exception of a synchronous step in scheduleChunkGeneration's compose (a crash report
+ * "Exception generating new chunk", thrown again on the main thread); the step now runs on the pool, outside that try,
+ * so {@link #crash} builds the same report there.
  */
 public final class ParallelGen {
     public static final boolean ENABLED = Boolean.getBoolean("lab.opt.all") || Boolean.getBoolean("lab.opt.ParallelWorldgenMixin");
@@ -41,7 +52,7 @@ public final class ParallelGen {
 
     private static final Object CLAIMS_LOCK = new Object();
     private static final LongOpenHashSet CLAIMED = new LongOpenHashSet();
-    private static final ArrayList<FeatureJob> WAITING = new ArrayList<>();
+    private static final ArrayList<FeatureJob<?>> WAITING = new ArrayList<>();
 
     private ParallelGen() {}
 
@@ -49,21 +60,25 @@ public final class ParallelGen {
         return Util.backgroundExecutor();
     }
 
-    public static boolean shouldOffload(ChunkStep step) {
+    public static boolean shouldOffload(ChunkStatus s) {
         if (BYPASS.get()) return false;
-        ChunkStatus s = step.targetStatus();
         return s == ChunkStatus.SURFACE || s == ChunkStatus.CARVERS || s == ChunkStatus.FEATURES;
     }
 
-    /** Runs the vanilla step body on the pool; `vanilla` re-enters ChunkMap.applyStep with the bypass flag set. */
-    public static CompletableFuture<ChunkAccess> submit(ChunkPos pos, ChunkStep step, Supplier<CompletableFuture<ChunkAccess>> vanilla) {
+    /** whether this call of the step only hands it to the pool (ParallelWorldgenMixin on, not the re-entrant call) */
+    public static boolean offloads(ChunkStatus s) {
+        return ENABLED && shouldOffload(s);
+    }
+
+    /** Runs the vanilla step body on the pool; `vanilla` re-enters ChunkStatus.generate with the bypass flag set. */
+    public static <T> CompletableFuture<T> submit(ChunkPos pos, ChunkStatus status, Supplier<CompletableFuture<T>> vanilla) {
         OFFLOADED.increment();
         if (GenTrace.ON) GenTrace.submitted.increment();
         long t0 = GenTrace.ON ? System.nanoTime() : 0;
-        if (step.targetStatus() != ChunkStatus.FEATURES) return CompletableFuture.supplyAsync(() -> traced(t0, vanilla), pool());
+        if (status != ChunkStatus.FEATURES) return CompletableFuture.supplyAsync(() -> traced(t0, vanilla), pool());
         FEATURE_JOBS.increment();
-        FeatureJob job = new FeatureJob(pos.x, pos.z, vanilla, t0);
-        ArrayList<FeatureJob> start;
+        FeatureJob<T> job = new FeatureJob<>(pos.x, pos.z, vanilla, t0);
+        ArrayList<FeatureJob<?>> start;
         synchronized (CLAIMS_LOCK) {
             WAITING.add(job);
             start = startable();
@@ -77,7 +92,7 @@ public final class ParallelGen {
     }
 
     /** a step body with the trace's timing (GenTrace: to a worker, running, done) */
-    private static ChunkAccess traced(long t0, Supplier<CompletableFuture<ChunkAccess>> vanilla) {
+    private static <T> T traced(long t0, Supplier<CompletableFuture<T>> vanilla) {
         if (!GenTrace.ON) return run(vanilla);
         long t1 = System.nanoTime();
         GenTrace.started.increment();
@@ -99,7 +114,7 @@ public final class ParallelGen {
         }
     }
 
-    private static ChunkAccess run(Supplier<CompletableFuture<ChunkAccess>> vanilla) {
+    private static <T> T run(Supplier<CompletableFuture<T>> vanilla) {
         BYPASS.set(true);
         try {
             // these steps return completedFuture: join() only unwraps, it never blocks here
@@ -109,14 +124,31 @@ public final class ParallelGen {
         }
     }
 
-    private static final class FeatureJob implements Runnable {
+    /**
+     * A synchronous step's body threw: vanilla's scheduleChunkGeneration report - the crash report thrown on the main
+     * thread (its executor logs it) and here (the step's future completes with it).
+     */
+    public static ReportedException crash(Throwable exception, ServerLevel level, ChunkGenerator generator, ChunkPos pos) {
+        if (exception instanceof ReportedException r) return r;
+        CrashReport crashreport = CrashReport.forThrowable(exception, "Exception generating new chunk");
+        CrashReportCategory crashreportcategory = crashreport.addCategory("Chunk to be generated");
+        crashreportcategory.setDetail("Location", String.format(java.util.Locale.ROOT, "%d,%d", pos.x, pos.z));
+        crashreportcategory.setDetail("Position hash", ChunkPos.asLong(pos.x, pos.z));
+        crashreportcategory.setDetail("Generator", generator);
+        level.getServer().execute(() -> {
+            throw new ReportedException(crashreport);
+        });
+        return new ReportedException(crashreport);
+    }
+
+    private static final class FeatureJob<T> implements Runnable {
         final int x, z;
-        final Supplier<CompletableFuture<ChunkAccess>> body;
-        final CompletableFuture<ChunkAccess> result = new CompletableFuture<>();
+        final Supplier<CompletableFuture<T>> body;
+        final CompletableFuture<T> result = new CompletableFuture<>();
         final long t0;
         boolean waited;
 
-        FeatureJob(int x, int z, Supplier<CompletableFuture<ChunkAccess>> body, long t0) {
+        FeatureJob(int x, int z, Supplier<CompletableFuture<T>> body, long t0) {
             this.x = x;
             this.z = z;
             this.body = body;
@@ -125,7 +157,7 @@ public final class ParallelGen {
 
         @Override
         public void run() {
-            ChunkAccess c = null;
+            T c = null;
             Throwable err = null;
             if (GenTrace.ON && waited) {
                 long w = System.nanoTime() - t0;
@@ -138,7 +170,7 @@ public final class ParallelGen {
             } catch (Throwable t) {
                 err = t;
             }
-            ArrayList<FeatureJob> start;
+            ArrayList<FeatureJob<?>> start;
             synchronized (CLAIMS_LOCK) {
                 for (int dx = -1; dx <= 1; dx++)
                     for (int dz = -1; dz <= 1; dz++) CLAIMED.remove(ChunkPos.asLong(x + dx, z + dz));
@@ -152,11 +184,11 @@ public final class ParallelGen {
     }
 
     /** Under CLAIMS_LOCK: claims and removes, in FIFO order, every waiter whose window is free and not reserved. */
-    private static ArrayList<FeatureJob> startable() {
-        ArrayList<FeatureJob> out = new ArrayList<>(2);
+    private static ArrayList<FeatureJob<?>> startable() {
+        ArrayList<FeatureJob<?>> out = new ArrayList<>(2);
         LongOpenHashSet reserved = null;
         for (int i = 0; i < WAITING.size(); ) {
-            FeatureJob j = WAITING.get(i);
+            FeatureJob<?> j = WAITING.get(i);
             if (windowFree(j, CLAIMED) && (reserved == null || windowFree(j, reserved))) {
                 for (int dx = -1; dx <= 1; dx++)
                     for (int dz = -1; dz <= 1; dz++) CLAIMED.add(ChunkPos.asLong(j.x + dx, j.z + dz));
@@ -172,13 +204,13 @@ public final class ParallelGen {
         return out;
     }
 
-    private static boolean windowFree(FeatureJob j, LongOpenHashSet set) {
+    private static boolean windowFree(FeatureJob<?> j, LongOpenHashSet set) {
         for (int dx = -1; dx <= 1; dx++)
             for (int dz = -1; dz <= 1; dz++) if (set.contains(ChunkPos.asLong(j.x + dx, j.z + dz))) return false;
         return true;
     }
 
-    private static void startAll(ArrayList<FeatureJob> jobs) {
+    private static void startAll(ArrayList<FeatureJob<?>> jobs) {
         Executor p = pool();
         for (int i = 0; i < jobs.size(); i++) p.execute(jobs.get(i));
     }

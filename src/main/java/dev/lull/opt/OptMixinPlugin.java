@@ -123,7 +123,7 @@ public final class OptMixinPlugin implements IMixinConfigPlugin {
             on = Boolean.getBoolean("lab.opt.all") || Boolean.getBoolean("lab.opt.NetReactor");
         if (simple.equals("NetReactorWaitMixin"))   // MainReactor's waitForTasks overwrite flushes by itself
             on = on && !(Boolean.getBoolean("lab.opt.all") || Boolean.getBoolean("lab.opt.MainReactor"));
-        if (simple.equals("StructurePlaceLockMixin"))
+        if (simple.equals("StructurePlaceLockMixin") || simple.equals("StructurePaletteCacheMixin"))   // parallel generation's guards
             on = Boolean.getBoolean("lab.opt.all") || Boolean.getBoolean("lab.opt.ParallelWorldgenMixin");
         if (simple.equals("LightRecipeVerifyMixin")) on = Boolean.getBoolean("lab.lightrecipe.verify");   // measurement only
         if (simple.startsWith("LightScout")) on = Boolean.getBoolean("lab.lightscout");   // measurement only

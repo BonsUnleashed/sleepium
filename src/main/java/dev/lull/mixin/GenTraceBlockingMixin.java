@@ -19,7 +19,7 @@ import org.spongepowered.asm.mixin.injection.At;
 public abstract class GenTraceBlockingMixin {
     @Shadow @Final ServerLevel level;
 
-    @WrapOperation(method = "getChunk(IILnet/minecraft/world/level/chunk/status/ChunkStatus;Z)Lnet/minecraft/world/level/chunk/ChunkAccess;",
+    @WrapOperation(method = "getChunk(IILnet/minecraft/world/level/chunk/ChunkStatus;Z)Lnet/minecraft/world/level/chunk/ChunkAccess;",
             at = @At(value = "INVOKE", target = "Lnet/minecraft/server/level/ServerChunkCache$MainThreadExecutor;managedBlock(Ljava/util/function/BooleanSupplier;)V"))
     private void sleep$blocking(@org.spongepowered.asm.mixin.injection.Coerce BlockableEventLoop<?> executor, BooleanSupplier done, Operation<Void> original) {
         level.getProfiler().push("blockingGetChunk");

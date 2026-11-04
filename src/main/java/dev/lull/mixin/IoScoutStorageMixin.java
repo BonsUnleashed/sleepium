@@ -6,14 +6,20 @@ import dev.lull.IoScout;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.chunk.storage.RegionFileStorage;
-import net.minecraft.world.level.chunk.storage.RegionStorageInfo;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 
 /** Measurement only (-Dsleep.ioScout=true): reading a chunk from its region file (disk + inflate + NBT parse). */
 @Mixin(RegionFileStorage.class)
 public abstract class IoScoutStorageMixin {
-    @Shadow public abstract RegionStorageInfo info();
+    @Shadow @org.spongepowered.asm.mixin.Final private java.nio.file.Path folder;
+
+    /** 1.20.1 has no RegionStorageInfo: the kind from the folder (region = chunk, poi, entities) */
+    @org.spongepowered.asm.mixin.Unique
+    private String sleep$type() {
+        String n = String.valueOf(this.folder.getFileName());
+        return n.equals("region") ? "chunk" : n;
+    }
 
     @WrapMethod(method = "read")
     private CompoundTag sleep$read(ChunkPos pos, Operation<CompoundTag> original) {
@@ -21,7 +27,7 @@ public abstract class IoScoutStorageMixin {
         try {
             return original.call(pos);
         } finally {
-            IoScout.read(info().type(), System.nanoTime() - t);
+            IoScout.read(sleep$type(), System.nanoTime() - t);
         }
     }
 }

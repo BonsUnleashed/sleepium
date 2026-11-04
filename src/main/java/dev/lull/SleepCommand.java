@@ -36,6 +36,14 @@ public final class SleepCommand {
                     say(ctx, "mixin audit done");
                     return 1;
                 }))
+                .then(Commands.literal("genbench")
+                        .then(Commands.argument("side", IntegerArgumentType.integer(2, 64))
+                                .then(Commands.argument("label", com.mojang.brigadier.arguments.StringArgumentType.word()).executes(ctx -> {
+                                    GenBench.start(ctx.getSource().getServer(), IntegerArgumentType.getInteger(ctx, "side"),
+                                            com.mojang.brigadier.arguments.StringArgumentType.getString(ctx, "label"));
+                                    say(ctx, "sleep: genbench started");
+                                    return 1;
+                                }))))
                 .then(Commands.literal("settle").executes(ctx -> {
                     try {
                         say(ctx, TestSeeds.settleLight(ctx.getSource().getServer()));
@@ -86,12 +94,12 @@ public final class SleepCommand {
     }
 
     /**
-     * The end of every server tick (TickTimer, LOWEST): the benches' clocks. On 1.21.1 also GenBench (world generation),
-     * NetBench (networking) - not ported yet - and the auto-stop of /sleep run (its report commands come over with the
-     * event counter).
+     * The end of every server tick (TickTimer, LOWEST): the benches' clocks. On 1.21.1 also NetBench (networking) - not
+     * ported yet - and the auto-stop of /sleep run (its report commands come over with the event counter).
      */
     static void onTickEnd(net.minecraft.server.MinecraftServer server) {
         IdleBench.onTickEnd(server);
+        GenBench.onTickEnd(server);
     }
 
     private static void say(CommandContext<CommandSourceStack> ctx, String msg) {

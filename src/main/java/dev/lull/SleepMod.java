@@ -29,8 +29,9 @@ public final class SleepMod {
         gameBus.addListener(EventPriority.NORMAL, false, TickEvent.ServerTickEvent.class, e -> {
             if (e.phase == TickEvent.Phase.END) dev.lull.api.Travel.tick();   // 1.21.1: ServerTickEvent.Post
         });
+        gameBus.addListener(EventPriority.NORMAL, false, net.minecraftforge.event.level.ChunkEvent.Load.class, GenBench::onChunkLoad);
         // not yet on 1.20.1: EventCounter, EventBench (the event bus step), NetBench, the bulk payloads / coalescing (networking),
-        // GenBench (world generation), the settings screen and the shaderpack pipeline (port-pending.txt)
+        // the settings screen and the shaderpack pipeline (port-pending.txt)
         if (FMLEnvironment.dist.isClient()) {
             ClientMeter.register(gameBus);   // class is only loaded on the physical client
             // the render cache's frame budget (1.21.1: RenderFrameEvent.Pre; Forge 1.20.1: RenderTickEvent START)
