@@ -5,7 +5,16 @@
   "compatibilityLevel": "JAVA_17",
   "refmap": "sleepium.refmap.json",
   "mixins": [
-    "BootMixin"
+    "BootMixin",
+    "SeedEntitiesMixin",
+    "SeedExplosionMixin",
+    "SeedLevelAccessor",
+    "SeedLevelMixin",
+    "SeedMthAccessor",
+    "SeedSensorAccessor",
+    "SeedShufflingMixin",
+    "TickControlLevelMixin",
+    "TickControlServerMixin"
   ],
   "injectors": {
     "defaultRequire": 1

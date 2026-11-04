@@ -21,6 +21,12 @@ tasks.named('jar', Jar).configure {
     manifest.attributes('MixinConfigs': "${mod_id}.mixins.json")   // Forge reads the mixin configs from the manifest
 }
 
+// the test scenes (data/sleep/functions: lag_*, client_*): loaded by the dev runs and the tools, not in the jar
+sourceSets {
+    scenes
+}
+tasks.named('classes') { dependsOn 'processScenesResources' }
+
 // Minecraft 1.20.1 runs on Java 17 (players' launchers ship 17): the port compiles for 17
 java.toolchain.languageVersion = JavaLanguageVersion.of(17)
 
@@ -48,6 +54,7 @@ legacyForge {
     mods {
         "${mod_id}" {
             sourceSet(sourceSets.main)
+            sourceSet(sourceSets.scenes)
         }
     }
 }
@@ -81,8 +88,37 @@ var generateModMetadata = tasks.register('generateModMetadata', ProcessResources
     into 'build/generated/sources/modMetadata'
 }
 sourceSets.main.resources.srcDir generateModMetadata
+
+// Names (dev.lull.Names): the official -> SRG member table, gzipped into the jar, for the engine's own bytecode work
+var packNames = tasks.register('packNames') {
+    dependsOn 'createMinecraftArtifacts'
+    var src = layout.buildDirectory.file('moddev/artifacts/namedToIntermediate.tsrg')
+    var out = layout.buildDirectory.dir('generated/sources/names')
+    inputs.file src
+    outputs.dir out
+    doLast {
+        var f = out.get().file('sleepium-names.tsrg.gz').asFile
+        f.parentFile.mkdirs()
+        new java.util.zip.GZIPOutputStream(new FileOutputStream(f)).withCloseable { it << src.get().asFile.bytes }
+    }
+}
+sourceSets.main.resources.srcDir packNames
 legacyForge.ideSyncTask generateModMetadata
 
 tasks.withType(JavaCompile).configureEach {
     options.encoding = 'UTF-8'
+}
+
+// the dedicated server reads its console from this build's standard input: the tools drive it with commands
+tasks.named('runServer') { standardInput = System.in }
+
+// extra JVM arguments for the runs, from the tools: -PrunJvmArgs="-Dlab.opt.defaults=true -Dsleep.seedEntities=true"
+// -PrunArgs="--width 1280 --height 720": program arguments for the dev runs
+if (project.hasProperty('runArgs')) {
+    def extra = project.property('runArgs').toString().trim()
+    if (!extra.isEmpty()) legacyForge.runs.configureEach { programArguments.addAll(extra.split(/\s+/) as List) }
+}
+if (project.hasProperty('runJvmArgs')) {
+    def extra = project.property('runJvmArgs').toString().trim()
+    if (!extra.isEmpty()) legacyForge.runs.configureEach { jvmArguments.addAll(extra.split(/\s+/) as List) }
 }

@@ -1,0 +1,17 @@
+setblock 1412 -59 197 minecraft:air
+setblock 1412 -59 199 minecraft:air
+setblock 1412 -59 201 minecraft:air
+setblock 1412 -59 203 minecraft:air
+setblock 1412 -59 205 minecraft:air
+setblock 1412 -59 207 minecraft:air
+setblock 1412 -59 209 minecraft:air
+setblock 1412 -59 211 minecraft:air
+setblock 1412 -59 213 minecraft:air
+setblock 1412 -59 215 minecraft:air
+setblock 1412 -59 217 minecraft:air
+setblock 1412 -59 219 minecraft:air
+setblock 1412 -59 221 minecraft:air
+setblock 1412 -59 223 minecraft:air
+setblock 1412 -59 225 minecraft:air
+setblock 1412 -59 227 minecraft:air
+schedule function sleep:create_clutch_on 10t replace

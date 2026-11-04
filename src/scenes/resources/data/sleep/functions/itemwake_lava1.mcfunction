@@ -1,0 +1,12 @@
+setblock 1203 -60 103 minecraft:lava
+setblock 1209 -60 103 minecraft:lava
+setblock 1215 -60 103 minecraft:lava
+setblock 1203 -60 109 minecraft:lava
+setblock 1209 -60 109 minecraft:lava
+setblock 1215 -60 109 minecraft:lava
+setblock 1203 -60 115 minecraft:lava
+setblock 1209 -60 115 minecraft:lava
+setblock 1215 -60 115 minecraft:lava
+setblock 1203 -60 121 minecraft:lava
+setblock 1209 -60 121 minecraft:lava
+setblock 1215 -60 121 minecraft:lava
