@@ -85,13 +85,13 @@ public final class MoveMemo {
             // v2: only the fields move's code reads or writes (the scan's sets) - the rest it never touches
             Set<String> rw = new HashSet<>(READ_SETS.getOrDefault(c, Set.of()));
             rw.addAll(WRITE_SETS.getOrDefault(c, Set.of()));
-            fl.removeIf(x -> !rw.contains(x.getName()));
+            fl.removeIf(x -> !rw.contains(dev.lull.Names.official(x.getName())));
             // synched data: by its modification counter (MoveMemoDataMixin), not a deep fingerprint of every item
             fl.removeIf(x -> dev.lull.Names.official(x.getName()).equals("entityData") && x.getDeclaringClass() == Entity.class);
             f = fl.toArray(new Field[0]);
             skip = new boolean[f.length];
             for (int i = 0; i < f.length; i++) {
-                skip[i] = EXCLUDED.contains(f[i].getName());
+                skip[i] = EXCLUDED.contains(dev.lull.Names.official(f[i].getName()));
                 if (dev.lull.Names.official(f[i].getName()).equals("random") && f[i].getDeclaringClass() == Entity.class) random = i;
             }
             snap = refuse == null ? SnapCompiler.compile(fl, true, new boolean[f.length]) : null;

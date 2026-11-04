@@ -49,6 +49,18 @@ public final class SleepCommand {
                                         .executes(ctx -> run(ctx, IntegerArgumentType.getInteger(ctx, "seconds"),
                                                 StringArgumentType.getString(ctx, "label"))))))
                 .then(Commands.literal("status").executes(SleepCommand::status))
+                .then(Commands.literal("sleep").executes(ctx -> {   // the sleep engine: block entities and entities asleep
+                    String r = dev.lull.optsupport.sleep.SleepEngine.report() + dev.lull.optsupport.sleep.EntitySleep.report()
+                            + dev.lull.optsupport.sleep.EntitySleep.census(ctx.getSource().getLevel());
+                    SleepMod.LOGGER.info("{}{}", System.lineSeparator(), r);
+                    say(ctx, r);
+                    return 1;
+                }))
+                .then(Commands.literal("sleepents").executes(ctx -> {
+                    String r = dev.lull.optsupport.sleep.SleepEngine.entityReport(ctx.getSource().getLevel());
+                    SleepMod.LOGGER.info("{}{}", System.lineSeparator(), r);
+                    return 1;
+                }))
                 .then(Commands.literal("busbench").executes(ctx -> {
                     if (EventCounter.INSTANCE.enabled()) {
                         say(ctx, "sleep: run /sleep stop first");

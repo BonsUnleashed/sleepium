@@ -353,7 +353,7 @@ public final class EntitySleep {
                 if (plan.nulls().contains(x)) nu.add(i);
                 if (plan.zeros().contains(x)) ze.add(i);
                 if (Entity.class.isAssignableFrom(x.getType())) er.add(i);
-                forbidV[i] = FORBID_V.contains(x.getName()) && x.getDeclaringClass() == Entity.class;
+                forbidV[i] = FORBID_V.contains(dev.lull.Names.official(x.getName())) && x.getDeclaringClass() == Entity.class;
             }
             if (tickCount < 0) refuse = "no tickCount";
             if (refuse != null) return;
@@ -2527,7 +2527,7 @@ public final class EntitySleep {
         Field[] fs = DFIELDS.computeIfAbsent(e.getClass(), EntitySleep::instanceFields);
         long h = 17;
         for (Field f : fs) {
-            String n = f.getName();
+            String n = dev.lull.Names.official(f.getName());
             if (n.equals("id") || n.equals("uuid") || n.equals("stringUUID") || n.startsWith("sleep$") || n.startsWith("probe$") || n.equals("bobOffs") || n.equals("timeOffs") || n.equals("rotA")) continue;   // per run (timeOffs, rotA: Math.random() in LivingEntity's constructor, cosmetic)
             Class<?> t = f.getType();
             // (random seeds are per run: RandomSource.create() is seeded from the clock)

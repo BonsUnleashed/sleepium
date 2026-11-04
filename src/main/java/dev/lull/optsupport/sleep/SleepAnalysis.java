@@ -629,7 +629,7 @@ final class SleepAnalysis {
             for (String[] t : tickers) branches(t[0], method(t[0], t[1], t[2]), 0, seen, beChain, beClass);
         }
         if (reject != null) return new Plan(false, reject, List.copyOf(clocks.values()), List.copyOf(conds));
-        for (Field c : clocks.values()) if (c != null) watch.putIfAbsent(c.getName(), c);
+        for (Field c : clocks.values()) if (c != null) watch.putIfAbsent(dev.lull.Names.official(c.getName()), c);   // (keys: Mojang names, as the bytecode reads them)
         return new Plan(true, "ok: " + tickers.size() + " ticker(s), watching " + watch.size() + " field(s)", List.copyOf(clocks.values()),
                 List.copyOf(conds), List.copyOf(watch.values()));
     }
@@ -1944,7 +1944,8 @@ final class SleepAnalysis {
         @Override
         protected Map<String, Field> computeValue(Class<?> c) {
             Map<String, Field> m = c.getSuperclass() == null || c.getSuperclass() == Object.class ? new HashMap<>() : new HashMap<>(FIELDS_IN.get(c.getSuperclass()));
-            for (Field f : declaredFields(c)) m.put(f.getName(), f);
+            // by Mojang's name: the analysed bytecode names fields so (ClassBytes), production's Fields carry SRG names
+            for (Field f : declaredFields(c)) m.put(dev.lull.Names.official(f.getName()), f);
             return m;
         }
     };
