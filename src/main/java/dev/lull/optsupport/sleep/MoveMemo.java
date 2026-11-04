@@ -125,12 +125,6 @@ public final class MoveMemo {
     static Entity recording;
     public static long draws;
     private static Thread thread;
-    /**
-     * Posts with listeners on the game bus (1.21.1: CompositeEventBus.fullPosts), the "posted an event with listeners"
-     * check. Forge 1.20.1 has no composite bus yet (the event bus step): the skipping mixin (MoveMemoMixin) stays in
-     * port-pending.txt until the bus counts them here.
-     */
-    public static long BUS_POSTS;
 
     private MoveMemo() {}
 
@@ -201,7 +195,7 @@ public final class MoveMemo {
         s.my = v.y;
         s.mz = v.z;
         s.draws0 = draws;
-        s.posts0 = BUS_POSTS;
+        s.posts0 = dev.lull.optsupport.CompositeEventBus.fullPosts;
         s.writes0 = dev.lull.BeTickStats.writes;
         s.unobserved0 = SleepEngine.unobservedAll;
         s.attrEpoch = attrEpoch(e);
@@ -244,7 +238,7 @@ public final class MoveMemo {
         k.snap.refs(e, s.afterRefs);
         String why = null;
         if (draws != s.draws0) why = "drew from its random";
-        else if (BUS_POSTS != s.posts0) why = "posted an event with listeners";
+        else if (dev.lull.optsupport.CompositeEventBus.fullPosts != s.posts0) why = "posted an event with listeners";
         else if (dev.lull.BeTickStats.writes != s.writes0) why = "wrote to the world";
         else if (SleepEngine.unobservedAll != s.unobserved0) why = "unobserved read";
         else if (readerRuns != s.readers0) why = "ran a reader of an excluded field";

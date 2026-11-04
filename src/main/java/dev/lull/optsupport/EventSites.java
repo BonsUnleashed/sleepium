@@ -7,29 +7,32 @@ import java.lang.invoke.MethodType;
 import java.lang.invoke.MutableCallSite;
 import java.util.ArrayList;
 import java.util.List;
-import net.neoforged.bus.api.Event;
-import net.neoforged.bus.api.IEventBus;
-import net.neoforged.neoforge.common.NeoForge;
+import net.minecraftforge.common.MinecraftForge;
+import net.minecraftforge.eventbus.api.Event;
+import net.minecraftforge.eventbus.api.IEventBus;
 
 /**
- * Allocation-free events nobody listens to (EventSiteMixin rewrites {@code NeoForge.EVENT_BUS.post(new E(...))} in
- * NeoForge's hook classes into an invokedynamic bound here, one call site per place).
+ * Allocation-free events nobody listens to (EventSiteMixin rewrites {@code MinecraftForge.EVENT_BUS.post(new E(...))}
+ * in Forge's hook classes into an invokedynamic bound here, one call site per place).
  *
- * <p>Each site is a MutableCallSite. While type E has no listener, its target is "return the event": the JIT sees a
- * constant target, inlines it, and escape analysis removes the {@code new E(...)} at the caller altogether. Otherwise
- * the target is the normal {@code bus.post(event)}. Any listener registration anywhere switches every fast site back
- * to the normal target first (CompositeEventBus calls {@link #invalidate}); a site becomes fast again by itself after
- * a post that finds no listener. Only when NeoForge.EVENT_BUS is our CompositeEventBus.
+ * <p>Each site is a MutableCallSite. While type E has no listener, its target is the bus' answer for an empty listener
+ * list ({@code isCancelable() && isCanceled()}, false for a fresh event): the JIT sees a constant target, inlines it,
+ * and escape analysis removes the {@code new E(...)} at the caller altogether. Otherwise the target is the normal
+ * {@code bus.post(event)}. Any listener registration anywhere switches every fast site back to the normal target first
+ * (CompositeEventBus calls {@link #invalidate}); a site becomes fast again by itself after a post that finds no
+ * listener. Only when MinecraftForge.EVENT_BUS is our CompositeEventBus.
  */
 public final class EventSites {
     private static final List<Site> SITES = new ArrayList<>();
-    private static final MethodHandle SLOW;
+    private static final MethodHandle SLOW, FAST;
     public static volatile long sites, fastSwitches, invalidations;
 
     static {
         try {
             SLOW = MethodHandles.lookup().findStatic(EventSites.class, "slow",
-                    MethodType.methodType(Event.class, Site.class, IEventBus.class, Event.class));
+                    MethodType.methodType(boolean.class, Site.class, IEventBus.class, Event.class));
+            FAST = MethodHandles.lookup().findStatic(EventSites.class, "fast",
+                    MethodType.methodType(boolean.class, IEventBus.class, Event.class));
         } catch (ReflectiveOperationException e) {
             throw new ExceptionInInitializerError(e);
         }
@@ -46,8 +49,7 @@ public final class EventSites {
         Site(Class<?> type, MethodType mt) {
             this.type = type;
             this.cs = new MutableCallSite(mt);
-            // (IEventBus, Event) -> Event: return the event itself
-            this.fast = MethodHandles.dropArguments(MethodHandles.identity(Event.class), 0, IEventBus.class).asType(mt);
+            this.fast = FAST.asType(mt);
             this.slow = MethodHandles.insertArguments(SLOW, 0, this).asType(mt);
             cs.setTarget(slow);
         }
@@ -62,10 +64,15 @@ public final class EventSites {
         return s.cs;
     }
 
+    /** what EventBus.post returns for an event no listener sees */
+    private static boolean fast(IEventBus bus, Event event) {
+        return event.isCanceled() && event.isCancelable();
+    }
+
     /** The normal post; afterwards the site turns fast if this type has (now) no listener at all. */
-    private static Event slow(Site s, IEventBus bus, Event event) {
-        Event r = bus.post(event);
-        if (!s.isFast && bus == NeoForge.EVENT_BUS && bus instanceof CompositeEventBus cb && !cb.hasListeners(s.type)) {
+    private static boolean slow(Site s, IEventBus bus, Event event) {
+        boolean r = bus.post(event);
+        if (!s.isFast && bus == MinecraftForge.EVENT_BUS && bus instanceof CompositeEventBus cb && !cb.hasListeners(s.type)) {
             synchronized (SITES) {
                 if (!cb.hasListeners(s.type)) {   // re-check under the lock that invalidate() takes
                     s.cs.setTarget(s.fast);
@@ -96,17 +103,22 @@ public final class EventSites {
         }
     }
 
-    /** The events posted from inside a (non-player: players stay on the render thread) entity's rendering. */
-    private static final Class<?>[] ENTITY_RENDER_EVENTS = {net.neoforged.neoforge.client.event.RenderLivingEvent.Pre.class,
-            net.neoforged.neoforge.client.event.RenderLivingEvent.Post.class, net.neoforged.neoforge.client.event.RenderNameTagEvent.class,
-            net.neoforged.neoforge.client.event.RenderItemInFrameEvent.class};
+    /**
+     * The events posted from inside a (non-player: players stay on the render thread) entity's rendering; in a holder,
+     * loaded on the first ask (client classes: a dedicated server never loads them).
+     */
+    private static final class RenderEvents {
+        static final Class<?>[] ENTITY_RENDER_EVENTS = {net.minecraftforge.client.event.RenderLivingEvent.Pre.class,
+            net.minecraftforge.client.event.RenderLivingEvent.Post.class, net.minecraftforge.client.event.RenderNameTagEvent.class,
+            net.minecraftforge.client.event.RenderItemInFrameEvent.class};
+    }
     /**
      * One of them has a listener now, asked of the bus (a mod's listener must not run on a worker); cheap, callers ask
      * once per frame (listeners can be added at any time).
      */
     public static boolean renderListened() {
-        if (!(NeoForge.EVENT_BUS instanceof CompositeEventBus cb)) return true;
-        for (Class<?> c : ENTITY_RENDER_EVENTS) if (cb.mayHaveListeners(c)) return true;
+        if (!(MinecraftForge.EVENT_BUS instanceof CompositeEventBus cb)) return true;
+        for (Class<?> c : RenderEvents.ENTITY_RENDER_EVENTS) if (cb.mayHaveListeners(c)) return true;
         return false;
     }
 

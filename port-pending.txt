@@ -74,12 +74,6 @@ dev/lull/optsupport/BlockMeshMemo.java
 dev/lull/optsupport/EntityBatch.java
 dev/lull/optsupport/PartBatch.java
 # the event bus (Forge's eventbus 6 differs from NeoForge's): its own step
-dev/lull/bus/**
-dev/lull/optsupport/CompositeEventBus.java
-dev/lull/optsupport/EventSites.java
-dev/lull/opt/NeoForgeBusMixin.java
-dev/lull/opt/EventSiteMixin.java
-dev/lull/opt/ClientEventSiteMixin.java
 # networking (1.20.1 has no CustomPacketPayload / StreamCodec): its own step
 dev/lull/net/**
 dev/lull/opt/NetReactorConnectionMixin.java
@@ -94,11 +88,6 @@ dev/lull/EventCounter.java
 # the event bus step: their safety reads the composite bus (CompositeEventBus.hasListeners / mayHaveListeners /
 # fullPosts); without it NeighborNotifySkip and AsyncChunkSave never apply, and MoveMemo could skip a move that posted an
 # event somebody listens to (MoveMemo.java stays: its epochs are shared with mob sleep; only the skipping mixin waits)
-dev/lull/opt/NeighborNotifySkipMixin.java
-dev/lull/opt/LevelNeighborUpdaterAccessor.java
-dev/lull/optsupport/AsyncChunkSave.java
-dev/lull/opt/AsyncChunkSave*.java
-dev/lull/opt/MoveMemoMixin.java
 # the renderer (stage 3): measurement of its parts (DrawStats* mixins, ChunkMultiDraw counters) and their users
 dev/lull/DrawStats.java
 dev/lull/GpuTimer.java
@@ -132,7 +121,6 @@ dev/lull/opt/RenderCallJournalMixin.java
 dev/lull/opt/TextureIdWorkerMixin.java
 dev/lull/opt/TextureRegisterWorkerMixin.java
 # the event bus step: the event-site rewrite (its mixins are pending above)
-dev/lull/optsupport/EventSiteTransformer.java
 # 1.21-only target: NeoForge's ClientHooks.isBlockEntityRendererVisible (the default box new AABB(pos)); Forge 1.20.1
 # tests frustum.isVisible(be.getRenderBoundingBox()), whose default box comes from the collision shape: another check
 dev/lull/opt/BlockEntityCullNoAllocMixin.java

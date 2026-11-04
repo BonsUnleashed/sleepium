@@ -1,51 +1,59 @@
 package dev.lull.optsupport;
 
 import dev.lull.bus.CompositeDispatcher;
-import java.lang.invoke.MethodHandles;
-import java.lang.invoke.VarHandle;
-import java.lang.reflect.Method;
-import java.util.Map;
 import java.util.function.Consumer;
-import net.neoforged.bus.EventBus;
-import net.neoforged.bus.ListenerList;
-import net.neoforged.bus.api.Event;
-import net.neoforged.bus.api.EventListener;
-import net.neoforged.bus.api.EventPriority;
-import net.neoforged.bus.api.IEventBus;
-import net.neoforged.bus.api.IEventExceptionHandler;
+import net.minecraftforge.eventbus.EventBus;
+import net.minecraftforge.eventbus.ListenerList;
+import net.minecraftforge.eventbus.api.Event;
+import net.minecraftforge.eventbus.api.EventListenerHelper;
+import net.minecraftforge.eventbus.api.EventPriority;
+import net.minecraftforge.eventbus.api.GenericEvent;
+import net.minecraftforge.eventbus.api.IEventBus;
+import net.minecraftforge.eventbus.api.IEventBusInvokeDispatcher;
+import net.minecraftforge.eventbus.api.IEventExceptionHandler;
+import net.minecraftforge.eventbus.api.IEventListener;
 
 /**
- * exp/bus-composite: wraps NeoForge.EVENT_BUS (installed by dev.lull.opt.NeoForgeBusMixin).
+ * Wraps MinecraftForge.EVENT_BUS (installed by dev.lull.opt.ForgeBusMixin); the 1.20.1 / Forge eventbus 6 form of
+ * 1.21.1's wrapper around NeoForge's bus.
  *
- * <p>Registration, unregistration, start() and phase posts are delegated unchanged to the real EventBus.
- * {@link #post(Event)} dispatches through a {@link CompositeDispatcher} generated for the event's listener list.
- * A rebuilt list is detected by array identity: {@code ListenerList.getListeners()} returns a new array after any
- * (un)registration, so no invalidation hooks are needed.
+ * <p>Registration, unregistration, start() / shutdown() and posts with an invoke dispatcher go to the real EventBus
+ * unchanged. {@link #post(Event)} dispatches through a {@link CompositeDispatcher} generated for the event class's
+ * listener array. Forge keeps one static ListenerList per event class (parents' listeners merged in) with one array per
+ * bus id; the array is rebuilt - a new array - after any (un)registration, so a changed set is seen by identity.
  *
- * <p>Vanilla post semantics that are kept: the shutdown flag (read from the delegate), checkTypesOnDispatch (then the
- * wrapper simply falls back to the delegate), and the exception handler, called with index -1 because the unrolled
- * code does not know which listener threw.
+ * <p>Vanilla post semantics that are kept: shut down (MinecraftForge builds the bus shut down until Forge starts it;
+ * the wrapper sees start() / shutdown() itself and posts through the delegate while not started), checkTypesOnDispatch
+ * (then always the delegate), phase tracking (EventPriority entries of the array are invoked, they set the event's
+ * phase), the result ({@code isCancelable() && isCanceled()}) and the exception handler (the bus itself: MinecraftForge
+ * gives none), called with index -1 from the generated code, which does not know which listener threw.
  */
 public final class CompositeEventBus implements IEventBus {
-    private static final CompositeDispatcher.Dispatch EMPTY = e -> {};
-
     /** Inlinable no-listener fast path in post() ({@code -Dlab.opt.busFastPath=false} disables it for A/B). */
     static final boolean FAST_PATH = !"false".equals(System.getProperty("lab.opt.busFastPath"));
 
     /** Lists this short use a plain loop (same cost as vanilla); longer ones get a generated composite. */
     static final int COMPOSITE_MIN = Integer.getInteger("lab.opt.compositeMin", 3);
 
-    private record Built(ListenerList list, EventListener[] source, CompositeDispatcher.Dispatch dispatch) {}
+    /** eventbus.checkTypesOnDispatch: the bus checks every event's type, the wrapper leaves every post to it */
+    private static final boolean CHECK_TYPES = Boolean.parseBoolean(System.getProperty("eventbus.checkTypesOnDispatch", "false"));
+
+    private record Built(IEventListener[] source, CompositeDispatcher.Dispatch dispatch) {}
 
     private static final class Holder {
-        volatile Built built;   // one volatile read on the hot path
+        final ListenerList list;   // per class, for good (EventListenerHelper keeps it)
+        volatile Built built;      // one volatile read on the hot path
         final java.util.concurrent.atomic.LongAdder posts = new java.util.concurrent.atomic.LongAdder();
+
+        Holder(ListenerList list) {
+            this.list = list;
+        }
     }
 
     // ---- optional statistics (-Dlab.opt.busStats=true): which path every post takes, and posts per event type
     public static final boolean STATS = Boolean.getBoolean("lab.opt.busStats");
     public static final String[] PATH_NAMES = {"composite (generated dispatcher)", "short list (plain loop)",
-            "no listeners", "fallback: first post of a type", "fallback: shut down / type checks", "phase post (delegated)"};
+            "no listeners", "fallback: not started", "fallback: type checks", "dispatcher post (delegated)"};
     private static final java.util.concurrent.atomic.LongAdder[] PATHS = new java.util.concurrent.atomic.LongAdder[6];
     private static final java.util.Map<Class<?>, Holder> TYPES = new java.util.concurrent.ConcurrentHashMap<>();
     private static final java.util.Map<Class<?>, Long> LAST_TYPES = new java.util.HashMap<>();
@@ -83,16 +91,18 @@ public final class CompositeEventBus implements IEventBus {
         return sb.toString();
     }
 
+    /** an event only the wrapper listens to: finds the bus id (EventBus.busID is private; one listener, then gone) */
+    public static final class BusProbe extends Event {}
+
     private final EventBus delegate;
-    private final VarHandle shutdown;
-    private final boolean fallbackAlways;
-    private final IEventExceptionHandler exceptionHandler;
-    private final Object listenerLists;
-    private final Method getReadMap;
+    private final int busId;
+    private final boolean trackPhases;
+    /** started and not shut down since: posts may take the wrapper's paths (else the delegate: shut down, events dropped) */
+    private volatile boolean live;
     private final ClassValue<Holder> holders = new ClassValue<>() {
         @Override
         protected Holder computeValue(Class<?> type) {
-            Holder h = new Holder();
+            Holder h = new Holder(EventListenerHelper.getListenerList(type));
             if (STATS) TYPES.put(type, h);
             return h;
         }
@@ -100,21 +110,30 @@ public final class CompositeEventBus implements IEventBus {
 
     public CompositeEventBus(IEventBus built) {
         this.delegate = (EventBus) built;
-        try {
-            MethodHandles.Lookup lookup = MethodHandles.privateLookupIn(EventBus.class, MethodHandles.lookup());
-            this.shutdown = lookup.findVarHandle(EventBus.class, "shutdown", boolean.class);
-            this.fallbackAlways = (boolean) lookup.findVarHandle(EventBus.class, "checkTypesOnDispatch", boolean.class).get(delegate);
-            this.exceptionHandler = (IEventExceptionHandler) lookup.findVarHandle(EventBus.class, "exceptionHandler",
-                    IEventExceptionHandler.class).get(delegate);
-            var f = EventBus.class.getDeclaredField("listenerLists");
-            f.setAccessible(true);
-            this.listenerLists = f.get(delegate);
-            this.getReadMap = listenerLists.getClass().getDeclaredMethod("getReadMap");
-            this.getReadMap.setAccessible(true);
-        } catch (ReflectiveOperationException e) {
-            throw new IllegalStateException("cannot wrap EventBus", e);
+        Consumer<BusProbe> probe = e -> {};
+        delegate.addListener(EventPriority.NORMAL, false, BusProbe.class, probe);
+        ListenerList pl = EventListenerHelper.getListenerList(BusProbe.class);
+        int id = -1;
+        for (int i = 0; i < 4096 && id < 0; i++) {
+            try {
+                if (pl.getListeners(i).length > 0) id = i;
+            } catch (RuntimeException end) {
+                break;   // past the lists' size
+            }
         }
-        System.out.println("[sleep/opt] NeoForge.EVENT_BUS wrapped by CompositeEventBus");
+        delegate.unregister(probe);
+        if (id < 0) throw new IllegalStateException("cannot find the event bus' id");
+        this.busId = id;
+        boolean phases = true;
+        try {
+            var f = EventBus.class.getDeclaredField("trackPhases");   // the eventbus module is open
+            f.setAccessible(true);
+            phases = f.getBoolean(delegate);
+        } catch (ReflectiveOperationException | RuntimeException e) {
+            // true is the builder's default (MinecraftForge keeps it)
+        }
+        this.trackPhases = phases;
+        System.out.println("[sleep/opt] MinecraftForge.EVENT_BUS wrapped by CompositeEventBus (bus id " + id + ")");
     }
 
     public EventBus delegate() {
@@ -122,134 +141,98 @@ public final class CompositeEventBus implements IEventBus {
     }
 
     @Override
-    public <T extends Event> T post(T event) {
+    public boolean post(Event event) {
         if (FAST_PATH && !STATS) {
-            // Tiny, inlinable path for the common case "nobody listens" (97-99 % of posts): when the JIT inlines it
-            // into the call site, escape analysis can drop the event allocation entirely. Every condition that
-            // matters for exactness is checked; anything else goes to the full path.
-            Built b = holders.get(event.getClass()).built;
-            if (b != null && b.source().length == 0 && b.list().getListeners() == b.source() && !fallbackAlways
-                    && !(boolean) shutdown.getVolatile(delegate)) {
-                return event;
+            // Tiny, inlinable path for the common case "nobody listens": when the JIT inlines it into the call site,
+            // escape analysis can drop the event allocation entirely. The result is the bus' own for an empty list.
+            Holder h = holders.get(event.getClass());
+            Built b = h.built;
+            if (b != null && b.source().length == 0 && live && h.list.getListeners(busId) == b.source()) {
+                return event.isCanceled() && event.isCancelable();
             }
         }
         return postFull(event);
     }
 
-    /**
-     * True if posting {@code type} would invoke at least one listener (listeners of parent types included), or if
-     * that is not known yet (type never posted): callers may skip building and posting an event only on false.
-     */
+    /** True if posting {@code type} would invoke at least one listener (listeners of parent types included). */
     public boolean hasListeners(Class<?> type) {
-        if (fallbackAlways || (boolean) shutdown.getVolatile(delegate)) return true;
-        Built b = holders.get(type).built;
-        if (b != null) return b.list().getListeners().length > 0;
-        ListenerList list = lookupList(type);
-        return list == null || list.getListeners().length > 0;
+        if (!live || CHECK_TYPES) return true;
+        return holders.get(type).list.getListeners(busId).length > 0;
     }
 
-    /**
-     * Like hasListeners, but a type never posted is answered too: the bus creates a type's listener list when a listener
-     * registers for it or when it is first posted, so no list means nobody registered for it; what a first post would
-     * find then are its parent types' listeners.
-     */
+    /** Forge's lists are made per class with their parents' listeners: the same answer as hasListeners. */
     public boolean mayHaveListeners(Class<?> type) {
-        if (fallbackAlways || (boolean) shutdown.getVolatile(delegate)) return true;
-        Built b = holders.get(type).built;
-        if (b != null) return b.list().getListeners().length > 0;
-        ListenerList list = lookupList(type);
-        if (list != null) return list.getListeners().length > 0;
-        for (Class<?> c = type.getSuperclass(); c != null && Event.class.isAssignableFrom(c); c = c.getSuperclass()) {
-            ListenerList pl = lookupList(c);
-            if (pl != null && pl.getListeners().length > 0) return true;
-        }
-        return false;
+        return hasListeners(type);
     }
 
-    private static final boolean PHYSICAL_CLIENT = net.neoforged.fml.loading.FMLEnvironment.dist.isClient();
+    private static final boolean PHYSICAL_CLIENT = net.minecraftforge.fml.loading.FMLEnvironment.dist.isClient();
 
-    /** Full post: first posts, listener changes, dispatch, fallbacks and statistics. */
     /** posts that took the full path (somebody listens, or not known): MoveMemo's "no event with listeners" */
     public static long fullPosts;
 
-    private <T extends Event> T postFull(T event) {
+    /** Full post: listener changes, dispatch, fallbacks and statistics. */
+    private boolean postFull(Event event) {
         fullPosts++;
-        // ParallelRender: a mod renderer posting an event somebody listens to (GeckoLib's GeoRenderEvent) from a worker job:
-        // the listener must not run there; the job goes to the render thread and the type stays there
-        // (client only: ParallelRender is a client class; touching it on a dedicated server loads client classes)
-        if (PHYSICAL_CLIENT && ParallelRender.inJob() && mayHaveListeners(event.getClass())) throw ParallelRender.REFUSE_LISTENED;
-        if (fallbackAlways || (boolean) shutdown.getVolatile(delegate)) {
-            if (STATS) count(4, holders.get(event.getClass()));
+        if (!live || CHECK_TYPES) {
+            if (STATS) count(live ? 4 : 3, null);
             return delegate.post(event);   // identical vanilla behaviour (incl. returning early when shut down)
         }
         Holder h = holders.get(event.getClass());
+        IEventListener[] current = h.list.getListeners(busId);
         Built b = h.built;
-        if (b == null) {
-            ListenerList list = lookupList(event.getClass());
-            if (list == null) {
-                if (STATS) count(3, h);
-                return delegate.post(event);   // first ever post of this type: let the bus create the list
-            }
-            b = build(h, list, list.getListeners());
-        }
-        EventListener[] current = b.list().getListeners();
-        if (current != b.source()) {
-            b = build(h, b.list(), current);   // listener set changed since the composite was generated
+        if (b == null || current != b.source()) {
+            b = build(h, current, event.isCancelable());   // first post, or the listener set changed since
         }
         int n = current.length;
         if (STATS) count(n == 0 ? 2 : n < COMPOSITE_MIN ? 1 : 0, h);
         if (n == 0) {
-            return event;
+            return event.isCanceled() && event.isCancelable();
         }
         if (n < COMPOSITE_MIN) {
             int i = 0;
             try {
-                for (; i < n; i++) current[i].invoke(event);
+                for (; i < n; i++) {
+                    if (!trackPhases && current[i].getClass() == EventPriority.class) continue;
+                    current[i].invoke(event);
+                }
             } catch (Throwable t) {
-                exceptionHandler.handleException(this, event, current, i, t);
+                ((IEventExceptionHandler) delegate).handleException(delegate, event, current, i, t);
                 throw t;
             }
-            return event;
+            return event.isCancelable() && event.isCanceled();
         }
         try {
             b.dispatch().dispatch(event);
         } catch (Throwable t) {
-            exceptionHandler.handleException(this, event, current, -1, t);
+            ((IEventExceptionHandler) delegate).handleException(delegate, event, current, -1, t);
             throw t;
         }
-        return event;
+        return event.isCancelable() && event.isCanceled();
     }
 
-    private static Built build(Holder h, ListenerList list, EventListener[] current) {
-        Built b = new Built(list, current, current.length < COMPOSITE_MIN ? EMPTY : CompositeDispatcher.create(current));
+    private Built build(Holder h, IEventListener[] current, boolean cancelable) {
+        Built b = new Built(current, current.length < COMPOSITE_MIN ? null : CompositeDispatcher.create(current, cancelable, trackPhases));
         h.built = b;
         return b;
     }
 
-    private ListenerList lookupList(Class<?> type) {
-        try {
-            return (ListenerList) ((Map<?, ?>) getReadMap.invoke(listenerLists)).get(type);
-        } catch (ReflectiveOperationException e) {
-            throw new IllegalStateException(e);
-        }
-    }
-
     // ---- everything else: straight delegation
 
-    @Override public <T extends Event> T post(EventPriority phase, T event) {
-        if (STATS) count(5, holders.get(event.getClass()));
-        return delegate.post(phase, event);
+    @Override public boolean post(Event event, IEventBusInvokeDispatcher wrapper) {
+        if (STATS) count(5, null);
+        return delegate.post(event, wrapper);
     }
+    @Override public void start() { EventSites.invalidate(); delegate.start(); live = true; }
+    @Override public void shutdown() { live = false; EventSites.invalidate(); delegate.shutdown(); }
     // listener changes: every allocation-free event site back to the normal post, before and after (EventSites)
     @Override public void register(Object target) { EventSites.invalidate(); delegate.register(target); EventSites.invalidate(); }
     @Override public void unregister(Object object) { EventSites.invalidate(); delegate.unregister(object); EventSites.invalidate(); }
-    @Override public void start() { EventSites.invalidate(); delegate.start(); EventSites.invalidate(); }
     @Override public <T extends Event> void addListener(Consumer<T> consumer) { EventSites.invalidate(); delegate.addListener(consumer); EventSites.invalidate(); }
-    @Override public <T extends Event> void addListener(Class<T> eventType, Consumer<T> consumer) { EventSites.invalidate(); delegate.addListener(eventType, consumer); EventSites.invalidate(); }
     @Override public <T extends Event> void addListener(EventPriority priority, Consumer<T> consumer) { EventSites.invalidate(); delegate.addListener(priority, consumer); EventSites.invalidate(); }
-    @Override public <T extends Event> void addListener(EventPriority priority, Class<T> eventType, Consumer<T> consumer) { EventSites.invalidate(); delegate.addListener(priority, eventType, consumer); EventSites.invalidate(); }
     @Override public <T extends Event> void addListener(EventPriority priority, boolean receiveCanceled, Consumer<T> consumer) { EventSites.invalidate(); delegate.addListener(priority, receiveCanceled, consumer); EventSites.invalidate(); }
     @Override public <T extends Event> void addListener(EventPriority priority, boolean receiveCanceled, Class<T> eventType, Consumer<T> consumer) { EventSites.invalidate(); delegate.addListener(priority, receiveCanceled, eventType, consumer); EventSites.invalidate(); }
-    @Override public <T extends Event> void addListener(boolean receiveCanceled, Consumer<T> consumer) { EventSites.invalidate(); delegate.addListener(receiveCanceled, consumer); EventSites.invalidate(); }
-    @Override public <T extends Event> void addListener(boolean receiveCanceled, Class<T> eventType, Consumer<T> consumer) { EventSites.invalidate(); delegate.addListener(receiveCanceled, eventType, consumer); EventSites.invalidate(); }
+    @Override public <T extends GenericEvent<? extends F>, F> void addGenericListener(Class<F> genericClassFilter, Consumer<T> consumer) { EventSites.invalidate(); delegate.addGenericListener(genericClassFilter, consumer); EventSites.invalidate(); }
+    @Override public <T extends GenericEvent<? extends F>, F> void addGenericListener(Class<F> genericClassFilter, EventPriority priority, Consumer<T> consumer) { EventSites.invalidate(); delegate.addGenericListener(genericClassFilter, priority, consumer); EventSites.invalidate(); }
+    @Override public <T extends GenericEvent<? extends F>, F> void addGenericListener(Class<F> genericClassFilter, EventPriority priority, boolean receiveCanceled, Consumer<T> consumer) { EventSites.invalidate(); delegate.addGenericListener(genericClassFilter, priority, receiveCanceled, consumer); EventSites.invalidate(); }
+    @Override public <T extends GenericEvent<? extends F>, F> void addGenericListener(Class<F> genericClassFilter, EventPriority priority, boolean receiveCanceled, Class<T> eventType, Consumer<T> consumer) { EventSites.invalidate(); delegate.addGenericListener(genericClassFilter, priority, receiveCanceled, eventType, consumer); EventSites.invalidate(); }
 }

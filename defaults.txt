@@ -84,7 +84,7 @@
 -Dlab.opt.NeighborQueueMixin=true
 -Dlab.opt.NeighborReactMixin=true
 -Dlab.opt.NeighborReactStateMixin=true
--Dlab.opt.NeoForgeBusMixin=true
+-Dlab.opt.ForgeBusMixin=true
 -Dlab.opt.NetBulk=true
 -Dlab.opt.NetCoalesce=true
 -Dlab.opt.NetLagMixin=true

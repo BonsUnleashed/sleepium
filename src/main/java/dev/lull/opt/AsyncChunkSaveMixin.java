@@ -22,8 +22,8 @@ public abstract class AsyncChunkSaveMixin {
     }
 
     @Redirect(method = "save(Lnet/minecraft/world/level/chunk/ChunkAccess;)Z", at = @At(value = "INVOKE",
-            target = "Lnet/minecraft/server/level/ChunkMap;write(Lnet/minecraft/world/level/ChunkPos;Lnet/minecraft/nbt/CompoundTag;)Ljava/util/concurrent/CompletableFuture;"))
-    private CompletableFuture<Void> sleep$store(ChunkMap self, ChunkPos pos, CompoundTag tag) {
-        return AsyncChunkSave.store(self, pos, tag);
+            target = "Lnet/minecraft/server/level/ChunkMap;write(Lnet/minecraft/world/level/ChunkPos;Lnet/minecraft/nbt/CompoundTag;)V"))
+    private void sleep$store(ChunkMap self, ChunkPos pos, CompoundTag tag) {
+        AsyncChunkSave.store(self, pos, tag);
     }
 }

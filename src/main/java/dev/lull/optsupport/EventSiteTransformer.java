@@ -17,13 +17,13 @@ import org.objectweb.asm.tree.analysis.SourceInterpreter;
 import org.objectweb.asm.tree.analysis.SourceValue;
 
 /**
- * Rewrites {@code NeoForge.EVENT_BUS.post(event)} into an invokedynamic bound to {@link EventSites} wherever the
+ * Rewrites {@code MinecraftForge.EVENT_BUS.post(event)} into an invokedynamic bound to {@link EventSites} wherever the
  * receiver is that static field and the event's exact class is known from its {@code new E(...)} (directly or through
  * a local). Every other post is left as it is. Called from OptMixinPlugin.postApply for EventSiteMixin's targets.
  */
 public final class EventSiteTransformer {
-    private static final String BUS = "net/neoforged/bus/api/IEventBus";
-    private static final String POST_DESC = "(Lnet/neoforged/bus/api/Event;)Lnet/neoforged/bus/api/Event;";
+    private static final String BUS = "net/minecraftforge/eventbus/api/IEventBus";
+    private static final String POST_DESC = "(Lnet/minecraftforge/eventbus/api/Event;)Z";
     private static final Handle BSM = new Handle(Opcodes.H_INVOKESTATIC, "dev/lull/optsupport/EventSites", "bootstrap",
             "(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;Ljava/lang/Class;)Ljava/lang/invoke/CallSite;", false);
     public static int rewritten, skipped;
@@ -52,7 +52,7 @@ public final class EventSiteTransformer {
                     skipped++;
                     continue;
                 }
-                m.instructions.set(insns[i], new InvokeDynamicInsnNode("post", "(L" + BUS + ";Lnet/neoforged/bus/api/Event;)Lnet/neoforged/bus/api/Event;",
+                m.instructions.set(insns[i], new InvokeDynamicInsnNode("post", "(L" + BUS + ";Lnet/minecraftforge/eventbus/api/Event;)Z",
                         BSM, Type.getObjectType(type)));
                 rewritten++;
             }
@@ -68,7 +68,7 @@ public final class EventSiteTransformer {
     private static boolean isEventBusField(SourceValue v) {
         if (v.insns.size() != 1) return false;
         return v.insns.iterator().next() instanceof FieldInsnNode fi && fi.getOpcode() == Opcodes.GETSTATIC
-                && fi.owner.equals("net/neoforged/neoforge/common/NeoForge") && fi.name.equals("EVENT_BUS");
+                && fi.owner.equals("net/minecraftforge/common/MinecraftForge") && fi.name.equals("EVENT_BUS");
     }
 
     /** The class of NEW that produced this value (through DUP, CHECKCAST or a single-store local), else null. */

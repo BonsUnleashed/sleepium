@@ -20,8 +20,8 @@ import net.minecraft.world.level.chunk.ChunkAccess;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.chunk.PalettedContainer;
 import net.minecraft.world.level.chunk.storage.ChunkStorage;
-import net.neoforged.neoforge.common.NeoForge;
-import net.neoforged.neoforge.event.level.ChunkDataEvent;
+import net.minecraftforge.common.MinecraftForge;
+import net.minecraftforge.event.level.ChunkDataEvent;
 
 /**
  * exp/async-chunk-save (server): the expensive part of saving a chunk on the main thread — encoding every section's
@@ -68,7 +68,7 @@ public final class AsyncChunkSave {
         // a LevelChunk
         if (!(chunk instanceof LevelChunk) && !(chunk instanceof net.minecraft.world.level.chunk.ProtoChunk)) return false;
         if (((StorageAccess) storage).sleep$legacyHandler() != null) return false;
-        return NeoForge.EVENT_BUS instanceof CompositeEventBus cb && !cb.mayHaveListeners(ChunkDataEvent.Save.class);
+        return MinecraftForge.EVENT_BUS instanceof CompositeEventBus cb && !cb.mayHaveListeners(ChunkDataEvent.Save.class);
     }
 
     /** ChunkMap.save's ChunkSerializer.write, main thread. */
@@ -96,33 +96,37 @@ public final class AsyncChunkSave {
     public static DataResult encode(Codec codec, DynamicOps ops, Object value) {
         if (!deferring || !(value instanceof PalettedContainer<?> pc) || ops != NbtOps.INSTANCE) return codec.encodeStart(ops, value);
         CompoundTag placeholder = new CompoundTag();
-        Tag reference = VERIFY ? (Tag) codec.encodeStart(ops, value).getOrThrow() : null;
+        Tag reference = VERIFY ? (Tag) codec.encodeStart(ops, value).getOrThrow(false, e -> {}) : null;
         collecting.add(new Object[] {placeholder, pc.copy(), codec, reference});
         return DataResult.success(placeholder);
     }
 
-    /** ChunkMap.save's storage write, main thread. */
-    public static CompletableFuture<Void> store(ChunkStorage storage, ChunkPos pos, CompoundTag tag) {
+    /** ChunkMap.save's storage write, main thread (1.20.1: ChunkStorage.write returns nothing, IOWorker's future is dropped). */
+    public static void store(ChunkStorage storage, ChunkPos pos, CompoundTag tag) {
         List<Object[]> jobs = lastPending;
         lastPending = null;
-        if (jobs == null || jobs.isEmpty()) return storage.write(pos, tag);
+        if (jobs == null || jobs.isEmpty()) {
+            storage.write(pos, tag);
+            return;
+        }
         deferred.incrementAndGet();
         long key = pos.toLong();
         CompletableFuture<Void> previous = STORED.get(key);
         CompletableFuture<Void> encoded = CompletableFuture.runAsync(() -> fill(jobs), ServerReactor.pool());
-        CompletableFuture<CompletableFuture<Void>> handed = (previous == null ? encoded : encoded.thenCombine(previous.exceptionally(t -> null), (a, b) -> null))
-                .thenApply(v -> storage.write(pos, tag));
-        CompletableFuture<Void> stored = handed.thenApply(f -> (Void) null);
+        CompletableFuture<Void> stored = (previous == null ? encoded : encoded.thenCombine(previous.exceptionally(t -> null), (a, b) -> (Void) null))
+                .thenRun(() -> storage.write(pos, tag));
         STORED.put(key, stored);
-        stored.whenComplete((v, t) -> STORED.remove(key, stored));
-        return handed.thenCompose(f -> f);
+        stored.whenComplete((v, t) -> {
+            STORED.remove(key, stored);
+            if (t != null) System.out.println("[sleep/opt] async chunk save of " + pos + " failed: " + t);   // vanilla logs a failed save too
+        });
     }
 
     private static void fill(List<Object[]> jobs) {
         for (Object[] j : jobs) {
             CompoundTag placeholder = (CompoundTag) j[0];
             @SuppressWarnings({"unchecked", "rawtypes"})
-            Tag enc = (Tag) ((Codec) j[2]).encodeStart(NbtOps.INSTANCE, j[1]).getOrThrow();
+            Tag enc = (Tag) ((Codec) j[2]).encodeStart(NbtOps.INSTANCE, j[1]).getOrThrow(false, e -> {});
             CompoundTag e = (CompoundTag) enc;
             for (String k : e.getAllKeys()) placeholder.put(k, e.get(k));
             sections.incrementAndGet();

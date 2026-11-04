@@ -121,7 +121,15 @@
     "LightTimingMixin",
     "NeighborReactMultiMixin",
     "MainReactorWaitMixin",
-    "WriteBarrierSampleMixin"
+    "WriteBarrierSampleMixin",
+    "ForgeBusMixin",
+    "EventSiteMixin",
+    "NeighborNotifySkipMixin",
+    "LevelNeighborUpdaterAccessor",
+    "MoveMemoMixin",
+    "AsyncChunkSaveMixin",
+    "AsyncChunkSaveEncodeMixin",
+    "AsyncChunkSaveStorageMixin"
   ],
   "client": [
     "AmbientChunksMixin",
@@ -152,7 +160,8 @@
     "LightScoutAoMixin",
     "LightScoutFlatMixin",
     "LightScoutFluidMixin",
-    "LightRecipeVerifyMixin"
+    "LightRecipeVerifyMixin",
+    "ClientEventSiteMixin"
   ],
   "injectors": {
     "defaultRequire": 1

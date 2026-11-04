@@ -17,7 +17,7 @@ public enum Feature {
     /** palette encoding of saved chunks on the pool */
     ASYNC_CHUNK_SAVE("AsyncChunkSaveMixin", true),
     /** NeoForge event bus: generated dispatch for long listener lists */
-    EVENT_BUS("NeoForgeBusMixin", true),
+    EVENT_BUS("ForgeBusMixin", true),
     /** block entities whose tick only lets time pass stop ticking until something they read changes */
     BLOCK_ENTITY_SLEEP("SleepMixin", false),
     /** resting entities replay a proven quiet period instead of ticking */

@@ -159,7 +159,7 @@ public final class OptMixinPlugin implements IMixinConfigPlugin {
      * not the experimental worldgen/pool ones). Expanded into the individual flags before any of them is read.
      */
     static final String[] UNIVERSAL = {"TickMemoMixin", "ChunkCacheMixin", "EntitySectionScanMixin", "EntitySectionIndexMixin",
-            "NeighborNotifySkipMixin", "NeoForgeBusMixin", "NeighborReactMixin", "TagCacheMixin", "BrainFlatMixin", "PoiColumnMixin", "EntityCollisionSkipMixin", "BlockCollisionMemoMixin", "EventSiteMixin", "NeighborQueueMixin", "SignalPathMixin", "CubeShapeMixin", "FluidSpreadMixin", "TickSchedulerMixin",
+            "NeighborNotifySkipMixin", "ForgeBusMixin", "NeighborReactMixin", "TagCacheMixin", "BrainFlatMixin", "PoiColumnMixin", "EntityCollisionSkipMixin", "BlockCollisionMemoMixin", "EventSiteMixin", "NeighborQueueMixin", "SignalPathMixin", "CubeShapeMixin", "FluidSpreadMixin", "TickSchedulerMixin",
             // client side (applied on the physical client only): event sites, measured -22 % client tick time with the
             // client-thread collision memo (OwnerThread)
             "ClientEventSiteMixin",
@@ -194,7 +194,8 @@ public final class OptMixinPlugin implements IMixinConfigPlugin {
     @Override public List<String> getMixins() { return null; }
     @Override public void preApply(String targetClassName, ClassNode targetClass, String mixinClassName, IMixinInfo mixinInfo) {}
     @Override public void postApply(String targetClassName, ClassNode targetClass, String mixinClassName, IMixinInfo mixinInfo) {
-        // EventSiteMixin / ClientEventSiteMixin -> EventSiteTransformer: the event bus step (port-pending.txt)
+        if (mixinClassName.endsWith(".EventSiteMixin") || mixinClassName.endsWith(".ClientEventSiteMixin"))
+            dev.lull.optsupport.EventSiteTransformer.transform(targetClass);
         if (mixinClassName.endsWith(".WriteBarrierMixin"))
             dev.lull.optsupport.sleep.WriteBarrier.transform(targetClass);
         if (mixinClassName.endsWith(".WorldgenAllocAp2Mixin"))

@@ -24,6 +24,12 @@ public final class SleepCommand {
     static void register(RegisterCommandsEvent event) {
         CommandDispatcher<CommandSourceStack> d = event.getDispatcher();
         d.register(Commands.literal("sleep").requires(s -> s.hasPermission(2))
+                .then(Commands.literal("buscheck").executes(ctx -> {
+                    java.util.List<String> fails = BusCheck.check();
+                    say(ctx, fails.isEmpty() ? "bus check: OK (" + BusCheck.expected() + "); " + dev.lull.optsupport.EventSites.report()
+                            : "bus check: FAILED\n  " + String.join("\n  ", fails));
+                    return fails.isEmpty() ? 1 : 0;
+                }))
                 .then(Commands.literal("audit").executes(ctx -> {
                     // every mixin applied now (Mixin loads each target): apply failures show at once, not when a class first loads
                     org.spongepowered.asm.mixin.MixinEnvironment.getCurrentEnvironment().audit();
