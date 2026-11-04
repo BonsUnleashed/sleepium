@@ -18,7 +18,9 @@ base {
 // the jar names the Minecraft version it is for: sleepium-1.0.3+mc1.20.1.jar
 tasks.named('jar', Jar).configure {
     archiveVersion = "${mod_version}+mc${minecraft_version}"
-    manifest.attributes('MixinConfigs': "${mod_id}.mixins.json")   // Forge reads the mixin configs from the manifest
+    // Forge reads the mixin configs from the manifest (1.21.1: [[mixins]] in neoforge.mods.toml); geo / flywheel / catnip /
+    // veil / shaders come back with their ports (port-pending.txt)
+    manifest.attributes('MixinConfigs': "${mod_id}.mixins.json,${mod_id}-opt.mixins.json,sleepium-foreign-test.mixins.json")
 }
 
 // the test scenes (data/sleep/functions: lag_*, client_*): loaded by the dev runs and the tools, not in the jar
@@ -26,6 +28,19 @@ sourceSets {
     scenes
 }
 tasks.named('classes') { dependsOn 'processScenesResources' }
+
+// the 1.21.1 engine's files not ported yet stay out of the compile (port-pending.txt, notes/54)
+sourceSets.main.java {
+    file('port-pending.txt').readLines().collect { it.trim() }.findAll { it && !it.startsWith('#') }.each { exclude it }
+}
+
+repositories {
+    // GeckoLib, for the engine's GeckoLib mixins (applied only when GeckoLib is installed)
+    maven {
+        url = 'https://dl.cloudsmith.io/public/geckolib3/geckolib/maven/'
+        content { includeGroup 'software.bernie.geckolib' }
+    }
+}
 
 // Minecraft 1.20.1 runs on Java 17 (players' launchers ship 17): the port compiles for 17
 java.toolchain.languageVersion = JavaLanguageVersion.of(17)
@@ -63,10 +78,16 @@ legacyForge {
 mixin {
     add sourceSets.main, "${mod_id}.refmap.json"
     config "${mod_id}.mixins.json"
+    config "${mod_id}-opt.mixins.json"
+    config "sleepium-foreign-test.mixins.json"
 }
 
 dependencies {
     annotationProcessor 'org.spongepowered:mixin:0.8.5:processor'
+    // MixinExtras (WrapOperation, WrapMethod...): bundled, Forge 1.20.1 does not ship it
+    compileOnly(annotationProcessor('io.github.llamalad7:mixinextras-common:0.4.1'))
+    implementation(jarJar('io.github.llamalad7:mixinextras-forge:0.4.1'))
+    compileOnly "software.bernie.geckolib:geckolib-forge-${minecraft_version}:${geckolib_version}"
 }
 
 var generateModMetadata = tasks.register('generateModMetadata', ProcessResources) {
@@ -122,3 +143,4 @@ if (project.hasProperty('runJvmArgs')) {
     def extra = project.property('runJvmArgs').toString().trim()
     if (!extra.isEmpty()) legacyForge.runs.configureEach { jvmArguments.addAll(extra.split(/\s+/) as List) }
 }
+tasks.withType(JavaCompile).configureEach { options.compilerArgs += ['-Xmaxerrs', '20000', '-Xmaxwarns', '20000'] }

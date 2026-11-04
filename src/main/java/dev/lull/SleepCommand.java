@@ -64,6 +64,15 @@ public final class SleepCommand {
                 })));
     }
 
+    /**
+     * The end of every server tick (TickTimer, LOWEST): the benches' clocks. On 1.21.1 also GenBench (world generation),
+     * NetBench (networking) - not ported yet - and the auto-stop of /sleep run (its report commands come over with the
+     * event counter).
+     */
+    static void onTickEnd(net.minecraft.server.MinecraftServer server) {
+        IdleBench.onTickEnd(server);
+    }
+
     private static void say(CommandContext<CommandSourceStack> ctx, String msg) {
         ctx.getSource().sendSuccess(() -> Component.literal(msg), true);
     }

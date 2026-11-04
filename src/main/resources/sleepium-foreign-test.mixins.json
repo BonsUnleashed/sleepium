@@ -1,0 +1,14 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "testmods.foreign",
+  "plugin": "testmods.foreign.ForeignPlugin",
+  "compatibilityLevel": "JAVA_17",
+  "refmap": "sleepium.refmap.json",
+  "mixins": [
+    "ForeignFurnaceMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

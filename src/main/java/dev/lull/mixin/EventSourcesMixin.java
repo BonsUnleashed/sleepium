@@ -1,0 +1,36 @@
+package dev.lull.mixin;
+
+import dev.lull.EventSources;
+import net.minecraft.core.BlockPos;
+
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.gameevent.GameEvent;
+import net.minecraft.world.phys.Vec3;
+import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.injection.At;
+import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+
+/** Counters for vanilla's in-tick event mechanisms on the server (see {@link EventSources}). */
+@Mixin(ServerLevel.class)
+public abstract class EventSourcesMixin {
+    @Inject(method = "blockEvent", at = @At("HEAD"))
+    private void sleep$blockEvent(BlockPos pos, Block block, int id, int param, CallbackInfo ci) {
+        EventSources.blockEvents++;
+        dev.lull.BeTickStats.writes++;
+    }
+
+    // 1.20.1: gameEvent takes the GameEvent itself (1.21: a Holder<GameEvent>)
+    @Inject(method = "gameEvent(Lnet/minecraft/world/level/gameevent/GameEvent;Lnet/minecraft/world/phys/Vec3;Lnet/minecraft/world/level/gameevent/GameEvent$Context;)V", at = @At("HEAD"))
+    private void sleep$gameEvent(GameEvent event, Vec3 pos, GameEvent.Context ctx, CallbackInfo ci) {
+        EventSources.gameEvents++;
+        dev.lull.BeTickStats.writes++;
+    }
+
+    @Inject(method = "tickNonPassenger", at = @At("HEAD"))
+    private void sleep$entityTick(Entity entity, CallbackInfo ci) {
+        EventSources.entityTicks++;
+    }
+}

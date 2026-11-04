@@ -1,0 +1,152 @@
+# Files of the 1.21.1 engine not ported to 1.20.1 yet: left out of the compile (globs under src/main/java).
+# A line goes when its part is ported and checked (notes/54).
+
+# mods' adapters (other mods' 1.20.1 versions differ)
+dev/lull/catmixin/**
+dev/lull/veilmixin/**
+dev/lull/flwmixin/**
+dev/lull/geomixin/**
+# the shaderpack pipeline and the settings screen
+dev/lull/shaders/**
+dev/lull/shadermixin/**
+dev/lull/ui/**
+# diagnostics and benchmarks of the 1.21.1 work
+dev/lull/ScaleListeners.java
+dev/lull/BusEquivalence.java
+dev/lull/BusAnatomy.java
+dev/lull/EventBench.java
+dev/lull/mixin/GenProfile*.java
+dev/lull/mixin/GenTrace*.java
+# the client renderer (1.20.1 has the old buffer API and section renderer): stage 3
+dev/lull/optsupport/ChunkMultiDraw.java
+dev/lull/optsupport/SectionLists.java
+dev/lull/optsupport/LightVolumes.java
+dev/lull/optsupport/QuadSort.java
+dev/lull/optsupport/RenderCache*.java
+dev/lull/optsupport/ParallelRender.java
+dev/lull/optsupport/ChunkBufferTag.java
+dev/lull/optsupport/AnimStream.java
+dev/lull/optsupport/GeoParallel.java
+dev/lull/optsupport/MolangJit.java
+dev/lull/optsupport/KineticMemo.java
+dev/lull/optsupport/KineticResident.java
+dev/lull/optsupport/FlwLabExecutor.java
+dev/lull/opt/ChunkUploadMixin.java
+dev/lull/opt/ChunkMultiDraw*.java
+dev/lull/opt/ChunkSectionMixin.java
+dev/lull/opt/ShaderLight*.java
+dev/lull/opt/ShaderSamplerNamesMixin.java
+dev/lull/opt/EntityBatchMixin.java
+dev/lull/opt/VertexSortDirectMixin.java
+dev/lull/opt/BufferBuilderAccessor.java
+dev/lull/opt/BufferSourceAccessor.java
+dev/lull/opt/MeshDataAccessor.java
+dev/lull/opt/BlockMeshMemoMixin.java
+dev/lull/opt/SectionListsMixin.java
+dev/lull/opt/SectionLayerMaskMixin.java
+dev/lull/opt/LevelRendererVisibleAccessor.java
+dev/lull/opt/PartTypeMixin.java
+dev/lull/opt/PartBatchMixin.java
+dev/lull/opt/CompositeStateAccessor.java
+dev/lull/opt/ModelPartIterMixin.java
+dev/lull/opt/EntityRendererAccessor.java
+dev/lull/opt/EntityCullNoAllocMixin.java
+dev/lull/mixin/DrawStats*.java
+# world generation and the chunk reactors (1.20.1's chunk pipeline differs): stage 2b
+dev/lull/opt/WorldgenShareRegionMixin.java
+dev/lull/opt/ReactorReadJournalMixin.java
+dev/lull/opt/ReactorFullMixin.java
+dev/lull/opt/ReactorStorageAccessor.java
+dev/lull/opt/ReactorChunkLoadMixin.java
+dev/lull/opt/ParallelWorldgenMixin.java
+dev/lull/opt/WorldgenReactorMixin.java
+dev/lull/optsupport/ParallelGen.java
+dev/lull/mixin/ChunkStepHashMixin.java
+dev/lull/GenBench.java
+dev/lull/GenBenchHooks.java
+dev/lull/mixin/IoScout*.java
+dev/lull/opt/LightScoutMixin.java
+dev/lull/opt/RenderCache*.java
+dev/lull/opt/ParallelEntitiesMixin.java
+dev/lull/opt/ParallelReloadMixin.java
+dev/lull/optsupport/BeMemo.java
+dev/lull/optsupport/BlockMeshMemo.java
+dev/lull/optsupport/EntityBatch.java
+dev/lull/optsupport/PartBatch.java
+# the event bus (Forge's eventbus 6 differs from NeoForge's): its own step
+dev/lull/bus/**
+dev/lull/optsupport/CompositeEventBus.java
+dev/lull/optsupport/EventSites.java
+dev/lull/opt/NeoForgeBusMixin.java
+dev/lull/opt/EventSiteMixin.java
+dev/lull/opt/ClientEventSiteMixin.java
+# networking (1.20.1 has no CustomPacketPayload / StreamCodec): its own step
+dev/lull/net/**
+dev/lull/opt/NetReactorConnectionMixin.java
+dev/lull/opt/BulkDataArraysMixin.java
+dev/lull/mixin/NetStatsSendMixin.java
+dev/lull/mixin/NetCoalesceClientMixin.java
+
+# --- the 11-04 compile pass: files that reference pending parts or 1.21-only systems ---
+# the event bus step: Forge's eventbus 6 keeps one static ListenerList per event class, no per-bus listenerLists map
+# to discover the posted types from (EventCounter's discovery and listener counts)
+dev/lull/EventCounter.java
+# the event bus step: their safety reads the composite bus (CompositeEventBus.hasListeners / mayHaveListeners /
+# fullPosts); without it NeighborNotifySkip and AsyncChunkSave never apply, and MoveMemo could skip a move that posted an
+# event somebody listens to (MoveMemo.java stays: its epochs are shared with mob sleep; only the skipping mixin waits)
+dev/lull/opt/NeighborNotifySkipMixin.java
+dev/lull/opt/LevelNeighborUpdaterAccessor.java
+dev/lull/optsupport/AsyncChunkSave.java
+dev/lull/opt/AsyncChunkSave*.java
+dev/lull/opt/MoveMemoMixin.java
+# the renderer (stage 3): measurement of its parts (DrawStats* mixins, ChunkMultiDraw counters) and their users
+dev/lull/DrawStats.java
+dev/lull/GpuTimer.java
+dev/lull/optsupport/GeoParts.java
+dev/lull/opt/BlockMeshDirtyMixin.java
+dev/lull/opt/PartDrawMixin.java
+dev/lull/opt/PartFrameMixin.java
+# networking: they drive dev/lull/net (NetLag, NetReactor, Bulk, Coalesce)
+dev/lull/NetBench.java
+dev/lull/api/NetContent.java
+dev/lull/opt/NetLagMixin.java
+dev/lull/opt/NetReactorTickMixin.java
+dev/lull/opt/NetReactorWaitMixin.java
+# the renderer (stage 3): parts used only by pending renderer classes (chunk multi-draw's shader patches, occlusion
+# culling and indirect commands, part batching's materials / coatings, the 1.21 VertexConsumer recorder, light boxes,
+# the bulk vertex path), and the mixins of pending renderer parts (QuadSort, ParallelRender)
+dev/lull/optsupport/RecordingBuilder.java
+dev/lull/optsupport/VertexTags.java
+dev/lull/optsupport/ShaderPatches.java
+dev/lull/opt/ChunkShaderPatchMixin.java
+dev/lull/optsupport/ProgramCaches.java
+dev/lull/optsupport/Materials.java
+dev/lull/optsupport/Coatings.java
+dev/lull/optsupport/OcclusionCull.java
+dev/lull/optsupport/IndirectCommands.java
+dev/lull/optsupport/IndirectDiag.java
+dev/lull/optsupport/LightBoxes.java
+dev/lull/optsupport/BulkData.java
+dev/lull/opt/VertexSortRadixMixin.java
+dev/lull/opt/RenderCallJournalMixin.java
+dev/lull/opt/TextureIdWorkerMixin.java
+dev/lull/opt/TextureRegisterWorkerMixin.java
+# the event bus step: the event-site rewrite (its mixins are pending above)
+dev/lull/optsupport/EventSiteTransformer.java
+# 1.21-only target: NeoForge's ClientHooks.isBlockEntityRendererVisible (the default box new AABB(pos)); Forge 1.20.1
+# tests frustum.isVisible(be.getRenderBoundingBox()), whose default box comes from the collision shape: another check
+dev/lull/opt/BlockEntityCullNoAllocMixin.java
+# world generation (stage 2b): its measurements, driven by GenBench / the pending GenProfile* / GenTrace* mixins and ParallelGen
+dev/lull/GenProfile.java
+dev/lull/optsupport/GenTrace.java
+# world generation (stage 2b): the rest of WorldgenReactor - its core (WorldgenReactorMixin, ReactorFull / ChunkLoad /
+# Storage / ReadJournal) is pending above, these parts alone would be half a feature behind the same flag
+# (ReactorTickMixin is already ported to 1.20.1's millisecond tick schedule)
+dev/lull/opt/ReactorExecutorMixin.java
+dev/lull/opt/ReactorIOWorkerInvoker.java
+dev/lull/opt/ReactorMainDrainMixin.java
+dev/lull/opt/ReactorRingsAccessor.java
+dev/lull/opt/ReactorTickMixin.java
+# 1.21-only target: UnloadRecheckMixin fixes 1.21's stop-time spin (isReadyForSaving re-queued at once); 1.20.1's
+# scheduleUnload re-attaches to the new getChunkToSave() future, no spin - on 1.20.1 it would only defer unloads
+dev/lull/opt/UnloadRecheckMixin.java
