@@ -1,7 +1,7 @@
 package dev.lull.optsupport;
 
 import com.mojang.blaze3d.systems.RenderSystem;
-import com.mojang.blaze3d.vertex.MeshData;
+import com.mojang.blaze3d.vertex.BufferBuilder;
 import com.mojang.blaze3d.vertex.VertexFormat;
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 import java.nio.ByteBuffer;
@@ -12,7 +12,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
 import net.minecraft.client.renderer.RenderType;
-import net.minecraft.client.renderer.chunk.SectionRenderDispatcher;
+import net.minecraft.client.renderer.chunk.ChunkRenderDispatcher;
 import org.lwjgl.opengl.GL;
 import com.mojang.blaze3d.vertex.DefaultVertexFormat;
 import org.lwjgl.opengl.GL11C;
@@ -40,8 +40,14 @@ import org.lwjgl.system.MemoryUtil;
 public final class ChunkMultiDraw {
     /** draws per multi-draw call = offsets per uniform block (16 KB, the guaranteed minimum block size) */
     public static final int MAX_DRAWS = 1024;
-    /** -Dlab.chunkmd.noFaceCull=true: every face bucket drawn (A/B of the direction culling) */
-    private static final boolean FACE_CULL = !Boolean.getBoolean("lab.chunkmd.noFaceCull");
+    /**
+     * -Dlab.chunkmd.faceCull=true: the face buckets (direction culling). Off by default on 1.20.1 (on in 1.21.1, where
+     * -Dlab.chunkmd.noFaceCull turned it off): the buckets reorder a section's quads, and on 1.20.1's terrain view
+     * (saved world, 40 110 40) that alone - every bucket still drawn - changed ~270 pixels of leaves against vanilla
+     * (fragments of equal depth resolved in another order), whichever directions were left out. Without it the quads
+     * keep vanilla's order (all in "other"); the GPU culls the back faces as before.
+     */
+    private static final boolean FACE_CULL = Boolean.getBoolean("lab.chunkmd.faceCull") && !Boolean.getBoolean("lab.chunkmd.noFaceCull");
     private static final int REGION_W = 8, REGION_H = 4;
     private static final int UBO_BINDING = 7;
     /** vertex shader names patched by ChunkShaderPatchMixin */
@@ -380,9 +386,9 @@ public final class ChunkMultiDraw {
     }
 
     /** From VertexBuffer.upload of a section's layer buffer, before vanilla consumes the mesh (render thread). */
-    public static boolean store(SectionRenderDispatcher.RenderSection section, RenderType layer, MeshData mesh) {
-        MeshData.DrawState ds = mesh.drawState();
-        if (layer == RenderType.translucent() && dev.lull.shaders.ShaderPipeline.active) {
+    public static boolean store(ChunkRenderDispatcher.RenderChunk section, RenderType layer, BufferBuilder.RenderedBuffer mesh) {
+        BufferBuilder.DrawState ds = mesh.drawState();
+        if (layer == RenderType.translucent() && shaderPipeline()) {
             storeShadowCopy(section, layer, mesh);
             return false;   // vanilla's sorted buffer still draws the camera's pass
         }
@@ -390,7 +396,7 @@ public final class ChunkMultiDraw {
             storeTranslucent(section, layer, mesh);
             return false;   // vanilla's buffer kept too: its resorts and any frame drawn the vanilla way
         }
-        if (!layerSupported(layer) || mesh.indexBuffer() != null || ds.mode() != VertexFormat.Mode.QUADS || !capable()) return false;
+        if (!layerSupported(layer) || !ds.sequentialIndex() || ds.mode() != VertexFormat.Mode.QUADS || !capable()) return false;
         release(section, layer);
         int li = layerIndex(layer);
         if (li < 0) return false;
@@ -405,7 +411,7 @@ public final class ChunkMultiDraw {
         Entry e = new Entry();
         ByteBuffer vb = mesh.vertexBuffer();
         if (PACK_STATS && stride == 32) packStats(vb, verts);
-        if (ds.format().getOffset(com.mojang.blaze3d.vertex.VertexFormatElement.POSITION) == 0 && verts % 4 == 0) {
+        if (positionFirst(ds.format()) && verts % 4 == 0) {
             vb = bucketed(vb, verts / 4, stride, e.bq, e.plane);
         } else {
             java.util.Arrays.fill(e.bq, 0, 4, 0);   // everything in "other"
@@ -416,7 +422,7 @@ public final class ChunkMultiDraw {
         uploads++;
         // meshes with light recipes (exp/shader-light) keep the 32-byte format: the packed one has no room for them
         // (not under a shaderpack: its vertex prologue reads the quads' positions as BLOCK floats)
-        if (PACK && !dev.lull.shaders.ShaderPipeline.active && ds.format() == DefaultVertexFormat.BLOCK && verts % 4 == 0 && !LightVolumes.hasRecipes(mesh)) {
+        if (PACK && !shaderPipeline() && ds.format() == DefaultVertexFormat.BLOCK && verts % 4 == 0 && !LightVolumes.hasRecipes(mesh)) {
             Entry pe = new Entry();
             pe.origin = e.origin;
             System.arraycopy(e.plane, 0, pe.plane, 0, 7);
@@ -441,8 +447,8 @@ public final class ChunkMultiDraw {
      * vertices (its sorted order is in the index buffer; a resort only replaces that, so the copy stays right), drawn
      * unsorted with sequential indices - the shadow programs do not blend.
      */
-    private static void storeShadowCopy(SectionRenderDispatcher.RenderSection section, RenderType layer, MeshData mesh) {
-        MeshData.DrawState ds = mesh.drawState();
+    private static void storeShadowCopy(ChunkRenderDispatcher.RenderChunk section, RenderType layer, BufferBuilder.RenderedBuffer mesh) {
+        BufferBuilder.DrawState ds = mesh.drawState();
         if (ds.mode() != VertexFormat.Mode.QUADS || ds.format() != DefaultVertexFormat.BLOCK || !capable()) return;
         release(section, layer);
         int li = layerIndex(layer);
@@ -465,10 +471,10 @@ public final class ChunkMultiDraw {
 
     /** a shadow pass can draw this layer through the arenas */
     public static boolean shadowLayer(RenderType t) {
-        return layerSupported(t) || t == RenderType.translucent() && dev.lull.shaders.ShaderPipeline.active && capable() && ssbo();
+        return layerSupported(t) || t == RenderType.translucent() && shaderPipeline() && capable() && ssbo();
     }
 
-    private static void put(Arena a, Entry e, ByteBuffer data, int verts, SectionRenderDispatcher.RenderSection section) {
+    private static void put(Arena a, Entry e, ByteBuffer data, int verts, ChunkRenderDispatcher.RenderChunk section) {
         int start = a.alloc(verts);
         if (start < 0) {
             a.grow(verts);
@@ -564,25 +570,27 @@ public final class ChunkMultiDraw {
     }
 
     /**
-     * Multi-draw replaces renderSectionLayer's body, so it gives way when another mod's mixin changes that method
-     * (Sable / Aeronautics draw ships there, Veil hooks it): then the layers, and the uploads, stay vanilla's.
+     * Multi-draw replaces renderChunkLayer's body (1.21.1: renderSectionLayer), so it gives way when another mod's mixin
+     * changes that method (Sable / Aeronautics draw ships there, Veil hooks it; Embeddium / Rubidium replace it): then
+     * the layers, and the uploads, stay vanilla's.
      */
-    public static final boolean ACTIVE = !MixinTouch.touched("net/minecraft/client/renderer/LevelRenderer", "renderSectionLayer");
+    public static final boolean ACTIVE = !MixinTouch.touched("net/minecraft/client/renderer/LevelRenderer", "renderChunkLayer");
 
     private static final boolean KEEP_VANILLA = Boolean.getBoolean("lab.chunkmd.keepVanilla");
 
-    /** From RenderSection.reset (origin change, release): every layer's entry. */
-    public static void release(SectionRenderDispatcher.RenderSection section) {
+    /** From RenderChunk.reset (origin change, release): every layer's entry. */
+    public static void release(ChunkRenderDispatcher.RenderChunk section) {
         for (RenderType t : LAYERS) release(section, t);
         if (LightVolumes.ON) LightVolumes.released(section);
     }
 
     /**
-     * RenderSection.setCompiled: a layer the new compile does not have is gone — vanilla stops drawing it
-     * (CompiledSection.isEmpty) and no upload replaces its entry, so the entry is released here, at the same moment.
+     * A new compile published (1.20.1: RebuildTask's compiled.set, seen right after it at
+     * LevelRenderer.addRecentlyCompiledChunk): a layer the new compile does not have is gone — vanilla stops drawing it
+     * (CompiledChunk.isEmpty) and no upload replaces its entry, so the entry is released here, at the same moment.
      */
-    public static void compiled(SectionRenderDispatcher.RenderSection section, SectionRenderDispatcher.CompiledSection compiled) {
-        // setCompiled runs on the compile task's thread: the arenas belong to the render thread, which drains this
+    public static void compiled(ChunkRenderDispatcher.RenderChunk section, ChunkRenderDispatcher.CompiledChunk compiled) {
+        // the compile's completion may run off the render thread: the arenas belong to the render thread, which drains this
         PENDING_COMPILED.add(new Object[] {section, compiled});
     }
 
@@ -592,14 +600,14 @@ public final class ChunkMultiDraw {
     private static void drainCompiled() {
         Object[] p;
         while ((p = PENDING_COMPILED.poll()) != null) {
-            var section = (SectionRenderDispatcher.RenderSection) p[0];
-            var compiled = (SectionRenderDispatcher.CompiledSection) p[1];
-            if (section.getCompiled() != compiled) continue;   // a newer compile (or a reset) came since
+            var section = (ChunkRenderDispatcher.RenderChunk) p[0];
+            var compiled = (ChunkRenderDispatcher.CompiledChunk) p[1];
+            if (section.getCompiledChunk() != compiled) continue;   // a newer compile (or a reset) came since
             for (RenderType t : LAYERS) if (compiled.isEmpty(t)) release(section, t);
         }
     }
 
-    private static void release(SectionRenderDispatcher.RenderSection section, RenderType layer) {
+    private static void release(ChunkRenderDispatcher.RenderChunk section, RenderType layer) {
         int li = LAYERS.indexOf(layer);
         if (li < 0) return;
         Object[] md = ((ChunkEntries) section).sleep$md();
@@ -620,7 +628,7 @@ public final class ChunkMultiDraw {
         return 2 * LAYERS.indexOf(a.layer) + (a.packed ? 1 : 0);
     }
 
-    /** RenderSection (ChunkSectionMixin): its arena entries by slot, so drawing needs no lookup. */
+    /** RenderChunk (ChunkSectionMixin): its arena entries by slot, so drawing needs no lookup. */
     public interface ChunkEntries {
         Object[] sleep$md();
 
@@ -652,21 +660,35 @@ public final class ChunkMultiDraw {
      * Draws the layer's visible sections: arena sections queued per region, others (no entry, stale origin) the vanilla
      * way on the spot. Returns false when the layer or the current shader cannot use it (then the caller draws vanilla).
      */
-    public static boolean draw(RenderType layer, Iterable<SectionRenderDispatcher.RenderSection> visible, double x, double y, double z,
+    public static boolean draw(RenderType layer, Iterable<?> visible, double x, double y, double z,
             net.minecraft.client.renderer.ShaderInstance shader) {
-        if (dev.lull.DrawStats.ON) {
-            dev.lull.DrawStats.phaseBegin(4);
-            // the camera's layers as their own sections (GPU time, pipeline statistics per layer)
-            if (!allFaces) dev.lull.DrawStats.section(layer == RenderType.solid() ? "terrain/solid" : layer == RenderType.cutoutMipped() ? "terrain/cutout_mipped" : "terrain/cutout");
-        }
-        try {
-            return draw0(layer, visible, x, y, z, shader);
-        } finally {
-            if (dev.lull.DrawStats.ON) dev.lull.DrawStats.phaseEnd(4);
-        }
+        // (1.21.1 timed the layer here as a DrawStats section: DrawStats comes over with the renderer's measurements)
+        return draw0(layer, visible, x, y, z, shader);
     }
 
-    private static boolean draw0(RenderType layer, Iterable<SectionRenderDispatcher.RenderSection> visible, double x, double y, double z,
+    /**
+     * A visible list's element as its render chunk: 1.20.1's LevelRenderer lists RenderChunkInfo (the chunk in its
+     * package-private field, read through ChunkInfoAccessor); a caller with its own list may pass the chunks themselves.
+     */
+    public static ChunkRenderDispatcher.RenderChunk chunkOf(Object o) {
+        return o instanceof ChunkRenderDispatcher.RenderChunk c ? c : ((dev.lull.opt.ChunkInfoAccessor) o).sleep$chunk();
+    }
+
+    /** 1.20.1's VertexFormat has no offset by element: the position is at 0 when it is the first element */
+    private static boolean positionFirst(VertexFormat f) {
+        var els = f.getElements();
+        return !els.isEmpty() && els.get(0) == DefaultVertexFormat.ELEMENT_POSITION;
+    }
+
+    /**
+     * The shaderpack pipeline (dev/lull/shaders) is not on 1.20.1 yet (port-pending.txt): its paths here (the shadow
+     * pass's copies of the translucent layer, the vertex prologue's arena binding) stay unused until it comes over.
+     */
+    private static boolean shaderPipeline() {
+        return false;
+    }
+
+    private static boolean draw0(RenderType layer, Iterable<?> visible, double x, double y, double z,
             net.minecraft.client.renderer.ShaderInstance shader) {
         int li = LAYERS.indexOf(layer);
         if (li < 0) return false;
@@ -681,7 +703,7 @@ public final class ChunkMultiDraw {
         boolean replaces = replacesVanilla(layer);
         int fs = 2 * li;
         // with the vanilla buffers empty, only the sections with an entry matter: SectionLists keeps them, in order
-        if (replaces && SECTION_LISTS && visible instanceof it.unimi.dsi.fastutil.objects.ObjectArrayList<SectionRenderDispatcher.RenderSection> vis)
+        if (replaces && SECTION_LISTS && visible instanceof it.unimi.dsi.fastutil.objects.ObjectArrayList<?> vis)
             visible = SectionLists.layer(vis, li);
         // the same camera position over the same lists and contents gives the same draws: last frame's are drawn again
         // (offsets and face buckets depend on the position only, so turning the head keeps them)
@@ -709,11 +731,12 @@ public final class ChunkMultiDraw {
             return true;
         }
         if (SORT_NEAR && !allFaces) visible = sortedNearFirst(visible, x, y, z);
-        for (SectionRenderDispatcher.RenderSection s : visible) {
+        for (Object info : visible) {
+            ChunkRenderDispatcher.RenderChunk s = chunkOf(info);
             // the section's own entry slots: no emptiness test (an empty layer has no entry), no map lookups
             Object[] md = ((ChunkEntries) s).sleep$md();
             Entry e = (Entry) md[fs], pe = (Entry) md[fs + 1];
-            if (e == null && pe == null && (replaces || s.getCompiled().isEmpty(layer))) {
+            if (e == null && pe == null && (replaces || s.getCompiledChunk().isEmpty(layer))) {
                 if (replaces) sectionsSkipped++;
                 continue;
             }
@@ -862,13 +885,13 @@ public final class ChunkMultiDraw {
     public static long translucentDraws, translucentFallbacks, resorts;
     private static ByteBuffer indexScratch = MemoryUtil.memAlloc(1 << 16);
 
-    /** LevelRenderer.renderSectionLayer: the translucent layer can take the multi-draw path now */
+    /** LevelRenderer.renderChunkLayer: the translucent layer can take the multi-draw path now */
     public static boolean translucentReady() {
-        return TRANSLUCENT && translucentPatched && ACTIVE && !dev.lull.shaders.ShaderPipeline.active && capable() && ssbo() && indirect();
+        return TRANSLUCENT && translucentPatched && ACTIVE && !shaderPipeline() && capable() && ssbo() && indirect();
     }
 
-    private static void storeTranslucent(SectionRenderDispatcher.RenderSection section, RenderType layer, MeshData mesh) {
-        MeshData.DrawState ds = mesh.drawState();
+    private static void storeTranslucent(ChunkRenderDispatcher.RenderChunk section, RenderType layer, BufferBuilder.RenderedBuffer mesh) {
+        BufferBuilder.DrawState ds = mesh.drawState();
         release(section, layer);
         if (!TRANSLUCENT || !translucentPatched || ds.mode() != VertexFormat.Mode.QUADS || ds.format() != DefaultVertexFormat.BLOCK || !capable()) return;
         int verts = ds.vertexCount();
@@ -890,7 +913,8 @@ public final class ChunkMultiDraw {
         put(a, e, mesh.vertexBuffer(), verts, section);
         e.idx = e.start * 2;
         e.indexCount = ds.indexCount();
-        writeIndices(a, e, mesh.indexBuffer(), ds.indexType(), ds.indexCount());
+        // (1.20.1: a sequential buffer's indexBuffer() is an empty slice, not null)
+        writeIndices(a, e, ds.sequentialIndex() ? null : mesh.indexBuffer(), ds.indexType(), ds.indexCount());
     }
 
     /** a section's indices (vanilla's sorted buffer; null: the sequential quad pattern) as ints at its index range */
@@ -933,8 +957,8 @@ public final class ChunkMultiDraw {
         GL15C.nglBufferSubData(GL31C.GL_COPY_WRITE_BUFFER, 4L * e.idx, 4L * count, d);
     }
 
-    /** VertexBuffer.uploadIndexBuffer of a translucent section (a resort): its copy's indices replaced the same way */
-    public static void resorted(SectionRenderDispatcher.RenderSection section, ByteBuffer indices, VertexFormat.IndexType type) {
+    /** an index-only VertexBuffer.upload of a translucent section (1.20.1's resort): its copy's indices replaced the same way */
+    public static void resorted(ChunkRenderDispatcher.RenderChunk section, ByteBuffer indices, VertexFormat.IndexType type) {
         int li = LAYERS.indexOf(RenderType.translucent());
         if (li < 0 || indices == null || type == null) return;
         Entry e = (Entry) ((ChunkEntries) section).sleep$md()[2 * li];
@@ -952,7 +976,7 @@ public final class ChunkMultiDraw {
      * The translucent layer's draw: the visible sections backwards (vanilla's order), one command each, one call.
      * False (nothing drawn): a visible non-empty section has no current copy - the caller draws the vanilla way.
      */
-    public static boolean drawTranslucent(it.unimi.dsi.fastutil.objects.ObjectArrayList<SectionRenderDispatcher.RenderSection> visible, double x, double y, double z,
+    public static boolean drawTranslucent(it.unimi.dsi.fastutil.objects.ObjectArrayList<?> visible, double x, double y, double z,
             net.minecraft.client.renderer.ShaderInstance shader) {
         RenderType layer = RenderType.translucent();
         int li = LAYERS.indexOf(layer);
@@ -973,8 +997,8 @@ public final class ChunkMultiDraw {
         int n = 0;
         Arena arena = null;
         for (int i = cap - 1; i >= 0; i--) {
-            SectionRenderDispatcher.RenderSection s = visible.get(i);
-            if (s.getCompiled().isEmpty(layer)) continue;
+            ChunkRenderDispatcher.RenderChunk s = chunkOf(visible.get(i));
+            if (s.getCompiledChunk().isEmpty(layer)) continue;
             Entry e = (Entry) ((ChunkEntries) s).sleep$md()[2 * li];
             var o = s.getOrigin();
             if (e == null || e.idx < 0 || e.origin != o.asLong() || !e.arena.indexed || (arena != null && e.arena != arena)) {
@@ -1182,9 +1206,8 @@ public final class ChunkMultiDraw {
                 GL30C.glBindVertexArray(a.vao);
                 seq.bind(a.maxIndices);
                 // a shaderpack's vertex prologue reads the quad's other vertices from the arena
-                if (dev.lull.shaders.ShaderPipeline.active) GL30C.glBindBufferBase(GL43C.GL_SHADER_STORAGE_BUFFER, 9, a.vbo);
+                if (shaderPipeline()) GL30C.glBindBufferBase(GL43C.GL_SHADER_STORAGE_BUFFER, 9, a.vbo);
                 GL30C.glBindBufferRange(target, UBO_BINDING, buf, a.uboOffset, sb ? 16L * a.n : 16L * MAX_DRAWS);
-                if (dev.lull.DrawStats.ON) dev.lull.DrawStats.phaseBegin(3);
                 if (phase > 0)   // the layer's commands, those this phase does not draw with no instance (the order kept)
                     OcclusionCull.draw(phase, LISTED.indexOf(a), seq.type().asGLType, a.n, (int) (a.cmdOffset / 20));
                 else if (indirect) {
@@ -1193,7 +1216,6 @@ public final class ChunkMultiDraw {
                     drawNanos += System.nanoTime() - tD;
                     if (IndirectDiag.ON) IndirectDiag.after("chunks", seq.type().asGLType, cmdBase + a.cmdOffset, a.n, 20);
                 } else GL32C.nglMultiDrawElementsBaseVertex(GL15C.GL_TRIANGLES, a.counts, seq.type().asGLType, a.indices, a.n, a.bases);
-                if (dev.lull.DrawStats.ON) dev.lull.DrawStats.phaseEnd(3);
                 multiDraws++;
                 if (!keep) {
                     a.n = 0;
@@ -1281,17 +1303,17 @@ public final class ChunkMultiDraw {
     private static final boolean SORT_NEAR = Boolean.getBoolean("lab.chunkmd.sortNear");
     /** -Dlab.chunkmd.sortFar (with sortNear): farthest first - an overdraw probe */
     private static final boolean SORT_FAR = Boolean.getBoolean("lab.chunkmd.sortFar");
-    private static SectionRenderDispatcher.RenderSection[] sortBuf = new SectionRenderDispatcher.RenderSection[1024];
+    private static Object[] sortBuf = new Object[1024];
     private static double[] sortKey = new double[1024];
 
-    private static Iterable<SectionRenderDispatcher.RenderSection> sortedNearFirst(Iterable<SectionRenderDispatcher.RenderSection> in, double x, double y, double z) {
+    private static Iterable<?> sortedNearFirst(Iterable<?> in, double x, double y, double z) {
         int n = 0;
-        for (SectionRenderDispatcher.RenderSection s : in) {
+        for (Object s : in) {
             if (n == sortBuf.length) {
                 sortBuf = java.util.Arrays.copyOf(sortBuf, n * 2);
                 sortKey = java.util.Arrays.copyOf(sortKey, n * 2);
             }
-            var o = s.getOrigin();
+            var o = chunkOf(s).getOrigin();
             double dx = o.getX() + 8 - x, dy = o.getY() + 8 - y, dz = o.getZ() + 8 - z;
             sortBuf[n] = s;
             sortKey[n] = (SORT_FAR ? -1 : 1) * (dx * dx + dy * dy + dz * dz);
@@ -1300,7 +1322,7 @@ public final class ChunkMultiDraw {
         // insertion sort on nearly ordered input
         for (int i = 1; i < n; i++) {
             double k = sortKey[i];
-            SectionRenderDispatcher.RenderSection v = sortBuf[i];
+            Object v = sortBuf[i];
             int j = i - 1;
             while (j >= 0 && sortKey[j] > k) {
                 sortKey[j + 1] = sortKey[j];

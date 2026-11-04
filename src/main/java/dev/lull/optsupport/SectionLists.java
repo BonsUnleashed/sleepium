@@ -2,7 +2,7 @@ package dev.lull.optsupport;
 
 import it.unimi.dsi.fastutil.objects.ObjectArrayList;
 import net.minecraft.client.renderer.RenderType;
-import net.minecraft.client.renderer.chunk.SectionRenderDispatcher;
+import net.minecraft.client.renderer.chunk.ChunkRenderDispatcher;
 
 /**
  * exp/section-lists (client): the frame's passes over every visible section (three opaque layers, translucent,
@@ -13,17 +13,22 @@ import net.minecraft.client.renderer.chunk.SectionRenderDispatcher;
  * (ChunkMultiDraw), the translucent / tripwire sections whose compiled layer is not empty, the sections with renderable
  * block entities. A loop over a list therefore does what the loop over all visible sections did. Changes: the visible
  * list compared by references with the last one (no section is read), and a generation bumped by setCompiled,
- * RenderSection.reset and arena stores / releases.
+ * RenderChunk.reset and arena stores / releases.
+ *
+ * <p>1.20.1: the visible list (LevelRenderer.renderChunksInFrustum) holds RenderChunkInfo, not the chunks: the lists
+ * hold those same infos (the loops read them), the per-chunk state is on the RenderChunk (ChunkMultiDraw.chunkOf).
  */
 public final class SectionLists {
     private static int gen, builtGen = -1;
     private static Object[] lastRefs = new Object[0];
     private static int lastSize = -1;
-    private static ObjectArrayList<SectionRenderDispatcher.RenderSection> built;
+    private static ObjectArrayList<?> built;
     @SuppressWarnings("unchecked")
-    private static final ObjectArrayList<SectionRenderDispatcher.RenderSection>[] LAYERS = new ObjectArrayList[8];
-    private static final ObjectArrayList<SectionRenderDispatcher.RenderSection> TRANSLUCENT = new ObjectArrayList<>(), TRIPWIRE = new ObjectArrayList<>(),
-            BLOCK_ENTITIES = new ObjectArrayList<>(), DIRTY = new ObjectArrayList<>(), DIRTY_OUT = new ObjectArrayList<>();
+    private static final ObjectArrayList<Object>[] LAYERS = new ObjectArrayList[8];
+    private static final ObjectArrayList<Object> TRANSLUCENT = new ObjectArrayList<>(), TRIPWIRE = new ObjectArrayList<>(),
+            BLOCK_ENTITIES = new ObjectArrayList<>(), DIRTY_OUT = new ObjectArrayList<>();
+    /** the dirty chunks themselves (setDirty sees the chunk, not its info) */
+    private static final ObjectArrayList<ChunkRenderDispatcher.RenderChunk> DIRTY = new ObjectArrayList<>(), DIRTY_SORT = new ObjectArrayList<>();
     /** id of the current build (the visible indices and the dirty list belong to it) */
     private static int build;
     public static long builds, reuses;
@@ -45,7 +50,7 @@ public final class SectionLists {
         return ((long) build << 32) | (builtGen & 0xFFFFFFFFL);
     }
 
-    private static void refresh(ObjectArrayList<SectionRenderDispatcher.RenderSection> visible) {
+    private static void refresh(ObjectArrayList<?> visible) {
         int n = visible.size();
         Object[] refs = visible.elements();
         if (builtGen == gen && built == visible && lastSize == n && java.util.Arrays.equals(refs, 0, n, lastRefs, 0, n)) {
@@ -60,7 +65,8 @@ public final class SectionLists {
         build++;
         RenderType translucent = RenderType.translucent(), tripwire = RenderType.tripwire();
         for (int i = 0; i < n; i++) {
-            var s = (SectionRenderDispatcher.RenderSection) refs[i];
+            Object info = refs[i];
+            var s = ChunkMultiDraw.chunkOf(info);
             ChunkMultiDraw.ChunkEntries ce = (ChunkMultiDraw.ChunkEntries) s;
             ce.sleep$setVis(i, build);
             if (s.isDirty()) {
@@ -68,11 +74,11 @@ public final class SectionLists {
                 ce.sleep$setDirtyBuild(build);
             }
             Object[] md = ce.sleep$md();
-            for (int k = 0; k < LAYERS.length; k++) if (md[2 * k] != null || md[2 * k + 1] != null) LAYERS[k].add(s);
-            var c = s.getCompiled();
-            if (!c.isEmpty(translucent)) TRANSLUCENT.add(s);
-            if (!c.isEmpty(tripwire)) TRIPWIRE.add(s);
-            if (!c.getRenderableBlockEntities().isEmpty()) BLOCK_ENTITIES.add(s);
+            for (int k = 0; k < LAYERS.length; k++) if (md[2 * k] != null || md[2 * k + 1] != null) LAYERS[k].add(info);
+            var c = s.getCompiledChunk();
+            if (!c.isEmpty(translucent)) TRANSLUCENT.add(info);
+            if (!c.isEmpty(tripwire)) TRIPWIRE.add(info);
+            if (!c.getRenderableBlockEntities().isEmpty()) BLOCK_ENTITIES.add(info);
         }
         if (lastRefs.length < n) lastRefs = new Object[Math.max(n, lastRefs.length * 2)];
         System.arraycopy(refs, 0, lastRefs, 0, n);
@@ -83,13 +89,14 @@ public final class SectionLists {
     }
 
     /** ChunkMultiDraw: the visible sections with an arena entry for layer index li. */
-    public static ObjectArrayList<SectionRenderDispatcher.RenderSection> layer(ObjectArrayList<SectionRenderDispatcher.RenderSection> visible, int li) {
+    public static ObjectArrayList<Object> layer(ObjectArrayList<?> visible, int li) {
         refresh(visible);
         return LAYERS[li];
     }
 
-    /** renderSectionLayer's own loops: for translucent and tripwire, only the sections that have the layer. */
-    public static ObjectArrayList<SectionRenderDispatcher.RenderSection> forLayer(ObjectArrayList<SectionRenderDispatcher.RenderSection> visible) {
+    /** renderChunkLayer's own loops: for translucent and tripwire, only the sections that have the layer. */
+    @SuppressWarnings("rawtypes")
+    public static ObjectArrayList forLayer(ObjectArrayList visible) {
         RenderType t = currentLayer;
         if (t == RenderType.translucent()) {
             refresh(visible);
@@ -103,13 +110,14 @@ public final class SectionLists {
     }
 
     /** renderLevel's block entity loop: only the sections that have renderable block entities. */
-    public static ObjectArrayList<SectionRenderDispatcher.RenderSection> blockEntities(ObjectArrayList<SectionRenderDispatcher.RenderSection> visible) {
+    @SuppressWarnings("rawtypes")
+    public static ObjectArrayList blockEntities(ObjectArrayList visible) {
         refresh(visible);
         return BLOCK_ENTITIES;
     }
 
-    /** RenderSection.setDirty / reset: a visible section of the current build joins its dirty list (once). */
-    public static void dirtied(SectionRenderDispatcher.RenderSection s) {
+    /** RenderChunk.setDirty / reset: a visible section of the current build joins its dirty list (once). */
+    public static void dirtied(ChunkRenderDispatcher.RenderChunk s) {
         ChunkMultiDraw.ChunkEntries ce = (ChunkMultiDraw.ChunkEntries) s;
         if (ce.sleep$visIdx(build) >= 0 && ce.sleep$dirtyBuild() != build) {
             DIRTY.add(s);
@@ -119,9 +127,11 @@ public final class SectionLists {
 
     /**
      * compileSections' loop: the visible sections that are dirty, in visible-list order (the loop tests isDirty itself;
-     * the ones no longer dirty are dropped here). Sections that are dirty but not visible are never walked.
+     * the ones no longer dirty are dropped here). Sections that are dirty but not visible are never walked. 1.20.1: the
+     * loop reads infos - each dirty chunk's own, found by its index in the visible list of this build.
      */
-    public static ObjectArrayList<SectionRenderDispatcher.RenderSection> dirtyVisible(ObjectArrayList<SectionRenderDispatcher.RenderSection> visible) {
+    @SuppressWarnings("rawtypes")
+    public static ObjectArrayList dirtyVisible(ObjectArrayList visible) {
         refresh(visible);
         DIRTY_OUT.clear();
         int w = 0;
@@ -132,13 +142,14 @@ public final class SectionLists {
                 continue;
             }
             DIRTY.set(w++, s);
-            DIRTY_OUT.add(s);
+            DIRTY_SORT.add(s);
         }
         DIRTY.size(w);
-        if (DIRTY_OUT.size() > 1) {
-            int b = build;
-            DIRTY_OUT.sort((a, c) -> Integer.compare(((ChunkMultiDraw.ChunkEntries) a).sleep$visIdx(b), ((ChunkMultiDraw.ChunkEntries) c).sleep$visIdx(b)));
-        }
+        int b = build;
+        if (DIRTY_SORT.size() > 1)
+            DIRTY_SORT.sort((a, c) -> Integer.compare(((ChunkMultiDraw.ChunkEntries) a).sleep$visIdx(b), ((ChunkMultiDraw.ChunkEntries) c).sleep$visIdx(b)));
+        for (int i = 0; i < DIRTY_SORT.size(); i++) DIRTY_OUT.add(lastRefs[((ChunkMultiDraw.ChunkEntries) DIRTY_SORT.get(i)).sleep$visIdx(b)]);
+        DIRTY_SORT.clear();
         return DIRTY_OUT;
     }
 

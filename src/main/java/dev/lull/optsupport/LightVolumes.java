@@ -2,9 +2,8 @@ package dev.lull.optsupport;
 
 import com.mojang.blaze3d.vertex.BufferBuilder;
 import com.mojang.blaze3d.vertex.DefaultVertexFormat;
-import com.mojang.blaze3d.vertex.MeshData;
 import com.mojang.blaze3d.vertex.VertexConsumer;
-import dev.lull.opt.BufferBuilderAccessor;
+import dev.lull.opt.LightBuilderAccessor;
 import java.util.BitSet;
 import java.util.IdentityHashMap;
 import java.util.Set;
@@ -25,9 +24,13 @@ import org.lwjgl.system.MemoryUtil;
  * UV2 itself stays baked as vanilla's, so a section without a light volume renders exactly as before.
  *
  * <p>A recipe is written only when it reproduces the UV2 actually written for that vertex (so a mod's own light,
- * NeoForge's per-quad light data, full-bright quads... stay baked). Vertices that did not come through an AO or flat
+ * Forge's per-quad light data, full-bright quads... stay baked). Vertices that did not come through an AO or flat
  * quad of ModelBlockRenderer get the sentinel in a pass over each layer's buffer before it is built. Meshes with
  * recipes are marked (not packed into the 16-byte format, which has no room for them).
+ *
+ * <p>1.20.1: a section is compiled by ChunkRenderDispatcher.RenderChunk.RebuildTask.compile (1.21.1: SectionCompiler),
+ * a layer ends as a BufferBuilder.RenderedBuffer (1.21.1: MeshData), and the builder's vertices are read through
+ * LightBuilderAccessor (its buffer, write offset, vertex count and format).
  */
 public final class LightVolumes {
     private LightVolumes() {}
@@ -77,7 +80,12 @@ public final class LightVolumes {
     }
 
     private static boolean blockBuilder(VertexConsumer vc) {
-        return vc instanceof BufferBuilder bb && ((BufferBuilderAccessor) bb).sleep$format() == DefaultVertexFormat.BLOCK;
+        return vc instanceof BufferBuilder bb && ((LightBuilderAccessor) bb).sleep$lvFormat() == DefaultVertexFormat.BLOCK;
+    }
+
+    /** the address of the builder's last written vertex (1.21.1: BufferBuilder's vertexPointer) */
+    private static long lastVertex(LightBuilderAccessor a) {
+        return MemoryUtil.memAddress0(a.sleep$lvBuffer()) + a.sleep$lvNext() - STRIDE;
     }
 
     /** After ModelBlockRenderer.putQuadData: the quad's four vertices are the builder's last four. */
@@ -91,16 +99,16 @@ public final class LightVolumes {
         Compile c = STATE.get();
         if (!c.on || !blockBuilder(consumer)) return;
         BufferBuilder bb = (BufferBuilder) consumer;
-        BufferBuilderAccessor a = (BufferBuilderAccessor) bb;
-        int n = a.sleep$vertices();
+        LightBuilderAccessor a = (LightBuilderAccessor) bb;
+        int n = a.sleep$lvVertices();
         if (n < 4) return;
-        long last = a.sleep$vertexPointer();
+        long last = lastVertex(a);
         boolean have;
         if (ao) {
             have = LightRecipe.integerPath(quad.getDirection(), shapeFlags);
             if (have) LightRecipe.recipes(level, pos, quad.getDirection(), shapeFlags, c.rec);
         } else {
-            // NeoForge's calculateFaceWithoutAO (quads without AO) and flat lighting: one sample, with the quad's own
+            // Forge's calculateFaceWithoutAO (quads without AO) and flat lighting: one sample, with the quad's own
             // block's emission (LevelRenderer.getLightColor(level, state, sample))
             BlockPos lp = culledFlat || shapeFlags.get(0) ? pos.relative(quad.getDirection()) : pos;
             int one = LightRecipe.flatSelf(level, state, pos, lp);
@@ -157,10 +165,10 @@ public final class LightVolumes {
     public static void fluidVertex(BlockAndTintGetter level, BlockPos fluidPos, VertexConsumer consumer) {
         Compile c = STATE.get();
         if (!c.on || !blockBuilder(consumer)) return;
-        BufferBuilderAccessor a = (BufferBuilderAccessor) consumer;
-        int n = a.sleep$vertices();
+        LightBuilderAccessor a = (LightBuilderAccessor) consumer;
+        int n = a.sleep$lvVertices();
         if (n < 1) return;
-        long v = a.sleep$vertexPointer();
+        long v = lastVertex(a);
         int value = SENTINEL;
         if (c.fluidRec != SENTINEL && LightRecipe.emulate(level, fluidPos, c.fluidRec) == MemoryUtil.memGetInt(v + UV2)) value = c.fluidRec;
         else rejected.incrementAndGet();
@@ -210,8 +218,8 @@ public final class LightVolumes {
         org.lwjgl.opengl.GL30C.glVertexAttribIPointer(7, 1, org.lwjgl.opengl.GL11C.GL_UNSIGNED_INT, STRIDE, NORMAL);
     }
 
-    /** LevelRenderer.renderSectionLayer, before a translucent section's draw: its volume, or -1 (baked light) */
-    public static void translucentDraw(net.minecraft.client.renderer.chunk.SectionRenderDispatcher.RenderSection section) {
+    /** LevelRenderer.renderChunkLayer, before a translucent section's draw: its volume, or -1 (baked light) */
+    public static void translucentDraw(net.minecraft.client.renderer.chunk.ChunkRenderDispatcher.RenderChunk section) {
         if (!translucentPatched) return;
         net.minecraft.client.renderer.ShaderInstance sh = com.mojang.blaze3d.systems.RenderSystem.getShader();
         if (sh == null) return;
@@ -234,7 +242,7 @@ public final class LightVolumes {
     }
 
     /** ChunkMultiDraw's translucent multi-draw: the volume translucentDraw would set for this section's draw */
-    public static float translucentVolume(net.minecraft.client.renderer.chunk.SectionRenderDispatcher.RenderSection section) {
+    public static float translucentVolume(net.minecraft.client.renderer.chunk.ChunkRenderDispatcher.RenderChunk section) {
         Sec sec = SECS.get(key(section));
         return sec != null && sec.vol >= 0 && sec.ready && sec.translucentRecipes ? sec.vol : -1;
     }
@@ -248,14 +256,14 @@ public final class LightVolumes {
         if (loc >= 0) org.lwjgl.opengl.GL20C.glUniform1i(loc, -1);
     }
 
-    /** SectionCompiler, before a layer's builder is built: the vertices no quad hook wrote get the sentinel. */
+    /** RebuildTask.compile, before a layer's builder is ended: the vertices no quad hook wrote get the sentinel. */
     public static boolean beforeBuild(BufferBuilder bb) {
         Compile c = STATE.get();
         if (!c.on || !blockBuilder(bb)) return false;
-        BufferBuilderAccessor a = (BufferBuilderAccessor) bb;
-        int n = a.sleep$vertices();
+        LightBuilderAccessor a = (LightBuilderAccessor) bb;
+        int n = a.sleep$lvVertices();
         if (n == 0) return false;
-        long first = a.sleep$vertexPointer() - (long) (n - 1) * STRIDE;
+        long first = lastVertex(a) - (long) (n - 1) * STRIDE;
         BitSet w = c.written.get(bb);
         for (int i = 0; i < n; i++) {
             if (w != null && w.get(i)) continue;
@@ -266,7 +274,7 @@ public final class LightVolumes {
         return true;
     }
 
-    /** SectionCompiler.getOrBeginLayer: a layer that is not drawn from our arenas keeps its baked light (incomplete). */
+    /** RebuildTask.compile, a layer's builder taken: a layer that is not drawn from our arenas keeps its baked light (incomplete). */
     public static void layerUsed(net.minecraft.client.renderer.RenderType type) {
         Compile c = STATE.get();
         if (c.on && !ChunkMultiDraw.layerSupported(type) && !(type == net.minecraft.client.renderer.RenderType.translucent() && translucentPatched))
@@ -278,14 +286,14 @@ public final class LightVolumes {
         return STATE.get().info;
     }
 
-    /** Implemented on MeshData: built with recipes (its compile's info), or not (null). */
+    /** Implemented on BufferBuilder.RenderedBuffer: built with recipes (its compile's info), or not (null). */
     public interface RecipeMesh {
         CompileInfo sleep$recipeInfo();
 
         void sleep$setRecipeInfo(CompileInfo info);
     }
 
-    public static boolean hasRecipes(MeshData mesh) {
+    public static boolean hasRecipes(BufferBuilder.RenderedBuffer mesh) {
         return mesh instanceof RecipeMesh r && r.sleep$recipeInfo() != null;
     }
 
@@ -318,7 +326,7 @@ public final class LightVolumes {
     }
 
     private static final it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap<Sec> SECS = new it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap<>();
-    private static final it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap<net.minecraft.client.renderer.chunk.SectionRenderDispatcher.RenderSection> SECTIONS =
+    private static final it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap<net.minecraft.client.renderer.chunk.ChunkRenderDispatcher.RenderChunk> SECTIONS =
             new it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap<>();
     private static final java.util.ArrayList<Long> DIRTY = new java.util.ArrayList<>();
     private static int buffer, capacity, used;
@@ -356,14 +364,14 @@ public final class LightVolumes {
         return p.asLong();
     }
 
-    private static long key(net.minecraft.client.renderer.chunk.SectionRenderDispatcher.RenderSection s) {
+    private static long key(net.minecraft.client.renderer.chunk.ChunkRenderDispatcher.RenderChunk s) {
         var o = s.getOrigin();
         return SectionPos.asLong(o.getX() >> 4, o.getY() >> 4, o.getZ() >> 4);
     }
 
     /** ChunkUploadMixin, after ChunkMultiDraw.store: a layer mesh of the section reached the GPU (ours: in an arena). */
-    public static void uploaded(net.minecraft.client.renderer.chunk.SectionRenderDispatcher.RenderSection section, net.minecraft.client.renderer.RenderType layer,
-                                MeshData mesh, boolean ours) {
+    public static void uploaded(net.minecraft.client.renderer.chunk.ChunkRenderDispatcher.RenderChunk section, net.minecraft.client.renderer.RenderType layer,
+                                BufferBuilder.RenderedBuffer mesh, boolean ours) {
         CompileInfo info = mesh instanceof RecipeMesh r ? r.sleep$recipeInfo() : null;
         long k = key(section);
         if (!FIRST_SEEN.containsKey(k)) FIRST_SEEN.put(k, System.nanoTime());
@@ -394,14 +402,14 @@ public final class LightVolumes {
     }
 
     /** the section's arena entries with recipes point at its volume */
-    private static void assign(net.minecraft.client.renderer.chunk.SectionRenderDispatcher.RenderSection section, int vol) {
+    private static void assign(net.minecraft.client.renderer.chunk.ChunkRenderDispatcher.RenderChunk section, int vol) {
         Object[] md = ((ChunkMultiDraw.ChunkEntries) section).sleep$md();
         for (Object o : md) if (o instanceof ChunkMultiDraw.Entry e) e.vol = e.recipes ? vol : -1;
         SectionLists.changed();
     }
 
-    /** RenderSection reset (origin change, release): its volume is free again. */
-    public static void released(net.minecraft.client.renderer.chunk.SectionRenderDispatcher.RenderSection section) {
+    /** RenderChunk reset (origin change, release): its volume is free again. */
+    public static void released(net.minecraft.client.renderer.chunk.ChunkRenderDispatcher.RenderChunk section) {
         FIRST_SEEN.remove(key(section));
         LIGHT_COUNT.remove(key(section));
         SECTIONS.remove(key(section));
@@ -414,7 +422,7 @@ public final class LightVolumes {
      * with a volume gets its volume refreshed instead; any other one is re-meshed, from now on with recipes.
      */
     public static void lightChanged(int x, int y, int z) {
-        if (PartBatch.LIT_ON) LightBoxes.sectionChanged(x, y, z);
+        // (1.21.1 also refreshed part batching's lit boxes here, PartBatch.LIT_ON: they come with PartBatch's port)
         long k = SectionPos.asLong(x, y, z);
         Sec sec = SECS.get(k);
         if (!recipesIgnored && sec != null && sec.vol >= 0 && sec.ready && sec.info != null && sec.info.complete) {

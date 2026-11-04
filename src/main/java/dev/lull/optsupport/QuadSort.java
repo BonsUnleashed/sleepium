@@ -171,24 +171,29 @@ public final class QuadSort {
     }
 
     /**
-     * BufferSource.endBatch: MeshData.sortQuads when the sorting is DISTANCE_TO_ORIGIN (world rendering). The keys come
-     * straight from the vertex buffer: the centroid of vertices 0 and 2 as unpackQuadCentroids forms it, the distance
-     * by the same JOML call the vanilla lambda makes (origin.distanceSquared); then the same stable descending order
-     * and the same index buffer as buildSortedIndexBuffer. No Vector3f per quad, no SortState (BufferSource drops it).
+     * The marker VertexSortDirectMixin leaves in BufferBuilder.sortingPoints for a DISTANCE_TO_ORIGIN sort: the points
+     * are not made (one Vector3f per quad); the keys are read from the vertices when the indices are written.
      */
-    public static com.mojang.blaze3d.vertex.MeshData.SortState sortQuads(com.mojang.blaze3d.vertex.MeshData m, com.mojang.blaze3d.vertex.ByteBufferBuilder bb,
-            VertexSorting sorting) {
-        var ds = m.drawState();
-        var f = ds.format();
-        if (sorting != VertexSorting.DISTANCE_TO_ORIGIN || ds.mode() != com.mojang.blaze3d.vertex.VertexFormat.Mode.QUADS
-                || !f.contains(com.mojang.blaze3d.vertex.VertexFormatElement.POSITION)) return m.sortQuads(bb, sorting);
-        int quads = ds.vertexCount() / 4;
+    public static final org.joml.Vector3f[] DIRECT = new org.joml.Vector3f[0];
+
+    /**
+     * BufferBuilder.putSortedQuadIndices when the sorting is DISTANCE_TO_ORIGIN (world rendering; 1.21.1: MeshData.sortQuads
+     * of BufferSource.endBatch). The keys come straight from the vertex buffer: the centroid of vertices 0 and 2 as
+     * makeQuadSortingPoints forms it (the first three floats of a vertex, whatever the format), the distance by the same
+     * JOML call the vanilla lambda makes (origin.distanceSquared); then the same stable descending order and the same
+     * indices, written where vanilla's IntConsumer writes them (from nextElementByte, native order). Render thread only
+     * (the keys' array is shared).
+     */
+    public static void putDirect(java.nio.ByteBuffer buffer, int batchStart, int at, int vertices, com.mojang.blaze3d.vertex.VertexFormat f,
+            com.mojang.blaze3d.vertex.VertexFormat.IndexType type) {
+        int quads = vertices / 4;
         if (keys.length < quads) keys = new float[Math.max(quads, keys.length * 2)];
         float[] d = keys;
-        long base = org.lwjgl.system.MemoryUtil.memAddress(m.vertexBuffer());
-        int stride = f.getVertexSize(), po = f.getOffset(com.mojang.blaze3d.vertex.VertexFormatElement.POSITION);
+        long addr = org.lwjgl.system.MemoryUtil.memAddress0(buffer);
+        long base = addr + batchStart;
+        int stride = f.getVertexSize();
         for (int q = 0; q < quads; q++) {
-            long v0 = base + (long) q * 4 * stride + po, v2 = v0 + 2L * stride;
+            long v0 = base + (long) q * 4 * stride, v2 = v0 + 2L * stride;
             float cx = (org.lwjgl.system.MemoryUtil.memGetFloat(v0) + org.lwjgl.system.MemoryUtil.memGetFloat(v2)) / 2.0F;
             float cy = (org.lwjgl.system.MemoryUtil.memGetFloat(v0 + 4) + org.lwjgl.system.MemoryUtil.memGetFloat(v2 + 4)) / 2.0F;
             float cz = (org.lwjgl.system.MemoryUtil.memGetFloat(v0 + 8) + org.lwjgl.system.MemoryUtil.memGetFloat(v2 + 8)) / 2.0F;
@@ -203,8 +208,7 @@ public final class QuadSort {
             checked++;
             if (!java.util.Arrays.equals(ref, order)) mismatches++;
         }
-        var type = ds.indexType();
-        long p = bb.reserve(quads * 6 * type.bytes);
+        long p = addr + at;
         if (type == com.mojang.blaze3d.vertex.VertexFormat.IndexType.SHORT) {
             for (int j : order) {
                 int b = j * 4;
@@ -228,10 +232,8 @@ public final class QuadSort {
                 p += 24;
             }
         }
-        ((dev.lull.opt.MeshDataAccessor) (Object) m).sleep$setIndexBuffer(bb.build());
         fastSorts++;
         fastQuads += quads;
-        return null;
     }
 
     public static String report() {

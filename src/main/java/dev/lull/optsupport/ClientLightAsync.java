@@ -111,7 +111,7 @@ public final class ClientLightAsync {
         for (int i = 0; i < marks.length; i++) {
             long p = marks[i];
             if (level != null) level.getChunkSource().onLightUpdate(LAYERS[layers[i]], SectionPos.of(p));
-            // 1.21.1: LightVolumes.lightChanged when the light volumes are on (stage 3, not on 1.20.1 yet)
+            else if (LightVolumes.ON) LightVolumes.lightChanged(SectionPos.x(p), SectionPos.y(p), SectionPos.z(p));
             else lr.setSectionDirty(SectionPos.x(p), SectionPos.y(p), SectionPos.z(p));
         }
         replayed += marks.length;

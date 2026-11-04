@@ -5,7 +5,7 @@ import dev.lull.optsupport.ChunkBufferTag;
 import dev.lull.optsupport.ChunkMultiDraw;
 import java.util.Map;
 import net.minecraft.client.renderer.RenderType;
-import net.minecraft.client.renderer.chunk.SectionRenderDispatcher;
+import net.minecraft.client.renderer.chunk.ChunkRenderDispatcher;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
@@ -13,8 +13,12 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-/** ChunkMultiDraw: tags the section's layer buffers; a reset (origin change, release) frees its arena entries. */
-@Mixin(SectionRenderDispatcher.RenderSection.class)
+/**
+ * ChunkMultiDraw: tags the section's layer buffers; a reset (origin change, release) frees its arena entries.
+ * 1.20.1: the section is ChunkRenderDispatcher.RenderChunk; it has no setCompiled (RebuildTask sets the compiled
+ * reference itself), so a new compile is seen at LevelRenderer.addRecentlyCompiledChunk (ChunkCompiledMixin).
+ */
+@Mixin(ChunkRenderDispatcher.RenderChunk.class)
 public abstract class ChunkSectionMixin implements ChunkMultiDraw.ChunkEntries {
     @Shadow @Final private Map<RenderType, VertexBuffer> buffers;
     @org.spongepowered.asm.mixin.Unique private final Object[] sleep$md = new Object[16];
@@ -54,29 +58,21 @@ public abstract class ChunkSectionMixin implements ChunkMultiDraw.ChunkEntries {
     @Inject(method = "setDirty", at = @At("HEAD"))
     private void sleep$dirty(boolean playerChanged, CallbackInfo ci) {
         sleep$epoch++;
-        if (dev.lull.optsupport.PartBatch.LIT_ON) {
-            var o = ((SectionRenderDispatcher.RenderSection) (Object) this).getOrigin();
-            dev.lull.optsupport.LightBoxes.sectionChanged(o.getX() >> 4, o.getY() >> 4, o.getZ() >> 4);
-        }
-        dev.lull.optsupport.SectionLists.dirtied((SectionRenderDispatcher.RenderSection) (Object) this);
+        // (1.21.1 also told LightBoxes here when part batching's lit boxes are on: they come with PartBatch's port)
+        dev.lull.optsupport.SectionLists.dirtied((ChunkRenderDispatcher.RenderChunk) (Object) this);
     }
 
     @Inject(method = "<init>", at = @At("RETURN"))
     private void sleep$tag(CallbackInfo ci) {
-        if (((SectionRenderDispatcher.RenderSection) (Object) this).index < 0) return;   // not the level's (Sable's ship sections: local origins)
-        for (var e : buffers.entrySet()) ((ChunkBufferTag) e.getValue()).sleep$tag((SectionRenderDispatcher.RenderSection) (Object) this, e.getKey());
-    }
-
-    @Inject(method = "setCompiled", at = @At("HEAD"))
-    private void sleep$compiled(SectionRenderDispatcher.CompiledSection compiled, CallbackInfo ci) {
-        ChunkMultiDraw.compiled((SectionRenderDispatcher.RenderSection) (Object) this, compiled);
+        if (((ChunkRenderDispatcher.RenderChunk) (Object) this).index < 0) return;   // not the level's (Sable's ship sections: local origins)
+        for (var e : buffers.entrySet()) ((ChunkBufferTag) e.getValue()).sleep$tag((ChunkRenderDispatcher.RenderChunk) (Object) this, e.getKey());
     }
 
     @Inject(method = "reset", at = @At("HEAD"))
     private void sleep$reset(CallbackInfo ci) {
         sleep$epoch++;
         dev.lull.optsupport.SectionLists.changed();
-        dev.lull.optsupport.SectionLists.dirtied((SectionRenderDispatcher.RenderSection) (Object) this);   // reset sets dirty
-        ChunkMultiDraw.release((SectionRenderDispatcher.RenderSection) (Object) this);
+        dev.lull.optsupport.SectionLists.dirtied((ChunkRenderDispatcher.RenderChunk) (Object) this);   // reset sets dirty
+        ChunkMultiDraw.release((ChunkRenderDispatcher.RenderChunk) (Object) this);
     }
 }

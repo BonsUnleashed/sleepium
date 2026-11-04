@@ -433,17 +433,12 @@ public final class OcclusionCull {
         hizFrame = frames;
         // the depth the layer draws into, known to the engine: GL queries of it (texture size, framebuffer attachment)
         // cost the CPU ~0.28 ms a frame (a driver sync while it is being drawn into, 11-02)
+        // (1.21.1 took a shaderpack's depthtex0 from ShaderPipeline first: the pipeline is not on 1.20.1 yet)
         int depth, w, h;
-        if (dev.lull.shaders.ShaderPipeline.gbufferDepth() != 0) {
-            depth = dev.lull.shaders.ShaderPipeline.gbufferDepth();
-            w = dev.lull.shaders.ShaderPipeline.gbufferWidth();
-            h = dev.lull.shaders.ShaderPipeline.gbufferHeight();
-        } else {
-            var rt = net.minecraft.client.Minecraft.getInstance().getMainRenderTarget();
-            depth = rt.getDepthTextureId();
-            w = rt.width;
-            h = rt.height;
-        }
+        var rt = net.minecraft.client.Minecraft.getInstance().getMainRenderTarget();
+        depth = rt.getDepthTextureId();
+        w = rt.width;
+        h = rt.height;
         if (!checked) {   // once: the bound framebuffer's depth is that texture
             checked = true;
             int type = GL30C.glGetFramebufferAttachmentParameteri(GL30C.GL_DRAW_FRAMEBUFFER, GL30C.GL_DEPTH_ATTACHMENT, GL30C.GL_FRAMEBUFFER_ATTACHMENT_OBJECT_TYPE);

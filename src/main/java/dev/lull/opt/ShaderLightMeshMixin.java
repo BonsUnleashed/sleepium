@@ -1,12 +1,15 @@
 package dev.lull.opt;
 
-import com.mojang.blaze3d.vertex.MeshData;
+import com.mojang.blaze3d.vertex.BufferBuilder;
 import dev.lull.optsupport.LightVolumes;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
 
-/** ShaderLightMixin: a mesh built with light recipes in its normal bytes. */
-@Mixin(MeshData.class)
+/**
+ * ShaderLightMixin: a mesh built with light recipes in its normal bytes (1.20.1: a BufferBuilder.RenderedBuffer; 1.21.1:
+ * MeshData).
+ */
+@Mixin(BufferBuilder.RenderedBuffer.class)
 public abstract class ShaderLightMeshMixin implements LightVolumes.RecipeMesh {
     @Unique private LightVolumes.CompileInfo sleep$recipeInfo;
 

@@ -29,14 +29,18 @@ public final class ClientCounters {
     private ClientCounters() {}
 
     public static String report() {
-        // 1.20.1: the event sites' report (the event bus step) and the rest of the renderer's (ChunkMultiDraw, QuadSort,
-        // PartBatch / Materials, SectionLists, LightVolumes: stage 3) come over with their parts (port-pending.txt)
+        // 1.20.1: the event sites' report (the event bus step) and PartBatch / Materials' (stage 3) come over with their
+        // parts (port-pending.txt)
         return String.format(Locale.ROOT, "client opts: ambient biome lookups skipped %d, sampler locations from cache %d; collision memo hits %d, misses %d",
                 biomeSkips, samplerHits, BlockCollisionMemo.hits, BlockCollisionMemo.misses)
                 + (Boolean.getBoolean("lab.opt.EntityBatchMixin") ? "; " + EntityBatch.report() : "")
                 + (Boolean.getBoolean("lab.opt.RenderCacheMixin") ? "; " + RenderCache.report() : "")
-                + (Boolean.getBoolean("lab.opt.ParallelEntitiesMixin") ? "; " + ParallelRender.report() : "") + extra()
+                + (Boolean.getBoolean("lab.opt.ParallelEntitiesMixin") ? "; " + ParallelRender.report() : "")
                 + (Boolean.getBoolean("lab.opt.BlockMeshMemoMixin") ? "; " + BlockMeshMemo.report() : "")
+                + (Boolean.getBoolean("lab.opt.ChunkMultiDrawMixin") ? "; " + ChunkMultiDraw.report() : "")
+                + (Boolean.getBoolean("lab.opt.VertexSortRadixMixin") ? "; " + QuadSort.report() : "") + extra()
+                + (Boolean.getBoolean("lab.opt.SectionListsMixin") ? "; " + SectionLists.report() : "")
+                + (Boolean.getBoolean("lab.opt.ShaderLightMixin") ? "; " + LightVolumes.report() : "")
                 + (Boolean.getBoolean("lab.opt.ChunkTickMemoMixin") ? "; chunk tick memo: hits " + ChunkTickMemo.hits + ", misses " + ChunkTickMemo.misses + ", epoch " + ChunkTickMemo.epoch : "")
                 + (Boolean.getBoolean("lab.opt.ClientLightAsyncMixin") ? "; " + ClientLightAsync.report() + "; " + FrameReactor.report() : "")
                 + (Boolean.getBoolean("lab.opt.UniformDedupeMixin") ? "; uniform uploads sent " + uniformsSent + ", skipped (same value) " + uniformsSkipped : "")

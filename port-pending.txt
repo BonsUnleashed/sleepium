@@ -20,24 +20,11 @@ dev/lull/BusEquivalence.java
 dev/lull/BusAnatomy.java
 dev/lull/EventBench.java
 # the client renderer (1.20.1 has the old buffer API and section renderer): stage 3
-dev/lull/optsupport/ChunkMultiDraw.java
-dev/lull/optsupport/SectionLists.java
-dev/lull/optsupport/LightVolumes.java
-dev/lull/optsupport/QuadSort.java
-dev/lull/optsupport/ChunkBufferTag.java
 dev/lull/optsupport/MolangJit.java
 dev/lull/optsupport/KineticMemo.java
 dev/lull/optsupport/KineticResident.java
 dev/lull/optsupport/FlwLabExecutor.java
-dev/lull/opt/ChunkUploadMixin.java
-dev/lull/opt/ChunkMultiDraw*.java
-dev/lull/opt/ChunkSectionMixin.java
-dev/lull/opt/ShaderLight*.java
-dev/lull/opt/ShaderSamplerNamesMixin.java
-dev/lull/opt/VertexSortDirectMixin.java
 dev/lull/opt/MeshDataAccessor.java
-dev/lull/opt/SectionListsMixin.java
-dev/lull/opt/SectionLayerMaskMixin.java
 dev/lull/opt/LevelRendererVisibleAccessor.java
 dev/lull/opt/PartTypeMixin.java
 dev/lull/opt/PartBatchMixin.java
@@ -77,16 +64,10 @@ dev/lull/opt/NetReactorWaitMixin.java
 # the renderer (stage 3): parts used only by pending renderer classes (chunk multi-draw's shader patches, occlusion
 # culling and indirect commands, part batching's materials / coatings, the 1.21 VertexConsumer recorder, light boxes,
 # the bulk vertex path), and the mixins of pending renderer parts (QuadSort, ParallelRender)
-dev/lull/optsupport/ShaderPatches.java
-dev/lull/opt/ChunkShaderPatchMixin.java
 dev/lull/optsupport/ProgramCaches.java
 dev/lull/optsupport/Materials.java
-dev/lull/optsupport/OcclusionCull.java
-dev/lull/optsupport/IndirectCommands.java
-dev/lull/optsupport/IndirectDiag.java
 dev/lull/optsupport/LightBoxes.java
 dev/lull/optsupport/BulkData.java
-dev/lull/opt/VertexSortRadixMixin.java
 # the event bus step: the event-site rewrite (its mixins are pending above)
 # 1.21-only target: NeoForge's ClientHooks.isBlockEntityRendererVisible (the default box new AABB(pos)); Forge 1.20.1
 # tests frustum.isVisible(be.getRenderBoundingBox()), whose default box comes from the collision shape: another check
@@ -102,3 +83,6 @@ dev/lull/opt/WorldgenShareRegionMixin.java
 dev/lull/mixin/GenTraceUnloadMixin.java
 # 1.21-only target: MinecraftServer.waitForTasks (1.20.1 inherits BlockableEventLoop's; GenProfileWaitMixin times both)
 dev/lull/mixin/GenProfileServerWaitMixin.java
+
+
+# 1.21-only: MeshData (the 1.21 buffer API) - QuadSort's direct sort is on BufferBuilder on 1.20.1 (VertexSortDirectMixin)

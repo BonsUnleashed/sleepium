@@ -14,7 +14,8 @@ import org.spongepowered.asm.mixin.injection.Redirect;
 /**
  * ShaderLightMixin: fluid vertices get the fluid light recipe — the light of each face comes from
  * getLightColor(level, p) (per channel max of p and p.above()) computed just before its vertices. Vanilla's and
- * mods' fluids that render through LiquidBlockRenderer; anything else keeps the sentinel (baked).
+ * mods' fluids that render through LiquidBlockRenderer; anything else keeps the sentinel (baked). (1.20.1's vertex
+ * takes the position as doubles.)
  */
 @Mixin(LiquidBlockRenderer.class)
 public abstract class ShaderLightFluidMixin {
@@ -24,7 +25,7 @@ public abstract class ShaderLightFluidMixin {
     }
 
     @Shadow
-    private void vertex(VertexConsumer buffer, float x, float y, float z, float r, float g, float b, float alpha, float u, float v, int light) {}
+    private void vertex(VertexConsumer buffer, double x, double y, double z, float r, float g, float b, float alpha, float u, float v, int light) {}
 
     @Redirect(method = "tesselate", at = @At(value = "INVOKE",
             target = "Lnet/minecraft/client/renderer/block/LiquidBlockRenderer;getLightColor(Lnet/minecraft/world/level/BlockAndTintGetter;Lnet/minecraft/core/BlockPos;)I"))
@@ -34,8 +35,8 @@ public abstract class ShaderLightFluidMixin {
     }
 
     @Redirect(method = "tesselate", at = @At(value = "INVOKE",
-            target = "Lnet/minecraft/client/renderer/block/LiquidBlockRenderer;vertex(Lcom/mojang/blaze3d/vertex/VertexConsumer;FFFFFFFFFI)V"))
-    private void sleep$vertex(LiquidBlockRenderer self, VertexConsumer buffer, float x, float y, float z, float r, float g, float b, float alpha, float u, float v, int light,
+            target = "Lnet/minecraft/client/renderer/block/LiquidBlockRenderer;vertex(Lcom/mojang/blaze3d/vertex/VertexConsumer;DDDFFFFFFI)V"))
+    private void sleep$vertex(LiquidBlockRenderer self, VertexConsumer buffer, double x, double y, double z, float r, float g, float b, float alpha, float u, float v, int light,
                               @Local(argsOnly = true) BlockAndTintGetter level, @Local(argsOnly = true, ordinal = 0) BlockPos fluidPos) {
         vertex(buffer, x, y, z, r, g, b, alpha, u, v, light);
         LightVolumes.fluidVertex(level, fluidPos, buffer);

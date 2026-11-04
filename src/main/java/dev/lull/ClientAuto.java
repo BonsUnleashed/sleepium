@@ -544,7 +544,8 @@ public final class ClientAuto {
                     if (dev.lull.optsupport.LightTiming.ON) log(dev.lull.optsupport.LightTiming.report());
                     if (dev.lull.optsupport.LightScout.ON) log(dev.lull.optsupport.LightScout.report());
                     if (dev.lull.optsupport.LightRecipe.VERIFY) log(dev.lull.optsupport.LightRecipe.report());
-                    // LightVolumes / DrawStats / GeoParts reports: the renderer's parts, not on 1.20.1 yet (stage 3)
+                    if (Boolean.getBoolean("lab.shaderlight.diag")) log(dev.lull.optsupport.LightVolumes.diagReport());
+                    // DrawStats / GeoParts reports: the renderer's parts, not on 1.20.1 yet (stage 3)
                     for (java.util.function.Function<String, String> r : REPORTS) {   // other mods' reports (the label of the run given)
                         String x = r.apply(LABEL);
                         if (x != null) log(x);

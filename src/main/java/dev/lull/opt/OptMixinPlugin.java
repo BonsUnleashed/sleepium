@@ -66,7 +66,8 @@ public final class OptMixinPlugin implements IMixinConfigPlugin {
             on = Boolean.getBoolean("lab.opt.all") || Boolean.getBoolean("lab.opt.CubeShapeMixin");
         if (simple.equals("SignalProofStateMixin"))
             on = Boolean.getBoolean("lab.opt.all") || Boolean.getBoolean("lab.opt.SignalPathMixin");
-        if (simple.equals("ChunkSectionMixin") || simple.equals("ChunkUploadMixin"))
+        // (1.20.1: ChunkCompiledMixin sees new compiles - 1.21.1's setCompiled hook; ChunkInfoAccessor reads RenderChunkInfo)
+        if (simple.equals("ChunkSectionMixin") || simple.equals("ChunkUploadMixin") || simple.equals("ChunkCompiledMixin") || simple.equals("ChunkInfoAccessor"))
             on = Boolean.getBoolean("lab.opt.all") || Boolean.getBoolean("lab.opt.ChunkMultiDrawMixin");
         if (simple.equals("ChunkShaderPatchMixin"))   // the shader patch hook of both chunk multi-draw and part batching
             on = Boolean.getBoolean("lab.opt.all") || Boolean.getBoolean("lab.opt.ChunkMultiDrawMixin") || Boolean.getBoolean("lab.opt.PartBatchMixin");
@@ -102,7 +103,8 @@ public final class OptMixinPlugin implements IMixinConfigPlugin {
             on = Boolean.getBoolean("lab.opt.all") || Boolean.getBoolean("lab.opt.FrameGarbageMixin");
         if (simple.equals("ClientLightCallbackMixin") || simple.equals("ClientLevelLightQueueAccessor") || simple.equals("ClientLightJoinMixin"))
             on = Boolean.getBoolean("lab.opt.all") || Boolean.getBoolean("lab.opt.ClientLightAsyncMixin");
-        if (simple.equals("ShaderLightCompileMixin") || simple.equals("ShaderLightMeshMixin") || simple.equals("ShaderLightChunkCacheMixin") || simple.equals("ShaderLightFrameMixin") || simple.equals("ShaderLightFluidMixin") || simple.equals("ShaderLightTranslucentMixin"))
+        if (simple.equals("ShaderLightCompileMixin") || simple.equals("ShaderLightMeshMixin") || simple.equals("ShaderLightChunkCacheMixin") || simple.equals("ShaderLightFrameMixin") || simple.equals("ShaderLightFluidMixin") || simple.equals("ShaderLightTranslucentMixin")
+                || simple.equals("LightBuilderAccessor"))   // (1.20.1: the builder's vertices for the recipes)
             on = Boolean.getBoolean("lab.opt.all") || Boolean.getBoolean("lab.opt.ShaderLightMixin");
         if (simple.startsWith("WorldgenAlloc") || simple.startsWith("Xoroshiro"))
             on = Boolean.getBoolean("lab.opt.all") || Boolean.getBoolean("lab.opt.WorldgenAlloc");
@@ -202,6 +204,7 @@ public final class OptMixinPlugin implements IMixinConfigPlugin {
             dev.lull.optsupport.ScratchArrays.transform(targetClass);
         if (mixinClassName.endsWith(".AllocTrimPackMixin"))
             dev.lull.optsupport.AllocTrim.transformPack(targetClass);
-        // VertexSortRadixMixin -> QuadSort.transform: the renderer (stage 3, port-pending.txt)
+        if (mixinClassName.endsWith(".VertexSortRadixMixin"))
+            dev.lull.optsupport.QuadSort.transform(targetClass);
     }
 }
