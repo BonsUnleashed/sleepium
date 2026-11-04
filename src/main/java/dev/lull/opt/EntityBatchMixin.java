@@ -49,9 +49,22 @@ public abstract class EntityBatchMixin {
     @Unique private final Map<RenderType, BufferBuilder> sleep$buffers = new HashMap<>();
     @Unique private final List<RenderType> sleep$deferred = new ArrayList<>();
     @Unique private boolean sleep$flushing;
+    @Unique private static final boolean KEEP_SHARED = !"false".equals(System.getProperty("lab.ebatch.keepShared"));
 
     @Inject(method = "getBuffer", at = @At("HEAD"), cancellable = true)
     private void sleep$getBuffer(RenderType type, CallbackInfoReturnable<VertexConsumer> cir) {
+        // 1.20.1 ends the shared batch when a FIXED buffer's type is asked for (1.21's BufferSource does not): every
+        // sign's text was drawn alone, as the next sign's board (a fixed sheet) came. Fixed buffers are drawn at the end
+        // anyway, so nothing is drawn between: the fixed buffer is handed out as 1.21 does, the shared batch and
+        // lastState stay (another shared type still ends it, as vanilla)
+        if (KEEP_SHARED && lastState.isPresent() && !fixedBuffers.containsKey(lastState.get()) && type.canConsolidateConsecutiveGeometry()) {
+            BufferBuilder fixed = fixedBuffers.get(type);
+            if (fixed != null) {
+                if (startedBuffers.add(fixed)) fixed.begin(type.mode(), type.format());
+                cir.setReturnValue(fixed);
+                return;
+            }
+        }
         BufferBuilder b = sleep$buffers.get(type);
         if (b != null && sleep$deferred.contains(type)) {
             cir.setReturnValue(b);
@@ -63,9 +76,11 @@ public abstract class EntityBatchMixin {
             if (sleep$buffers.size() >= EntityBatch.MAX_TYPES) return;   // vanilla's shared buffer for the rest
             sleep$buffers.put(type, b = new BufferBuilder(type.bufferSize()));
         }
-        // vanilla ends the shared batch on this switch: so do we (a blending batch keeps its place); a fixed buffer's
-        // type stays the last one (vanilla does not end those on a switch)
-        if (lastState.isPresent() && !fixedBuffers.containsKey(lastState.get())) endBatch(lastState.get());
+        // vanilla ends the shared batch on this switch; we keep it open (-Dlab.ebatch.keepShared=false: vanilla's end):
+        // a batched type draws nothing now (its batch is drawn later), so nothing is drawn between this shared batch
+        // and its next geometry - the shared type's later vertices join the same draw in the same order (one draw for
+        // every sign's text, 1.20.1: 69 draws -> 1 on client_entities); another shared type still ends it as vanilla
+        if (!KEEP_SHARED && lastState.isPresent() && !fixedBuffers.containsKey(lastState.get())) endBatch(lastState.get());
         b.begin(type.mode(), type.format());
         startedBuffers.add(b);
         EntityBatch.started(b, type);

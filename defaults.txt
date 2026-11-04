@@ -180,3 +180,5 @@
 -Dlab.opt.RenderCacheBlockEntityMixin=true
 -Dlab.opt.RenderCacheClockMixin=true
 -Dlab.opt.RenderCacheMixin=true
+-Dlab.prender.listenersOnWorkers=true
+-Dlab.opt.EntityDataNoLockMixin=true

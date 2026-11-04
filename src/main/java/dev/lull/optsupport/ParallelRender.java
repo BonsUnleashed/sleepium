@@ -427,9 +427,13 @@ public final class ParallelRender {
     }
 
     /**
-     * -Dlab.prender.listenersOnWorkers=true (experiment, not safe in general): entities go to workers although an
-     * entity render event has listeners - the listeners then run on the worker. For measuring the GeckoLib adapter
-     * under mods whose RenderLivingEvent listeners act on players only (Cursed Fate's / KCR's MCreator procedures).
+     * -Dlab.prender.listenersOnWorkers (on in the 1.20.1 defaults since 11-05, the maintainers' call: 1.21.1 keeps such entities
+     * on the render thread): entities go to workers although an entity render event has listeners - the listeners
+     * then run on the worker, inside the job. What they draw, cancel or push on the pose lands in the job's record and
+     * is merged in vanilla's order, so the frame is the same; the risk left is a listener that is not thread-safe -
+     * one that throws there sends its job to the render thread and keeps the type there (learnFailure). Players stay
+     * on the render thread anyway. Packs this matters for: GeckoLib mods with MCreator procedures on
+     * RenderLivingEvent (Cursed Fate, Kleiders Custom Renderer), whose entities otherwise never leave the render thread.
      */
     private static final boolean LISTENERS_ON_WORKERS = Boolean.getBoolean("lab.prender.listenersOnWorkers");
 

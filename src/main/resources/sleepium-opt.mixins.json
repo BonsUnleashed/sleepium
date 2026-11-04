@@ -144,7 +144,8 @@
     "MoveMemoMixin",
     "AsyncChunkSaveMixin",
     "AsyncChunkSaveEncodeMixin",
-    "AsyncChunkSaveStorageMixin"
+    "AsyncChunkSaveStorageMixin",
+    "EntityDataNoLockMixin"
   ],
   "client": [
     "SectionLayerMaskMixin",
