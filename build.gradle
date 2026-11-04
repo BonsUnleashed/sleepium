@@ -39,7 +39,7 @@ repositories {
     // GeckoLib, for the engine's GeckoLib mixins (applied only when GeckoLib is installed)
     maven {
         url = 'https://dl.cloudsmith.io/public/geckolib3/geckolib/maven/'
-        content { includeGroup 'software.bernie.geckolib' }
+        content { includeGroup 'software.bernie.geckolib'; includeGroup 'com.eliotlash.mclib' }
     }
 }
 
@@ -91,6 +91,8 @@ dependencies {
     compileOnly(annotationProcessor('io.github.llamalad7:mixinextras-common:0.4.1'))
     implementation(jarJar('io.github.llamalad7:mixinextras-forge:0.4.1'))
     compileOnly "software.bernie.geckolib:geckolib-forge-${minecraft_version}:${geckolib_version}"
+    // mclib: GeckoLib 4.8.4's Molang tree (it ships the jar inside, jar-in-jar), for MolangJit
+    compileOnly 'com.eliotlash.mclib:mclib:20'
     // -PtestMods=<folder>: every jar there (released mods: SRG member names) remapped onto the dev runs' classpath -
     // the Cursed Fate set (GeckoLib, Photon + LDLib, Kleiders Custom Renderer, playerAnimator) for the client tests
     if (project.hasProperty('testMods')) file(project.property('testMods')).listFiles().findAll { it.name.endsWith('.jar') }.each {

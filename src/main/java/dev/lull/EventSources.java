@@ -7,7 +7,7 @@ import net.minecraftforge.common.MinecraftForge;
 /**
  * Counts every kind of "event" the game has, so we can see which ones go through our bus and which never touch it.
  * <ul>
- *   <li>NeoForge game bus posts: counted by CompositeEventBus when {@code -Dlab.opt.busStats=true}</li>
+ *   <li>Forge game bus posts: counted by CompositeEventBus when {@code -Dlab.opt.busStats=true}</li>
  *   <li>vanilla mechanisms inside the tick (EventSourcesMixin, server levels only):
  *       block events (pistons, note blocks, chest lids), GameEvents (vibrations/sculk), scheduled block/fluid tick
  *       requests, neighbour updates, block-entity ticks (polling), entity ticks</li>
@@ -39,9 +39,23 @@ public final class EventSources {
         for (int i = 0; i < n.length; i++) {
             sb.append(String.format(Locale.ROOT, "  %-46s %10.1f%n", names[i], (n[i] - last[i]) / (double) dt));
         }
-        // the composite bus's path counters (1.21.1: CompositeEventBus) come over with the event bus step (port-pending.txt)
-        sb.append("  -- MinecraftForge.EVENT_BUS is Forge's bus (" + MinecraftForge.EVENT_BUS.getClass().getSimpleName()
-                + "): the composite bus is not on 1.20.1 yet\n");
+        if (MinecraftForge.EVENT_BUS instanceof dev.lull.optsupport.CompositeEventBus) {
+            long[] p = dev.lull.optsupport.CompositeEventBus.pathCounts();
+            long total = 0;
+            for (long v : p) total += v;
+            sb.append(String.format(Locale.ROOT, "  -- MinecraftForge.EVENT_BUS = CompositeEventBus: %.1f posts/tick%n", (total - lastBus) / (double) dt));
+            String[] pn = dev.lull.optsupport.CompositeEventBus.PATH_NAMES;
+            for (int i = 0; i < p.length; i++) {
+                sb.append(String.format(Locale.ROOT, "     %-43s %10.1f%n", pn[i], (p[i] - lastPaths[i]) / (double) dt));
+            }
+            if (!dev.lull.optsupport.CompositeEventBus.STATS) sb.append("     (path counters off: -Dlab.opt.busStats=true)\n");
+            else sb.append(dev.lull.optsupport.CompositeEventBus.topTypes(12, dt));
+            lastBus = total;
+            lastPaths = p;
+        } else {
+            sb.append("  -- MinecraftForge.EVENT_BUS is Forge's bus (" + MinecraftForge.EVENT_BUS.getClass().getSimpleName()
+                    + "): enable -Dlab.opt.ForgeBusMixin=true\n");
+        }
         sb.append(dev.lull.optsupport.OptCounters.report());
         last = n;
         lastTick = tick;

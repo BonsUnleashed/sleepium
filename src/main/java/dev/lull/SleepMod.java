@@ -25,6 +25,8 @@ public final class SleepMod {
         gameBus.addListener(EventPriority.NORMAL, false, net.minecraftforge.event.server.ServerStartedEvent.class, e -> dev.lull.optsupport.ClassPreload.started());
         gameBus.addListener(EventPriority.NORMAL, false, net.minecraftforge.event.server.ServerStoppedEvent.class, e -> dev.lull.optsupport.ClassPreload.stopped());
         TickTimer.INSTANCE.register(gameBus);
+        EventCounter.INSTANCE.attach(gameBus);
+        EventBench.registerListeners(gameBus);
         gameBus.addListener(SleepCommand::register);
         gameBus.addListener(EventPriority.NORMAL, false, TickEvent.ServerTickEvent.class, e -> {
             if (e.phase == TickEvent.Phase.START) NetBench.onTickStart();   // 1.21.1: ServerTickEvent.Pre
@@ -45,7 +47,6 @@ public final class SleepMod {
         gameBus.addListener(EventPriority.NORMAL, false, net.minecraftforge.event.entity.player.PlayerEvent.PlayerLoggedInEvent.class, e -> {
             if (e.getEntity() instanceof net.minecraft.server.level.ServerPlayer p0) dev.lull.net.Coalesce.enable(p0);   // before anything big goes out (mods after it send theirs)
         });
-        // not yet on 1.20.1: EventCounter, EventBench (the event bus step) (port-pending.txt)
         if (FMLEnvironment.dist.isClient()) {
             ClientMeter.register(gameBus);   // class is only loaded on the physical client
             dev.lull.ui.SleepUi.register(gameBus);   // the settings screen (mod list, Options)

@@ -5,18 +5,8 @@
 dev/lull/catmixin/**
 dev/lull/veilmixin/**
 dev/lull/flwmixin/**
-# GeckoLib (4.8.4 on 1.20.1): AnimStreamMixin, GeoMixinPlugin and the parallel-render ones ported; GeoCubes waits for
-# PartBatch (bones from VRAM), MolangJit for GeckoLib 4.8.4's Molang (mclib's IValue tree, not 4.9's MathValue: a rewrite, and Molang is not in the
-# Cursed Fate profile)
-dev/lull/geomixin/MolangJitMixin.java
 # the shaderpack pipeline and the settings screen
-# diagnostics and benchmarks of the 1.21.1 work
-dev/lull/ScaleListeners.java
-dev/lull/BusEquivalence.java
-dev/lull/BusAnatomy.java
-dev/lull/EventBench.java
 # the client renderer (1.20.1 has the old buffer API and section renderer): stage 3
-dev/lull/optsupport/MolangJit.java
 dev/lull/optsupport/KineticMemo.java
 dev/lull/optsupport/KineticResident.java
 dev/lull/optsupport/FlwLabExecutor.java
@@ -31,9 +21,6 @@ dev/lull/opt/LevelRendererVisibleAccessor.java
 # networking (1.20.1 has no CustomPacketPayload / StreamCodec): its own step
 
 # --- the 11-04 compile pass: files that reference pending parts or 1.21-only systems ---
-# the event bus step: Forge's eventbus 6 keeps one static ListenerList per event class, no per-bus listenerLists map
-# to discover the posted types from (EventCounter's discovery and listener counts)
-dev/lull/EventCounter.java
 # the event bus step: their safety reads the composite bus (CompositeEventBus.hasListeners / mayHaveListeners /
 # fullPosts); without it NeighborNotifySkip and AsyncChunkSave never apply, and MoveMemo could skip a move that posted an
 # event somebody listens to (MoveMemo.java stays: its epochs are shared with mob sleep; only the skipping mixin waits)

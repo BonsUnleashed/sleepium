@@ -4,9 +4,10 @@ import java.util.Locale;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Consumer;
-import net.neoforged.bus.api.Event;
-import net.neoforged.bus.api.ICancellableEvent;
-import net.neoforged.bus.api.IEventBus;
+import net.minecraftforge.eventbus.api.Cancelable;
+import net.minecraftforge.eventbus.api.Event;
+import net.minecraftforge.eventbus.api.EventPriority;
+import net.minecraftforge.eventbus.api.IEventBus;
 
 /**
  * Microbenchmark of {@code IEventBus.post} run on the live game bus, on the server thread.
@@ -17,16 +18,20 @@ import net.neoforged.bus.api.IEventBus;
  * JMH run would see one listener class and let the JIT inline it.
  *
  * <p>Each case reports ns/op and bytes allocated per op (server thread TLAB accounting).
+ *
+ * <p>1.20.1: on MinecraftForge.EVENT_BUS (CompositeEventBus when ForgeBusMixin is on, else Forge's EventBus); a
+ * cancellable event is {@code @Cancelable} (1.21.1: ICancellableEvent).
  */
 final class EventBench {
-    /** No listeners at all: the cost of a NeoForge hook nobody subscribed to. */
+    /** No listeners at all: the cost of a Forge hook nobody subscribed to. */
     public static final class EmptyEvent extends Event {}
 
     /** One no-op listener. */
     public static final class OneListenerEvent extends Event {}
 
     /** One no-op listener, cancellable: the bus wraps listeners in an isCanceled() check. */
-    public static final class CancellableEvent extends Event implements ICancellableEvent {}
+    @Cancelable
+    public static final class CancellableEvent extends Event {}
 
     private static volatile long sink;
     private static volatile Consumer<Object> directTarget = o -> sink++;
@@ -37,11 +42,11 @@ final class EventBench {
 
     static void registerListeners(IEventBus gameBus) {
         bus = gameBus;
-        gameBus.addListener(OneListenerEvent.class, e -> sink++);
-        gameBus.addListener(CancellableEvent.class, e -> sink++);
+        gameBus.addListener(EventPriority.NORMAL, false, OneListenerEvent.class, e -> sink++);
+        gameBus.addListener(EventPriority.NORMAL, false, CancellableEvent.class, e -> sink++);
         gameBus.register(ScaleListeners.class);   // 211 distinct static listener methods
         ScaleListeners.registerConsumers(gameBus); // 100 distinct lambda listeners
-        BusEquivalence.register(gameBus);
+        // (1.21.1 also registers BusEquivalence's listeners: on 1.20.1 BusCheck registers its own, /sleep buscheck)
     }
 
     record Result(String name, double nsPerOp, double bytesPerOp) {
@@ -57,7 +62,6 @@ final class EventBench {
 
     static List<Result> run(int n) {
         EmptyEvent reusedEmpty = new EmptyEvent();
-        OneListenerEvent reusedOne = new OneListenerEvent();
 
         List<Object[]> cases = List.of(
                 new Object[] {"baseline: Consumer.accept (no bus)", (Case) k -> {
@@ -73,9 +77,8 @@ final class EventBench {
                 new Object[] {"post(new OneListenerEvent())  1 listener", (Case) k -> {
                     for (int i = 0; i < k; i++) bus.post(new OneListenerEvent());
                 }},
-                new Object[] {"post(reused OneListenerEvent) 1 listener", (Case) k -> {
-                    for (int i = 0; i < k; i++) bus.post(reusedOne);
-                }},
+                // (1.21.1 also posts a reused OneListenerEvent: Forge's Event.setPhase refuses a second pass through the
+                // same phase - "already NORMAL" - so an event with listeners cannot be posted twice on 1.20.1)
                 new Object[] {"post(new CancellableEvent())  1 listener", (Case) k -> {
                     for (int i = 0; i < k; i++) bus.post(new CancellableEvent());
                 }},

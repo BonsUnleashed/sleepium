@@ -2,41 +2,51 @@ package dev.lull;
 
 import dev.lull.bus.CompositeDispatcher;
 import java.lang.reflect.Field;
-import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
 import java.util.function.IntFunction;
-import net.neoforged.bus.ListenerList;
-import net.neoforged.bus.api.Event;
-import net.neoforged.bus.api.EventListener;
-import net.neoforged.bus.api.IEventBus;
-import net.neoforged.bus.api.SubscribeEvent;
-import net.neoforged.neoforge.common.NeoForge;
+import net.minecraftforge.common.MinecraftForge;
+import net.minecraftforge.eventbus.EventBus;
+import net.minecraftforge.eventbus.api.Event;
+import net.minecraftforge.eventbus.api.EventListenerHelper;
+import net.minecraftforge.eventbus.api.IEventBus;
+import net.minecraftforge.eventbus.api.IEventListener;
+import net.minecraftforge.eventbus.api.SubscribeEvent;
 
 /**
  * Where do the nanoseconds of IEventBus.post go? Same listeners, different dispatch shapes (/sleep busbench).
  *
- *   bus      - NeoForge.EVENT_BUS.post(e)                         (vanilla: megamorphic loop in EventBus)
- *   loop     - our own for-loop over the SAME EventListener[]     (bus minus its bookkeeping)
+ *   bus      - MinecraftForge.EVENT_BUS.post(e)                   (the composite bus with ForgeBusMixin, else Forge's loop)
+ *   loop     - our own for-loop over the SAME IEventListener[]    (bus minus its bookkeeping)
  *   compose  - CompositeDispatcher: unrolled, one call site per listener
  *   direct   - the listener bodies as plain static calls          (lower bound)
  * plus the cost of one SubscribeEvent.receiveCanceled() proxy call (paid per listener per post on cancellable events).
+ * <p>
+ * 1.20.1: Forge's eventbus 6 keeps one ListenerList per event class for every bus (EventListenerHelper), with one
+ * array per bus id; the arrays hold an EventPriority phase marker per priority present (the loop calls them as the bus
+ * does). The dispatcher is built as CompositeEventBus builds it (cancelable from the class, phases tracked).
  */
 final class BusAnatomy {
     record Row(String name, double ns) {}
 
     private BusAnatomy() {}
 
-    static ListenerList listenerList(IEventBus bus, Class<?> type) throws ReflectiveOperationException {
+    /** the bus' id in Forge's per-class listener lists (EventBus.busID is private; the eventbus module is open) */
+    static int busId(IEventBus bus) throws ReflectiveOperationException {
         Object real = bus instanceof dev.lull.optsupport.CompositeEventBus c ? c.delegate() : bus;
-        Field f = real.getClass().getDeclaredField("listenerLists");
+        Field f = EventBus.class.getDeclaredField("busID");
         f.setAccessible(true);
-        Object helper = f.get(real);
-        Method m = helper.getClass().getDeclaredMethod("getReadMap");
-        m.setAccessible(true);
-        return (ListenerList) ((Map<?, ?>) m.invoke(helper)).get(type);
+        return f.getInt(real);
+    }
+
+    /** what one post of {@code type} on this bus invokes (1.21.1: the bus' own ListenerList) */
+    static IEventListener[] listeners(IEventBus bus, Class<?> type) throws ReflectiveOperationException {
+        return EventListenerHelper.getListenerList(type).getListeners(busId(bus));
+    }
+
+    static CompositeDispatcher.Dispatch dispatcher(IEventBus bus, Class<?> type, Event sample) throws ReflectiveOperationException {
+        return CompositeDispatcher.create(listeners(bus, type), sample.isCancelable(), true);
     }
 
     interface Body {
@@ -56,7 +66,7 @@ final class BusAnatomy {
     }
 
     static List<Row> run(int n) throws ReflectiveOperationException {
-        IEventBus bus = NeoForge.EVENT_BUS;
+        IEventBus bus = MinecraftForge.EVENT_BUS;
         List<Row> rows = new ArrayList<>();
         caseFor(rows, bus, n, 10, ScaleListeners.Scale10.class, i -> { var e = new ScaleListeners.Scale10(); e.id = i; return e; });
         caseFor(rows, bus, n, 50, ScaleListeners.Scale50.class, i -> { var e = new ScaleListeners.Scale50(); e.id = i; return e; });
@@ -84,16 +94,17 @@ final class BusAnatomy {
     private static void caseFor(List<Row> rows, IEventBus bus, int n, int count, Class<? extends Event> type,
                                 IntFunction<? extends Event> make) throws ReflectiveOperationException {
         bus.post(make.apply(0));                                  // make sure the listener list exists and is built
-        EventListener[] ls = listenerList(bus, type).getListeners();
-        CompositeDispatcher.Dispatch composite = CompositeDispatcher.create(ls);
-        String tag = type.getSimpleName() + " (" + ls.length + " listeners)";
+        IEventListener[] ls = listeners(bus, type);
+        CompositeDispatcher.Dispatch composite = CompositeDispatcher.create(ls, make.apply(0).isCancelable(), true);
+        long real = java.util.Arrays.stream(ls).filter(l -> !(l instanceof net.minecraftforge.eventbus.api.EventPriority)).count();
+        String tag = type.getSimpleName() + " (" + real + " listeners)";   // the array's phase markers left out
         rows.add(new Row(tag + " bus.post", time(n, k -> {
             for (int i = 0; i < k; i++) bus.post(make.apply(i));
         })));
         rows.add(new Row(tag + " own loop", time(n, k -> {
             for (int i = 0; i < k; i++) {
                 Event e = make.apply(i);
-                for (EventListener l : ls) l.invoke(e);
+                for (IEventListener l : ls) l.invoke(e);
             }
         })));
         rows.add(new Row(tag + " composite", time(n, k -> {
@@ -111,7 +122,7 @@ final class BusAnatomy {
                 {ScaleListeners.Scale50ConsumerCancellable.class, 8000, 8050, (IntFunction<Event>) i -> { var e = new ScaleListeners.Scale50ConsumerCancellable(); e.id = i; return e; }}};
         for (Object[] c : cases) {
             @SuppressWarnings("unchecked") IntFunction<Event> make = (IntFunction<Event>) c[3];
-            CompositeDispatcher.Dispatch d = CompositeDispatcher.create(listenerList(bus, (Class<?>) c[0]).getListeners());
+            CompositeDispatcher.Dispatch d = dispatcher(bus, (Class<?>) c[0], make.apply(0));
             long before = ScaleListeners.sink;
             for (int id = (int) c[1] - 5; id < (int) c[2] + 5; id++) bus.post(make.apply(id));
             long viaBus = ScaleListeners.sink - before;

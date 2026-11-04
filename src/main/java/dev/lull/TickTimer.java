@@ -65,7 +65,7 @@ final class TickTimer {
 
     private void onPre() {
         long now = System.nanoTime();
-        // EventCounter.onServerTick: the event counter is not on 1.20.1 yet (the event bus step, port-pending.txt)
+        EventCounter.INSTANCE.onServerTick(Thread.currentThread());
         if (lastPre != 0) {
             long interval = now - lastPre;
             if (interval < GAP_NANOS) {

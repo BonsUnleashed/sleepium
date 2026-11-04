@@ -10,6 +10,7 @@
     "GeoModelWorkerMixin",
     "MolangActorMixin",
     "MolangVariableMixin",
+    "MolangJitMixin",
     "KeyframeJournalMixin",
     "GeoTextureDimsMixin",
     "GeoCubesMixin"

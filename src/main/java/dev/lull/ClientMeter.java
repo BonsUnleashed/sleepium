@@ -183,6 +183,8 @@ final class ClientMeter {
                 .append(String.format(Locale.ROOT, "stutters (frame > 2x median): %d (%.2f %%)%n", stutters, 100.0 * stutters / Math.max(1, n)))
                 .append(sections).append('\n').append(entities).append("\n\n")
                 .append(TaskStats.report(secs, Math.max(1, n)).replace("per tick", "per frm "));
+        if (net.minecraftforge.fml.ModList.get().isLoaded("geckolib") && (Boolean.getBoolean("lab.opt.all") || Boolean.getBoolean("lab.opt.MolangJitMixin")))
+            sb.append('\n').append(dev.lull.optsupport.MolangJit.report()).append('\n');   // (the class needs GeckoLib's mclib)
 
         Path dir = mc.gameDirectory.toPath().resolve(dev.lull.SleepOut.ROOT);
         String ts = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss"));
