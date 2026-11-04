@@ -177,3 +177,6 @@
 -Dlab.opt.AllocTrim=true
 -Dlab.opt.ChunkIo=true
 -Dlab.opt.ParallelWorldgenMixin=true
+-Dlab.opt.RenderCacheBlockEntityMixin=true
+-Dlab.opt.RenderCacheClockMixin=true
+-Dlab.opt.RenderCacheMixin=true

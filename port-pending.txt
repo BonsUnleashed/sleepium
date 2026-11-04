@@ -8,7 +8,6 @@ dev/lull/flwmixin/**
 # GeckoLib (4.8.4 on 1.20.1): AnimStreamMixin, GeoMixinPlugin and the parallel-render ones ported; GeoCubes waits for
 # PartBatch (bones from VRAM), MolangJit for GeckoLib 4.8.4's Molang (mclib's IValue tree, not 4.9's MathValue: a rewrite, and Molang is not in the
 # Cursed Fate profile)
-dev/lull/geomixin/GeoCubesMixin.java
 dev/lull/geomixin/MolangJitMixin.java
 # the shaderpack pipeline and the settings screen
 # diagnostics and benchmarks of the 1.21.1 work
@@ -23,14 +22,11 @@ dev/lull/optsupport/KineticResident.java
 dev/lull/optsupport/FlwLabExecutor.java
 dev/lull/opt/MeshDataAccessor.java
 dev/lull/opt/LevelRendererVisibleAccessor.java
-dev/lull/opt/PartTypeMixin.java
-dev/lull/opt/PartBatchMixin.java
 dev/lull/mixin/DrawStats*.java
 # world generation and the chunk reactors (stage 2b) are ported; left of that list: the client's (renderer, stage 3) -
 # LightScoutMixin (measurement: 1.21's SectionCompiler.compile; 1.20.1 compiles in RenderChunk's RebuildTask), the
 # render cache, ParallelEntities / ParallelReload (EntityRenderDispatcher) and their supports
 dev/lull/opt/LightScoutMixin.java
-dev/lull/optsupport/PartBatch.java
 # the event bus (Forge's eventbus 6 differs from NeoForge's): its own step
 # networking (1.20.1 has no CustomPacketPayload / StreamCodec): its own step
 
@@ -44,15 +40,10 @@ dev/lull/EventCounter.java
 # the renderer (stage 3): measurement of its parts (DrawStats* mixins, ChunkMultiDraw counters) and their users
 dev/lull/DrawStats.java
 dev/lull/GpuTimer.java
-dev/lull/optsupport/GeoParts.java
-dev/lull/opt/PartDrawMixin.java
-dev/lull/opt/PartFrameMixin.java
 # networking: they drive dev/lull/net (NetLag, NetReactor, Bulk, Coalesce)
 # the renderer (stage 3): parts used only by pending renderer classes (chunk multi-draw's shader patches, occlusion
 # culling and indirect commands, part batching's materials / coatings, the 1.21 VertexConsumer recorder, light boxes,
 # the bulk vertex path), and the mixins of pending renderer parts (QuadSort, ParallelRender)
-dev/lull/optsupport/Materials.java
-dev/lull/optsupport/LightBoxes.java
 # the event bus step: the event-site rewrite (its mixins are pending above)
 # 1.21-only target: NeoForge's ClientHooks.isBlockEntityRendererVisible (the default box new AABB(pos)); Forge 1.20.1
 # tests frustum.isVisible(be.getRenderBoundingBox()), whose default box comes from the collision shape: another check

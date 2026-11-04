@@ -78,7 +78,11 @@ public final class ParallelRender {
         return j == null ? null : j.locals;
     }
 
-    // (1.21.1: jobParts() - a job's GeckoLib bone records for PartBatch; part batching is not on 1.20.1 yet)
+    /** The current job's part records (null outside jobs, and in verify mode: the bytes are compared there). */
+    public static PartBatch.JobParts jobParts() {
+        Job j = CURRENT.get();
+        return j == null || VERIFY ? null : j.parts;
+    }
 
     /** true while ParallelRender builds its renderer sets: objects made now belong to a worker set */
     public static volatile boolean buildingSets;
@@ -190,6 +194,8 @@ public final class ParallelRender {
         volatile boolean done, ok;
         final RenderCache.Rec out = new RenderCache.Rec();
         final List<com.mojang.blaze3d.pipeline.RenderCall> calls = new ArrayList<>();
+        /** records of model parts drawn from VRAM (GeckoLib bones), queued at the merge */
+        final PartBatch.JobParts parts = new PartBatch.JobParts();
         final java.util.IdentityHashMap<Object, Object> locals = new java.util.IdentityHashMap<>();
 
         /** worker or render thread: whoever claims the job first renders it */
@@ -202,6 +208,7 @@ public final class ParallelRender {
             Set s = SETS.poll();
             calls.clear();
             locals.clear();
+            parts.clear();
             CURRENT.set(this);
             try {
                 ok = s != null && render(s, this);
@@ -221,7 +228,10 @@ public final class ParallelRender {
                 if (type != null) learnFailure(type, t);
             } finally {
                 CURRENT.remove();
-                if (!ok) calls.clear();   // the render thread renders it again, side effects included
+                if (!ok) {   // the render thread renders it again, side effects included
+                    calls.clear();
+                    parts.clear();
+                }
                 if (s != null) SETS.add(s);
                 done = true;
                 synchronized (this) {
@@ -395,7 +405,18 @@ public final class ParallelRender {
                 || !pose.last().pose().equals(j.basePose) || !pose.last().normal().equals(j.baseNormal)) {
             mergeFallbacks++;   // the worker's bytes are not this call's: the render thread renders it (its journal dropped)
             j.calls.clear();
+            j.parts.clear();
             return false;
+        }
+        if (j.parts.size() > 0) {
+            long t0 = System.nanoTime();
+            boolean ok = PartBatch.mergeJob(j.parts, j.buffers);
+            mergeNanos += System.nanoTime() - t0;
+            if (!ok) {   // a record's type is not a batch here: the object the vanilla way, without the job's side effects
+                mergeFallbacks++;
+                j.calls.clear();
+                return false;
+            }
         }
         for (int c = 0; c < j.calls.size(); c++) j.calls.get(c).execute();   // the job's deferred side effects, in place
         journaled += j.calls.size();
@@ -517,6 +538,10 @@ public final class ParallelRender {
     /** renderEntity + EntityRenderDispatcher.render (without hitboxes), with a worker's renderers. */
     private static boolean render(Set s, Job j) {
         Entity e = j.entity;
+        long coat = Coatings.of(e);
+        j.parts.coat = Coatings.word0(coat);
+        j.parts.coat2 = Coatings.word1(coat);
+        j.parts.height = Coatings.word2(e, coat);   // (the height and the blows' marks)
         float pt = j.pt;
         EntityRenderer<? super Entity> r = s.renderer(e);
         if (r == null) return false;
@@ -561,7 +586,7 @@ public final class ParallelRender {
             for (int i = 0; i < WHY_N.length; i++) if (WHY_N[i] > 0) w.append(' ').append(WHY_NAMES[i]).append(' ').append(WHY_N[i]).append(';');
             System.out.println(w);
         }
-        return String.format(java.util.Locale.ROOT, "parallel render: %d workers, jobs %d, on workers %d (render thread helped %d), on the render thread %d (of them merges that fell back %d), failed %d, refused %d, journaled calls %d%s", THREADS, jobs, parallel,
-                helped, sequential, mergeFallbacks, failed, refused, journaled, (WORKER_REFUSED.isEmpty() ? "" : ", kept on the render thread " + WORKER_REFUSED) + (VERIFY ? ", verified " + verified + ", mismatches " + mismatches : ""));
+        return String.format(java.util.Locale.ROOT, "parallel render: %d workers, jobs %d, on workers %d (render thread helped %d), on the render thread %d (of them merges that fell back %d), failed %d, refused %d, journaled calls %d, part records merged in %.0f ms%s", THREADS, jobs, parallel,
+                helped, sequential, mergeFallbacks, failed, refused, journaled, mergeNanos / 1e6, (WORKER_REFUSED.isEmpty() ? "" : ", kept on the render thread " + WORKER_REFUSED) + (VERIFY ? ", verified " + verified + ", mismatches " + mismatches : ""));
     }
 }

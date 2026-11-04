@@ -21,6 +21,9 @@ import software.bernie.geckolib.renderer.GeoRenderer;
  * geometry could depend on per-frame state); a bone with a flat cube (GeckoLib flips such normals by the posed
  * direction, fixInvertedFlatCube); a buffer PartBatch cannot draw (not a batched NEW_ENTITY type with a patched shader,
  * or off the render thread).
+ * <p>
+ * GeckoLib 4.8.4 (1.20.1): the colour as four floats (packed to bytes for the record as BufferBuilder writes them),
+ * RenderUtils (4.9: RenderUtil), the Dynamic renderer in software.bernie.geckolib.renderer, the 14-argument vertex.
  */
 public final class GeoParts {
     private GeoParts() {}
@@ -45,12 +48,14 @@ public final class GeoParts {
         protected java.lang.reflect.Field computeValue(Class<?> c) {
             java.lang.reflect.Field out = null;
             try {
-                Method cube = c.getMethod("renderCube", PoseStack.class, GeoCube.class, VertexConsumer.class, int.class, int.class, int.class);
-                Method quad = c.getMethod("createVerticesOfQuad", GeoQuad.class, Matrix4f.class, Vector3f.class, VertexConsumer.class, int.class, int.class, int.class);
+                Method cube = c.getMethod("renderCube", PoseStack.class, GeoCube.class, VertexConsumer.class, int.class, int.class, float.class, float.class,
+                        float.class, float.class);
+                Method quad = c.getMethod("createVerticesOfQuad", GeoQuad.class, Matrix4f.class, Vector3f.class, VertexConsumer.class, int.class, int.class,
+                        float.class, float.class, float.class, float.class);
                 Class<?> qd = quad.getDeclaringClass();
                 if (cube.getDeclaringClass() == GeoRenderer.class) {
                     if (qd == GeoRenderer.class) out = NO_FIELD;
-                    else if (qd.getName().startsWith("software.bernie.geckolib.renderer.specialty.DynamicGeo")) {
+                    else if (qd.getName().startsWith("software.bernie.geckolib.renderer.DynamicGeo")) {
                         java.lang.reflect.Field f = qd.getDeclaredField("textureOverride");
                         f.setAccessible(true);
                         out = f;
@@ -96,7 +101,7 @@ public final class GeoParts {
     public static double maxPosDiff;
     private static final Rec CPU = new Rec(), GEO = new Rec();
 
-    private static final class Rec implements VertexConsumer, PartBatch.Flagged {
+    private static final class Rec implements VertexConsumer, PartBatch.Flagged {   // (1.20.1's consumer: positions and normals)
         float[] v = new float[4096 * 6];
         int[] f = new int[4096];
         int n, flags;
@@ -106,22 +111,29 @@ public final class GeoParts {
             flags = fl;
         }
 
-        @Override public VertexConsumer addVertex(float x, float y, float z) {
+        @Override public VertexConsumer vertex(double x, double y, double z) {
             if (v.length < (n + 1) * 6) v = java.util.Arrays.copyOf(v, v.length * 2);
             if (f.length < n + 1) f = java.util.Arrays.copyOf(f, f.length * 2);
-            v[n * 6] = x; v[n * 6 + 1] = y; v[n * 6 + 2] = z;
+            v[n * 6] = (float) x; v[n * 6 + 1] = (float) y; v[n * 6 + 2] = (float) z;
             f[n] = flags;
             n++;
             return this;
         }
-        @Override public VertexConsumer setColor(int r, int g, int b, int a) { return this; }
-        @Override public VertexConsumer setUv(float u, float w) { return this; }
-        @Override public VertexConsumer setUv1(int u, int w) { return this; }
-        @Override public VertexConsumer setUv2(int u, int w) { return this; }
-        @Override public VertexConsumer setNormal(float x, float y, float z) {
+        @Override public void vertex(float x, float y, float z, float r, float g, float b, float a, float u, float w, int overlay, int light, float nx, float ny, float nz) {
+            vertex(x, y, z);
+            normal(nx, ny, nz);
+        }
+        @Override public VertexConsumer color(int r, int g, int b, int a) { return this; }
+        @Override public VertexConsumer uv(float u, float w) { return this; }
+        @Override public VertexConsumer overlayCoords(int u, int w) { return this; }
+        @Override public VertexConsumer uv2(int u, int w) { return this; }
+        @Override public VertexConsumer normal(float x, float y, float z) {
             v[(n - 1) * 6 + 3] = x; v[(n - 1) * 6 + 4] = y; v[(n - 1) * 6 + 5] = z;
             return this;
         }
+        @Override public void endVertex() {}
+        @Override public void defaultColor(int r, int g, int b, int a) {}
+        @Override public void unsetDefaultColor() {}
     }
 
     private static int nb(float f) {   // BufferBuilder's normal byte
@@ -132,7 +144,7 @@ public final class GeoParts {
         CPU.n = 0;
         for (GeoCube cube : bone.getCubes()) {
             poseStack.pushPose();
-            renderer.renderCube(poseStack, cube, CPU, 0, 0, -1);
+            renderer.renderCube(poseStack, cube, CPU, 0, 0, 1.0F, 1.0F, 1.0F, 1.0F);
             poseStack.popPose();
         }
         GEO.n = 0;
@@ -186,9 +198,9 @@ public final class GeoParts {
             if (flags != 0 && flagged == null) return false;
             if (flagged != null) flagged.sleep$flags(flags);
             PoseStack ps = new PoseStack();
-            software.bernie.geckolib.util.RenderUtil.translateToPivotPoint(ps, cube);
-            software.bernie.geckolib.util.RenderUtil.rotateMatrixAroundCube(ps, cube);
-            software.bernie.geckolib.util.RenderUtil.translateAwayFromPivotPoint(ps, cube);
+            software.bernie.geckolib.util.RenderUtils.translateToPivotPoint(ps, cube);
+            software.bernie.geckolib.util.RenderUtils.rotateMatrixAroundCube(ps, cube);
+            software.bernie.geckolib.util.RenderUtils.translateAwayFromPivotPoint(ps, cube);
             org.joml.Matrix3f nm = ps.last().normal();
             Matrix4f pose = new Matrix4f(ps.last().pose());
             for (GeoQuad quad : cube.quads()) {
@@ -197,7 +209,7 @@ public final class GeoParts {
                 for (software.bernie.geckolib.cache.object.GeoVertex vertex : quad.vertices()) {
                     Vector3f pos = vertex.position();
                     pose.transform(p.set(pos.x(), pos.y(), pos.z(), 1.0f));
-                    consumer.addVertex(p.x(), p.y(), p.z(), -1, vertex.texU(), vertex.texV(), 0, 0, normal.x(), normal.y(), normal.z());
+                    consumer.vertex(p.x(), p.y(), p.z(), 1.0F, 1.0F, 1.0F, 1.0F, vertex.texU(), vertex.texV(), 0, 0, normal.x(), normal.y(), normal.z());
                 }
             }
         }

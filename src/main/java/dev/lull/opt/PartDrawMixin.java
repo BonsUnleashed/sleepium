@@ -9,8 +9,12 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-/** PartBatchMixin: the queued parts of the render type being drawn, right after its batch (program still bound). */
-@Mixin(VertexBuffer.class)
+/**
+ * PartBatchMixin: the queued parts of the render type being drawn, right after its batch (program still bound).
+ * 1.20.1: ShaderSamplerNamesMixin overwrites _drawWithShader (here, not in ShaderInstance as on 1.21.1); a later
+ * priority injects into that body (Mixin refuses an injection into a method merged at the same priority).
+ */
+@Mixin(value = VertexBuffer.class, priority = 1100)
 public abstract class PartDrawMixin {
     @Inject(method = "_drawWithShader", at = @At(value = "INVOKE", target = "Lcom/mojang/blaze3d/vertex/VertexBuffer;draw()V", shift = At.Shift.AFTER))
     private void sleep$parts(Matrix4f modelView, Matrix4f projection, ShaderInstance shader, CallbackInfo ci) {

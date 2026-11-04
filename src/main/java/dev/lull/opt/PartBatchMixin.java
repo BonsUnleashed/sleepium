@@ -16,18 +16,20 @@ import org.spongepowered.asm.mixin.injection.Redirect;
 @Mixin(ModelPart.class)
 public abstract class PartBatchMixin implements PartBatch.PartCompiler {
     @Shadow
-    private void compile(PoseStack.Pose pose, VertexConsumer buffer, int packedLight, int packedOverlay, int color) {
+    private void compile(PoseStack.Pose pose, VertexConsumer buffer, int packedLight, int packedOverlay, float red, float green, float blue, float alpha) {
         throw new AssertionError();
     }
 
-    @Redirect(method = "render(Lcom/mojang/blaze3d/vertex/PoseStack;Lcom/mojang/blaze3d/vertex/VertexConsumer;III)V", at = @At(value = "INVOKE",
-            target = "Lnet/minecraft/client/model/geom/ModelPart;compile(Lcom/mojang/blaze3d/vertex/PoseStack$Pose;Lcom/mojang/blaze3d/vertex/VertexConsumer;III)V"))
-    private void sleep$compile(ModelPart self, PoseStack.Pose pose, VertexConsumer buffer, int light, int overlay, int color) {
-        if (!PartBatch.capture(self, pose, buffer, light, overlay, color, this)) compile(pose, buffer, light, overlay, color);
+    /** (1.20.1: the colour as four floats; the record takes it packed to bytes as BufferBuilder writes them) */
+    @Redirect(method = "render(Lcom/mojang/blaze3d/vertex/PoseStack;Lcom/mojang/blaze3d/vertex/VertexConsumer;IIFFFF)V", at = @At(value = "INVOKE",
+            target = "Lnet/minecraft/client/model/geom/ModelPart;compile(Lcom/mojang/blaze3d/vertex/PoseStack$Pose;Lcom/mojang/blaze3d/vertex/VertexConsumer;IIFFFF)V"))
+    private void sleep$compile(ModelPart self, PoseStack.Pose pose, VertexConsumer buffer, int light, int overlay, float red, float green, float blue, float alpha) {
+        if (!PartBatch.capture(self, pose, buffer, light, overlay, PartBatch.packColor(red, green, blue, alpha), this))
+            compile(pose, buffer, light, overlay, red, green, blue, alpha);
     }
 
     @Override
     public void sleep$geometry(PoseStack.Pose pose, VertexConsumer consumer) {
-        compile(pose, consumer, 0, 0, -1);
+        compile(pose, consumer, 0, 0, 1.0F, 1.0F, 1.0F, 1.0F);
     }
 }

@@ -545,7 +545,8 @@ public final class ClientAuto {
                     if (dev.lull.optsupport.LightScout.ON) log(dev.lull.optsupport.LightScout.report());
                     if (dev.lull.optsupport.LightRecipe.VERIFY) log(dev.lull.optsupport.LightRecipe.report());
                     if (Boolean.getBoolean("lab.shaderlight.diag")) log(dev.lull.optsupport.LightVolumes.diagReport());
-                    // DrawStats / GeoParts reports: the renderer's parts, not on 1.20.1 yet (stage 3)
+                    // (DrawStats' report: the renderer's measurement, not on 1.20.1 yet)
+                    if (Boolean.getBoolean("lab.geoparts.verify")) log(dev.lull.optsupport.GeoParts.report());   // GeckoLib loaded then
                     for (java.util.function.Function<String, String> r : REPORTS) {   // other mods' reports (the label of the run given)
                         String x = r.apply(LABEL);
                         if (x != null) log(x);

@@ -33,7 +33,8 @@ import org.lwjgl.system.MemoryUtil;
  * differ from vanilla's in float rounding only (vanilla multiplies the translation into the matrix first) — accepted
  * for this engine, unlike every other render change (frame hash). 1.20.1: the level's pose stack carries the camera
  * rotation (1.21's is the identity there), so a replay takes the general transform, normals re-quantized after it
- * (frame: about 2 % of the entities' pixels differ by 1 in a channel); the resident path (PartBatch) is not here yet.
+ * (frame: about 2 % of the entities' pixels differ by 1 in a channel); a resident segment's record carries that
+ * rotation as its normal matrix (PartBatch mode 2 turns the normals on the GPU the same way).
  *
  * <p>Validity: the object's whole state (StateHash: every field of its class chain, hashed once per tick, tick counters
  * left out), the caller's key (synched data and equipment / block state), packed light, overlay, yaw argument; and a
@@ -82,17 +83,44 @@ public final class RenderCache {
         int runN;
         /** the native block, freed when the record is collected (its object left the world) */
         final long[] box = new long[1];
-        // 1.20.1: no resident (VRAM) copies yet - PartBatch's resident arena comes with part batching (stage 3: chunk
-        // multi-draw's arena and the shader patch hook, port-pending.txt); every replay is the CPU one
+        /** per segment: first vertex in PartBatch's resident arena (-1: not uploaded); shared with the cleaner */
+        final int[][] res = {new int[4], new int[4]};   // starts, counts
 
         Rec() {
             long[] b = box;
+            int[][] r = res;
+            java.util.Arrays.fill(r[0], -1);
             CLEANER.register(this, () -> {
                 if (b[0] != 0) MemoryUtil.nmemFree(b[0]);
+                for (int i = 0; i < r[0].length; i++) if (r[0][i] >= 0) PartBatch.RES_FREE.add(new int[] {r[0][i], r[1][i]});
             });
         }
 
+        /** VRAM copies of the old contents released (render thread) before a new recording replaces them. */
+        void releaseResident() {
+            for (int i = 0; i < res[0].length; i++) {
+                if (res[0][i] >= 0) PartBatch.residentRelease(res[0][i], res[1][i]);
+                res[0][i] = -1;
+            }
+        }
+
+        int resident(int i) {
+            if (res[0].length <= i) {
+                int c = Math.max(i + 1, res[0].length * 2);
+                int[] s = java.util.Arrays.copyOf(res[0], c), n = java.util.Arrays.copyOf(res[1], c);
+                java.util.Arrays.fill(s, res[0].length, c, -1);
+                res[0] = s;
+                res[1] = n;
+            }
+            if (res[0][i] < 0) {
+                res[0][i] = PartBatch.residentUpload(mem + offs[i], counts[i]);
+                res[1][i] = counts[i];
+            }
+            return res[0][i];
+        }
+
         void clear() {
+            releaseResident();
             types.clear();
             size = 0;
             runN = 0;
@@ -637,8 +665,22 @@ public final class RenderCache {
             if (TIME) tGetBuffer += tb - ta;
             long src = rec.mem + rec.offs[i];
             int n = rec.counts[i];
+            // (1.20.1: the pose has the camera rotation in it - no identity normal matrix: the record turns the normals)
+            boolean resident = !asIs && rec != PROBE && n % 4 == 0 && PartBatch.residentOk(t, vc, buffers);
             long tc = TIME ? System.nanoTime() : 0;
-            // (1.20.1: PartBatch's resident path - segments drawn from VRAM - is not here yet: part batching is pending)
+            if (TIME) tResidentOk += tc - tb;
+            if (resident) {
+                PartBatch.queueResident(t, (BufferBuilder) vc, rec.resident(i), n, M, N);
+                if (TIME) {
+                    tQueue += System.nanoTime() - tc;
+                    long[] c = CPU_TYPES.computeIfAbsent(t, k -> new long[4]);
+                    c[2]++;
+                    c[3] += n;
+                }
+                replayedVertices += n;
+                residentSegments++;
+                continue;
+            }
             VertexFormat f = t.format();
             // a BufferBuilder building this format and mode, between vertices (1.20.1: its element cursor at the first
             // element): one copy, as its own putBulkData(ByteBuffer) appends whole vertices

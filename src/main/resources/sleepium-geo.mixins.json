@@ -11,7 +11,8 @@
     "MolangActorMixin",
     "MolangVariableMixin",
     "KeyframeJournalMixin",
-    "GeoTextureDimsMixin"
+    "GeoTextureDimsMixin",
+    "GeoCubesMixin"
   ],
   "injectors": {
     "defaultRequire": 1

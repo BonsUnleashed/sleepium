@@ -8,9 +8,6 @@ import com.mojang.blaze3d.shaders.Program;
  * (ChunkShaderPatchMixin) and Veil's recompile of every vanilla shader (VeilShaderPatchMixin), so a program Veil swaps
  * in keeps them.
  *
- * <p>1.20.1: the chunk multi-draw patches only so far; part batching's (PartBatch.patch for the entity / armor /
- * item-entity programs and SuperByteBuffer parts in the block types, Materials' vertex and fragment patches) come back
- * with part batching's port (port-pending.txt).
  */
 public final class ShaderPatches {
     private ShaderPatches() {}
@@ -23,7 +20,17 @@ public final class ShaderPatches {
                 if (Boolean.getBoolean("lab.opt.ChunkMultiDrawMixin") && ChunkMultiDraw.capable()) src = ChunkMultiDraw.patch(name, src);
             } else if (ChunkMultiDraw.SUPPORTED.contains(name)) {
                 if (Boolean.getBoolean("lab.opt.ChunkMultiDrawMixin") && ChunkMultiDraw.capable()) src = ChunkMultiDraw.patch(name, src);
+                // SuperByteBuffer parts (SbbPartsMixin) draw into the opaque block types too: their shaders take part records as well
+                if (Boolean.getBoolean("lab.opt.SbbPartsMixin") && Boolean.getBoolean("lab.opt.PartBatchMixin") && !"rendertype_translucent".equals(name)
+                        && PartBatch.capable()) src = PartBatch.patch(name, src);
+            } else if (Boolean.getBoolean("lab.opt.PartBatchMixin") && (name.startsWith("rendertype_entity") || name.startsWith("rendertype_armor")
+                    || name.startsWith("rendertype_item_entity"))
+                    && PartBatch.capable()) {
+                src = PartBatch.patch(name, src);
+                src = Materials.patchVertex(name, src);
             }
+        } else if (type == Program.Type.FRAGMENT && Boolean.getBoolean("lab.opt.PartBatchMixin")) {
+            src = Materials.patchFragment(name, src);
         }
         return src;
     }

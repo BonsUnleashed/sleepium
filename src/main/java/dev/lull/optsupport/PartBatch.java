@@ -42,6 +42,12 @@ import org.lwjgl.system.MemoryUtil;
  * position, normal (normalised and quantised to bytes as BufferBuilder does), colour, light and overlay. The draws of a
  * commuting type give the same pixels in any order, so drawing the parts after the batch's other vertices is safe.
  * The GPU computes the transform: differences in float rounding (the render cache's allowance).
+ *
+ * <p>1.20.1: the level's pose stack carries the camera rotation (1.21's is the identity there), so entity normals are in
+ * view space and a resident recording's record carries the normal matrix as well (mode 2 turns the normals too, as
+ * RenderCache's CPU replay does); vanilla 1.20.1 does not normalise a part's posed normal (ModelPart.Cube.compile), so
+ * neither does mode 1. The colour is the four floats of 1.20.1's ModelPart.render, packed to bytes as BufferBuilder
+ * does.
  */
 public final class PartBatch {
     private static final int SSBO_BINDING = 6, SPIN_BINDING = 5;
@@ -62,7 +68,7 @@ public final class PartBatch {
      * ids) - not under sleep's shaderpack pipeline; resident recordings (mode 2) are, their vertices carry the ids.
      */
     public static boolean partsAllowed() {
-        return capable() && !dev.lull.shaders.ShaderPipeline.active;
+        return capable();   // (1.21.1: not under sleep's shaderpack pipeline, not on 1.20.1 yet)
     }
 
     public static boolean capable() {
@@ -117,6 +123,12 @@ public final class PartBatch {
         if (uv0) pre.append("    vec2 probe_UV0 = UV0;\n");
         pre.append("    if (ProbePartMode == 2) {\n");
         pre.append("        probe_Position = (probeParts[gl_DrawIDARB].pose * vec4(Position, 1.0)).xyz;\n");
+        // 1.20.1: a recording's normals are object-local, the frame's view rotation is in the record (RenderCache.transform:
+        // turned, normalised, packed again)
+        pre.append("        vec3 probe_rn = mat3(probeParts[gl_DrawIDARB].n0.xyz, probeParts[gl_DrawIDARB].n1.xyz, probeParts[gl_DrawIDARB].n2.xyz) * Normal;\n");
+        pre.append("        float probe_rl = length(probe_rn);\n");
+        pre.append("        if (probe_rl > 0.0) probe_rn /= probe_rl;\n");
+        pre.append("        probe_Normal = trunc(clamp(probe_rn, -1.0, 1.0) * 127.0) / 127.0;\n");
         pre.append("    } else if (ProbePartMode != 0) {\n");
         if (EXTRA) {
             pre.append("        int probe_i = ProbePartMode == 5 ? gl_BaseInstanceARB : gl_DrawIDARB;\n");
@@ -153,7 +165,7 @@ public final class PartBatch {
             pre.append("        probe_Position = (probe_d.pose * vec4(Position, 1.0)).xyz;\n");
             pre.append("        vec3 probe_n = mat3(probe_d.n0.xyz, probe_d.n1.xyz, probe_d.n2.xyz) * Normal;\n");
         }
-        pre.append("        if (ProbePartMode == 1) probe_n = normalize(probe_n);\n");   // mode 3 (GeckoLib bones): as emitted, not normalised
+        // (1.21.1: mode 1 normalised as its ModelPart does; 1.20.1's ModelPart.Cube.compile does not: as emitted, like mode 3)
         // GeckoLib's fixInvertedFlatCube: on a flat cube's axes a negative (posed) component is flipped: abs()
         pre.append("        if (ProbePartMode == 3) { int probe_f = int(ProbeFlags + 0.5); if ((probe_f & 1) != 0) probe_n.x = abs(probe_n.x); if ((probe_f & 2) != 0) probe_n.y = abs(probe_n.y); if ((probe_f & 4) != 0) probe_n.z = abs(probe_n.z); }\n");
         pre.append("        probe_Normal = trunc(clamp(probe_n, -1.0, 1.0) * 127.0) / 127.0;\n");   // as BufferBuilder packs it
@@ -215,7 +227,6 @@ public final class PartBatch {
         public void sleep$flags(int f) {
             flags = f;
         }
-        float nx, ny, nz;
 
         void reset() {
             n = 0;
@@ -231,17 +242,28 @@ public final class PartBatch {
             }
         }
 
+        // 1.20.1: a vertex starts with vertex() and the element calls fill it (any order here: only this recorder reads
+        // them); the 14-argument form (ModelPart, GeckoLib, BakedQuad bulk data) in one go
         @Override
-        public VertexConsumer addVertex(float x, float y, float z) {
+        public VertexConsumer vertex(double x, double y, double z) {
             ensure();
             long v = MemoryUtil.memAddress(geomScratch) + (long) n * STRIDE;
-            MemoryUtil.memPutFloat(v, x);
-            MemoryUtil.memPutFloat(v + 4, y);
-            MemoryUtil.memPutFloat(v + 8, z);
+            MemoryUtil.memPutFloat(v, (float) x);
+            MemoryUtil.memPutFloat(v + 4, (float) y);
+            MemoryUtil.memPutFloat(v + 8, (float) z);
             MemoryUtil.memPutInt(v + 24, -1);
             MemoryUtil.memPutInt(v + 28, 0);
             n++;
             return this;
+        }
+
+        @Override
+        public void vertex(float x, float y, float z, float red, float green, float blue, float alpha, float u, float v, int overlay, int light, float nx,
+                float ny, float nz) {
+            vertex(x, y, z);
+            uv(u, v);
+            uv2(light & 0xFFFF, light >> 16 & 0xFFFF);
+            normal(nx, ny, nz);
         }
 
         @Override
@@ -253,18 +275,18 @@ public final class PartBatch {
             return MemoryUtil.memAddress(geomScratch) + (long) (n - 1) * STRIDE;
         }
 
-        @Override public VertexConsumer setColor(int r, int g, int b, int a) { return this; }
-        @Override public VertexConsumer setUv(float u, float v) {
+        @Override public VertexConsumer color(int r, int g, int b, int a) { return this; }
+        @Override public VertexConsumer uv(float u, float v) {
             MemoryUtil.memPutFloat(last() + 12, u);
             MemoryUtil.memPutFloat(last() + 16, v);
             return this;
         }
-        @Override public VertexConsumer setUv1(int u, int v) { return this; }
-        @Override public VertexConsumer setUv2(int u, int v) {   // a template's own light (SuperByteBuffer)
+        @Override public VertexConsumer overlayCoords(int u, int v) { return this; }
+        @Override public VertexConsumer uv2(int u, int v) {   // a template's own light (SuperByteBuffer)
             MemoryUtil.memPutInt(last() + 28, (u & 0xFFFF) | v << 16);
             return this;
         }
-        @Override public VertexConsumer setNormal(float x, float y, float z) {
+        @Override public VertexConsumer normal(float x, float y, float z) {
             long p = last() + 20;
             MemoryUtil.memPutByte(p, normalByte(x));
             MemoryUtil.memPutByte(p + 1, normalByte(y));
@@ -272,6 +294,9 @@ public final class PartBatch {
             MemoryUtil.memPutByte(p + 3, (byte) flags);
             return this;
         }
+        @Override public void endVertex() {}
+        @Override public void defaultColor(int r, int g, int b, int a) {}
+        @Override public void unsetDefaultColor() {}
     }
 
     private static byte normalByte(float f) {
@@ -391,11 +416,12 @@ public final class PartBatch {
         // a fixed buffer of the source (vanilla's Sheets: item frames' frames, chests, signs) of a type whose draws commute:
         // drawn once per frame like a batch, the residents right after it
         if (FIXED_RESIDENT && buffers instanceof net.minecraft.client.renderer.MultiBufferSource.BufferSource bs && EntityBatch.commutes(t)
-                && ((dev.lull.opt.BufferSourceAccessor) bs).sleep$fixed().containsKey(t) && ((dev.lull.opt.BufferSourceAccessor) bs).sleep$started().get(t) == bb)
+                && ((dev.lull.opt.BufferSourceAccessor) bs).sleep$fixed().get(t) == bb && ((dev.lull.opt.BufferSourceAccessor) bs).sleep$started().contains(bb))
             return typeOk(t) && capable();
-        // experiment (-Dlab.rcache.translucentResident): a sorted (translucent) type, drawn per object back to front
-        return TRANSLUCENT_RESIDENT && t.sortOnUpload() && buffers instanceof net.minecraft.client.renderer.MultiBufferSource.BufferSource bs
-                && ((dev.lull.opt.BufferSourceAccessor) bs).sleep$started().get(t) == bb && typeOk(t) && capable();
+        // experiment (-Dlab.rcache.translucentResident): a sorted (translucent) type, drawn per object back to front (1.20.1:
+        // the builder getBuffer just gave for it, started in this source)
+        return TRANSLUCENT_RESIDENT && t.sortOnUpload && buffers instanceof net.minecraft.client.renderer.MultiBufferSource.BufferSource bs
+                && ((dev.lull.opt.BufferSourceAccessor) bs).sleep$started().contains(bb) && typeOk(t) && capable();
     }
 
     /**
@@ -432,13 +458,26 @@ public final class PartBatch {
         while ((r = RES_FREE.poll()) != null) RES_ARENA.release(r[0], r[1]);
     }
 
-    /** One resident segment drawn with the pose M this frame (the batch gets an empty quad so it is drawn). */
-    public static void queueResident(RenderType t, BufferBuilder bb, int start, int n, Matrix4f m) {
+    /**
+     * One resident segment drawn with the pose M (and, 1.20.1, its normal matrix N: the view rotation) this frame (the
+     * batch gets an empty quad so it is drawn).
+     */
+    public static void queueResident(RenderType t, BufferBuilder bb, int start, int n, Matrix4f m, Matrix3f nm) {
         dev.lull.opt.BufferBuilderAccessor a = (dev.lull.opt.BufferBuilderAccessor) bb;
-        if (a.sleep$vertices() == 0) for (int i = 0; i < 4; i++) bb.addVertex(0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0);
+        if (a.sleep$vertices() == 0) for (int i = 0; i < 4; i++) bb.vertex(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0);
         Queue q = RESIDENT.computeIfAbsent(t, x -> new Queue());
         q.ensure();
-        m.getToAddress(q.mem + 144L * q.n);
+        long rec = q.mem + 144L * q.n;
+        m.getToAddress(rec);
+        MemoryUtil.memPutFloat(rec + 64, nm.m00());
+        MemoryUtil.memPutFloat(rec + 68, nm.m01());
+        MemoryUtil.memPutFloat(rec + 72, nm.m02());
+        MemoryUtil.memPutFloat(rec + 80, nm.m10());
+        MemoryUtil.memPutFloat(rec + 84, nm.m11());
+        MemoryUtil.memPutFloat(rec + 88, nm.m12());
+        MemoryUtil.memPutFloat(rec + 96, nm.m20());
+        MemoryUtil.memPutFloat(rec + 100, nm.m21());
+        MemoryUtil.memPutFloat(rec + 104, nm.m22());
         if (q.keys.length <= q.n) q.keys = java.util.Arrays.copyOf(q.keys, Math.max(64, q.keys.length * 2));
         q.keys[q.n] = m.m30() * m.m30() + m.m31() * m.m31() + m.m32() * m.m32();   // the object's origin, camera-relative
         int idx = n / 4 * 6;
@@ -449,6 +488,11 @@ public final class PartBatch {
         residentDraws++;
     }
     private static final Map<RenderType, Boolean> TYPE_OK = new IdentityHashMap<>();
+
+    /** 1.20.1: a colour given as four floats, as BufferBuilder writes it ((byte) (int) (c * 255)), packed ARGB as 1.21's ints */
+    public static int packColor(float r, float g, float b, float a) {
+        return ((int) (a * 255.0F) & 255) << 24 | ((int) (r * 255.0F) & 255) << 16 | ((int) (g * 255.0F) & 255) << 8 | ((int) (b * 255.0F) & 255);
+    }
 
     /**
      * From ModelPart.render in place of compile: true if the part was queued (then nothing is written to the buffer).
@@ -881,7 +925,7 @@ public final class PartBatch {
     /** The batch must be drawn even if every part of it is queued: one empty quad if it has no vertices yet. */
     private static void emptyQuad(BufferBuilder bb) {
         if (((dev.lull.opt.BufferBuilderAccessor) bb).sleep$vertices() == 0) {
-            for (int i = 0; i < 4; i++) bb.addVertex(0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0);
+            for (int i = 0; i < 4; i++) bb.vertex(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0);
             emptyQuadVertices += 4;
         }
     }
@@ -1098,7 +1142,7 @@ public final class PartBatch {
         if (sbb) drawQueue(shader, sq, 4);
         if (per) drawPersistent(shader, pq);
         if (res) {
-            if (t.sortOnUpload()) sortBackToFront(r);
+            if (t.sortOnUpload) sortBackToFront(r);
             drawQueue(shader, r, 2);
         }
         com.mojang.blaze3d.vertex.BufferUploader.invalidate();   // vanilla's bound buffer is no longer bound
@@ -1204,8 +1248,7 @@ public final class PartBatch {
                 RES_ARENA.vaoStale = false;
             }
             GL30C.glBindVertexArray(resVao);
-            // a shaderpack program's vertex prologue reads the quad's other vertices (tangent, mid UV) from the arena
-            if (dev.lull.shaders.ShaderPipeline.active) GL30C.glBindBufferBase(GL43C.GL_SHADER_STORAGE_BUFFER, 9, RES_ARENA.vbo);
+            // (1.21.1: a shaderpack program's prologue reads the quad's other vertices from the arena; not on 1.20.1 yet)
         }
         RenderSystem.AutoStorageIndexBuffer seq = RenderSystem.getSequentialBuffer(VertexFormat.Mode.QUADS);
         seq.bind(q.maxIndices);
