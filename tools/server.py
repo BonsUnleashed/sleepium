@@ -5,7 +5,8 @@
         s.cmd('tick freeze')
         line = s.ask('time query gametime', r'The time is (\\d+)')
 
-MC_PORT gives a second server (another copy of the project, its own run folder) its own port.
+MC_PORT gives a second server (another copy of the project, its own run folder) its own port. MC_MODS=<folder> puts
+released mods on the server (build.gradle -PtestMods: remapped), for every tool that starts one (compatibility runs).
 """
 import os
 import re
@@ -65,6 +66,8 @@ class Server:
         with open(os.path.join(RUN, 'server.properties'), 'w') as f:
             f.writelines('%s=%s\n' % kv for kv in self.props.items())
         args = [GRADLEW, 'runServer', '--console=plain', '-q', '-PrunJvmArgs=' + ' '.join(self.jvm_args)]
+        if os.environ.get('MC_MODS'):
+            args.append('-PtestMods=' + os.environ['MC_MODS'])
         self.p = subprocess.Popen(args, cwd=ROOT, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                                   text=True, encoding='utf-8', errors='replace', bufsize=1)
         self.logf = open(self.log, 'w', encoding='utf-8') if self.log else None

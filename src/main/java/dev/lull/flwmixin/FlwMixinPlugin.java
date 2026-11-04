@@ -16,7 +16,7 @@ public final class FlwMixinPlugin implements IMixinConfigPlugin {
     private static final boolean EXECUTOR = Boolean.getBoolean("lab.opt.all") || Boolean.getBoolean("lab.opt.FlwExecutorMixin");
 
     static boolean flywheel() {
-        var mods = net.neoforged.fml.loading.LoadingModList.get();
+        var mods = net.minecraftforge.fml.loading.LoadingModList.get();
         return mods != null && mods.getModFileById("flywheel") != null;
     }
 

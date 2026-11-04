@@ -28,12 +28,12 @@ public final class CatnipMixinPlugin implements IMixinConfigPlugin {
     private static final boolean LIT = PARTS && (Boolean.getBoolean("lab.opt.all") || Boolean.getBoolean("lab.opt.LevelLitPartsMixin"));
 
     static boolean create() {
-        var mods = net.neoforged.fml.loading.LoadingModList.get();
+        var mods = net.minecraftforge.fml.loading.LoadingModList.get();
         return mods != null && mods.getModFileById("create") != null;
     }
 
     static boolean ponder() {
-        var mods = net.neoforged.fml.loading.LoadingModList.get();
+        var mods = net.minecraftforge.fml.loading.LoadingModList.get();
         return mods != null && mods.getModFileById("ponder") != null;
     }
 

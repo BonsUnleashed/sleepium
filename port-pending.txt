@@ -2,14 +2,11 @@
 # A line goes when its part is ported and checked (notes/54).
 
 # mods' adapters (other mods' 1.20.1 versions differ)
-dev/lull/catmixin/**
 dev/lull/veilmixin/**
-dev/lull/flwmixin/**
 # the shaderpack pipeline and the settings screen
 # the client renderer (1.20.1 has the old buffer API and section renderer): stage 3
 dev/lull/optsupport/KineticMemo.java
 dev/lull/optsupport/KineticResident.java
-dev/lull/optsupport/FlwLabExecutor.java
 dev/lull/opt/MeshDataAccessor.java
 # 1.21-only: LevelRenderer.visibleSections (1.21.1's SectionListsMixin read it through this); 1.20.1's SectionListsMixin
 # shadows renderChunksInFrustum itself, and DrawStats does not need it
@@ -49,3 +46,16 @@ dev/lull/mixin/GenProfileServerWaitMixin.java
 # 1.21-only: MeshData (the 1.21 buffer API) - QuadSort's direct sort is on BufferBuilder on 1.20.1 (VertexSortDirectMixin)
 
 # the shaderpack pipeline (and the settings screen's pack options: its screens follow the pack's shaders.properties)
+
+
+# Create (catnip): the parts that draw from VRAM wait for PartBatch / KineticMemo / KineticResident (the renderer, pending
+# below); SbbCacheWorkerMixin (the parallel render's safety) and CreateTimeTestMixin are ported
+dev/lull/catmixin/SbbPartsMixin.java
+dev/lull/catmixin/KineticRotationMixin.java
+dev/lull/catmixin/KineticBeMixin.java
+dev/lull/catmixin/OverStressAccessor.java
+dev/lull/catmixin/ChainConveyorMemoMixin.java
+dev/lull/catmixin/KineticLevelMixin.java
+dev/lull/catmixin/ViewAreaInvoker.java
+dev/lull/catmixin/RenderSystemLightAccessor.java
+# Veil: brought by Sable / Create Aeronautics (1.21.1 only); not in the 1.20.1 target packs

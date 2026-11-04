@@ -120,7 +120,7 @@ public final class MixinTouch {
 
     /** "Lowner;name(desc)ret" or "owner.name(...)" -> name */
     static String invokedName(String target) {
-        String s = target.trim();
+        String s = ref(target).trim();
         int paren = s.indexOf('(');
         if (paren >= 0) s = s.substring(0, paren);
         int colon = s.indexOf(':');   // a field: "Lowner;name:Ltype;"
@@ -163,8 +163,15 @@ public final class MixinTouch {
                             continue;
                         }
                         Set<String> methods = new HashSet<>();
-                        collect(cn, methods);
-                        List<String> reds = redirectKeys(cn), ows = overwriteNames(cn);
+                        List<String> reds, ows;
+                        REFMAP.set(refMapper(mc, cn.name));
+                        try {
+                            collect(cn, methods);
+                            reds = redirectKeys(cn);
+                            ows = overwriteNames(cn);
+                        } finally {
+                            REFMAP.remove();
+                        }
                         for (String target : targets(cn)) {
                             m.computeIfAbsent(target, k -> new HashSet<>()).addAll(methods);
                             if (!reds.isEmpty()) REDIRECTS.computeIfAbsent(target, k -> new HashSet<>()).addAll(reds);
@@ -200,11 +207,12 @@ public final class MixinTouch {
                     if (!o.has("package")) continue;
                     String pkg = o.get("package").getAsString();
                     if (pkg.startsWith("dev.lull") || pkg.startsWith("dev.probe")) continue;
+                    com.google.gson.JsonObject refmap = refMapFile(file, o);
                     for (String key : new String[] {"mixins", "client", "server"}) {
                         if (!o.has(key) || !o.get(key).isJsonArray()) continue;
                         for (var e : o.getAsJsonArray(key)) {
                             java.nio.file.Path bytes = file.findResource((pkg + "." + e.getAsString()).replace('.', '/') + ".class");
-                            if (bytes != null && java.nio.file.Files.exists(bytes)) indexClass(java.nio.file.Files.readAllBytes(bytes), m);
+                            if (bytes != null && java.nio.file.Files.exists(bytes)) indexClass(java.nio.file.Files.readAllBytes(bytes), m, refmap);
                         }
                     }
                     // a config plugin may add mixins of its package the lists do not name (its getMixins: Embeddium's
@@ -214,7 +222,7 @@ public final class MixinTouch {
                         if (root != null && java.nio.file.Files.isDirectory(root))
                             try (var walk = java.nio.file.Files.walk(root)) {
                                 for (java.nio.file.Path c : (Iterable<java.nio.file.Path>) walk::iterator)
-                                    if (c.toString().endsWith(".class")) indexClass(java.nio.file.Files.readAllBytes(c), m);
+                                    if (c.toString().endsWith(".class")) indexClass(java.nio.file.Files.readAllBytes(c), m, refmap);
                             }
                     }
                 }
@@ -231,7 +239,7 @@ public final class MixinTouch {
             if (mods == null) return;
             for (var info : mods.getModFiles()) {
                 var file = info.getFile();
-                for (String name : mixinConfigs(file)) {
+                for (String name : ourConfigs(file)) {
                     if (!name.startsWith("sleepium")) continue;
                     java.nio.file.Path json = file.findResource(name);
                     if (json == null || !java.nio.file.Files.exists(json)) continue;
@@ -253,6 +261,21 @@ public final class MixinTouch {
         } catch (Throwable t) {
             System.out.println("[sleep/opt] own mixin list incomplete: " + t);
         }
+    }
+
+    /**
+     * Our configs in a mod file: the manifest's list, or - a dev run's mod is the build's folders, no manifest; Mixin
+     * gets the configs from the run's arguments - the sleepium*.mixins.json files at its root.
+     */
+    private static java.util.List<String> ourConfigs(net.minecraftforge.fml.loading.moddiscovery.ModFile file) {
+        java.util.List<String> out = mixinConfigs(file);
+        if (!out.isEmpty()) return out;
+        try (var list = java.nio.file.Files.list(file.getSecureJar().getRootPath())) {
+            list.map(p -> String.valueOf(p.getFileName())).filter(n -> n.startsWith("sleepium") && n.endsWith(".mixins.json")).sorted().forEach(out::add);
+        } catch (java.io.IOException | RuntimeException e) {
+            // not a folder or jar we can list: no configs of ours there
+        }
+        return out;
     }
 
     /**
@@ -279,14 +302,21 @@ public final class MixinTouch {
     }
 
     /** One foreign mixin class's touches, by its target classes (a class without @Mixin adds nothing). */
-    private static void indexClass(byte[] bytes, Map<String, Set<String>> m) {
+    private static void indexClass(byte[] bytes, Map<String, Set<String>> m, com.google.gson.JsonObject refmap) {
         ClassNode cn = new ClassNode();
         new org.objectweb.asm.ClassReader(bytes).accept(cn, org.objectweb.asm.ClassReader.SKIP_CODE);
         List<String> ts = targets(cn);
         if (ts.isEmpty()) return;
         Set<String> methods = new HashSet<>();
-        collect(cn, methods);
-        List<String> reds = redirectKeys(cn), ows = overwriteNames(cn);
+        List<String> reds, ows;
+        REFMAP.set(refMapEntries(refmap, cn.name));
+        try {
+            collect(cn, methods);
+            reds = redirectKeys(cn);
+            ows = overwriteNames(cn);
+        } finally {
+            REFMAP.remove();
+        }
         for (String target : ts) {
             m.computeIfAbsent(target, k -> new HashSet<>()).addAll(methods);
             if (!reds.isEmpty()) REDIRECTS.computeIfAbsent(target, k -> new HashSet<>()).addAll(reds);
@@ -328,7 +358,12 @@ public final class MixinTouch {
             }
             for (IMixinInfo mi : mixins) {
                 if (mi.getClassName().startsWith("dev.lull.") || mi.getClassName().startsWith("dev.probe.")) continue;   // (the engine's and its framework's)
-                collect(mi, out);
+                REFMAP.set(refMapper(mi.getConfig(), mi.getClassRef()));
+                try {
+                    collect(mi, out);
+                } finally {
+                    REFMAP.remove();
+                }
             }
         } catch (Throwable t) {
             out.add(ALL);
@@ -380,9 +415,60 @@ public final class MixinTouch {
         }
     }
 
+    /**
+     * The reference map of the mixin being read: its annotations' strings as the refmap maps them (null: as written).
+     * Mods written against other names than Mojang's - Yarn / intermediary in the ports of Fabric mods (Radium:
+     * method = "forEachInBox" for EntitySectionStorage.forEachAccessibleNonEmptySection) - only name their targets
+     * through the refmap; read as written, such a mixin touched no method we know and our overwrite of it did not give way.
+     */
+    private static final ThreadLocal<java.util.function.UnaryOperator<String>> REFMAP = new ThreadLocal<>();
+
+    private static String ref(String annotationValue) {
+        java.util.function.UnaryOperator<String> r = REFMAP.get();
+        if (r == null) return annotationValue;
+        String mapped = r.apply(annotationValue);
+        return mapped == null || mapped.isEmpty() ? annotationValue : mapped;
+    }
+
+    /** a registered config's reference mapper (Mixin's own: in a dev run already remapped to Mojang's names) */
+    private static java.util.function.UnaryOperator<String> refMapper(Object config, String mixinClass) {
+        try {
+            java.lang.reflect.Method get = config.getClass().getMethod("getReferenceMapper");
+            get.setAccessible(true);   // MixinConfig is package-private
+            Object mapper = get.invoke(config);
+            if (!(mapper instanceof org.spongepowered.asm.mixin.refmap.IReferenceMapper rm) || rm.isDefault()) return null;
+            String owner = mixinClass.replace('.', '/');
+            return v -> rm.remap(owner, v);
+        } catch (Throwable t) {
+            return null;
+        }
+    }
+
+    /** a config's refmap file from its mod file ("refmap" in the config), or null */
+    private static com.google.gson.JsonObject refMapFile(net.minecraftforge.fml.loading.moddiscovery.ModFile file, com.google.gson.JsonObject config) {
+        try {
+            if (!config.has("refmap")) return null;
+            java.nio.file.Path p = file.findResource(config.get("refmap").getAsString());
+            if (p == null || !java.nio.file.Files.exists(p)) return null;
+            com.google.gson.JsonObject o = com.google.gson.JsonParser.parseString(java.nio.file.Files.readString(p)).getAsJsonObject();
+            // Forge's names when the file has several environments ("data": {"searge": ...}), else the default table
+            if (o.has("data") && o.getAsJsonObject("data").has("searge")) return o.getAsJsonObject("data").getAsJsonObject("searge");
+            return o.has("mappings") ? o.getAsJsonObject("mappings") : null;
+        } catch (Throwable t) {
+            return null;
+        }
+    }
+
+    /** one mixin class's entries of a refmap file (values in SRG names: official() turns them into Mojang's) */
+    private static java.util.function.UnaryOperator<String> refMapEntries(com.google.gson.JsonObject refmap, String mixinInternalName) {
+        if (refmap == null || !refmap.has(mixinInternalName)) return null;
+        com.google.gson.JsonObject e = refmap.getAsJsonObject(mixinInternalName);
+        return v -> e.has(v) ? e.get(v).getAsString() : null;
+    }
+
     /** "name", "name(desc)ret", "Lowner;name(desc)ret" or a pattern -> the method name, or ALL if unclear. */
     static String nameOf(String target) {
-        String s = target.trim();
+        String s = ref(target).trim();
         int semi = s.indexOf(';'), paren = s.indexOf('(');
         if (s.startsWith("L") && semi > 0 && (paren < 0 || semi < paren)) s = s.substring(semi + 1);
         int end = s.length();

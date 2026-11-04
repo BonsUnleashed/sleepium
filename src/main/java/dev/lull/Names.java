@@ -76,9 +76,12 @@ public final class Names {
         return s == null ? name : s;
     }
 
-    /** The official name of a member name read from running bytecode (unchanged when it is not an SRG name). */
+    /**
+     * The official name of a member name read from running bytecode (unchanged when it is not an SRG name). Also in a
+     * dev run: other mods' refmaps name members in SRG there too (MixinTouch).
+     */
     public static String official(String running) {
-        if (!SRG || running.length() < 3 || running.charAt(1) != '_' || running.charAt(running.length() - 1) != '_') return running;
+        if (running.length() < 3 || running.charAt(1) != '_' || running.charAt(running.length() - 1) != '_') return running;
         load();
         String o = toOfficial.get(running);
         return o == null ? running : o;
