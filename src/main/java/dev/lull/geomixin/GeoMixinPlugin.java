@@ -19,7 +19,7 @@ public final class GeoMixinPlugin implements IMixinConfigPlugin {
             && (Boolean.getBoolean("lab.opt.all") || Boolean.getBoolean("lab.opt.ParallelEntitiesMixin"));
 
     public static boolean geckoLib() {
-        var mods = net.neoforged.fml.loading.LoadingModList.get();
+        var mods = net.minecraftforge.fml.loading.LoadingModList.get();
         return mods != null && mods.getModFileById("geckolib") != null;
     }
 

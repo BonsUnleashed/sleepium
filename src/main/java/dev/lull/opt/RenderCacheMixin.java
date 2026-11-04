@@ -24,12 +24,8 @@ public abstract class RenderCacheMixin {
             target = "Lnet/minecraft/client/renderer/entity/EntityRenderer;render(Lnet/minecraft/world/entity/Entity;FFLcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/MultiBufferSource;I)V"))
     @SuppressWarnings({"unchecked", "rawtypes"})
     private void sleep$cached(EntityRenderer r, Entity e, float yaw, float pt, PoseStack pose, MultiBufferSource buffers, int light) {
-        dev.lull.DrawStats.phaseBegin(8);
-        try {
-            cached(r, e, yaw, pt, pose, buffers, light);
-        } finally {
-            dev.lull.DrawStats.phaseEnd(8);
-        }
+        // (1.21.1: DrawStats phases 8 / 9 around this; the renderer's measurement is not on 1.20.1 yet)
+        cached(r, e, yaw, pt, pose, buffers, light);
     }
 
     @SuppressWarnings({"unchecked", "rawtypes"})
@@ -59,11 +55,9 @@ public abstract class RenderCacheMixin {
             return;
         }
         var d = dev.lull.optsupport.RenderCacheDraws.enterEntity(r, e, yaw, light);   // no lambda per call
-        dev.lull.DrawStats.phaseBegin(9);
         try {
             RenderCache.render(e, r.getClass(), d, pt, pose, buffers, light, OverlayTexture.NO_OVERLAY, yaw, key, (EntityRenderDispatcher) (Object) this);
         } finally {
-            dev.lull.DrawStats.phaseEnd(9);
             dev.lull.optsupport.RenderCacheDraws.exitEntity(d);
         }
     }

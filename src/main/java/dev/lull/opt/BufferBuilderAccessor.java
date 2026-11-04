@@ -1,16 +1,20 @@
 package dev.lull.opt;
 
 import com.mojang.blaze3d.vertex.BufferBuilder;
-import com.mojang.blaze3d.vertex.ByteBufferBuilder;
 import com.mojang.blaze3d.vertex.VertexFormat;
+import java.nio.ByteBuffer;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.gen.Accessor;
+import org.spongepowered.asm.mixin.gen.Invoker;
 
-/** RenderCacheMixins: appending complete recorded vertices to a BufferBuilder in one copy. */
+/**
+ * RenderCacheMixins: appending complete recorded vertices to a BufferBuilder in one copy (1.20.1: one ByteBuffer,
+ * nextElementByte the write position, elementIndex the element cursor - 0 between vertices).
+ */
 @Mixin(BufferBuilder.class)
 public interface BufferBuilderAccessor {
     @Accessor("buffer")
-    ByteBufferBuilder sleep$buffer();
+    ByteBuffer sleep$buffer();
 
     @Accessor("vertices")
     int sleep$vertices();
@@ -18,14 +22,14 @@ public interface BufferBuilderAccessor {
     @Accessor("vertices")
     void sleep$setVertices(int v);
 
-    @Accessor("vertexPointer")
-    void sleep$setVertexPointer(long p);
+    @Accessor("nextElementByte")
+    int sleep$nextElementByte();
 
-    @Accessor("vertexPointer")
-    long sleep$vertexPointer();
+    @Accessor("nextElementByte")
+    void sleep$setNextElementByte(int p);
 
-    @Accessor("elementsToFill")
-    int sleep$elementsToFill();
+    @Accessor("elementIndex")
+    int sleep$elementIndex();
 
     @Accessor("format")
     VertexFormat sleep$format();
@@ -35,4 +39,8 @@ public interface BufferBuilderAccessor {
 
     @Accessor("building")
     boolean sleep$building();
+
+    /** room for that many more bytes past nextElementByte (the buffer may be replaced: read sleep$buffer after it) */
+    @Invoker("ensureCapacity")
+    void sleep$ensureCapacity(int bytes);
 }

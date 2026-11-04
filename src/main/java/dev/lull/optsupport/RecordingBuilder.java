@@ -1,57 +1,78 @@
 package dev.lull.optsupport;
 
+import com.google.common.collect.ImmutableList;
+import com.mojang.blaze3d.vertex.BufferVertexConsumer;
+import com.mojang.blaze3d.vertex.DefaultVertexFormat;
+import com.mojang.blaze3d.vertex.DefaultedVertexConsumer;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import com.mojang.blaze3d.vertex.VertexFormat;
 import com.mojang.blaze3d.vertex.VertexFormatElement;
-import net.minecraft.util.Mth;
 import org.lwjgl.system.MemoryUtil;
 
 /**
- * RenderCache / ParallelRender: a reusable vertex recorder writing the same bytes a BufferBuilder of the format writes
- * (the element writers of BufferBuilder, first write of an element per vertex wins, elements not in the format
- * ignored), into one native buffer kept across recordings — no BufferBuilder, MeshData or result objects per recording.
- * The 11-argument addVertex goes through the setters (VertexConsumer's default), which gives BufferBuilder's
- * fast-path bytes too (colour as RGBA bytes, packed overlay / light as two shorts, normal bytes).
+ * RenderCache / ParallelRender: a reusable vertex recorder writing the same bytes a BufferBuilder of the format writes,
+ * into one native buffer kept across recordings — no BufferBuilder or RenderedBuffer per recording.
+ *
+ * <p>1.20.1's BufferBuilder fills a vertex element by element in the format's order: each setter writes only when the
+ * current element is its own (else it does nothing), nextElement steps over padding and puts the default colour when
+ * one is set, endVertex wants every element filled, lines modes write each vertex twice. This class is the same state
+ * machine: it is a BufferVertexConsumer, so the element writers are vanilla's own default methods, and nextElement /
+ * endVertex / color / the 14-argument fast path (NEW_ENTITY and BLOCK) are BufferBuilder's bodies. Padding bytes are
+ * never written (as in BufferBuilder): RenderCache compares and copies them as they are.
  */
-public final class RecordingBuilder implements VertexConsumer {
+public final class RecordingBuilder extends DefaultedVertexConsumer implements BufferVertexConsumer {
     final VertexFormat format;
+    final VertexFormat.Mode mode;
     /** the render type this builder records (set by RenderCache.Recorder) */
     public net.minecraft.client.renderer.RenderType type;
     final int vertexSize;
-    private final int posOff, colorOff, uv0Off, uv1Off, uv2Off, normalOff;
-    private final int initialFill;
+    private final ImmutableList<VertexFormatElement> elements;
+    private final boolean fastFormat, fullFormat, lines;
     long mem;
     private long cap;
     int n;
-    private long v;
-    private int fill;
+    /** BufferBuilder's nextElementByte: where the current element goes */
+    private int next;
+    private VertexFormatElement current;
+    private int elementIndex;
     /** VertexTags: runs of vertices written under one state - each run's first vertex and its three ids */
     int runs;
     int[] runAt = new int[2], runTag = new int[6];
     private final int[] now = new int[3];
 
-    private static final int COLOR = 1, UV0 = 2, UV1 = 4, UV2 = 8, NORMAL = 16;
-
-    public RecordingBuilder(VertexFormat format) {
+    public RecordingBuilder(VertexFormat format, VertexFormat.Mode mode) {
         this.format = format;
+        this.mode = mode;
         this.vertexSize = format.getVertexSize();
-        this.posOff = off(format, VertexFormatElement.POSITION);
-        this.colorOff = off(format, VertexFormatElement.COLOR);
-        this.uv0Off = off(format, VertexFormatElement.UV0);
-        this.uv1Off = off(format, VertexFormatElement.UV1);
-        this.uv2Off = off(format, VertexFormatElement.UV2);
-        this.normalOff = off(format, VertexFormatElement.NORMAL);
-        this.initialFill = (colorOff >= 0 ? COLOR : 0) | (uv0Off >= 0 ? UV0 : 0) | (uv1Off >= 0 ? UV1 : 0) | (uv2Off >= 0 ? UV2 : 0) | (normalOff >= 0 ? NORMAL : 0);
+        this.elements = format.getElements();
+        this.fastFormat = format == DefaultVertexFormat.NEW_ENTITY || format == DefaultVertexFormat.BLOCK;
+        this.fullFormat = format == DefaultVertexFormat.NEW_ENTITY;
+        this.lines = mode == VertexFormat.Mode.LINES || mode == VertexFormat.Mode.LINE_STRIP;
+        reset();
     }
 
-    private static int off(VertexFormat f, VertexFormatElement e) {
-        return f.contains(e) ? f.getOffset(e) : -1;
+    /** The element's byte offset in the format, or -1 (1.20.1's VertexFormat has offsets by index only). */
+    static int offset(VertexFormat f, VertexFormatElement e) {
+        ImmutableList<VertexFormatElement> es = f.getElements();
+        for (int i = 0; i < es.size(); i++) if (es.get(i).equals(e)) return f.getOffset(i);
+        return -1;
     }
 
+    /** a new recording (BufferBuilder.begin: the first element, nothing written) */
     public void reset() {
         n = 0;
-        fill = 0;
+        next = 0;
+        elementIndex = 0;
+        current = elements.get(0);
         runs = 0;
+        ensure(vertexSize);
+    }
+
+    private void ensure(long bytes) {
+        if (bytes <= cap) return;
+        long c = Math.max(bytes, Math.max(4096, cap * 2));
+        mem = mem == 0 ? MemoryUtil.nmemAlloc(c) : MemoryUtil.nmemRealloc(mem, c);
+        cap = c;
     }
 
     /** a new run when the state differs from the last run's */
@@ -72,124 +93,103 @@ public final class RecordingBuilder implements VertexConsumer {
 
     /** count whole vertices appended by the caller (BlockMeshMemo's replay): their first byte */
     long appendRaw(int count) {
-        long need = (long) (n + count) * vertexSize;
-        if (need > cap) {
-            long c = Math.max(need, Math.max(4096, cap * 2));
-            mem = mem == 0 ? MemoryUtil.nmemAlloc(c) : MemoryUtil.nmemRealloc(mem, c);
-            cap = c;
-        }
-        long dst = mem + (long) n * vertexSize;
+        if (elementIndex != 0) throw new IllegalStateException("Not filled all elements of the vertex");
+        ensure((long) (n + count + 1) * vertexSize);
+        long dst = mem + next;
         if (VertexTags.ON) tag(n);
         n += count;
-        v = mem + (long) (n - 1) * vertexSize;
-        fill = 0;
+        next += count * vertexSize;
         return dst;
     }
 
+    // ------------------------------------------------------------------ BufferVertexConsumer: the element cursor
+
     @Override
-    public VertexConsumer addVertex(float x, float y, float z) {
-        long need = (long) (n + 1) * vertexSize;
-        if (need > cap) {
-            long c = Math.max(need, Math.max(4096, cap * 2));
-            mem = mem == 0 ? MemoryUtil.nmemAlloc(c) : MemoryUtil.nmemRealloc(mem, c);
-            cap = c;
-        }
-        v = mem + (long) n * vertexSize;
-        if (VertexTags.ON) tag(n);
+    public VertexFormatElement currentElement() {
+        return current;
+    }
+
+    @Override
+    public void nextElement() {   // BufferBuilder.nextElement
+        elementIndex = (elementIndex + 1) % elements.size();
+        next += current.getByteSize();
+        current = elements.get(elementIndex);
+        if (current.getUsage() == VertexFormatElement.Usage.PADDING) nextElement();
+        if (defaultColorSet && current.getUsage() == VertexFormatElement.Usage.COLOR) BufferVertexConsumer.super.color(defaultR, defaultG, defaultB, defaultA);
+    }
+
+    @Override
+    public void putByte(int index, byte value) {
+        MemoryUtil.memPutByte(mem + next + index, value);
+    }
+
+    @Override
+    public void putShort(int index, short value) {
+        MemoryUtil.memPutShort(mem + next + index, value);
+    }
+
+    @Override
+    public void putFloat(int index, float value) {
+        MemoryUtil.memPutFloat(mem + next + index, value);
+    }
+
+    @Override
+    public VertexConsumer vertex(double x, double y, double z) {
+        if (VertexTags.ON && elementIndex == 0 && current.getUsage() == VertexFormatElement.Usage.POSITION) tag(n);
+        return BufferVertexConsumer.super.vertex(x, y, z);
+    }
+
+    @Override
+    public VertexConsumer color(int red, int green, int blue, int alpha) {   // BufferBuilder.color
+        if (defaultColorSet) throw new IllegalStateException();
+        return BufferVertexConsumer.super.color(red, green, blue, alpha);
+    }
+
+    @Override
+    public void endVertex() {   // BufferBuilder.endVertex
+        if (elementIndex != 0) throw new IllegalStateException("Not filled all elements of the vertex");
         n++;
-        fill = initialFill;
-        long p = v + posOff;
-        MemoryUtil.memPutFloat(p, x);
-        MemoryUtil.memPutFloat(p + 4, y);
-        MemoryUtil.memPutFloat(p + 8, z);
-        return this;
-    }
-
-    private boolean take(int bit) {
-        if ((fill & bit) == 0) return false;
-        fill &= ~bit;
-        return true;
-    }
-
-    @Override
-    public VertexConsumer setColor(int red, int green, int blue, int alpha) {
-        if (take(COLOR)) {
-            long p = v + colorOff;
-            MemoryUtil.memPutByte(p, (byte) red);
-            MemoryUtil.memPutByte(p + 1, (byte) green);
-            MemoryUtil.memPutByte(p + 2, (byte) blue);
-            MemoryUtil.memPutByte(p + 3, (byte) alpha);
+        ensure((long) next + vertexSize);
+        if (lines) {
+            MemoryUtil.memCopy(mem + next - vertexSize, mem + next, vertexSize);
+            next += vertexSize;
+            n++;
+            ensure((long) next + vertexSize);
         }
-        return this;
     }
 
     @Override
-    public VertexConsumer setColor(int color) {   // ARGB int, stored as RGBA bytes (BufferBuilder.putRgba)
-        return setColor(color >> 16 & 0xFF, color >> 8 & 0xFF, color & 0xFF, color >>> 24);
-    }
-
-    @Override
-    public VertexConsumer setUv(float u, float w) {
-        if (take(UV0)) {
-            long p = v + uv0Off;
-            MemoryUtil.memPutFloat(p, u);
-            MemoryUtil.memPutFloat(p + 4, w);
+    public void vertex(float x, float y, float z, float red, float green, float blue, float alpha, float texU, float texV, int overlayUV, int lightmapUV,
+            float normalX, float normalY, float normalZ) {   // BufferBuilder's fast path
+        if (defaultColorSet) throw new IllegalStateException();
+        if (!fastFormat) {
+            super.vertex(x, y, z, red, green, blue, alpha, texU, texV, overlayUV, lightmapUV, normalX, normalY, normalZ);
+            return;
         }
-        return this;
-    }
-
-    @Override
-    public VertexConsumer setUv1(int u, int w) {
-        if (dev.lull.shaders.ShaderIds.on && format == com.mojang.blaze3d.vertex.DefaultVertexFormat.NEW_ENTITY) {   // a shaderpack's ids, as BufferBuilder gets them
-            int id = dev.lull.shaders.ShaderIds.slot1;
-            u = u & 0xFF | (id & 0xFF) << 8;
-            w = w & 0xFF | (id >> 8 & 0xFF) << 8;
+        if (VertexTags.ON) tag(n);
+        putFloat(0, x);
+        putFloat(4, y);
+        putFloat(8, z);
+        putByte(12, (byte) ((int) (red * 255.0F)));
+        putByte(13, (byte) ((int) (green * 255.0F)));
+        putByte(14, (byte) ((int) (blue * 255.0F)));
+        putByte(15, (byte) ((int) (alpha * 255.0F)));
+        putFloat(16, texU);
+        putFloat(20, texV);
+        int i;
+        if (fullFormat) {
+            putShort(24, (short) (overlayUV & 0xFFFF));
+            putShort(26, (short) (overlayUV >> 16 & 0xFFFF));
+            i = 28;
+        } else {
+            i = 24;
         }
-        if (take(UV1)) {
-            long p = v + uv1Off;
-            MemoryUtil.memPutShort(p, (short) u);
-            MemoryUtil.memPutShort(p + 2, (short) w);
-        }
-        return this;
-    }
-
-    @Override
-    public VertexConsumer setOverlay(int packed) {
-        return setUv1(packed & 0xFFFF, packed >> 16 & 0xFFFF);
-    }
-
-    @Override
-    public VertexConsumer setUv2(int u, int w) {
-        if (dev.lull.shaders.ShaderIds.on && format == com.mojang.blaze3d.vertex.DefaultVertexFormat.NEW_ENTITY) {
-            int id = dev.lull.shaders.ShaderIds.item1;
-            u = u & 0xFF | (id & 0xFF) << 8;
-            w = w & 0xFF | (id >> 8 & 0xFF) << 8;
-        }
-        if (take(UV2)) {
-            long p = v + uv2Off;
-            MemoryUtil.memPutShort(p, (short) u);
-            MemoryUtil.memPutShort(p + 2, (short) w);
-        }
-        return this;
-    }
-
-    @Override
-    public VertexConsumer setLight(int packed) {
-        return setUv2(packed & 0xFFFF, packed >> 16 & 0xFFFF);
-    }
-
-    @Override
-    public VertexConsumer setNormal(float x, float y, float z) {
-        if (take(NORMAL)) {
-            long p = v + normalOff;
-            MemoryUtil.memPutByte(p, normalByte(x));
-            MemoryUtil.memPutByte(p + 1, normalByte(y));
-            MemoryUtil.memPutByte(p + 2, normalByte(z));
-        }
-        return this;
-    }
-
-    private static byte normalByte(float value) {
-        return (byte) ((int) (Mth.clamp(value, -1.0F, 1.0F) * 127.0F) & 0xFF);
+        putShort(i, (short) (lightmapUV & 0xFFFF));
+        putShort(i + 2, (short) (lightmapUV >> 16 & 0xFFFF));
+        putByte(i + 4, BufferVertexConsumer.normalIntValue(normalX));
+        putByte(i + 5, BufferVertexConsumer.normalIntValue(normalY));
+        putByte(i + 6, BufferVertexConsumer.normalIntValue(normalZ));
+        next += i + 8;
+        endVertex();
     }
 }

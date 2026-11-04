@@ -30,9 +30,13 @@ public final class SleepMod {
             if (e.phase == TickEvent.Phase.END) dev.lull.api.Travel.tick();   // 1.21.1: ServerTickEvent.Post
         });
         // not yet on 1.20.1: EventCounter, EventBench (the event bus step), NetBench, the bulk payloads / coalescing (networking),
-        // GenBench (world generation), the settings screen, the render cache and the shaderpack pipeline (port-pending.txt)
+        // GenBench (world generation), the settings screen and the shaderpack pipeline (port-pending.txt)
         if (FMLEnvironment.dist.isClient()) {
             ClientMeter.register(gameBus);   // class is only loaded on the physical client
+            // the render cache's frame budget (1.21.1: RenderFrameEvent.Pre; Forge 1.20.1: RenderTickEvent START)
+            gameBus.addListener(EventPriority.HIGHEST, false, TickEvent.RenderTickEvent.class, e -> {
+                if (e.phase == TickEvent.Phase.START) dev.lull.optsupport.RenderCache.frame();
+            });
         }
         System.out.println("[sleep] Sleepium for 1.20.1 / Forge loaded");
     }

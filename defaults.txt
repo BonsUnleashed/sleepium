@@ -4,7 +4,6 @@
 -Dlab.opt.BlockCollisionMemoMixin=true
 -Dlab.opt.BlockEntityCullNoAllocMixin=true
 -Dlab.opt.BlockMeshDirtyMixin=true
--Dlab.opt.BlockMeshMemoMixin=true
 -Dlab.opt.BrainFlatMixin=true
 -Dlab.opt.BulkDataArraysMixin=true
 -Dlab.opt.ChunkCacheClearMixin=true
@@ -108,9 +107,6 @@
 -Dlab.opt.ReactorMainDrainMixin=true
 -Dlab.opt.ReactorReadJournalMixin=true
 -Dlab.opt.ReactorTickMixin=true
--Dlab.opt.RenderCacheBlockEntityMixin=true
--Dlab.opt.RenderCacheClockMixin=true
--Dlab.opt.RenderCacheMixin=true
 -Dlab.opt.RenderCallJournalMixin=true
 -Dlab.opt.SamplerUnitDedupeMixin=true
 -Dlab.opt.ScoutBlockEntityMixin=true

@@ -1,6 +1,7 @@
 package dev.lull.optsupport;
 
 import com.mojang.blaze3d.vertex.BufferBuilder;
+import com.mojang.blaze3d.vertex.DefaultVertexFormat;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import com.mojang.blaze3d.vertex.VertexFormat;
@@ -110,7 +111,7 @@ public final class BlockMeshMemo {
 
         RecordingBuilder recorder(VertexFormat f) {
             RecordingBuilder r = recorders.get(f);
-            if (r == null) recorders.put(f, r = new RecordingBuilder(f));
+            if (r == null) recorders.put(f, r = new RecordingBuilder(f, VertexFormat.Mode.QUADS));   // (formatOf: quads only)
             r.reset();
             return r;
         }
@@ -147,8 +148,9 @@ public final class BlockMeshMemo {
 
     private static boolean supported(VertexFormat f) {
         for (VertexFormatElement e : f.getElements())
-            if (e != VertexFormatElement.POSITION && e != VertexFormatElement.COLOR && e != VertexFormatElement.UV0 && e != VertexFormatElement.UV1
-                    && e != VertexFormatElement.UV2 && e != VertexFormatElement.NORMAL) return false;
+            if (!e.equals(DefaultVertexFormat.ELEMENT_POSITION) && !e.equals(DefaultVertexFormat.ELEMENT_COLOR) && !e.equals(DefaultVertexFormat.ELEMENT_UV0)
+                    && !e.equals(DefaultVertexFormat.ELEMENT_UV1) && !e.equals(DefaultVertexFormat.ELEMENT_UV2) && !e.equals(DefaultVertexFormat.ELEMENT_NORMAL)
+                    && e.getUsage() != VertexFormatElement.Usage.PADDING) return false;   // (1.20.1: padding is an element)
         return true;
     }
 
@@ -263,8 +265,8 @@ public final class BlockMeshMemo {
                         same = false;
                         int off = (int) (i % vs);
                         what = "?";
-                        for (VertexFormatElement el : f.getElements())
-                            if (off >= f.getOffset(el) && off < f.getOffset(el) + el.byteSize()) what = f.getElementName(el);
+                        for (int k = 0; k < f.getElements().size(); k++)
+                            if (off >= f.getOffset(k) && off < f.getOffset(k) + f.getElements().get(k).getByteSize()) what = f.getElementAttributeNames().get(k);
                     }
             }
             if (!same) {
@@ -305,13 +307,16 @@ public final class BlockMeshMemo {
         Matrix3f nm = memo.nrm.set(pose.last().normal());
         boolean normalIdentity = nm.equals(memo.identity3);
         long dst;
-        if (consumer instanceof BufferBuilder bb && ((BufferBuilderAccessor) (Object) bb).sleep$elementsToFill() == 0) {
+        if (consumer instanceof BufferBuilder bb && ((BufferBuilderAccessor) bb).sleep$elementIndex() == 0) {
+            // 1.20.1: between vertices, whole vertices appended at nextElementByte (as RenderCache's replay)
             BufferBuilderAccessor a = (BufferBuilderAccessor) bb;
-            dst = a.sleep$buffer().reserve(n * vs);
+            a.sleep$ensureCapacity((n + 1) * vs);
+            int at = a.sleep$nextElementByte();
+            dst = MemoryUtil.memAddress0(a.sleep$buffer()) + at;
             MemoryUtil.memCopy(e.mem, dst, (long) n * vs);
             transform(dst, n, f, m, nm, normalIdentity);
             a.sleep$setVertices(a.sleep$vertices() + n);
-            a.sleep$setVertexPointer(dst + (long) (n - 1) * vs);
+            a.sleep$setNextElementByte(at + n * vs);
         } else if (consumer instanceof RecordingBuilder rb) {
             dst = rb.appendRaw(n);
             MemoryUtil.memCopy(e.mem, dst, (long) n * vs);
@@ -327,7 +332,7 @@ public final class BlockMeshMemo {
     }
 
     private static void transform(long base, int n, VertexFormat f, Matrix4f m, Matrix3f nm, boolean normalIdentity) {
-        int vs = f.getVertexSize(), po = f.getOffset(VertexFormatElement.POSITION), no = f.contains(VertexFormatElement.NORMAL) ? f.getOffset(VertexFormatElement.NORMAL) : -1;
+        int vs = f.getVertexSize(), po = RecordingBuilder.offset(f, DefaultVertexFormat.ELEMENT_POSITION), no = RecordingBuilder.offset(f, DefaultVertexFormat.ELEMENT_NORMAL);
         for (int i = 0; i < n; i++) {
             long v = base + (long) i * vs;
             float x = MemoryUtil.memGetFloat(v + po), y = MemoryUtil.memGetFloat(v + po + 4), z = MemoryUtil.memGetFloat(v + po + 8);
@@ -350,33 +355,24 @@ public final class BlockMeshMemo {
         }
     }
 
-    /** already transformed vertices through the consumer's calls */
+    /** already transformed vertices through the consumer's calls (1.20.1: in the format's element order, then endVertex) */
     private static void generic(VertexConsumer vc, long src, int n, VertexFormat f) {
         int vs = f.getVertexSize();
+        var es = f.getElements();
         for (int i = 0; i < n; i++) {
             long v = src + (long) i * vs;
-            int po = f.getOffset(VertexFormatElement.POSITION);
-            vc.addVertex(MemoryUtil.memGetFloat(v + po), MemoryUtil.memGetFloat(v + po + 4), MemoryUtil.memGetFloat(v + po + 8));
-            if (f.contains(VertexFormatElement.COLOR)) {
-                long c = v + f.getOffset(VertexFormatElement.COLOR);
-                vc.setColor(MemoryUtil.memGetByte(c) & 0xFF, MemoryUtil.memGetByte(c + 1) & 0xFF, MemoryUtil.memGetByte(c + 2) & 0xFF, MemoryUtil.memGetByte(c + 3) & 0xFF);
+            for (int k = 0; k < es.size(); k++) {
+                VertexFormatElement el = es.get(k);
+                long u = v + f.getOffset(k);
+                if (el.equals(DefaultVertexFormat.ELEMENT_POSITION)) vc.vertex(MemoryUtil.memGetFloat(u), MemoryUtil.memGetFloat(u + 4), MemoryUtil.memGetFloat(u + 8));
+                else if (el.equals(DefaultVertexFormat.ELEMENT_COLOR))
+                    vc.color(MemoryUtil.memGetByte(u) & 0xFF, MemoryUtil.memGetByte(u + 1) & 0xFF, MemoryUtil.memGetByte(u + 2) & 0xFF, MemoryUtil.memGetByte(u + 3) & 0xFF);
+                else if (el.equals(DefaultVertexFormat.ELEMENT_UV0)) vc.uv(MemoryUtil.memGetFloat(u), MemoryUtil.memGetFloat(u + 4));
+                else if (el.equals(DefaultVertexFormat.ELEMENT_UV1)) vc.overlayCoords(MemoryUtil.memGetShort(u), MemoryUtil.memGetShort(u + 2));
+                else if (el.equals(DefaultVertexFormat.ELEMENT_UV2)) vc.uv2(MemoryUtil.memGetShort(u), MemoryUtil.memGetShort(u + 2));
+                else if (el.equals(DefaultVertexFormat.ELEMENT_NORMAL)) vc.normal(MemoryUtil.memGetByte(u) / 127f, MemoryUtil.memGetByte(u + 1) / 127f, MemoryUtil.memGetByte(u + 2) / 127f);
             }
-            if (f.contains(VertexFormatElement.UV0)) {
-                long u = v + f.getOffset(VertexFormatElement.UV0);
-                vc.setUv(MemoryUtil.memGetFloat(u), MemoryUtil.memGetFloat(u + 4));
-            }
-            if (f.contains(VertexFormatElement.UV1)) {
-                long u = v + f.getOffset(VertexFormatElement.UV1);
-                vc.setUv1(MemoryUtil.memGetShort(u), MemoryUtil.memGetShort(u + 2));
-            }
-            if (f.contains(VertexFormatElement.UV2)) {
-                long u = v + f.getOffset(VertexFormatElement.UV2);
-                vc.setUv2(MemoryUtil.memGetShort(u), MemoryUtil.memGetShort(u + 2));
-            }
-            if (f.contains(VertexFormatElement.NORMAL)) {
-                long u = v + f.getOffset(VertexFormatElement.NORMAL);
-                vc.setNormal(MemoryUtil.memGetByte(u) / 127f, MemoryUtil.memGetByte(u + 1) / 127f, MemoryUtil.memGetByte(u + 2) / 127f);
-            }
+            vc.endVertex();
         }
     }
 

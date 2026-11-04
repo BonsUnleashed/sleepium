@@ -1,8 +1,7 @@
 package dev.lull.optsupport;
 
 import com.mojang.blaze3d.vertex.BufferBuilder;
-import com.mojang.blaze3d.vertex.ByteBufferBuilder;
-import com.mojang.blaze3d.vertex.MeshData;
+import com.mojang.blaze3d.vertex.DefaultVertexFormat;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import com.mojang.blaze3d.vertex.VertexFormat;
@@ -32,7 +31,9 @@ import org.lwjgl.system.MemoryUtil;
  * consumer, the vertices appended with the pose the dispatcher built for this frame (camera-relative translation):
  * one copy plus an affine transform per vertex for a BufferBuilder, the VertexConsumer calls otherwise. The result can
  * differ from vanilla's in float rounding only (vanilla multiplies the translation into the matrix first) — accepted
- * for this engine, unlike every other render change (frame hash).
+ * for this engine, unlike every other render change (frame hash). 1.20.1: the level's pose stack carries the camera
+ * rotation (1.21's is the identity there), so a replay takes the general transform, normals re-quantized after it
+ * (frame: about 2 % of the entities' pixels differ by 1 in a channel); the resident path (PartBatch) is not here yet.
  *
  * <p>Validity: the object's whole state (StateHash: every field of its class chain, hashed once per tick, tick counters
  * left out), the caller's key (synched data and equipment / block state), packed light, overlay, yaw argument; and a
@@ -81,44 +82,17 @@ public final class RenderCache {
         int runN;
         /** the native block, freed when the record is collected (its object left the world) */
         final long[] box = new long[1];
-        /** per segment: first vertex in PartBatch's resident arena (-1: not uploaded); shared with the cleaner */
-        final int[][] res = {new int[4], new int[4]};   // starts, counts
+        // 1.20.1: no resident (VRAM) copies yet - PartBatch's resident arena comes with part batching (stage 3: chunk
+        // multi-draw's arena and the shader patch hook, port-pending.txt); every replay is the CPU one
 
         Rec() {
             long[] b = box;
-            int[][] r = res;
-            java.util.Arrays.fill(r[0], -1);
             CLEANER.register(this, () -> {
                 if (b[0] != 0) MemoryUtil.nmemFree(b[0]);
-                for (int i = 0; i < r[0].length; i++) if (r[0][i] >= 0) PartBatch.RES_FREE.add(new int[] {r[0][i], r[1][i]});
             });
         }
 
-        /** VRAM copies of the old contents released (render thread) before a new recording replaces them. */
-        void releaseResident() {
-            for (int i = 0; i < res[0].length; i++) {
-                if (res[0][i] >= 0) PartBatch.residentRelease(res[0][i], res[1][i]);
-                res[0][i] = -1;
-            }
-        }
-
-        int resident(int i) {
-            if (res[0].length <= i) {
-                int c = Math.max(i + 1, res[0].length * 2);
-                int[] s = java.util.Arrays.copyOf(res[0], c), n = java.util.Arrays.copyOf(res[1], c);
-                java.util.Arrays.fill(s, res[0].length, c, -1);
-                res[0] = s;
-                res[1] = n;
-            }
-            if (res[0][i] < 0) {
-                res[0][i] = PartBatch.residentUpload(mem + offs[i], counts[i]);
-                res[1][i] = counts[i];
-            }
-            return res[0][i];
-        }
-
         void clear() {
-            releaseResident();
             types.clear();
             size = 0;
             runN = 0;
@@ -198,7 +172,7 @@ public final class RenderCache {
         public VertexConsumer getBuffer(RenderType type) {
             RecordingBuilder b = builders.get(type);
             if (b == null) {
-                builders.put(type, b = new RecordingBuilder(type.format()));
+                builders.put(type, b = new RecordingBuilder(type.format(), type.mode()));
                 b.type = type;
             }
             if (used.add(type)) {
@@ -258,16 +232,21 @@ public final class RenderCache {
     static boolean[] usedBytes(VertexFormat f) {
         return USED.computeIfAbsent(f, x -> {
             boolean[] u = new boolean[x.getVertexSize()];
-            for (VertexFormatElement e : x.getElements())
-                for (int k = 0; k < e.byteSize(); k++) u[x.getOffset(e) + k] = true;
+            var es = x.getElements();
+            for (int i = 0; i < es.size(); i++) {
+                VertexFormatElement e = es.get(i);
+                if (e.getUsage() == VertexFormatElement.Usage.PADDING) continue;   // never written (1.21's formats have no padding element)
+                for (int k = 0; k < e.getByteSize(); k++) u[x.getOffset(i) + k] = true;
+            }
             return u;
         });
     }
 
     private static boolean formatSupported(VertexFormat f) {
         for (VertexFormatElement e : f.getElements())
-            if (e != VertexFormatElement.POSITION && e != VertexFormatElement.COLOR && e != VertexFormatElement.UV0 && e != VertexFormatElement.UV1
-                    && e != VertexFormatElement.UV2 && e != VertexFormatElement.NORMAL) return false;
+            if (!e.equals(DefaultVertexFormat.ELEMENT_POSITION) && !e.equals(DefaultVertexFormat.ELEMENT_COLOR) && !e.equals(DefaultVertexFormat.ELEMENT_UV0)
+                    && !e.equals(DefaultVertexFormat.ELEMENT_UV1) && !e.equals(DefaultVertexFormat.ELEMENT_UV2) && !e.equals(DefaultVertexFormat.ELEMENT_NORMAL)
+                    && e.getUsage() != VertexFormatElement.Usage.PADDING) return false;
         return true;
     }
 
@@ -282,7 +261,7 @@ public final class RenderCache {
     /** Vertices started in the real source: a renderer that draws there past its recorder shows up as a change. */
     private static long realVertices() {
         long n = 0;
-        for (BufferBuilder b : ((dev.lull.opt.BufferSourceAccessor) real).sleep$started().values()) n += ((BufferBuilderAccessor) b).sleep$vertices();
+        for (BufferBuilder b : ((dev.lull.opt.BufferSourceAccessor) real).sleep$started()) n += ((BufferBuilderAccessor) b).sleep$vertices();
         return n + ownBuildersUsed(real);
     }
 
@@ -392,7 +371,7 @@ public final class RenderCache {
     /** Vertices started in a buffer source (a memo checks that a recording drew nothing but its parts). */
     public static long vertices(MultiBufferSource.BufferSource source) {
         long n = 0;
-        for (BufferBuilder b : ((dev.lull.opt.BufferSourceAccessor) source).sleep$started().values()) n += ((BufferBuilderAccessor) b).sleep$vertices();
+        for (BufferBuilder b : ((dev.lull.opt.BufferSourceAccessor) source).sleep$started()) n += ((BufferBuilderAccessor) b).sleep$vertices();
         return n;
     }
 
@@ -658,31 +637,22 @@ public final class RenderCache {
             if (TIME) tGetBuffer += tb - ta;
             long src = rec.mem + rec.offs[i];
             int n = rec.counts[i];
-            boolean resident = !asIs && normalIdentity && rec != PROBE && n % 4 == 0 && PartBatch.residentOk(t, vc, buffers);
             long tc = TIME ? System.nanoTime() : 0;
-            if (TIME) tResidentOk += tc - tb;
-            if (resident) {
-                PartBatch.queueResident(t, (BufferBuilder) vc, rec.resident(i), n, M);
-                if (TIME) {
-                    tQueue += System.nanoTime() - tc;
-                    long[] c = CPU_TYPES.computeIfAbsent(t, k -> new long[4]);
-                    c[2]++;
-                    c[3] += n;
-                }
-                replayedVertices += n;
-                residentSegments++;
-                continue;
-            }
+            // (1.20.1: PartBatch's resident path - segments drawn from VRAM - is not here yet: part batching is pending)
             VertexFormat f = t.format();
-            if (vc instanceof BufferBuilder bb && ((BufferBuilderAccessor) bb).sleep$format() == f && ((BufferBuilderAccessor) bb).sleep$mode() == t.mode()
-                    && ((BufferBuilderAccessor) (Object) bb).sleep$elementsToFill() == 0) {
+            // a BufferBuilder building this format and mode, between vertices (1.20.1: its element cursor at the first
+            // element): one copy, as its own putBulkData(ByteBuffer) appends whole vertices
+            if (vc instanceof BufferBuilder bb && ((BufferBuilderAccessor) bb).sleep$building() && ((BufferBuilderAccessor) bb).sleep$format() == f
+                    && ((BufferBuilderAccessor) bb).sleep$mode() == t.mode() && ((BufferBuilderAccessor) bb).sleep$elementIndex() == 0) {
                 BufferBuilderAccessor a = (BufferBuilderAccessor) bb;
                 int vs = f.getVertexSize();
-                long dst = a.sleep$buffer().reserve(n * vs);
+                a.sleep$ensureCapacity((n + 1) * vs);   // room for one more vertex after them, as endVertex keeps it
+                int at = a.sleep$nextElementByte();
+                long dst = MemoryUtil.memAddress0(a.sleep$buffer()) + at;
                 MemoryUtil.memCopy(src, dst, (long) n * vs);
                 if (!asIs) transform(dst, n, f, normalIdentity);
                 a.sleep$setVertices(a.sleep$vertices() + n);
-                a.sleep$setVertexPointer(dst + (long) (n - 1) * vs);
+                a.sleep$setNextElementByte(at + n * vs);
                 if (TIME) {
                     tCopy += System.nanoTime() - tc;
                     long[] c = CPU_TYPES.computeIfAbsent(t, k -> new long[4]);
@@ -700,7 +670,7 @@ public final class RenderCache {
     private static final int[] TAGS_SAVED = new int[3];
 
     private static void transform(long base, int n, VertexFormat f, boolean normalIdentity) {
-        int vs = f.getVertexSize(), po = f.getOffset(VertexFormatElement.POSITION), no = f.contains(VertexFormatElement.NORMAL) ? f.getOffset(VertexFormatElement.NORMAL) : -1;
+        int vs = f.getVertexSize(), po = RecordingBuilder.offset(f, DefaultVertexFormat.ELEMENT_POSITION), no = RecordingBuilder.offset(f, DefaultVertexFormat.ELEMENT_NORMAL);
         if (normalIdentity && M.m00() == 1 && M.m11() == 1 && M.m22() == 1 && M.m01() == 0 && M.m02() == 0 && M.m10() == 0 && M.m12() == 0 && M.m20() == 0
                 && M.m21() == 0 && M.m03() == 0 && M.m13() == 0 && M.m23() == 0 && M.m33() == 1) {
             // the usual pose here: the camera-relative translation only (the same sums the general form gives)
@@ -736,38 +706,38 @@ public final class RenderCache {
         }
     }
 
-    /** Any other consumer (outline, glint wrappers of a mod): the vertices through the VertexConsumer calls. */
+    /**
+     * Any other consumer (outline, glint wrappers of a mod): the vertices through the VertexConsumer calls, in the
+     * format's element order (1.20.1's consumers fill a vertex element by element: a call out of order is lost).
+     */
     private static void generic(VertexConsumer vc, long src, int n, VertexFormat f, Rec rec, int seg) {
         int vs = f.getVertexSize();
+        var es = f.getElements();
         int k = rec.runFirst[seg], kEnd = k + rec.runCount[seg];   // VertexTags runs of this segment
         for (int i = 0; i < n; i++) {
             if (k < kEnd && rec.runAt[k] == i) VertexTags.write(rec.runTag, 3 * k++);
             long v = src + (long) i * vs;
-            int po = f.getOffset(VertexFormatElement.POSITION);
-            float x = MemoryUtil.memGetFloat(v + po), y = MemoryUtil.memGetFloat(v + po + 4), z = MemoryUtil.memGetFloat(v + po + 8);
-            vc.addVertex(M.m00() * x + M.m10() * y + M.m20() * z + M.m30(), M.m01() * x + M.m11() * y + M.m21() * z + M.m31(),
-                    M.m02() * x + M.m12() * y + M.m22() * z + M.m32());
-            if (f.contains(VertexFormatElement.COLOR)) {
-                long c = v + f.getOffset(VertexFormatElement.COLOR);
-                vc.setColor(MemoryUtil.memGetByte(c) & 0xFF, MemoryUtil.memGetByte(c + 1) & 0xFF, MemoryUtil.memGetByte(c + 2) & 0xFF, MemoryUtil.memGetByte(c + 3) & 0xFF);
+            for (int e = 0; e < es.size(); e++) {
+                VertexFormatElement el = es.get(e);
+                long u = v + f.getOffset(e);
+                if (el.equals(DefaultVertexFormat.ELEMENT_POSITION)) {
+                    float x = MemoryUtil.memGetFloat(u), y = MemoryUtil.memGetFloat(u + 4), z = MemoryUtil.memGetFloat(u + 8);
+                    vc.vertex(M.m00() * x + M.m10() * y + M.m20() * z + M.m30(), M.m01() * x + M.m11() * y + M.m21() * z + M.m31(),
+                            M.m02() * x + M.m12() * y + M.m22() * z + M.m32());
+                } else if (el.equals(DefaultVertexFormat.ELEMENT_COLOR)) {
+                    vc.color(MemoryUtil.memGetByte(u) & 0xFF, MemoryUtil.memGetByte(u + 1) & 0xFF, MemoryUtil.memGetByte(u + 2) & 0xFF, MemoryUtil.memGetByte(u + 3) & 0xFF);
+                } else if (el.equals(DefaultVertexFormat.ELEMENT_UV0)) {
+                    vc.uv(MemoryUtil.memGetFloat(u), MemoryUtil.memGetFloat(u + 4));
+                } else if (el.equals(DefaultVertexFormat.ELEMENT_UV1)) {
+                    vc.overlayCoords(MemoryUtil.memGetShort(u), MemoryUtil.memGetShort(u + 2));
+                } else if (el.equals(DefaultVertexFormat.ELEMENT_UV2)) {
+                    vc.uv2(MemoryUtil.memGetShort(u), MemoryUtil.memGetShort(u + 2));
+                } else if (el.equals(DefaultVertexFormat.ELEMENT_NORMAL)) {
+                    float nx = MemoryUtil.memGetByte(u) / 127f, ny = MemoryUtil.memGetByte(u + 1) / 127f, nz = MemoryUtil.memGetByte(u + 2) / 127f;
+                    vc.normal(N.m00() * nx + N.m10() * ny + N.m20() * nz, N.m01() * nx + N.m11() * ny + N.m21() * nz, N.m02() * nx + N.m12() * ny + N.m22() * nz);
+                }
             }
-            if (f.contains(VertexFormatElement.UV0)) {
-                long u = v + f.getOffset(VertexFormatElement.UV0);
-                vc.setUv(MemoryUtil.memGetFloat(u), MemoryUtil.memGetFloat(u + 4));
-            }
-            if (f.contains(VertexFormatElement.UV1)) {
-                long u = v + f.getOffset(VertexFormatElement.UV1);
-                vc.setUv1(MemoryUtil.memGetShort(u), MemoryUtil.memGetShort(u + 2));
-            }
-            if (f.contains(VertexFormatElement.UV2)) {
-                long u = v + f.getOffset(VertexFormatElement.UV2);
-                vc.setUv2(MemoryUtil.memGetShort(u), MemoryUtil.memGetShort(u + 2));
-            }
-            if (f.contains(VertexFormatElement.NORMAL)) {
-                long u = v + f.getOffset(VertexFormatElement.NORMAL);
-                float nx = MemoryUtil.memGetByte(u) / 127f, ny = MemoryUtil.memGetByte(u + 1) / 127f, nz = MemoryUtil.memGetByte(u + 2) / 127f;
-                vc.setNormal(N.m00() * nx + N.m10() * ny + N.m20() * nz, N.m01() * nx + N.m11() * ny + N.m21() * nz, N.m02() * nx + N.m12() * ny + N.m22() * nz);
-            }
+            vc.endVertex();
         }
     }
 

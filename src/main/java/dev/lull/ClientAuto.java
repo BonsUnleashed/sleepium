@@ -177,7 +177,8 @@ public final class ClientAuto {
 
     private static void startMeasuring() {
         log("measuring started");   // the marker external profilers wait for (uprof_run.sh)
-        // DrawStats and the render cache's clock: the renderer's parts, not on 1.20.1 yet (stage 3, port-pending.txt)
+        // (DrawStats: the renderer's measurement, not on 1.20.1 yet - stage 3, port-pending.txt)
+        dev.lull.optsupport.RenderCache.timeReset();
         if (SERVER_PROBE) command(Minecraft.getInstance(), "sleep run 30 " + LABEL + "-srv");
         if (SERVER != null && !"false".equals(System.getProperty("sleep.clientAuto.netBench"))) command(Minecraft.getInstance(), "sleep net " + (STEADY ? Integer.getInteger("sleep.clientAuto.steadySeconds", 30) : 40) + " " + LABEL);
         if (JFR != null) {

@@ -16,6 +16,7 @@ import org.spongepowered.asm.mixin.injection.Redirect;
  * reusable array iterator per part instead of a new iterator per call (the map's values iterator, the list iterator).
  * Same elements, same order: the arrays are taken from the map / list (and taken again if their size changes). A part
  * never renders itself recursively and is used by one thread at a time, so its iterator is never shared.
+ * (1.20.1: the render overload with the colour as four floats.)
  */
 @Mixin(ModelPart.class)
 public abstract class ModelPartIterMixin {
@@ -26,7 +27,7 @@ public abstract class ModelPartIterMixin {
             sleep$cubeIter = new dev.lull.optsupport.MixinHelpers.ArrayIter();
     @Unique private Object[] sleep$children, sleep$cubes;
 
-    @Redirect(method = "render(Lcom/mojang/blaze3d/vertex/PoseStack;Lcom/mojang/blaze3d/vertex/VertexConsumer;III)V", at = @At(value = "INVOKE",
+    @Redirect(method = "render(Lcom/mojang/blaze3d/vertex/PoseStack;Lcom/mojang/blaze3d/vertex/VertexConsumer;IIFFFF)V", at = @At(value = "INVOKE",
             target = "Ljava/util/Collection;iterator()Ljava/util/Iterator;"))
     private Iterator<?> sleep$children(java.util.Collection<?> values) {
         Object[] a = sleep$children;

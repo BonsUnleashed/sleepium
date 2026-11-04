@@ -29,11 +29,14 @@ public final class ClientCounters {
     private ClientCounters() {}
 
     public static String report() {
-        // 1.20.1: the event sites' report (the event bus step) and the renderer's (ChunkMultiDraw, QuadSort, EntityBatch,
-        // RenderCache, ParallelRender, PartBatch / Materials, SectionLists, BlockMeshMemo, LightVolumes: stage 3) come
-        // over with their parts (port-pending.txt)
+        // 1.20.1: the event sites' report (the event bus step) and the rest of the renderer's (ChunkMultiDraw, QuadSort,
+        // PartBatch / Materials, SectionLists, LightVolumes: stage 3) come over with their parts (port-pending.txt)
         return String.format(Locale.ROOT, "client opts: ambient biome lookups skipped %d, sampler locations from cache %d; collision memo hits %d, misses %d",
-                biomeSkips, samplerHits, BlockCollisionMemo.hits, BlockCollisionMemo.misses) + extra()
+                biomeSkips, samplerHits, BlockCollisionMemo.hits, BlockCollisionMemo.misses)
+                + (Boolean.getBoolean("lab.opt.EntityBatchMixin") ? "; " + EntityBatch.report() : "")
+                + (Boolean.getBoolean("lab.opt.RenderCacheMixin") ? "; " + RenderCache.report() : "")
+                + (Boolean.getBoolean("lab.opt.ParallelEntitiesMixin") ? "; " + ParallelRender.report() : "") + extra()
+                + (Boolean.getBoolean("lab.opt.BlockMeshMemoMixin") ? "; " + BlockMeshMemo.report() : "")
                 + (Boolean.getBoolean("lab.opt.ChunkTickMemoMixin") ? "; chunk tick memo: hits " + ChunkTickMemo.hits + ", misses " + ChunkTickMemo.misses + ", epoch " + ChunkTickMemo.epoch : "")
                 + (Boolean.getBoolean("lab.opt.ClientLightAsyncMixin") ? "; " + ClientLightAsync.report() + "; " + FrameReactor.report() : "")
                 + (Boolean.getBoolean("lab.opt.UniformDedupeMixin") ? "; uniform uploads sent " + uniformsSent + ", skipped (same value) " + uniformsSkipped : "")

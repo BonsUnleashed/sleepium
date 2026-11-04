@@ -20,7 +20,6 @@ import net.minecraft.client.renderer.entity.EntityRenderer;
 import net.minecraft.client.renderer.entity.EntityRendererProvider;
 import net.minecraft.client.renderer.entity.EntityRenderers;
 import net.minecraft.client.renderer.entity.ItemRenderer;
-import net.minecraft.client.resources.PlayerSkin;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
@@ -79,11 +78,7 @@ public final class ParallelRender {
         return j == null ? null : j.locals;
     }
 
-    /** The current job's part records (null outside jobs, and in verify mode: the bytes are compared there). */
-    public static PartBatch.JobParts jobParts() {
-        Job j = CURRENT.get();
-        return j == null || VERIFY ? null : j.parts;
-    }
+    // (1.21.1: jobParts() - a job's GeckoLib bone records for PartBatch; part batching is not on 1.20.1 yet)
 
     /** true while ParallelRender builds its renderer sets: objects made now belong to a worker set */
     public static volatile boolean buildingSets;
@@ -128,7 +123,8 @@ public final class ParallelRender {
         /** the set's recorder: a set serves one job at a time, and finish copies into the job's record */
         final RenderCache.Recorder recorder = new RenderCache.Recorder();
         final Map<EntityType<?>, EntityRenderer<?>> renderers;
-        final Map<PlayerSkin.Model, EntityRenderer<? extends net.minecraft.world.entity.player.Player>> players;
+        /** 1.20.1: player renderers keyed by skin model name ("default" / "slim") */
+        final Map<String, EntityRenderer<? extends net.minecraft.world.entity.player.Player>> players;
 
         Set(int epoch) {
             this.epoch = epoch;
@@ -143,7 +139,8 @@ public final class ParallelRender {
             EntityRendererProvider.Context ctx = new EntityRendererProvider.Context(d, ir, mc.getBlockRenderer(), hand, rm, mc.getEntityModels(), mc.font);
             renderers = EntityRenderers.createEntityRenderers(ctx);
             players = EntityRenderers.createPlayerRenderers(ctx);
-            net.neoforged.fml.ModLoader.postEvent(new net.neoforged.neoforge.client.event.EntityRenderersEvent.AddLayers(renderers, players, ctx));
+            // as EntityRenderDispatcher.onResourceManagerReload posts it (mods add their layers to these renderers too)
+            net.minecraftforge.fml.ModLoader.get().postEvent(new net.minecraftforge.client.event.EntityRenderersEvent.AddLayers(renderers, players, ctx));
         }
 
         @SuppressWarnings("unchecked")
@@ -178,13 +175,17 @@ public final class ParallelRender {
         double camX, camY, camZ;
         float pt;
         PoseStack pose;
+        /**
+         * 1.20.1: the loop's pose at enqueue (renderLevel's stack carries the camera rotation; 1.21's is the identity
+         * there), copied on the render thread: a job starts from it as renderEntity would
+         */
+        final org.joml.Matrix4f basePose = new org.joml.Matrix4f();
+        final org.joml.Matrix3f baseNormal = new org.joml.Matrix3f();
         MultiBufferSource buffers;
         boolean parallel;
         volatile boolean done, ok;
         final RenderCache.Rec out = new RenderCache.Rec();
         final List<com.mojang.blaze3d.pipeline.RenderCall> calls = new ArrayList<>();
-        /** records of model parts drawn from VRAM (GeckoLib bones), queued at the merge */
-        final PartBatch.JobParts parts = new PartBatch.JobParts();
         final java.util.IdentityHashMap<Object, Object> locals = new java.util.IdentityHashMap<>();
 
         /** worker or render thread: whoever claims the job first renders it */
@@ -197,7 +198,6 @@ public final class ParallelRender {
             Set s = SETS.poll();
             calls.clear();
             locals.clear();
-            parts.clear();
             CURRENT.set(this);
             try {
                 ok = s != null && render(s, this);
@@ -217,10 +217,7 @@ public final class ParallelRender {
                 if (type != null) learnFailure(type, t);
             } finally {
                 CURRENT.remove();
-                if (!ok) {   // the render thread renders it again, side effects included
-                    calls.clear();
-                    parts.clear();
-                }
+                if (!ok) calls.clear();   // the render thread renders it again, side effects included
                 if (s != null) SETS.add(s);
                 done = true;
                 synchronized (this) {
@@ -305,6 +302,8 @@ public final class ParallelRender {
         j.camZ = camZ;
         j.pt = pt;
         j.pose = pose;
+        j.basePose.set(pose.last().pose());
+        j.baseNormal.set(pose.last().normal());
         j.buffers = buffers;
         j.done = false;
         j.ok = false;
@@ -380,9 +379,8 @@ public final class ParallelRender {
     }
 
     private static boolean eligible(Entity e, MultiBufferSource buffers) {
-        // a shaderpack: the ids its vertices carry come from render-thread state (ShaderIds)
         if (!DISPATCH_UNTOUCHED) return no(0);
-        if (dev.lull.shaders.ShaderPipeline.active) return no(1);
+        // (1.21.1: no(1) under sleep's shaderpack pipeline - its vertex ids are render-thread state; not on 1.20.1 yet)
         if (!WORKER_REFUSED.isEmpty() && WORKER_REFUSED.contains(e.getType())) return no(2);
         Minecraft mc = Minecraft.getInstance();
         EntityRenderDispatcher d = mc.getEntityRenderDispatcher();
@@ -413,15 +411,6 @@ public final class ParallelRender {
                     }
                 }
                 j.await();
-                if (j.ok && j.parts.size() > 0) {
-                    long t0 = System.nanoTime();
-                    boolean merged = PartBatch.mergeJob(j.parts, j.buffers);
-                    mergeNanos += System.nanoTime() - t0;
-                    if (!merged) {
-                        j.ok = false;   // a record's type is not a batch here: the object the vanilla way, without the job's side effects
-                        j.calls.clear();
-                    }
-                }
                 if (j.ok) {
                     if (VERIFY) verify(inv, j);
                     for (int c = 0; c < j.calls.size(); c++) j.calls.get(c).execute();   // the job's deferred side effects, in place
@@ -446,7 +435,10 @@ public final class ParallelRender {
     /** The same entity rendered on the render thread with the vanilla renderers, compared byte for byte. */
     private static void verify(LevelRendererInvoker inv, Job j) {
         VERIFY_REC.reset();
-        inv.sleep$renderEntity(j.entity, j.camX, j.camY, j.camZ, j.pt, new PoseStack(), VERIFY_REC);
+        PoseStack ps = new PoseStack();
+        ps.last().pose().set(j.basePose);
+        ps.last().normal().set(j.baseNormal);
+        inv.sleep$renderEntity(j.entity, j.camX, j.camY, j.camZ, j.pt, ps, VERIFY_REC);
         VERIFY_REC.finish(VERIFY_OUT);
         verified++;
         if (!VERIFY_OUT.sameAs(j.out)) {
@@ -473,10 +465,6 @@ public final class ParallelRender {
     /** renderEntity + EntityRenderDispatcher.render (without hitboxes), with a worker's renderers. */
     private static boolean render(Set s, Job j) {
         Entity e = j.entity;
-        long coat = Coatings.of(e);
-        j.parts.coat = Coatings.word0(coat);
-        j.parts.coat2 = Coatings.word1(coat);
-        j.parts.height = Coatings.word2(e, coat);   // (the height and the blows' marks)
         float pt = j.pt;
         EntityRenderer<? super Entity> r = s.renderer(e);
         if (r == null) return false;
@@ -489,19 +477,20 @@ public final class ParallelRender {
         rec.reset();
         PoseStack pose = s.pose;   // one per renderer set (a set serves one job at a time): its pose pool persists
         pose.setIdentity();
+        pose.last().pose().set(j.basePose);
+        pose.last().normal().set(j.baseNormal);
         Vec3 off = r.getRenderOffset(e, pt);
         pose.pushPose();
         pose.translate(x + off.x(), y + off.y(), z + off.z());
         r.render(e, yaw, pt, pose, rec, light);
         pose.translate(-off.x(), -off.y(), -off.z());
         EntityRenderDispatcher d = Minecraft.getInstance().getEntityRenderDispatcher();
-        if (d.options.entityShadows().get() && ((EntityRenderDispatcherInvoker) d).sleep$shouldRenderShadow() && !e.isInvisible()) {
-            float f = ((dev.lull.opt.EntityRendererAccessor) r).sleep$shadowRadius(e);
-            if (f > 0.0F) {
-                double d1 = d.distanceToSqr(e.getX(), e.getY(), e.getZ());
-                float f1 = (float) ((1.0 - d1 / 256.0) * (double) ((dev.lull.opt.EntityRendererAccessor) r).sleep$shadowStrength());
-                if (f1 > 0.0F) EntityRenderDispatcherInvoker.sleep$renderShadow(pose, rec, e, f1, pt, e.level(), Math.min(f, 32.0F));
-            }
+        // 1.20.1: the renderer's shadowRadius field (1.21: getShadowRadius(entity)), tested before the distance
+        float radius = ((dev.lull.opt.EntityRendererAccessor) r).sleep$shadowRadius();
+        if (d.options.entityShadows().get() && ((EntityRenderDispatcherInvoker) d).sleep$shouldRenderShadow() && radius > 0.0F && !e.isInvisible()) {
+            double d1 = d.distanceToSqr(e.getX(), e.getY(), e.getZ());
+            float f1 = (float) ((1.0 - d1 / 256.0) * (double) ((dev.lull.opt.EntityRendererAccessor) r).sleep$shadowStrength());
+            if (f1 > 0.0F) EntityRenderDispatcherInvoker.sleep$renderShadow(pose, rec, e, f1, pt, e.level(), Math.min(radius, 32.0F));
         }
         pose.popPose();
         if (rec.unsupported) return false;
@@ -515,7 +504,7 @@ public final class ParallelRender {
             for (int i = 0; i < WHY_N.length; i++) if (WHY_N[i] > 0) w.append(' ').append(WHY_NAMES[i]).append(' ').append(WHY_N[i]).append(';');
             System.out.println(w);
         }
-        return String.format(java.util.Locale.ROOT, "parallel render: %d workers, jobs %d, on workers %d (render thread helped %d), on the render thread %d, failed %d, refused %d, journaled calls %d, part records merged in %.0f ms%s", THREADS, jobs, parallel,
-                helped, sequential, failed, refused, journaled, mergeNanos / 1e6, (WORKER_REFUSED.isEmpty() ? "" : ", kept on the render thread " + WORKER_REFUSED) + (VERIFY ? ", verified " + verified + ", mismatches " + mismatches : ""));
+        return String.format(java.util.Locale.ROOT, "parallel render: %d workers, jobs %d, on workers %d (render thread helped %d), on the render thread %d, failed %d, refused %d, journaled calls %d%s", THREADS, jobs, parallel,
+                helped, sequential, failed, refused, journaled, (WORKER_REFUSED.isEmpty() ? "" : ", kept on the render thread " + WORKER_REFUSED) + (VERIFY ? ", verified " + verified + ", mismatches " + mismatches : ""));
     }
 }

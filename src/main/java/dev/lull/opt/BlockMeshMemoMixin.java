@@ -10,7 +10,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.level.BlockAndTintGetter;
 import net.minecraft.world.level.block.state.BlockState;
-import net.neoforged.neoforge.client.model.data.ModelData;
+import net.minecraftforge.client.model.data.ModelData;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Redirect;
@@ -18,14 +18,15 @@ import org.spongepowered.asm.mixin.injection.Redirect;
 /**
  * exp/block-mesh-memo (client): tesselateBlock's AO / flat tesselation against the client level served from
  * BlockMeshMemo while the section around the block is unchanged (pistons' moving blocks, falling blocks, …). The
- * model offset translate before these calls stays vanilla's.
+ * model offset translate before these calls stays vanilla's. (1.20.1: these are Forge's ModelData overloads, which
+ * have no SRG names: not remapped.)
  */
 @Mixin(ModelBlockRenderer.class)
 public abstract class BlockMeshMemoMixin {
-    private static final String TESSELATE = "tesselateBlock(Lnet/minecraft/world/level/BlockAndTintGetter;Lnet/minecraft/client/resources/model/BakedModel;Lnet/minecraft/world/level/block/state/BlockState;Lnet/minecraft/core/BlockPos;Lcom/mojang/blaze3d/vertex/PoseStack;Lcom/mojang/blaze3d/vertex/VertexConsumer;ZLnet/minecraft/util/RandomSource;JILnet/neoforged/neoforge/client/model/data/ModelData;Lnet/minecraft/client/renderer/RenderType;)V";
-    private static final String ARGS = "(Lnet/minecraft/world/level/BlockAndTintGetter;Lnet/minecraft/client/resources/model/BakedModel;Lnet/minecraft/world/level/block/state/BlockState;Lnet/minecraft/core/BlockPos;Lcom/mojang/blaze3d/vertex/PoseStack;Lcom/mojang/blaze3d/vertex/VertexConsumer;ZLnet/minecraft/util/RandomSource;JILnet/neoforged/neoforge/client/model/data/ModelData;Lnet/minecraft/client/renderer/RenderType;)V";
+    private static final String TESSELATE = "tesselateBlock(Lnet/minecraft/world/level/BlockAndTintGetter;Lnet/minecraft/client/resources/model/BakedModel;Lnet/minecraft/world/level/block/state/BlockState;Lnet/minecraft/core/BlockPos;Lcom/mojang/blaze3d/vertex/PoseStack;Lcom/mojang/blaze3d/vertex/VertexConsumer;ZLnet/minecraft/util/RandomSource;JILnet/minecraftforge/client/model/data/ModelData;Lnet/minecraft/client/renderer/RenderType;)V";
+    private static final String ARGS = "(Lnet/minecraft/world/level/BlockAndTintGetter;Lnet/minecraft/client/resources/model/BakedModel;Lnet/minecraft/world/level/block/state/BlockState;Lnet/minecraft/core/BlockPos;Lcom/mojang/blaze3d/vertex/PoseStack;Lcom/mojang/blaze3d/vertex/VertexConsumer;ZLnet/minecraft/util/RandomSource;JILnet/minecraftforge/client/model/data/ModelData;Lnet/minecraft/client/renderer/RenderType;)V";
 
-    @Redirect(method = TESSELATE, at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/block/ModelBlockRenderer;tesselateWithAO" + ARGS))
+    @Redirect(method = TESSELATE, at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/block/ModelBlockRenderer;tesselateWithAO" + ARGS), remap = false)
     private void sleep$ao(ModelBlockRenderer self, BlockAndTintGetter level, BakedModel model, BlockState state, BlockPos pos, PoseStack pose, VertexConsumer vc,
                           boolean checkSides, RandomSource random, long seed, int overlay, ModelData data, RenderType rt) {
         int r = BlockMeshMemo.begin(level, model, state, pos, pose, vc, checkSides, seed, overlay, data, rt, true);
@@ -43,7 +44,7 @@ public abstract class BlockMeshMemoMixin {
         BlockMeshMemo.end(pose, vc);
     }
 
-    @Redirect(method = TESSELATE, at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/block/ModelBlockRenderer;tesselateWithoutAO" + ARGS))
+    @Redirect(method = TESSELATE, at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/block/ModelBlockRenderer;tesselateWithoutAO" + ARGS), remap = false)
     private void sleep$flat(ModelBlockRenderer self, BlockAndTintGetter level, BakedModel model, BlockState state, BlockPos pos, PoseStack pose, VertexConsumer vc,
                             boolean checkSides, RandomSource random, long seed, int overlay, ModelData data, RenderType rt) {
         int r = BlockMeshMemo.begin(level, model, state, pos, pose, vc, checkSides, seed, overlay, data, rt, false);

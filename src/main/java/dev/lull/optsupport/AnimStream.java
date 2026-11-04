@@ -9,8 +9,7 @@ import java.util.HashMap;
 import java.util.Map;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.packs.resources.ResourceManager;
-import software.bernie.geckolib.animation.Animation;
-import software.bernie.geckolib.loading.json.typeadapter.KeyFramesAdapter;
+import software.bernie.geckolib.core.animation.Animation;
 import software.bernie.geckolib.loading.object.BakedAnimations;
 
 /**
@@ -58,7 +57,7 @@ public final class AnimStream {
                     String name = r.nextName();
                     JsonObject one = new JsonObject();
                     one.add(name, JsonParser.parseReader(r));
-                    BakedAnimations b = KeyFramesAdapter.GEO_GSON.fromJson(one, BakedAnimations.class);
+                    BakedAnimations b = software.bernie.geckolib.util.JsonUtil.GEO_GSON.fromJson(one, BakedAnimations.class);
                     if (b != null) out.putAll(b.animations());
                     animations++;
                 }
