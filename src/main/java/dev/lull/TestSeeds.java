@@ -17,6 +17,7 @@ public final class TestSeeds {
 
     public static final boolean ON = Boolean.getBoolean("sleep.seedEntities");
     private static final AtomicLong NEXT = new AtomicLong();
+    private static final int ID_BASE = 1_000_000;
 
     /** the seed of the next object made with a clock-seeded random */
     public static long next() {
@@ -34,6 +35,13 @@ public final class TestSeeds {
         sensor.setSeed(91);
         dev.lull.mixin.SeedMthAccessor.sleep$random().setSeed(92);
         NEXT.set(0);
+        // entities are seeded from their id (SeedEntitiesMixin) and some stagger work by it ((tickCount + id) % n): the
+        // ids made before the scene vary per run (the unfrozen ticks after start spawn animals), so the scene's start at a
+        // fixed base, above every id made so far
+        java.util.concurrent.atomic.AtomicInteger ids = dev.lull.mixin.SeedEntityCounterAccessor.sleep$counter();
+        if (ids.get() >= ID_BASE) System.out.println("[sleep/test] entity ids past the base (" + ids.get() + "): not reset");
+        else ids.set(ID_BASE);
+        ((dev.lull.mixin.SeedServerTickAccessor) server).sleep$setTickCount(1_000_000);   // goal ticks by (tick count + id) % 2
         long k = 93;
         for (String spec : STATICS) seedStatic(spec, k++);
     }
@@ -68,5 +76,31 @@ public final class TestSeeds {
         } catch (ReflectiveOperationException | RuntimeException e) {
             System.out.println("[sleep/test] static random " + spec + " not seeded: " + e);
         }
+    }
+
+    /**
+     * /sleep settle (after a scene is built, before it steps): the light engine's work done. The scene's blocks queue
+     * light updates for the light thread; mobs choose where to walk by light (getWalkTargetValue), so updates still
+     * running in the first ticks made a scene's mobs walk per run. Waits until every level's light engine has no queued
+     * task and no pending update for 200 ms in a row (5 s at most): the number of quiet polls it took is printed.
+     */
+    public static String settleLight(MinecraftServer server) throws ReflectiveOperationException, InterruptedException {
+        java.lang.reflect.Field tasks = net.minecraft.server.level.ThreadedLevelLightEngine.class.getDeclaredField(
+                Names.field("net/minecraft/server/level/ThreadedLevelLightEngine", "lightTasks"));
+        tasks.setAccessible(true);
+        long t0 = System.nanoTime();
+        int quiet = 0, polls = 0;
+        while (quiet < 20 && System.nanoTime() - t0 < 5_000_000_000L) {
+            boolean busy = false;
+            for (var lv : server.getAllLevels()) {
+                var le = lv.getChunkSource().getLightEngine();
+                le.tryScheduleUpdate();
+                busy |= !((java.util.Collection<?>) tasks.get(le)).isEmpty() || le.hasLightWork();
+            }
+            quiet = busy ? 0 : quiet + 1;
+            polls++;
+            Thread.sleep(10);
+        }
+        return "light settled: " + (quiet >= 20 ? "yes" : "NO (still busy after 5 s)") + ", " + polls + " polls";
     }
 }

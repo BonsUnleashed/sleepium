@@ -24,8 +24,18 @@ public final class DeepHash {
 
     private static final Map<Class<?>, Field[]> FIELDS = new HashMap<>();
 
+    /** -Dsleep.deepHashDump=true: of() also lists each field's value hash (fields()), for a hash that differs */
+    private static final boolean DUMP = Boolean.getBoolean("sleep.deepHashDump");
+    private static final StringBuilder LAST = new StringBuilder();
+
+    /** the field values of the last of() (with sleep.deepHashDump), else "" */
+    public static String lastFields() {
+        return LAST.toString();
+    }
+
     public static long of(Entity e) {
         long h = 17;
+        LAST.setLength(0);
         for (Field f : fields(e.getClass())) {
             String n = Names.official(f.getName());
             // per run: ids, UUIDs, Math.random() in LivingEntity's constructor (cosmetic)
@@ -38,6 +48,7 @@ public final class DeepHash {
                         : t == short.class ? f.getShort(e) : t == byte.class ? f.getByte(e) : t == float.class ? Float.floatToRawIntBits(f.getFloat(e))
                         : t == double.class ? Double.doubleToRawLongBits(f.getDouble(e)) : t == char.class ? f.getChar(e) : fp(f.get(e), 0);
                 h = h * 1_000_003L + n.hashCode() * 31L + v;
+                if (DUMP) LAST.append(' ').append(n).append('=').append(Long.toHexString(v));
             } catch (IllegalAccessException ex) {
                 h = h * 31 + 1;
             }

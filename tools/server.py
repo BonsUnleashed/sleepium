@@ -4,6 +4,8 @@
         s.wait_for(r'Done \\(')
         s.cmd('tick freeze')
         line = s.ask('time query gametime', r'The time is (\\d+)')
+
+MC_PORT gives a second server (another copy of the project, its own run folder) its own port.
 """
 import os
 import re
@@ -21,6 +23,13 @@ PROPS = {
     'level-type': 'minecraft\\:flat', 'level-seed': '20260924', 'online-mode': 'false', 'spawn-protection': '0',
     'view-distance': '8', 'simulation-distance': '8', 'sync-chunk-writes': 'false', 'max-tick-time': '-1',
     'pause-when-empty-seconds': '-1', 'spawn-monsters': 'false',
+    # vanilla's classic flat layers (grass at y -61) with no structures: without settings 1.20.1 falls back to the
+    # preset with villages, whose villagers - made on worldgen threads while a scene runs - draw from the static
+    # random every brain sensor is timed from (Sensor.RANDOM), so a scene's villagers scanned at per-run times
+    'generator-settings': '{"layers":[{"block":"minecraft:bedrock","height":1},{"block":"minecraft:dirt","height":2},'
+                          '{"block":"minecraft:grass_block","height":1}],"biome":"minecraft:plains","structure_overrides":[],'
+                          '"lakes":false,"features":false}',
+    'server-port': os.environ.get('MC_PORT', '25565'),   # a second server (another copy) beside a running suite
 }
 
 

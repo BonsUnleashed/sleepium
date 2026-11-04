@@ -61,6 +61,7 @@ for mode in ((a.only,) if a.only else ('off', 'on')):
         s.cmd('sleep reseed')
         s.cmd('function sleep:lag_clear')
         s.cmd('function sleep:lag_%s' % a.scene)
+        s.cmd('sleep settle')   # the scene's light updates done before it steps (mobs walk by light)
         s.cmd('tick step %d' % a.ticks)
         wait_time(s, 300 + a.ticks)
         h = s.ask('sleep hash %d -64 %d %d -40 %d' % (x1, z1, x2, z2), r'region hash (\w+) \(block entities (\d+), entities (\d+)')

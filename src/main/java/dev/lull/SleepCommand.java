@@ -30,10 +30,19 @@ public final class SleepCommand {
                     say(ctx, "mixin audit done");
                     return 1;
                 }))
+                .then(Commands.literal("settle").executes(ctx -> {
+                    try {
+                        say(ctx, TestSeeds.settleLight(ctx.getSource().getServer()));
+                    } catch (ReflectiveOperationException | InterruptedException e) {
+                        say(ctx, "light not settled: " + e);
+                    }
+                    return 1;
+                }))
                 .then(Commands.literal("reseed").executes(ctx -> {
                     // exactness tests: vanilla's clock-seeded randoms to fixed seeds, right before a scene is built
                     TestSeeds.reseed(ctx.getSource().getServer());
-                    say(ctx, "randoms reseeded");
+                    say(ctx, "randoms reseeded (identity hashes: core " + Integer.toHexString(System.identityHashCode(net.minecraft.world.entity.schedule.Activity.CORE))
+                            + ", idle " + Integer.toHexString(System.identityHashCode(net.minecraft.world.entity.schedule.Activity.IDLE)) + ")");
                     return 1;
                 }))
                 .then(Commands.literal("hash")
@@ -141,9 +150,15 @@ public final class SleepCommand {
                 var tag = new net.minecraft.nbt.CompoundTag();
                 e.saveWithoutId(tag);
                 tag.remove("UUID");
+                // 1.20.1: attribute modifiers made at spawn ("Random spawn bonus"...) take Mth.createInsecureUUID() - Mth's own
+                // unseeded random, per run (1.21.1 gives them fixed ids); amounts, names and operations stay compared
+                for (net.minecraft.nbt.Tag at : tag.getList("Attributes", net.minecraft.nbt.Tag.TAG_COMPOUND))
+                    for (net.minecraft.nbt.Tag m : ((net.minecraft.nbt.CompoundTag) at).getList("Modifiers", net.minecraft.nbt.Tag.TAG_COMPOUND))
+                        ((net.minecraft.nbt.CompoundTag) m).remove("UUID");
                 rows.add(net.minecraft.core.registries.BuiltInRegistries.ENTITY_TYPE.getKey(e.getType()) + " " + Double.doubleToLongBits(e.getX()) + " "
                         + Double.doubleToLongBits(e.getY()) + " " + Double.doubleToLongBits(e.getZ()) + " " + e.getDeltaMovement() + " " + canonNbt(tag)
-                        + (Boolean.getBoolean("sleep.hashEntitiesDeep") ? " deep=" + Long.toHexString(DeepHash.of(e)) : ""));
+                        + (Boolean.getBoolean("sleep.hashIds") ? " id=" + e.getId() : "")   // debugging a scene's determinism
+                        + (Boolean.getBoolean("sleep.hashEntitiesDeep") ? " deep=" + Long.toHexString(DeepHash.of(e)) + DeepHash.lastFields() : ""));
             }
             java.util.Collections.sort(rows);
             String rowsFile = System.getProperty("sleep.hashRows");
