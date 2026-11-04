@@ -1,9 +1,0 @@
-{
-  "required": true,
-  "minVersion": "0.8",
-  "package": "testmods.foreign",
-  "plugin": "testmods.foreign.ForeignPlugin",
-  "compatibilityLevel": "JAVA_21",
-  "mixins": ["ForeignFurnaceMixin"],
-  "injectors": { "defaultRequire": 1 }
-}

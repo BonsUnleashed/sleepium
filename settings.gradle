@@ -8,5 +8,5 @@ plugins {
     id 'org.gradle.toolchains.foojay-resolver-convention' version '1.0.0'
 }
 
-// the sleep engine: a NeoForge mod (mod id "sleepium") on its own; games and mods build on it from source (includeBuild)
-rootProject.name = 'sleepium'
+// Sleepium for Minecraft 1.20.1 / Forge: the port of ../sleep (1.21.1 / NeoForge), kept in its own folder
+rootProject.name = 'sleepium-1.20.1'
