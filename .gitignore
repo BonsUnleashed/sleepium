@@ -6,3 +6,4 @@ out/
 .idea/
 compile.log
 build.log
+run-client/
