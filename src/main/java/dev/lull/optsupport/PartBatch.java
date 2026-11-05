@@ -393,6 +393,12 @@ public final class PartBatch {
         if (FIXED_RESIDENT && buffers instanceof net.minecraft.client.renderer.MultiBufferSource.BufferSource bs && EntityBatch.commutes(t)
                 && ((dev.lull.opt.BufferSourceAccessor) bs).sleep$fixed().containsKey(t) && ((dev.lull.opt.BufferSourceAccessor) bs).sleep$started().get(t) == bb)
             return typeOk(t) && capable();
+        // another mod's batching source in place of vanilla's (Iris' FullyBufferedMultiBufferSource, ImmediatelyFast): a
+        // BufferSource subclass with builders of its own, each type drawn once per batch (RenderType.draw or its state set
+        // up: PartShardMixin); a type whose draws commute takes the residents right after that draw, as a batch of ours
+        if (OTHER_SOURCES && buffers instanceof net.minecraft.client.renderer.MultiBufferSource.BufferSource
+                && buffers.getClass() != net.minecraft.client.renderer.MultiBufferSource.BufferSource.class && EntityBatch.commutes(t))
+            return typeOk(t) && capable();
         // experiment (-Dlab.rcache.translucentResident): a sorted (translucent) type, drawn per object back to front
         return TRANSLUCENT_RESIDENT && t.sortOnUpload() && buffers instanceof net.minecraft.client.renderer.MultiBufferSource.BufferSource bs
                 && ((dev.lull.opt.BufferSourceAccessor) bs).sleep$started().get(t) == bb && typeOk(t) && capable();
@@ -403,6 +409,9 @@ public final class PartBatch {
      * types (items in frames) drawn from VRAM too, ordered per object (its origin's distance, farthest first) instead of
      * per quad across all objects; inside an object the recorded order.
      */
+    /** -Dlab.rcache.otherSources=false: residents only with this mod's batches and vanilla's fixed buffers */
+    public static final boolean OTHER_SOURCES = !"false".equals(System.getProperty("lab.rcache.otherSources"));
+
     /** -Dlab.rcache.fixedResident=false: cached segments of fixed buffers (Sheets) copied on the CPU every frame as before */
     public static final boolean FIXED_RESIDENT = !"false".equals(System.getProperty("lab.rcache.fixedResident"));
 
@@ -1080,6 +1089,20 @@ public final class PartBatch {
 
     public static void endType() {
         current = null;
+    }
+
+    /** PartShardMixin: a type's state set up outside RenderType.draw (another mod's batching source); draw's own wins */
+    private static int shardDepth;
+
+    public static void beginShard(RenderType t) {
+        if (current == null) {
+            current = t;
+            shardDepth = 1;
+        } else if (shardDepth > 0) shardDepth++;
+    }
+
+    public static void endShard() {
+        if (shardDepth > 0 && --shardDepth == 0) current = null;
     }
 
     /** From VertexBuffer._drawWithShader right after the batch's own draw: the type's queued parts. */

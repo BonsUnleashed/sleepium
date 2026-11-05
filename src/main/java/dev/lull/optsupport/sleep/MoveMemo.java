@@ -476,7 +476,7 @@ public final class MoveMemo {
             }
             if (m == null) continue;   // declared outside the chain (an interface default): not entity code
             if (skipMethods.contains(at + "." + m.name) || INSTRUMENTED.contains(at + "." + m.name)) continue;
-            if (dev.lull.optsupport.MixinTouch.touched(at, m.name)) return "mixin-changed " + at + "." + m.name;   // the scan reads the original bytes
+            if (dev.lull.ClassBytes.unseen(at, m.name)) return "mixin-changed " + at + "." + m.name;   // the scan reads the original bytes
             for (AbstractInsnNode in : m.instructions) {
                 if (in instanceof FieldInsnNode fw && fw.getOpcode() == Opcodes.PUTFIELD && owners.contains(fw.owner)) {
                     writes.add(fw.name);
@@ -502,11 +502,8 @@ public final class MoveMemo {
 
     private static ClassNode node(Map<String, ClassNode> nodes, String internal) {
         return nodes.computeIfAbsent(internal, n -> {
-            try (InputStream in = Entity.class.getClassLoader().getResourceAsStream(n + ".class")) {
-                if (in == null) return null;
-                ClassNode cn = new ClassNode();
-                new ClassReader(in).accept(cn, ClassReader.SKIP_FRAMES);
-                return cn;
+            try {
+                return dev.lull.ClassBytes.read(Entity.class.getClassLoader(), n, ClassReader.SKIP_FRAMES);
             } catch (Exception e) {
                 return null;
             }

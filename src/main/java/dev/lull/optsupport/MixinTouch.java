@@ -37,8 +37,42 @@ public final class MixinTouch {
 
     /** Is method {@code name} of class {@code internalName} changed by some foreign mixin? */
     public static boolean touched(String internalName, String name) {
+        return touched(internalName, name, null);
+    }
+
+    /** The same for one method ({@code desc}; null: every method of that name). */
+    public static boolean touched(String internalName, String name, String desc) {
         Set<String> t = TOUCHED.computeIfAbsent(internalName, MixinTouch::compute);
-        return t.contains(ALL) || t.contains(name);
+        if (t.contains(ALL) || t.contains(name)) return true;
+        for (String w : t)
+            if (w.startsWith(WILD)) return WILD_TOUCHED.computeIfAbsent(internalName + "." + name + (desc == null ? "" : desc), k -> wildTouches(internalName, name, desc, t));
+        return false;
+    }
+
+    /**
+     * A wildcard injector ({@code method = "*"}) at a field access or call ({@code @At(value = "FIELD" / "INVOKE", target
+     * = ...)}) changes only the methods with that instruction: "*@" + the member's name. ModernFix's lazy block-state
+     * cache redirects every read of BlockStateBase.cache; methods that never read it are not changed.
+     */
+    private static final String WILD = "*@";
+    private static final Map<String, Boolean> WILD_TOUCHED = new ConcurrentHashMap<>();
+
+    private static boolean wildTouches(String internalName, String name, String desc, Set<String> touched) {
+        ClassNode cn;
+        try {
+            cn = dev.lull.ClassBytes.readBefore(MixinTouch.class.getClassLoader(), internalName, org.objectweb.asm.ClassReader.SKIP_FRAMES);
+        } catch (Throwable e) {
+            cn = null;
+        }
+        if (cn == null) return true;
+        for (MethodNode m : cn.methods) {
+            if (!m.name.equals(name) || desc != null && !m.desc.equals(desc)) continue;
+            for (org.objectweb.asm.tree.AbstractInsnNode in : m.instructions) {
+                String member = in instanceof org.objectweb.asm.tree.FieldInsnNode f ? f.name : in instanceof org.objectweb.asm.tree.MethodInsnNode mi ? mi.name : null;
+                if (member != null && touched.contains(WILD + member)) return true;
+            }
+        }
+        return false;
     }
 
     /** Any foreign mixin at all on this class (for callers that cannot work per method). */
@@ -346,8 +380,9 @@ public final class MixinTouch {
                         if (!"method".equals(v.get(i))) continue;
                         named = injector = true;
                         Object targets = v.get(i + 1);
-                        if (targets instanceof List<?> l) for (Object s : l) out.add(nameOf(String.valueOf(s)));
-                        else out.add(nameOf(String.valueOf(targets)));
+                        String wild = wildAt(a);
+                        if (targets instanceof List<?> l) for (Object s : l) out.add(isWild(String.valueOf(s)) && wild != null ? wild : nameOf(String.valueOf(s)));
+                        else out.add(isWild(String.valueOf(targets)) && wild != null ? wild : nameOf(String.valueOf(targets)));
                     }
                 }
                 if (injectorType && !named) {   // targets given another way (@Desc): cannot tell which method
@@ -360,6 +395,26 @@ public final class MixinTouch {
     }
 
     /** "name", "name(desc)ret", "Lowner;name(desc)ret" or a pattern -> the method name, or ALL if unclear. */
+    private static boolean isWild(String target) {
+        return target.trim().equals("*");
+    }
+
+    /** an injector's one @At at a field access or a call: "*@" + that member's name; null otherwise */
+    private static String wildAt(AnnotationNode a) {
+        Object at = null;
+        for (int i = 0; a.values != null && i + 1 < a.values.size(); i += 2) if ("at".equals(a.values.get(i))) at = a.values.get(i + 1);
+        if (at instanceof List<?> l) at = l.size() == 1 ? l.get(0) : null;
+        if (!(at instanceof AnnotationNode an) || an.values == null) return null;
+        String value = null, target = null;
+        for (int i = 0; i + 1 < an.values.size(); i += 2) {
+            if ("value".equals(an.values.get(i))) value = String.valueOf(an.values.get(i + 1));
+            if ("target".equals(an.values.get(i))) target = String.valueOf(an.values.get(i + 1));
+        }
+        if (target == null || !("FIELD".equals(value) || "INVOKE".equals(value))) return null;
+        String n = nameOf(target);
+        return n.equals(ALL) ? null : WILD + n;
+    }
+
     static String nameOf(String target) {
         String s = target.trim();
         int semi = s.indexOf(';'), paren = s.indexOf('(');

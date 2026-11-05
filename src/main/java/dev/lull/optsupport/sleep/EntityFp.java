@@ -92,6 +92,8 @@ public final class EntityFp {
         if (r instanceof Vec3 v) return mix(mix(bits(v.x), bits(v.y)), bits(v.z));
         if (r instanceof AABB b) return mix(mix(mix(mix(mix(bits(b.minX), bits(b.minY)), bits(b.minZ)), bits(b.maxX)), bits(b.maxY)), bits(b.maxZ));
         if (r instanceof BlockPos p) return p.asLong() * 0x9E3779B97F4A7C15L + 1;
+        // an Optional of an immutable value (mainSupportingBlockPos, made anew whenever the support is looked up): by value
+        if (r instanceof java.util.Optional<?> o && immutableValue(o)) return o.isEmpty() ? 5 : mix(fp(o.get()), 17);
         if (r instanceof SynchedEntityData d) return synched(d);
         if (r instanceof net.minecraft.world.level.levelgen.LegacyRandomSource) return ((java.util.concurrent.atomic.AtomicLong) LEGACY_SEED.get(r)).get() * 31 + 7;
         if (r instanceof net.minecraft.world.level.levelgen.SingleThreadedRandomSource) return (long) SINGLE_SEED.get(r) * 31 + 11;

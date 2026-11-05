@@ -1,0 +1,98 @@
+package dev.lull;
+
+import java.io.InputStream;
+import org.objectweb.asm.ClassReader;
+import org.objectweb.asm.tree.ClassNode;
+
+/**
+ * Class bytes as they run, for the engine's bytecode analyses: they read classes as resources - before mixins - and
+ * refuse what other mods' mixins change (MixinTouch); with the running code they can analyse it instead.
+ */
+public final class ClassBytes {
+    private ClassBytes() {}
+
+    /**
+     * -Dlab.analysis.running=true: for a class other mods' mixins change, the analyses read the code that runs instead
+     * of refusing what those mixins touch.
+     */
+    public static final boolean RUNNING = Boolean.getBoolean("lab.analysis.running");
+
+    /**
+     * The class's node (flags as ClassReader.accept's) read as its resource, or null when it is not there; with
+     * lab.analysis.running, what other mods' mixins change in it as it runs (readRunning).
+     */
+    public static ClassNode read(ClassLoader loader, String internalName, int flags) throws java.io.IOException {
+        ClassNode cn = readBefore(loader, internalName, flags);
+        if (cn == null) return null;
+        if (RUNNING && dev.lull.optsupport.MixinTouch.anyForeign(internalName)
+                && readRunning(loader, internalName, cn, name -> dev.lull.optsupport.MixinTouch.touched(internalName, name)) != null)
+            MERGED.add(internalName);   // other mods' mixins in it: what they change, as it runs
+        return cn;
+    }
+
+    /** The class's node before mixins (flags as ClassReader.accept's), or null when the resource is not there. */
+    public static ClassNode readBefore(ClassLoader loader, String internalName, int flags) throws java.io.IOException {
+        try (InputStream in = (loader != null ? loader : ClassLoader.getSystemClassLoader()).getResourceAsStream(internalName + ".class")) {
+            if (in == null) return null;
+            ClassNode cn = new ClassNode();
+            new ClassReader(in).accept(cn, flags);
+            return cn;
+        }
+    }
+
+    /** classes read with what other mods' mixins change in them as it runs (readRunning) */
+    private static final java.util.Set<String> MERGED = java.util.concurrent.ConcurrentHashMap.newKeySet();
+
+    /**
+     * Is this method changed by another mod's mixin in a way the analyses cannot see - its class read before mixins
+     * (or not read yet)? With -Dlab.analysis.running the analyses see such methods as they run.
+     */
+    public static boolean unseen(String owner, String name) {
+        return dev.lull.optsupport.MixinTouch.touched(owner, name) && !MERGED.contains(owner);
+    }
+
+    /**
+     * The class before mixins ({@code before}, as read) with the methods other mods' mixins change ({@code foreign}, by
+     * name) as they run, and what mixins add (handlers, merged methods, interfaces, fields); this mod's own changes
+     * elsewhere stay out, as in the resource bytes. Null when the running code is not at hand.
+     */
+    public static ClassNode readRunning(ClassLoader loader, String internalName, ClassNode before, java.util.function.Predicate<String> foreign) {
+        ClassNode run = readRunning(loader, internalName);
+        if (run == null || before == null) return null;
+        java.util.Map<String, org.objectweb.asm.tree.MethodNode> had = new java.util.HashMap<>();
+        for (org.objectweb.asm.tree.MethodNode m : before.methods) had.put(m.name + m.desc, m);
+        for (org.objectweb.asm.tree.MethodNode m : run.methods) {
+            org.objectweb.asm.tree.MethodNode b = had.get(m.name + m.desc);
+            if (b == null) before.methods.add(m);
+            else if (foreign.test(m.name)) before.methods.set(before.methods.indexOf(b), m);
+        }
+        for (String i : run.interfaces) if (!before.interfaces.contains(i)) before.interfaces.add(i);   // a mixin's interface, its default methods
+        java.util.Set<String> fields = new java.util.HashSet<>();
+        for (org.objectweb.asm.tree.FieldNode f : before.fields) fields.add(f.name);
+        for (org.objectweb.asm.tree.FieldNode f : run.fields) if (fields.add(f.name)) before.fields.add(f);
+        return before;
+    }
+
+    /**
+     * The class as it runs: its resource bytes put through Mixin's transformer again (every mod's mixins applied as when
+     * the class was loaded; Mixin's applyMixins is synchronized), no frames. Null when the resource or Mixin's
+     * transformer is not at hand, or the transformer fails.
+     */
+    public static ClassNode readRunning(ClassLoader loader, String internalName) {
+        try (InputStream in = (loader != null ? loader : ClassLoader.getSystemClassLoader()).getResourceAsStream(internalName + ".class")) {
+            if (in == null) return null;
+            org.spongepowered.asm.mixin.MixinEnvironment env = org.spongepowered.asm.mixin.MixinEnvironment.getCurrentEnvironment();
+            if (!(env.getActiveTransformer() instanceof org.spongepowered.asm.mixin.transformer.IMixinTransformer t)) return null;
+            ClassNode cn = new ClassNode();
+            new ClassReader(in).accept(cn, ClassReader.EXPAND_FRAMES);
+            t.transformClass(env, internalName.replace('/', '.'), cn);
+            for (org.objectweb.asm.tree.MethodNode m : cn.methods)
+                for (org.objectweb.asm.tree.AbstractInsnNode i : m.instructions.toArray())
+                    if (i instanceof org.objectweb.asm.tree.FrameNode) m.instructions.remove(i);
+            return cn;
+        } catch (Throwable e) {
+            System.out.println("[sleep/analysis] " + internalName + ": the running code not at hand: " + e);
+            return null;
+        }
+    }
+}

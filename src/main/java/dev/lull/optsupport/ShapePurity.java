@@ -116,9 +116,9 @@ public final class ShapePurity {
         ClassLoader loader = c.getClassLoader();
         String cname = Type.getInternalName(c);
         for (String k = cname; k != null; ) {
-            if (MixinTouch.touched(k, "getCollisionShape") || MixinTouch.touched(k, "getShape")) return k + ": shape methods mixin-changed";
-            if (k.equals(BLOCK_BEHAVIOUR)) break;
             ClassNode cn = node(loader, k);
+            if (dev.lull.ClassBytes.unseen(k, "getCollisionShape") || dev.lull.ClassBytes.unseen(k, "getShape")) return k + ": shape methods mixin-changed";
+            if (k.equals(BLOCK_BEHAVIOUR)) break;
             if (cn == null) return "no bytes for " + k;
             k = cn.superName;
         }
@@ -129,7 +129,7 @@ public final class ShapePurity {
             Resolved shape = resolve(loader, cname, "getShape", SHAPE_DESC);
             if (shape == null) return "getShape not found";
             String why = pure(loader, cname, shape, 0, true, false);
-            if (why != null && !MixinTouch.touched(BLOCK_BEHAVIOUR, "getCollisionShape")) DEFAULT_COLLISION.add(c);
+            if (why != null && !dev.lull.ClassBytes.unseen(BLOCK_BEHAVIOUR, "getCollisionShape")) DEFAULT_COLLISION.add(c);
             return why;
         }
         return pure(loader, cname, col, 0, true, false);
@@ -139,8 +139,8 @@ public final class ShapePurity {
 
     private static Resolved resolve(ClassLoader loader, String cls, String name, String desc) {
         for (String k = cls; k != null; ) {
-            if (MixinTouch.touched(k, name)) return null;   // resolution not knowable from resource bytes
             ClassNode cn = node(loader, k);
+            if (dev.lull.ClassBytes.unseen(k, name)) return null;   // resolution not knowable from resource bytes
             if (cn == null) return null;
             for (MethodNode m : cn.methods) if (m.name.equals(name) && m.desc.equals(desc)) return new Resolved(k, m);
             k = cn.superName;
@@ -155,7 +155,7 @@ public final class ShapePurity {
     private static String pure(ClassLoader loader, String concrete, Resolved r, int depth, boolean shapeArgs, boolean memo) {
         if (depth > MAX_DEPTH) return "too deep";
         MethodNode m = r.method;
-        if (MixinTouch.touched(r.owner, m.name)) return r.owner + "." + m.name + " mixin-changed";
+        if (dev.lull.ClassBytes.unseen(r.owner, m.name)) return r.owner + "." + m.name + " mixin-changed";
         // identity matters only for returned objects: a method returning a primitive may allocate temporaries, and a
         // memo function (the argument of computeIfAbsent) is called once per key, its result then kept by the map
         boolean mayAllocate = memo || Type.getReturnType(m.desc).getSort() <= Type.DOUBLE;
@@ -281,10 +281,9 @@ public final class ShapePurity {
     private static ClassNode node(ClassLoader loader, String k) {
         ClassNode cached = NODES.get(k);
         if (cached != null) return cached;
-        try (InputStream in = (loader != null ? loader : ClassLoader.getSystemClassLoader()).getResourceAsStream(k + ".class")) {
-            if (in == null) return null;
-            ClassNode cn = new ClassNode();
-            new ClassReader(in).accept(cn, ClassReader.SKIP_FRAMES | ClassReader.SKIP_DEBUG);
+        try {
+            ClassNode cn = dev.lull.ClassBytes.read(loader, k, ClassReader.SKIP_FRAMES | ClassReader.SKIP_DEBUG);
+            if (cn == null) return null;
             NODES.put(k, cn);
             return cn;
         } catch (Exception e) {

@@ -21,6 +21,7 @@ PROPS = {
     'level-type': 'minecraft\\:flat', 'level-seed': '20260924', 'online-mode': 'false', 'spawn-protection': '0',
     'view-distance': '8', 'simulation-distance': '8', 'sync-chunk-writes': 'false', 'max-tick-time': '-1',
     'pause-when-empty-seconds': '-1', 'spawn-monsters': 'false',
+    'server-port': os.environ.get('MC_PORT', '25565'),   # a second server (another copy: tools/suite.py) beside a running one
 }
 
 

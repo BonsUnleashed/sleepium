@@ -48,6 +48,7 @@ public final class EntitySleep {
     private static final int MIN_X = Integer.getInteger("lab.entsleep.minX", Integer.MIN_VALUE);
     private static final int MAX_DIFFS = 8192;
     private static final boolean DEBUG = Boolean.getBoolean("lab.entsleep.debug");
+    private static final int DEBUG_N = Integer.getInteger("lab.entsleep.debugN", 6);
     /** -Dlab.sleep.components=true: the analysis follows the entity's AI objects (mob sleep in progress, notes/47) */
     static final boolean COMPONENTS = Boolean.getBoolean("lab.sleep.components");
     /** -Dlab.entsleep.noSleepFor=A,B: these classes are observed but never put to sleep (diagnosis) */
@@ -1288,7 +1289,7 @@ public final class EntitySleep {
             for (int i = 0; i < n; i++) {
                 if (!c.special[i] && b[i] != s.base[i]) {
                     s.k = -1;
-                    if (DEBUG && dbgP++ < 6) System.out.println("[sleep/entsleep] not periodic: " + slotName(c, i) + " #" + e.getId() + " t=" + e.tickCount);
+                    if (DEBUG && dbgP++ < DEBUG_N) System.out.println("[sleep/entsleep] not periodic: " + slotName(c, i) + " #" + e.getId() + " t=" + e.tickCount);
                     fail(s, c.comp != null ? "not periodic: " + slotName(c, i) : "not periodic");
                     return;
                 }

@@ -595,7 +595,7 @@ final class SleepAnalysis {
         for (Class<?> c : blockTypes(blockClass)) {
             ClassNode cn = node(internal(c));
             if (cn == null) continue;
-            if (MixinTouch.touched(internal(c), "getTicker"))
+            if (changed(internal(c), "getTicker"))
                 return new Plan(false, "mixin-changed " + c.getSimpleName() + ".getTicker", List.of(), List.of());
             for (MethodNode m : cn.methods) {
                 for (AbstractInsnNode in : m.instructions) {
@@ -608,7 +608,7 @@ final class SleepAnalysis {
                         t = tickerObject(ti.desc, beChain);
                     }
                     if (t == null) continue;
-                    if (MixinTouch.touched(internal(c), m.name))
+                    if (changed(internal(c), m.name))
                         return new Plan(false, "mixin-changed " + c.getSimpleName() + "." + m.name, List.of(), List.of());
                     final String[] found = t;
                     if (tickers.stream().noneMatch(x -> Arrays.equals(x, found))) tickers.add(found);
@@ -683,7 +683,7 @@ final class SleepAnalysis {
     }
 
     private void follow0(String owner, MethodNode m, int depth, Set<String> seen, Set<String> beChain, Class<?> beClass) throws AnalyzerException {
-        if (MixinTouch.touched(owner, m.name)) {   // the resource bytes are not the code that runs
+        if (changed(owner, m.name)) {   // the resource bytes are not the code that runs
             reject = "mixin-changed " + simple(owner) + "." + m.name;
             return;
         }
@@ -2415,16 +2415,22 @@ final class SleepAnalysis {
     // ---------------------------------------------------------------- class access
 
     private ClassNode node(String internal) {
-        return nodes.computeIfAbsent(internal, k -> {
-            try (InputStream in = loader.getResourceAsStream(k + ".class")) {
-                if (in == null) return null;
-                ClassNode cn = new ClassNode();
-                new ClassReader(in).accept(cn, ClassReader.SKIP_FRAMES);
-                return cn;
-            } catch (Exception e) {
-                return null;
-            }
-        });
+        ClassNode n = nodes.get(internal);
+        if (n != null || nodes.containsKey(internal)) return n;
+        try {
+            n = dev.lull.ClassBytes.read(loader, internal, ClassReader.SKIP_FRAMES);   // other mods' mixins as they run (lab.analysis.running)
+        } catch (Exception e) {
+            n = null;
+        }
+        nodes.put(internal, n);
+        return n;
+    }
+
+    /** Is this method changed by another mod's mixin in a way the analysis cannot see (ClassBytes.unseen)? */
+    private boolean changed(String owner, String name) {
+        if (!MixinTouch.touched(owner, name)) return false;
+        node(owner);
+        return dev.lull.ClassBytes.unseen(owner, name);
     }
 
     private final Map<String, Boolean> nothingOwned = new HashMap<>();
@@ -2535,7 +2541,7 @@ final class SleepAnalysis {
     private String ownerOf0(String owner, String name, String desc) {
         List<String> ifaces = new ArrayList<>();
         for (String c = owner; c != null; ) {
-            if (MixinTouch.touched(c, name)) {   // a mixin may add or change this method here: resolution unknown
+            if (changed(c, name)) {   // a mixin may add or change this method here: resolution unknown
                 if (reject == null) reject = "mixin-changed " + simple(c) + "." + name;
                 return null;
             }
@@ -2550,7 +2556,7 @@ final class SleepAnalysis {
         while (!ifaces.isEmpty()) {
             String i = ifaces.remove(ifaces.size() - 1);
             if (!seen.add(i)) continue;
-            if (MixinTouch.touched(i, name)) {
+            if (changed(i, name)) {
                 if (reject == null) reject = "mixin-changed " + simple(i) + "." + name;
                 return null;
             }
