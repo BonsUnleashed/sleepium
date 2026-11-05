@@ -1,0 +1,35 @@
+# Commits from before the carry-over rule (notes/58): reconciled by hand when the branches were made (11-05).
+1ea8fd6dafb1c63b94fb4664e8e91727d89e0759 sleep: ParallelRender next to mods that mix into EntityRenderDispatcher.render 
+70c9fc0baf20be41d6f570115899d8e7b4a9d0be sleep: next to other optimisation mods, one at a time (notes/57). The analyses 
+66822a46b9421252cb8ae36bfc294e7215b5f2ff sleep: the port's findings brought back (notes/56). Burning entities go to Para
+c11a8f73e8924532f27e82c5bf57cedd07ef4245 sleep: README and the store description for 1.0.3 - water and glass in one draw
+dfb9ee19a166700ab801024c849eab76e232202e sleep-1.20.1: two comments worded for the published history (the listeners-on-w
+b263d20be8d636d20e336d1fe94525d6fb5bd736 sleep-1.20.1: ParallelRender next to Oculus (its entity_render_context mixin in
+b4d4d78252e2ac34ae7b86227acb84cc0ba4c2ca sleep-1.20.1: next to other optimisation mods, one at a time (notes/57). Radium
+11d1e2ebac3bca4a7a7ce3dcc19b65ce912f6801 sleep-1.20.1: where the port lagged (notes/56). Entity sleep never applied on F
+772e877c8b2b719122da265fc0480d55d944068c sleep-1.20.1: client_cursedfate_fight - players' Cursed Fate videos in motion (
+620592a4b6cc72c57048dd79e9202d07627fa9ad sleep-1.20.1: EntityFluidLoopMixin - Forge 1.20.1's fluid API ran Stream pipeli
+89149a538c12c0174759c20da2be9d3b2ae17d4e sleep-1.20.1: closing the gap to 1.21.1 - EntityDataNoLockMixin (1.20.1 takes a
+d1907da7470ef0f100020bd731cac0fc7462c225 sleep-1.20.1: run-client/ ignored (tools/mp_test.py's client folder)
+b9e87699f9d1a1cfa4e173a124ab1491483d33dd sleep-1.20.1: Create's adapters that draw from VRAM - SbbParts (Ponder 1.0.91: 
+646b208a0bca05bdf36598cd6a5e7e320f362540 sleep-1.20.1: the sleep engine in production (SRG member names) - a production 
+1d5e9039c30cb743efde7ba87aaa2f74bba2f97d sleep-1.20.1: compatibility with the target packs' mods and the first Create ad
+277de3e19df86a71048fa78ff21047d4157cc824 sleep-1.20.1: the event bus diagnostics and MolangJit for GeckoLib 4.8.4 - Even
+2368406ebb417a3355e021bdd90da87c881e9539 sleep-1.20.1: the settings screen's shaders page (PackOptionsScreen, pack rows 
+b752a8940a58a8513bded0e7fcac9241dbaf2c98 sleep-1.20.1: part batching on 1.20.1 - PartBatch (model parts from VRAM), Part
+af2378014670b69fb52acbfaca8190141c3440ec sleep-1.20.1: the shaderpack pipeline on 1.20.1 - shaders/** and shadermixin/**
+577c5eb0144911851516a95a120eaeb2f796c7c6 sleep-1.20.1: networking and the settings screen - bulk content transfer and co
+8f00b25cbe9a132060d29bc6e0c0ef678ed377c9 sleep-1.20.1: the chunk renderer on 1.20.1 - ChunkMultiDraw (sections from shar
+8532d0e86733393fda00e26a436aca4f8dc200d9 sleep-1.20.1: world generation and the chunk reactors (stage 2b) - ParallelWorl
+fb90cd326d83694749cf7495c3463f27aed513cc sleep-1.20.1: GeckoLib 4.8.4 on ParallelRender's workers - GeoParallel, GeoMode
+bdbd9b50cc27e86225adf5155205dcfc3cc3ac97 sleep-1.20.1: ClientAuto skips 1.20.1's first-start accessibility onboarding sc
+b6e7ff2292554e7acf07152dfd08b28b1497e8b0 sleep-1.20.1: the entity render cluster on 1.20.1 - RecordingBuilder (the exact
+cb20e356e2971dacd5e07e67cb01afc2867ed475 sleep-1.20.1: the Cursed Fate set on the dev client - build.gradle -PtestMods=<
+6ac6432bc079a6165a3a392b5712702bacac17cb sleep-1.20.1: frozen levels tick their entity sections as 1.21's /tick freeze d
+16b3103260c5ebe70757938c4523761928578a40 sleep-1.20.1: the first client runs - two crashes of Forge's Mixin 0.8.5 fixed:
+8cb5b074181a676880fe983da0af860388af5346 sleep-1.20.1: the event bus on Forge's eventbus 6 - CompositeEventBus wraps Min
+1ee1015221667d2780e30ad6630797b9fbc51124 sleep-1.20.1: the exactness harness deterministic on 1.20.1 / Forge - attribute
+299807e58d2489d098b0e51b846f5c5a38cd5f24 sleep-1.20.1: the defaults packed into the jar (sleepium/defaults.txt: 182 flag
+d546dcc263fa2be703670ad9a9c176b39d21251b sleep-1.20.1: the whole 1.21.1 engine tree brought over; the server core compil
+932fd1c9d3f1a4017d3a70221214a57a61230f18 sleep-1.20.1: the exactness harness on 1.20.1 - TickControl (/tick freeze, unfr
+c34fb94768f7e321344acfbb03026ac999e199b0 sleep-1.20.1: the port's folder (Minecraft 1.20.1 / Forge 47.4.9, ModDevGradle 
