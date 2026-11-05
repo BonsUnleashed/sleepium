@@ -149,6 +149,7 @@
     "EntityFluidLoopMixin"
   ],
   "client": [
+    "SpriteInterpolateMixin",
     "SectionLayerMaskMixin",
     "AmbientChunksMixin",
     "AmbientParticleSkipMixin",

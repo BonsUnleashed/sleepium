@@ -460,11 +460,23 @@ final class SleepAnalysis {
         return reasons.size() + (reject != null && reasons.isEmpty() ? 1 : 0);
     }
 
+    private static final String CAPABILITY_PROVIDER = "net/minecraftforge/common/capabilities/CapabilityProvider";
+
     private Plan runEntity(Class<?> ec) throws AnalyzerException {
         Set<String> chainSet = new HashSet<>();
         for (Class<?> c = ec; c != null && c != Object.class; c = c.getSuperclass()) chainSet.add(internal(c));
         this.chain = chainSet;
         this.beCls = ec;
+        if (chainSet.contains(CAPABILITY_PROVIDER)) {
+            // Forge 1.20.1: every entity is a CapabilityProvider. Its bookkeeping reached from tick (lazy gathering,
+            // invalidateCaps in remove, serializeCaps in saves) refused every entity type: no entity ever slept. Under
+            // runtime-checked assumptions it is unreachable or a no-op, as on NeoForge 1.21.1 (no capabilities there):
+            // isLazy false (entities gather in their constructor), no dispatcher (no mod attached a capability to this
+            // entity), not inside a portal (1.20.1's portal is a flag and a clock; 1.21.1's a nullable portalProcess)
+            zeroFields.add("isLazy");
+            zeroFields.add("isInsidePortal");
+            forcedNulls.add("capabilities");
+        }
         Field tickCount = field(ec, "tickCount");
         if (tickCount == null) return new Plan(false, "no tickCount", List.of(), List.of());
         clocks.put(fkey("net/minecraft/world/entity/Entity", "tickCount"), tickCount);
@@ -708,7 +720,7 @@ final class SleepAnalysis {
                 watch.putIfAbsent(wf.name, fld);
             }
             if (entityMode && op == Opcodes.PUTFIELD && in[i] instanceof FieldInsnNode pf && !onThis(fr[i], 2, fr, m) && !entityClass(pf.owner)
-                    && !fresh(fr[i], 2, fr, m, 0) && !localScratch(pf.owner, owner, m)) {
+                    && !fresh(fr[i], 2, fr, m, 0) && !localScratch(pf.owner, owner, m) && !entityCapabilityFlag(pf, owner, m)) {
                 reject = "writes " + simple(pf.owner) + "." + pf.name + " of a foreign object";
                 break;
             }
@@ -2109,6 +2121,24 @@ final class SleepAnalysis {
         return owner + "." + name;
     }
 
+    /**
+     * Forge 1.20.1: CapabilityProvider.invalidateCaps / reviveCaps setting its valid flag, reached through
+     * Entity.remove on another entity (ItemEntity.merge discards the item it merged): the flag of an entity, written
+     * where the entity's own fields are (removalReason in setRemoved, as on 1.21.1). CapabilityProvider is not an
+     * Entity class itself (ItemStack, LevelChunk and block entities extend it too): only these two methods and this
+     * one field, which vanilla calls on entities from entity code.
+     * <p>Also the lazy gathering's bookkeeping (capabilities, lazyData, initialized) in getCapabilities /
+     * doGatherCapabilities / deserializeCaps (its lazy data): an ItemStack is a lazy provider, and ItemEntity's merge check (areMergable ->
+     * areCapsCompatible) gathers the other stack's capabilities on first use. A memo of the provider itself, the same
+     * whenever it is first asked (as ShapePurity's computeIfAbsent memos): no other state is written there.
+     */
+    private static boolean entityCapabilityFlag(FieldInsnNode pf, String owner, MethodNode m) {
+        if (!pf.owner.equals(CAPABILITY_PROVIDER) || !owner.equals(CAPABILITY_PROVIDER)) return false;
+        if (pf.name.equals("valid")) return m.name.equals("invalidateCaps") || m.name.equals("reviveCaps");
+        return (pf.name.equals("capabilities") || pf.name.equals("lazyData") || pf.name.equals("initialized"))
+                && (m.name.equals("getCapabilities") || m.name.equals("doGatherCapabilities") || m.name.equals("deserializeCaps"));
+    }
+
     private boolean entityClass(String internal) {
         try {
             return net.minecraft.world.entity.Entity.class.isAssignableFrom(Class.forName(internal.replace('/', '.'), false, loader));
@@ -2485,6 +2515,18 @@ final class SleepAnalysis {
         AbstractInsnNode[] real = java.util.Arrays.stream(t.instructions.toArray()).filter(x -> x.getOpcode() >= 0).toArray(AbstractInsnNode[]::new);
         if (real.length == 3 && real[0] instanceof VarInsnNode a && a.getOpcode() == Opcodes.ALOAD && a.var == 0
                 && real[1] instanceof FieldInsnNode g && g.getOpcode() == Opcodes.GETFIELD && real[2].getOpcode() >= Opcodes.IRETURN && real[2].getOpcode() <= Opcodes.ARETURN)
+            return g;
+        // one return, of this.f: the value is that field's whatever ran before it (Forge's CapabilityProvider
+        // .getCapabilities: a lazy branch, then return this.capabilities); what ran before is analysed where the call is
+        // followed, as for any own method - only the result is named by its field instead of "result of"
+        int returns = 0, at = -1;
+        for (int i = 0; i < real.length; i++)
+            if (real[i].getOpcode() >= Opcodes.IRETURN && real[i].getOpcode() <= Opcodes.RETURN) {
+                returns++;
+                at = i;
+            }
+        if (returns == 1 && at >= 2 && real[at].getOpcode() == Opcodes.ARETURN && real[at - 1] instanceof FieldInsnNode g && g.getOpcode() == Opcodes.GETFIELD
+                && real[at - 2] instanceof VarInsnNode a && a.getOpcode() == Opcodes.ALOAD && a.var == 0)
             return g;
         return null;
     }

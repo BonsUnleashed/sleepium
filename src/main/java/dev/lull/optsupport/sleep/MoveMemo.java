@@ -250,7 +250,7 @@ public final class MoveMemo {
         for (int i = 0; why == null && i < s.after.length; i++) {
             if (s.after[i] == s.before[i]) continue;
             if (k.skip[i]) why = "wrote " + k.f[i].getName();
-            else if (MOVED.contains(k.f[i].getName()) && k.f[i].getDeclaringClass() == Entity.class) why = "moved";   // section membership: setPos' callback
+            else if (MOVED.contains(dev.lull.Names.official(k.f[i].getName())) && k.f[i].getDeclaringClass() == Entity.class) why = "moved";   // (SRG names in production)   // section membership: setPos' callback
             else if (!k.f[i].getType().isPrimitive() && !valueType(s.afterRefs[i])) why = "changed " + k.f[i].getName() + " (" + typeName(s.afterRefs[i]) + ")";
             else {
                 if (nd == diff.length) diff = java.util.Arrays.copyOf(diff, nd * 2);

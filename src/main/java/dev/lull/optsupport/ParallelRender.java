@@ -387,6 +387,15 @@ public final class ParallelRender {
             && !MixinTouch.overwritten("net/minecraft/client/renderer/LevelRenderer", "renderEntity")
             && !MixinTouch.redirected("net/minecraft/client/renderer/LevelRenderer", "renderEntity", "render");
 
+    /**
+     * A burning entity's flame drawn by the worker, where render draws it (after the renderer, before the offset is
+     * undone): renderFlame reads the atlas' fire sprites and the camera's yaw, both fixed while the frame's entities
+     * are drawn. Burning mobs (zombies at noon, a fight with fire) went to the render thread before - in a horde nearly
+     * all of them. A mod's mixin in renderFlame keeps them there (-Dlab.prender.flame=false: always).
+     */
+    static final boolean FLAME_ON_WORKERS = !"false".equals(System.getProperty("lab.prender.flame"))
+            && !MixinTouch.touched("net/minecraft/client/renderer/entity/EntityRenderDispatcher", "renderFlame");
+
     /** the job being merged through renderEntity (render thread), and whether its dispatcher call took the job's bytes */
     private static Job merging;
     private static boolean merged;
@@ -455,7 +464,7 @@ public final class ParallelRender {
         Minecraft mc = Minecraft.getInstance();
         EntityRenderDispatcher d = mc.getEntityRenderDispatcher();
         if (LIB_UNSAFE.get(d.getRenderer(e).getClass())) return no(3);
-        if (buffers != mc.renderBuffers().bufferSource() || e instanceof AbstractClientPlayer || e.hasCustomName() || e.displayFireAnimation()
+        if (buffers != mc.renderBuffers().bufferSource() || e instanceof AbstractClientPlayer || e.hasCustomName() || e.displayFireAnimation() && !FLAME_ON_WORKERS
                 || d.shouldRenderHitBoxes()) return no(4);
         if (listened && !LISTENERS_ON_WORKERS) return no(5);
         if (dev.lull.api.Compat.parallelRenderExcluded(e)) return no(6);
@@ -506,6 +515,8 @@ public final class ParallelRender {
 
     private static final RenderCache.Recorder VERIFY_REC = new RenderCache.Recorder();
     private static final RenderCache.Rec VERIFY_OUT = new RenderCache.Rec();
+    /** verify mode: mismatches per entity type (in the report) */
+    private static final java.util.Map<String, Long> MISMATCH_TYPES = new java.util.TreeMap<>();
 
     /** The same entity rendered on the render thread with the vanilla renderers, compared byte for byte. */
     private static void verify(LevelRendererInvoker inv, Job j) {
@@ -517,9 +528,23 @@ public final class ParallelRender {
         VERIFY_REC.finish(VERIFY_OUT);
         verified++;
         if (!VERIFY_OUT.sameAs(j.out)) {
+            MISMATCH_TYPES.merge(j.entity.getType().toShortString(), 1L, Long::sum);
             if (mismatches++ < 5) System.out.println("[sleep/opt] parallel render: mismatch for " + j.entity.getType() + ": " + describe(VERIFY_OUT, j.out));
+            if (VERIFY_SELF) {   // the same render on the render thread once more: does a second render differ by itself?
+                VERIFY_REC.reset();
+                ps.last().pose().set(j.basePose);
+                ps.last().normal().set(j.baseNormal);
+                inv.sleep$renderEntity(j.entity, j.camX, j.camY, j.camZ, j.pt, ps, VERIFY_REC);
+                RenderCache.Rec again = new RenderCache.Rec();
+                VERIFY_REC.finish(again);
+                if (!again.sameAs(VERIFY_OUT)) SELF_TYPES.merge(j.entity.getType().toShortString(), 1L, Long::sum);
+            }
         }
     }
+
+    /** -Dlab.prender.verifySelf=true: a mismatch rendered a third time on the render thread; types whose two render-thread renders differ too */
+    private static final boolean VERIFY_SELF = Boolean.getBoolean("lab.prender.verifySelf");
+    private static final java.util.Map<String, Long> SELF_TYPES = new java.util.TreeMap<>();
 
     private static String describe(RenderCache.Rec a, RenderCache.Rec b) {
         StringBuilder sb = new StringBuilder("render thread " + a.types.size() + " types / " + a.size + " bytes, worker " + b.types.size() + " types / " + b.size + " bytes");
@@ -569,8 +594,9 @@ public final class ParallelRender {
         pose.pushPose();
         pose.translate(x + off.x(), y + off.y(), z + off.z());
         r.render(e, yaw, pt, pose, rec, light);
-        pose.translate(-off.x(), -off.y(), -off.z());
         EntityRenderDispatcher d = Minecraft.getInstance().getEntityRenderDispatcher();
+        if (e.displayFireAnimation()) ((EntityRenderDispatcherInvoker) d).sleep$renderFlame(pose, rec, e);
+        pose.translate(-off.x(), -off.y(), -off.z());
         // 1.20.1: the renderer's shadowRadius field (1.21: getShadowRadius(entity)), tested before the distance
         float radius = ((dev.lull.opt.EntityRendererAccessor) r).sleep$shadowRadius();
         if (d.options.entityShadows().get() && ((EntityRenderDispatcherInvoker) d).sleep$shouldRenderShadow() && radius > 0.0F && !e.isInvisible()) {
@@ -591,6 +617,6 @@ public final class ParallelRender {
             System.out.println(w);
         }
         return String.format(java.util.Locale.ROOT, "parallel render: %d workers, jobs %d, on workers %d (render thread helped %d), on the render thread %d (of them merges that fell back %d), failed %d, refused %d, journaled calls %d, part records merged in %.0f ms%s", THREADS, jobs, parallel,
-                helped, sequential, mergeFallbacks, failed, refused, journaled, mergeNanos / 1e6, (WORKER_REFUSED.isEmpty() ? "" : ", kept on the render thread " + WORKER_REFUSED) + (VERIFY ? ", verified " + verified + ", mismatches " + mismatches : ""));
+                helped, sequential, mergeFallbacks, failed, refused, journaled, mergeNanos / 1e6, (WORKER_REFUSED.isEmpty() ? "" : ", kept on the render thread " + WORKER_REFUSED) + (VERIFY ? ", verified " + verified + ", mismatches " + mismatches + (MISMATCH_TYPES.isEmpty() ? "" : " " + MISMATCH_TYPES) + (SELF_TYPES.isEmpty() ? "" : ", of them also between two render-thread renders " + SELF_TYPES) : ""));
     }
 }

@@ -1,4 +1,4 @@
-# a wave of client_cursedfate_fight: 8 zombies every 10 ticks (16 per second), 120 waves (960 zombies over 60 s)
+# a wave of client_cursedfate_fight and client_horde: 8 zombies every 10 ticks (16 per second), 120 waves (960 zombies over 60 s)
 summon minecraft:zombie 6.5 250 22.5
 summon minecraft:zombie 42.5 250 22.5
 summon minecraft:zombie 6.5 250 58.5

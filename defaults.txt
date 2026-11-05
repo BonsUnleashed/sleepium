@@ -133,6 +133,7 @@
 -Dlab.opt.SignalPathMixin=true
 -Dlab.opt.SignalProofStateMixin=true
 -Dlab.opt.SleepMixin=true
+-Dlab.opt.SpriteInterpolateMixin=true
 -Dlab.opt.StructurePlaceLockMixin=true
 -Dlab.opt.TagCacheMixin=true
 -Dlab.opt.TextureIdWorkerMixin=true

@@ -44,7 +44,7 @@ def scene_area(scene):
 
 
 # not errors of the engine: vanilla's flat world without generator settings, the scenes for the Create mod without it
-KNOWN = re.compile(r"No key layers|lag_create|Unknown block type 'create:|client_cursedfate|'cursedfate:")
+KNOWN = re.compile(r"No key layers|lag_create|Unknown block type 'create:|client_cursedfate|'cursedfate:|sleep:cf_vfx")
 
 
 class Server:

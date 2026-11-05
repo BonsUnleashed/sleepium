@@ -36,10 +36,12 @@ public final class ShapePurity {
     private static final String SHAPE_DESC = "(Lnet/minecraft/world/level/block/state/BlockState;Lnet/minecraft/world/level/BlockGetter;"
             + "Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/phys/shapes/CollisionContext;)Lnet/minecraft/world/phys/shapes/VoxelShape;";
     private static final int MAX_DEPTH = 6;
-    // 1.20.1: Forge production runs SRG member names (the resource bytes too): the analysed bytecode's names are the
-    // running ones, compared here as Mojang's through dev.lull.Names (1.21: Mojang names everywhere)
-    private static final String GET_COLLISION = dev.lull.Names.method(BLOCK_BEHAVIOUR, "getCollisionShape", SHAPE_DESC);
-    private static final String GET_SHAPE = dev.lull.Names.method(BLOCK_BEHAVIOUR, "getShape", SHAPE_DESC);
+    // 1.20.1: Forge production runs SRG member names, but the analysed bytecode comes through ClassBytes with Mojang's
+    // (its members and the references in its code): methods are looked up and fields matched by Mojang's names. Under
+    // the SRG name no block's getCollisionShape was found in production - every shape "not static", the collision memo
+    // never recorded (items: BlockCollisions 25 % of the server thread, 6.6 ms per tick against dev's 4.0)
+    private static final String GET_COLLISION = "getCollisionShape";
+    private static final String GET_SHAPE = "getShape";
 
     private static final Map<Class<?>, Boolean> RESULT = new ConcurrentHashMap<>();
     private static final Map<String, ClassNode> NODES = new ConcurrentHashMap<>();
@@ -275,7 +277,8 @@ public final class ShapePurity {
     private static boolean finalField(ClassLoader loader, String owner, String name) {
         try {
             for (Class<?> k = Class.forName(owner.replace('/', '.'), false, loader); k != null; k = k.getSuperclass()) {
-                for (Field f : k.getDeclaredFields()) if (f.getName().equals(name)) return Modifier.isFinal(f.getModifiers());
+                // the running name (SRG in production) against the analysed one (Mojang's, ClassBytes)
+                for (Field f : k.getDeclaredFields()) if (dev.lull.Names.official(f.getName()).equals(name)) return Modifier.isFinal(f.getModifiers());
             }
         } catch (Throwable ignored) {
         }

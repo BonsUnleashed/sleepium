@@ -15,6 +15,10 @@ public interface EntityRenderDispatcherInvoker {
     @Accessor("shouldRenderShadow")
     boolean sleep$shouldRenderShadow();
 
+    /** the flame on a burning entity (reads the atlas' fire sprites and the camera's yaw) */
+    @Invoker("renderFlame")
+    void sleep$renderFlame(PoseStack pose, MultiBufferSource buffers, Entity entity);
+
     @Invoker("renderShadow")
     static void sleep$renderShadow(PoseStack pose, MultiBufferSource buffers, Entity entity, float weight, float partialTicks, LevelReader level, float size) {
         throw new AssertionError();
