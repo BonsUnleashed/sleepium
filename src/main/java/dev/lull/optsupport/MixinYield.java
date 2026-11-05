@@ -113,8 +113,8 @@ public final class MixinYield {
         for (MethodNode m : cn.methods) {
             if (!overwrite(m)) continue;
             if (Boolean.getBoolean("sleep.mixinIndex.debug"))
-                System.out.println("[sleep/opt] yield check: " + mixinClassName + " overwrites " + target + "#" + m.name + " touched=" + MixinTouch.touched(target, m.name));
-            if (MixinTouch.touched(target, m.name)) {
+                System.out.println("[sleep/opt] yield check: " + mixinClassName + " overwrites " + target + "#" + m.name + " touched=" + MixinTouch.touched(target, m.name, m.desc));
+            if (MixinTouch.touched(target, m.name, m.desc)) {
                 yielded++;
                 System.out.println("[sleep/opt] " + mixinClassName.substring(mixinClassName.lastIndexOf('.') + 1) + " not applied: "
                         + targetClassName + "#" + m.name + " is changed by another mod's mixin (our overwrite would break it)");

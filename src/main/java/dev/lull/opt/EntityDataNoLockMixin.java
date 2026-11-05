@@ -17,10 +17,22 @@ import org.spongepowered.asm.mixin.Shadow;
  * (client_entities: 5 % of the render thread in the lock alone). The map it guards only changes when a data item is
  * defined (Entity's constructor, under the write lock); reading a value never changes it, so the read without the lock
  * returns the same item. 1.20.5 removed the lock (an array per entity). The crash report on a failed read is kept.
+ * The items are also kept in an array by id, filled as they are defined (the map lookup was 3-4 % of the server and
+ * render threads in the Cursed Fate fight); an id not in the array (an item put in the map some other way) is looked
+ * up in the map.
  */
 @Mixin(SynchedEntityData.class)
 public abstract class EntityDataNoLockMixin {
     @Shadow @Final private Int2ObjectMap<SynchedEntityData.DataItem<?>> itemsById;
+    @org.spongepowered.asm.mixin.Unique private SynchedEntityData.DataItem<?>[] sleep$items = new SynchedEntityData.DataItem<?>[0];
+
+    @org.spongepowered.asm.mixin.injection.Inject(method = "createDataItem", at = @org.spongepowered.asm.mixin.injection.At("TAIL"))
+    private <T> void sleep$defined(EntityDataAccessor<T> key, T value, org.spongepowered.asm.mixin.injection.callback.CallbackInfo ci) {
+        int id = key.getId();
+        if (id < 0) return;
+        if (id >= sleep$items.length) sleep$items = java.util.Arrays.copyOf(sleep$items, Math.max(id + 1, sleep$items.length * 2));
+        sleep$items[id] = itemsById.get(id);
+    }
 
     /**
      * @author sleep
@@ -30,7 +42,10 @@ public abstract class EntityDataNoLockMixin {
     @SuppressWarnings("unchecked")
     private <T> SynchedEntityData.DataItem<T> getItem(EntityDataAccessor<T> key) {
         try {
-            return (SynchedEntityData.DataItem<T>) itemsById.get(key.getId());
+            int id = key.getId();
+            SynchedEntityData.DataItem<?>[] a = sleep$items;
+            SynchedEntityData.DataItem<?> it = id >= 0 && id < a.length ? a[id] : null;
+            return (SynchedEntityData.DataItem<T>) (it != null ? it : itemsById.get(id));
         } catch (Throwable throwable) {
             CrashReport crashreport = CrashReport.forThrowable(throwable, "Getting synched entity data");
             CrashReportCategory crashreportcategory = crashreport.addCategory("Synched entity data");

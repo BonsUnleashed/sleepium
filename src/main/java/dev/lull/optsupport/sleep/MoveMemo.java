@@ -486,7 +486,7 @@ public final class MoveMemo {
             }
             if (m == null) continue;   // declared outside the chain (an interface default): not entity code
             if (skipMethods.contains(at + "." + m.name) || INSTRUMENTED.contains(at + "." + m.name)) continue;
-            if (dev.lull.optsupport.MixinTouch.touched(at, m.name)) return "mixin-changed " + at + "." + m.name;   // the scan reads the original bytes
+            if (dev.lull.ClassBytes.unseen(at, m.name)) return "mixin-changed " + at + "." + m.name;   // the scan reads the original bytes
             for (AbstractInsnNode in : m.instructions) {
                 if (in instanceof FieldInsnNode fw && fw.getOpcode() == Opcodes.PUTFIELD && owners.contains(fw.owner)) {
                     writes.add(fw.name);

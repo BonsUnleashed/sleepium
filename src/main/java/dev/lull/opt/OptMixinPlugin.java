@@ -71,7 +71,7 @@ public final class OptMixinPlugin implements IMixinConfigPlugin {
             on = Boolean.getBoolean("lab.opt.all") || Boolean.getBoolean("lab.opt.ChunkMultiDrawMixin");
         if (simple.equals("ChunkShaderPatchMixin"))   // the shader patch hook of both chunk multi-draw and part batching
             on = Boolean.getBoolean("lab.opt.all") || Boolean.getBoolean("lab.opt.ChunkMultiDrawMixin") || Boolean.getBoolean("lab.opt.PartBatchMixin");
-        if (simple.equals("PartDrawMixin") || simple.equals("PartTypeMixin") || simple.equals("PartFrameMixin") || simple.equals("ShaderStateShardAccessor"))
+        if (simple.equals("PartDrawMixin") || simple.equals("PartTypeMixin") || simple.equals("PartShardMixin") || simple.equals("PartFrameMixin") || simple.equals("ShaderStateShardAccessor"))
             on = Boolean.getBoolean("lab.opt.all") || Boolean.getBoolean("lab.opt.PartBatchMixin");
         if (simple.equals("CompositeRenderTypeAccessor") || simple.equals("CompositeStateAccessor"))
             on = Boolean.getBoolean("lab.opt.all") || Boolean.getBoolean("lab.opt.EntityBatchMixin");

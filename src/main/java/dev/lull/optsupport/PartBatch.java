@@ -412,13 +412,34 @@ public final class PartBatch {
     }
 
     /** A recorded segment of this type can be drawn from VRAM with its pose: batched, NEW_ENTITY quads, patched shader. */
+    /** -Dlab.rcache.whyResident=true: why cached segments were not drawn from VRAM (counts in the report) */
+    static final boolean WHY_RESIDENT = Boolean.getBoolean("lab.rcache.whyResident");
+    static final java.util.Map<String, long[]> RESIDENT_WHY = new java.util.concurrent.ConcurrentHashMap<>();
+
     public static boolean residentOk(RenderType t, VertexConsumer vc, net.minecraft.client.renderer.MultiBufferSource buffers) {
+        boolean ok = residentOk0(t, vc, buffers);
+        if (WHY_RESIDENT && !ok) {
+            String why = !RESIDENT_ON ? "off" : !(vc instanceof BufferBuilder bb) ? "consumer " + vc.getClass().getSimpleName()
+                    : t.format() != DefaultVertexFormat.NEW_ENTITY ? "format " + t.format() : t.mode() != VertexFormat.Mode.QUADS ? "mode"
+                    : EntityBatch.typeOf(bb) != t ? "not the type's batch: " + t + " in " + buffers.getClass().getSimpleName() : !typeOk(t) ? "type not patched: " + t : "?";
+            RESIDENT_WHY.computeIfAbsent(why.length() > 160 ? why.substring(0, 160) : why, k -> new long[1])[0]++;
+        }
+        return ok;
+    }
+
+    private static boolean residentOk0(RenderType t, VertexConsumer vc, net.minecraft.client.renderer.MultiBufferSource buffers) {
         if (!RESIDENT_ON || !(vc instanceof BufferBuilder bb) || t.format() != DefaultVertexFormat.NEW_ENTITY || t.mode() != VertexFormat.Mode.QUADS) return false;
         if (EntityBatch.typeOf(bb) == t) return typeOk(t) && capable();
         // a fixed buffer of the source (vanilla's Sheets: item frames' frames, chests, signs) of a type whose draws commute:
         // drawn once per frame like a batch, the residents right after it
         if (FIXED_RESIDENT && buffers instanceof net.minecraft.client.renderer.MultiBufferSource.BufferSource bs && EntityBatch.commutes(t)
                 && ((dev.lull.opt.BufferSourceAccessor) bs).sleep$fixed().get(t) == bb && ((dev.lull.opt.BufferSourceAccessor) bs).sleep$started().contains(bb))
+            return typeOk(t) && capable();
+        // another mod's batching source in place of vanilla's (Oculus / Iris' FullyBufferedMultiBufferSource, ImmediatelyFast):
+        // a BufferSource subclass with builders of its own, each type drawn once per batch (RenderType.end or its state set
+        // up: PartShardMixin); a type whose draws commute takes the residents right after that draw, as a batch of ours
+        if (OTHER_SOURCES && buffers instanceof net.minecraft.client.renderer.MultiBufferSource.BufferSource
+                && buffers.getClass() != net.minecraft.client.renderer.MultiBufferSource.BufferSource.class && EntityBatch.commutes(t))
             return typeOk(t) && capable();
         // experiment (-Dlab.rcache.translucentResident): a sorted (translucent) type, drawn per object back to front (1.20.1:
         // the builder getBuffer just gave for it, started in this source)
@@ -431,6 +452,9 @@ public final class PartBatch {
      * types (items in frames) drawn from VRAM too, ordered per object (its origin's distance, farthest first) instead of
      * per quad across all objects; inside an object the recorded order.
      */
+    /** -Dlab.rcache.otherSources=false: residents only with this mod's batches and vanilla's fixed buffers */
+    public static final boolean OTHER_SOURCES = !"false".equals(System.getProperty("lab.rcache.otherSources"));
+
     /** -Dlab.rcache.fixedResident=false: cached segments of fixed buffers (Sheets) copied on the CPU every frame as before */
     public static final boolean FIXED_RESIDENT = !"false".equals(System.getProperty("lab.rcache.fixedResident"));
 
@@ -1137,6 +1161,20 @@ public final class PartBatch {
 
     public static void endType() {
         current = null;
+    }
+
+    /** PartShardMixin: a type's state set up outside RenderType.end (another mod's batching source); end's own wins */
+    private static int shardDepth;
+
+    public static void beginShard(RenderType t) {
+        if (current == null) {
+            current = t;
+            shardDepth = 1;
+        } else if (shardDepth > 0) shardDepth++;
+    }
+
+    public static void endShard() {
+        if (shardDepth > 0 && --shardDepth == 0) current = null;
     }
 
     /** From VertexBuffer._drawWithShader right after the batch's own draw: the type's queued parts. */

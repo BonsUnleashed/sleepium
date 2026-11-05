@@ -156,7 +156,7 @@ public final class PosEscape {
     private static boolean proven(ClassLoader loader, String concrete, Resolved r, int param, int depth, StateCtx ctx) {
         if (depth > MAX_DEPTH) return no("too deep");
         MethodNode m = r.method();
-        if (MixinTouch.touched(r.owner(), m.name)) return no(r.owner() + "." + m.name + " mixin-changed");
+        if (dev.lull.ClassBytes.unseen(r.owner(), m.name)) return no(r.owner() + "." + m.name + " mixin-changed");
         if ((m.access & (Opcodes.ACC_ABSTRACT | Opcodes.ACC_NATIVE)) != 0) return no(m.name + " abstract/native");
         int posSlot = slotOf(m, param);
         for (AbstractInsnNode in : m.instructions)   // the parameter slot is never reassigned: every ALOAD of it is the parameter

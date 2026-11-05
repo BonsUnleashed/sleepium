@@ -188,6 +188,7 @@
     "PartBatchMixin",
     "PartDrawMixin",
     "PartTypeMixin",
+    "PartShardMixin",
     "PartFrameMixin",
     "ShaderStateShardAccessor",
     "ClientBiomeMemoMixin",

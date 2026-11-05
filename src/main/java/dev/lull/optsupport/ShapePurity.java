@@ -122,9 +122,9 @@ public final class ShapePurity {
         ClassLoader loader = c.getClassLoader();
         String cname = Type.getInternalName(c);
         for (String k = cname; k != null; ) {
+            ClassNode cn = node(loader, k);
             if (touched(k, GET_COLLISION) || touched(k, GET_SHAPE)) return k + ": shape methods mixin-changed";
             if (k.equals(BLOCK_BEHAVIOUR)) break;
-            ClassNode cn = node(loader, k);
             if (cn == null) return "no bytes for " + k;
             k = cn.superName;
         }
@@ -145,8 +145,8 @@ public final class ShapePurity {
 
     private static Resolved resolve(ClassLoader loader, String cls, String name, String desc) {
         for (String k = cls; k != null; ) {
-            if (touched(k, name)) return null;   // resolution not knowable from resource bytes
             ClassNode cn = node(loader, k);
+            if (touched(k, name)) return null;   // resolution not knowable from resource bytes
             if (cn == null) return null;
             for (MethodNode m : cn.methods) if (m.name.equals(name) && m.desc.equals(desc)) return new Resolved(k, m);
             k = cn.superName;
@@ -291,9 +291,9 @@ public final class ShapePurity {
      * while overwritten/merged methods of reobfuscated mixins carry SRG names). {@code running} is the bytecode name.
      */
     private static boolean touched(String owner, String running) {
-        if (MixinTouch.touched(owner, running)) return true;
+        if (dev.lull.ClassBytes.unseen(owner, running)) return true;
         String official = dev.lull.Names.official(running);
-        return !official.equals(running) && MixinTouch.touched(owner, official);
+        return !official.equals(running) && dev.lull.ClassBytes.unseen(owner, official);
     }
 
     private static ClassNode node(ClassLoader loader, String k) {

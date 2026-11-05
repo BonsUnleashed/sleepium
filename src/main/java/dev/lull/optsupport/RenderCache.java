@@ -660,7 +660,7 @@ public final class RenderCache {
         for (int i = 0; i < rec.types.size(); i++) {
             RenderType t = rec.types.get(i);
             long ta = TIME ? System.nanoTime() : 0;
-            VertexConsumer vc = buffers.getBuffer(t);
+            VertexConsumer vc = builderOf(buffers.getBuffer(t));
             long tb = TIME ? System.nanoTime() : 0;
             if (TIME) tGetBuffer += tb - ta;
             long src = rec.mem + rec.offs[i];
@@ -702,6 +702,7 @@ public final class RenderCache {
                     c[1] += n;
                 }
             } else {
+                if (WHY_GENERIC) whyGeneric(vc, f, t);
                 generic(vc, src, n, f, rec, i);
             }
             replayedVertices += n;
@@ -752,29 +753,101 @@ public final class RenderCache {
      * Any other consumer (outline, glint wrappers of a mod): the vertices through the VertexConsumer calls, in the
      * format's element order (1.20.1's consumers fill a vertex element by element: a call out of order is lost).
      */
+    /**
+     * The BufferBuilder a consumer writes into: the consumer itself, or a view of one that keeps its vertex state in the
+     * builder - Embeddium's SodiumBufferBuilder, which its mixin returns from BufferSource.getBuffer in place of the
+     * builder: a VertexBufferWriter (Sodium's API for bulk vertex writes) with a public no-argument method returning
+     * the BufferBuilder (getOriginalBufferBuilder, as Embeddium's own endBatch unwraps it). Between vertices the view
+     * holds nothing the builder does not, so whole vertices go into the builder as without it (copy and VRAM residents);
+     * otherwise every record went the per-vertex way (client_entities with Embeddium: 137 fps, 75 % of the render
+     * thread in it).
+     */
+    static VertexConsumer builderOf(VertexConsumer vc) {
+        if (vc instanceof BufferBuilder) return vc;
+        java.lang.invoke.MethodHandle h = VIEW_OF.get(vc.getClass());
+        if (h == NO_VIEW) return vc;
+        try {
+            Object bb = h.invoke(vc);
+            return bb instanceof BufferBuilder b ? b : vc;
+        } catch (Throwable e) {
+            return vc;
+        }
+    }
+
+    private static final java.lang.invoke.MethodHandle NO_VIEW = java.lang.invoke.MethodHandles.constant(Object.class, null);
+    private static final ClassValue<java.lang.invoke.MethodHandle> VIEW_OF = new ClassValue<>() {
+        @Override
+        protected java.lang.invoke.MethodHandle computeValue(Class<?> c) {
+            boolean writer = false;
+            for (Class<?> k = c; k != null && !writer; k = k.getSuperclass())
+                for (Class<?> i : k.getInterfaces()) writer |= i.getName().equals("net.caffeinemc.mods.sodium.api.vertex.buffer.VertexBufferWriter");
+            if (!writer) return NO_VIEW;
+            for (java.lang.reflect.Method m : c.getMethods())
+                if (m.getParameterCount() == 0 && m.getReturnType() == BufferBuilder.class && !java.lang.reflect.Modifier.isStatic(m.getModifiers()))
+                    try {
+                        return java.lang.invoke.MethodHandles.publicLookup().unreflect(m).asType(java.lang.invoke.MethodType.methodType(Object.class, VertexConsumer.class));
+                    } catch (Throwable e) {
+                        return NO_VIEW;
+                    }
+            return NO_VIEW;
+        }
+    };
+
+    private static final Map<VertexFormat, int[]> KINDS = new java.util.concurrent.ConcurrentHashMap<>();
+
+    /** per element: its kind (0 position, 1 color, 2 uv0, 3 uv1, 4 uv2, 5 normal, -1 other) and its offset */
+    private static int[] kinds(VertexFormat f) {
+        var es = f.getElements();
+        int[] out = new int[2 * es.size()];
+        for (int e = 0; e < es.size(); e++) {
+            VertexFormatElement el = es.get(e);
+            out[2 * e] = el.equals(DefaultVertexFormat.ELEMENT_POSITION) ? 0 : el.equals(DefaultVertexFormat.ELEMENT_COLOR) ? 1
+                    : el.equals(DefaultVertexFormat.ELEMENT_UV0) ? 2 : el.equals(DefaultVertexFormat.ELEMENT_UV1) ? 3
+                    : el.equals(DefaultVertexFormat.ELEMENT_UV2) ? 4 : el.equals(DefaultVertexFormat.ELEMENT_NORMAL) ? 5 : -1;
+            out[2 * e + 1] = f.getOffset(e);
+        }
+        return out;
+    }
+
+    /** -Dlab.rcache.whyGeneric=true: why records went the per-vertex way (counts in the report) */
+    private static final boolean WHY_GENERIC = Boolean.getBoolean("lab.rcache.whyGeneric");
+    private static final Map<String, long[]> GENERIC_WHY = new java.util.concurrent.ConcurrentHashMap<>();
+
+    private static void whyGeneric(VertexConsumer vc, VertexFormat f, RenderType t) {
+        String why;
+        if (!(vc instanceof BufferBuilder bb)) why = "consumer " + vc.getClass().getName();
+        else {
+            BufferBuilderAccessor a = (BufferBuilderAccessor) bb;
+            why = !a.sleep$building() ? "not building" : a.sleep$format() != f ? "format " + a.sleep$format() + " vs " + f
+                    : a.sleep$mode() != t.mode() ? "mode" : a.sleep$elementIndex() != 0 ? "element index " + a.sleep$elementIndex() : "?";
+        }
+        GENERIC_WHY.computeIfAbsent(why, k -> new long[1])[0]++;
+    }
+
     private static void generic(VertexConsumer vc, long src, int n, VertexFormat f, Rec rec, int seg) {
         int vs = f.getVertexSize();
-        var es = f.getElements();
+        int[] kinds = KINDS.computeIfAbsent(f, RenderCache::kinds);   // the elements' kinds, worked out once per format
+        int ne = kinds.length / 2;
         int k = rec.runFirst[seg], kEnd = k + rec.runCount[seg];   // VertexTags runs of this segment
         for (int i = 0; i < n; i++) {
             if (k < kEnd && rec.runAt[k] == i) VertexTags.write(rec.runTag, 3 * k++);
             long v = src + (long) i * vs;
-            for (int e = 0; e < es.size(); e++) {
-                VertexFormatElement el = es.get(e);
-                long u = v + f.getOffset(e);
-                if (el.equals(DefaultVertexFormat.ELEMENT_POSITION)) {
+            for (int e = 0; e < ne; e++) {
+                int kind = kinds[2 * e];
+                long u = v + kinds[2 * e + 1];
+                if (kind == 0) {
                     float x = MemoryUtil.memGetFloat(u), y = MemoryUtil.memGetFloat(u + 4), z = MemoryUtil.memGetFloat(u + 8);
                     vc.vertex(M.m00() * x + M.m10() * y + M.m20() * z + M.m30(), M.m01() * x + M.m11() * y + M.m21() * z + M.m31(),
                             M.m02() * x + M.m12() * y + M.m22() * z + M.m32());
-                } else if (el.equals(DefaultVertexFormat.ELEMENT_COLOR)) {
+                } else if (kind == 1) {
                     vc.color(MemoryUtil.memGetByte(u) & 0xFF, MemoryUtil.memGetByte(u + 1) & 0xFF, MemoryUtil.memGetByte(u + 2) & 0xFF, MemoryUtil.memGetByte(u + 3) & 0xFF);
-                } else if (el.equals(DefaultVertexFormat.ELEMENT_UV0)) {
+                } else if (kind == 2) {
                     vc.uv(MemoryUtil.memGetFloat(u), MemoryUtil.memGetFloat(u + 4));
-                } else if (el.equals(DefaultVertexFormat.ELEMENT_UV1)) {
+                } else if (kind == 3) {
                     vc.overlayCoords(MemoryUtil.memGetShort(u), MemoryUtil.memGetShort(u + 2));
-                } else if (el.equals(DefaultVertexFormat.ELEMENT_UV2)) {
+                } else if (kind == 4) {
                     vc.uv2(MemoryUtil.memGetShort(u), MemoryUtil.memGetShort(u + 2));
-                } else if (el.equals(DefaultVertexFormat.ELEMENT_NORMAL)) {
+                } else if (kind == 5) {
                     float nx = MemoryUtil.memGetByte(u) / 127f, ny = MemoryUtil.memGetByte(u + 1) / 127f, nz = MemoryUtil.memGetByte(u + 2) / 127f;
                     vc.normal(N.m00() * nx + N.m10() * ny + N.m20() * nz, N.m01() * nx + N.m11() * ny + N.m21() * nz, N.m02() * nx + N.m12() * ny + N.m22() * nz);
                 }
@@ -788,6 +861,9 @@ public final class RenderCache {
         if (WHY) WHY_COUNTS.entrySet().stream().sorted((a, b) -> Long.compare(b.getValue()[0], a.getValue()[0])).limit(25)
                 .forEach(e -> w.append("\n    changed ").append(e.getValue()[0]).append("x ").append(e.getKey()));
         StringBuilder sb = new StringBuilder(w.length() > 0 ? "render cache field changes:" + w + "\n" : "");
+        if (PartBatch.WHY_RESIDENT) PartBatch.RESIDENT_WHY.entrySet().stream().sorted((x, y) -> Long.compare(y.getValue()[0], x.getValue()[0])).limit(12)
+                .forEach(e -> sb.append("render cache not resident: ").append(e.getValue()[0]).append("x ").append(e.getKey()).append('\n'));
+        if (WHY_GENERIC) GENERIC_WHY.forEach((k, v) -> sb.append("render cache per-vertex way: ").append(v[0]).append("x ").append(k.length() > 200 ? k.substring(0, 200) : k).append('\n'));
         sb.append(String.format(java.util.Locale.ROOT,
                 "render cache: hits %d, records %d, animated %d, unsupported %d, vanilla %d, deferred to next frames %d, replayed vertices %d%s%s", hits, records,
                 animated, unsupported, vanilla, deferred, replayedVertices, VERIFY ? ", verified " + verified + ", mismatches " + mismatches : "",

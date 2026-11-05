@@ -53,7 +53,11 @@ public abstract class ShapeCacheMixin implements BlockCollisionMemo.StaticShape 
         Block block = getBlock();
         // getCollisionShape(level, pos) returns cache.collisionShape whenever the cache exists (no dynamic shape)
         sleep$collision = !block.hasDynamicShape() && ShapePurity.isStatic(block)
-                ? getCollisionShape(EmptyBlockGetter.INSTANCE, BlockPos.ZERO) : null;
+                ? ((BlockBehaviourInvoker) block).sleep$getCollisionShape(asState(), EmptyBlockGetter.INSTANCE, BlockPos.ZERO, CollisionContext.empty()) : null;
+        // (the block itself, as the cache just built computed its collisionShape - the same object, its shape being static -
+        // not getCollisionShape(level, pos), which reads the cache: ModernFix's lazy cache counts what initCache reaches as
+        // cache state and puts its cache build at the head of every method reading it, its own build included: a
+        // stack overflow at the first block state, production Forge 1.20.1 with ModernFix)
     }
 
     /**
