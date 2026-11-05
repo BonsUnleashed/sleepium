@@ -30,6 +30,9 @@ or the [GitHub releases](../../releases). Each release has one jar per supported
 
 How these were measured, on which hardware, and many more scenes: [docs/results.md](docs/results.md).
 
+<p align="center"><img src="art/gallery/next-to-mods-110.png" width="720" alt="Client fps next to other optimisation mods, before 1.1.0 and with 1.1.0"></p>
+<p align="center"><img src="art/gallery/forge-1201-n100.png" width="720" alt="Server time per tick on an Intel N100, Minecraft 1.20.1 / Forge, vanilla vs Sleepium"></p>
+
 ## Install
 
 Put the jar for your Minecraft version and loader into `mods/`. Nothing else is required; it runs on clients and

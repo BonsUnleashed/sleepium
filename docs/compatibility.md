@@ -32,6 +32,8 @@ comparison); Lithium helps fluids, redstone and pistons and slows items.
 
 ### Since 1.1.0
 
+<p align="center"><img src="../art/gallery/next-to-mods-110.png" width="720" alt="Client fps next to other optimisation mods"></p>
+
 - **Entity sleep next to mods that mix into `Entity`** (Lithium, Radium, Canary and most packs): the analyses used to
   refuse every method another mod's mixin changes, so with Lithium no item ever slept. They now read those methods as
   they run (the class put through Mixin's transformer again; only what other mods change, plus the handlers and

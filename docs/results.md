@@ -282,7 +282,11 @@ Intel N100, production Forge 1.20.1 server with the built jar, ms per tick (`/ti
 1.20.1 keeps 23 x 23 spawn chunks loaded and walks them every tick (1.20.5+ has the spawnChunkRadius rule, 2 by
 default): most of what is left between the versions on light servers is vanilla's own.
 
+<p align="center"><img src="../art/gallery/forge-1201-n100.png" width="720" alt="1.20.1 server on an Intel N100"></p>
+
 Client, the fights from a player's Cursed Fate videos (840 entities, zombies burning at noon, the set's effects; RTX
 4070 SUPER): vanilla 87 fps, Sleepium 600-646; with Oculus + Embeddium installed 289 -> 408-423.
+
+<p align="center"><img src="../art/gallery/cursedfate-fight.png" width="720" alt="A Cursed Fate fight on the client"></p>
 
 Desktop server tables next to Radium, Canary and ModernFix: [Compatibility](compatibility.md#minecraft-1201--forge).

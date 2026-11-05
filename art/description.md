@@ -1,6 +1,6 @@
 # Sleepium
 
-**A performance engine for NeoForge 1.21.1 that makes servers and clients cheaper to run without changing what the game computes.**
+**A performance engine for Minecraft 1.21.1 (NeoForge) and 1.20.1 (Forge) that makes servers and clients cheaper to run without changing what the game computes.**
 
 A hopper with nothing to do, a resting item stack, a furnace waiting for fuel: in vanilla each of them runs its full
 tick 20 times a second only to find out that nothing happened. Sleepium proves from the class's own bytecode and from
@@ -29,6 +29,39 @@ Client, entity / block-entity scene (armour stands, item frames, chests, signs, 
 
 - Intel N100: **39 → 117 fps**, garbage 3 952 → 113 KiB per frame
 - Ryzen 7 5800X + RTX 4070 SUPER: **67 → 1 514 fps**; 300 animated mobs 175 → 1 782 fps
+
+## New in 1.1.0: Minecraft 1.20.1 / Forge
+
+The whole engine on Forge 47 (Java 17 or newer): sleeping block entities and entities, the event engine, exact memos,
+parallel world generation, the renderer, GeckoLib and Create support, the settings screen, shaderpacks.
+
+Intel N100, production server, milliseconds per tick:
+
+| scene | vanilla | Sleepium |
+|---|---:|---:|
+| 4 000 item stacks | 114.9 | 10.7 |
+| 300 animals + 50 villagers | 22.2 | 13.25 |
+| 120 villagers | 19.3 | 14.0 |
+| 1 024 idle hoppers | 6.68 | 2.4 |
+
+The fights from a player's Cursed Fate videos (840 entities, zombies burning at noon, black holes and supernovas):
+**87 -> 600-646 fps**; with Oculus + Embeddium installed 289 -> 408-423 fps.
+
+## New in 1.1.0: the gains kept next to other optimisation mods
+
+Tested one mod at a time and as a pack (Biohazard: Project Genesis' optimisation set):
+
+| next to | before 1.1.0 | 1.1.0 |
+|---|---:|---:|
+| Embeddium (1.20.1), client fps | 137 | 845 |
+| Oculus + Embeddium (1.20.1), client fps | 238 | 440-464 |
+| ImmediatelyFast (1.20.1), client fps | 371 | 681 |
+| Iris + Sodium, no pack (1.21.1), client fps | 377 | 570 |
+| ImmediatelyFast (1.21.1), client fps | 809 | 1 149 |
+| Lithium (1.21.1), 4 000 items, ms per tick | 4.32 | 3.37 |
+
+Entity sleep now works next to mods that change entities (Lithium, Radium, Canary); ModernFix no longer turns off the
+collision memo; Iris and Oculus no longer keep entities off the render workers. Exact: world and frame hashes as before.
 
 ## Water and glass in one draw (1.0.3)
 
@@ -99,10 +132,12 @@ engine flag one by one with search. Saved to `config/sleepium.properties`.
 
 ## Installation and compatibility
 
-- Minecraft 1.21.1, NeoForge 21.1.251 or later, Java 21. The renderer needs OpenGL 4.3 (4.6 for multi-draw).
+- Minecraft 1.21.1 with NeoForge 21.1.251 or later (Java 21 or newer), or Minecraft 1.20.1 with Forge 47.4.9 or later
+  (Java 17 or newer). The renderer needs OpenGL 4.3 (4.6 for multi-draw).
 - Works on the server, on the client, or both: a server with Sleepium accepts clients without it, and the other way round.
 - Tested with Create 6.0.10, Create Aeronautics (Sable, Veil) and GeckoLib 4.9.3.
 - Tested together with Sodium, Iris (also with shaderpacks), Embeddium, Lithium, Moonrise, C2ME, ModernFix, FerriteCore, ImmediatelyFast, EntityCulling, ScalableLux, Radium, BadOptimizations, Dynamic FPS, Chloride, Noisium, spark, FastSuite, Ksyxis, ServerCore, Clumps and Create, and 13 of them at once. With Lithium or Moonrise installed Sleepium's changes stay exact.
+- On 1.20.1 tested with the optimisation set of Biohazard: Project Genesis (Embeddium, Oculus, ImmediatelyFast, EntityCulling, ModernFix, FerriteCore, Radium, Canary, dynamic lights, Create), each alone and all together, and with the Cursed Fate set (GeckoLib, Photon).
 - Where another mod overwrites or redirects the same method, Sleepium's change to it steps aside and vanilla's code runs with the other mod's change.
 
 ## Source and license
