@@ -16,9 +16,9 @@ base {
     archivesName = mod_id
 }
 
-// the jar names the Minecraft version it is for: sleepium-1.0.0+mc1.21.1.jar
+// the jar names the Minecraft version and the loader it is for: sleepium-1.1.0+mc1.21.1-neoforge.jar
 tasks.named('jar', Jar).configure {
-    archiveVersion = "${mod_version}+mc${minecraft_version}"
+    archiveVersion = "${mod_version}+mc${minecraft_version}-neoforge"
 }
 
 // the test scenes (data/sleep/function: lag_*, client_*): loaded by the dev runs and the tools, not in the jar
