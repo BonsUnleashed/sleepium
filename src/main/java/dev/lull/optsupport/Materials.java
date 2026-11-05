@@ -206,11 +206,11 @@ public final class Materials {
         try {
             if (stateField == null) {
                 Class<?> composite = Class.forName("net.minecraft.client.renderer.RenderType$CompositeRenderType");
-                stateField = composite.getDeclaredField("state");
+                stateField = composite.getDeclaredField(dev.lull.Names.field("net/minecraft/client/renderer/RenderType$CompositeRenderType", "state"));   // SRG in production
                 stateField.setAccessible(true);
-                textureField = Class.forName("net.minecraft.client.renderer.RenderType$CompositeState").getDeclaredField("textureState");
+                textureField = Class.forName("net.minecraft.client.renderer.RenderType$CompositeState").getDeclaredField(dev.lull.Names.field("net/minecraft/client/renderer/RenderType$CompositeState", "textureState"));
                 textureField.setAccessible(true);
-                cutoutTexture = Class.forName("net.minecraft.client.renderer.RenderStateShard$EmptyTextureStateShard").getDeclaredMethod("cutoutTexture");
+                cutoutTexture = Class.forName("net.minecraft.client.renderer.RenderStateShard$EmptyTextureStateShard").getDeclaredMethod(dev.lull.Names.method("net/minecraft/client/renderer/RenderStateShard$EmptyTextureStateShard", "cutoutTexture", "()Ljava/util/Optional;"));
                 cutoutTexture.setAccessible(true);
             }
             if (!stateField.getDeclaringClass().isInstance(t)) return null;

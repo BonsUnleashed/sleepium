@@ -48,7 +48,10 @@ public final class BulkData {
 
     private static boolean declaredBy(Class<?> c, Class<?>[] params, Class<?> expected) {
         try {
-            return c.getMethod("putBulkData", params).getDeclaringClass() == expected;
+            // the running name: SRG in production (a Mojang name found nothing there, and the fast path was never taken)
+            String desc = org.objectweb.asm.Type.getMethodDescriptor(org.objectweb.asm.Type.VOID_TYPE,
+                    java.util.Arrays.stream(params).map(org.objectweb.asm.Type::getType).toArray(org.objectweb.asm.Type[]::new));
+            return c.getMethod(dev.lull.Names.method("com/mojang/blaze3d/vertex/VertexConsumer", "putBulkData", desc), params).getDeclaringClass() == expected;
         } catch (NoSuchMethodException | RuntimeException e) {
             return false;
         }

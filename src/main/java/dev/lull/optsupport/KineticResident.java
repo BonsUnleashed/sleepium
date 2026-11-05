@@ -206,7 +206,8 @@ public final class KineticResident implements NoAllocChecks.Resident {
         @Override
         protected Boolean computeValue(Class<?> c) {
             try {
-                return c.getMethod("shouldRender", BlockEntity.class, net.minecraft.world.phys.Vec3.class).getDeclaringClass() == BlockEntityRenderer.class;
+                return c.getMethod(dev.lull.Names.method("net/minecraft/client/renderer/blockentity/BlockEntityRenderer", "shouldRender",   // SRG in production
+                        "(Lnet/minecraft/world/level/block/entity/BlockEntity;Lnet/minecraft/world/phys/Vec3;)Z"), BlockEntity.class, net.minecraft.world.phys.Vec3.class).getDeclaringClass() == BlockEntityRenderer.class;
             } catch (ReflectiveOperationException e) {
                 return false;
             }
