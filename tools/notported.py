@@ -48,6 +48,10 @@ def report(src, dst):
     for h, s, b in commits('%s..%s' % (base, src)):
         if h in BASELINE or h in same or any(c and h.startswith(c) for c in carried):
             continue
+        # a port itself (cherry-picked or written again from a commit there): nothing to bring back
+        origin = re.findall(r'\(cherry picked from commit ([0-9a-f]{7,40})\)', b) + re.findall(r'^Port-of: ([0-9a-f]{7,40})', b, re.M)
+        if any(subprocess.run(['git', '-C', ROOT, 'merge-base', '--is-ancestor', o, dst], capture_output=True).returncode == 0 for o in origin):
+            continue
         only = re.findall(r'^Only: (\S+)', b, re.M)
         if only and (src in only or 'this' in only):
             continue
