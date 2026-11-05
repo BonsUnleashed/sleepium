@@ -2,7 +2,7 @@
 
 Only `dev.lull.api` is meant for other mods.
 
-Other mods can include the engine from source, `includeBuild('../sleepium/1.21.1-neoforge') (a checkout of a version's branch)` in `settings.gradle` and then
+Other mods can include the engine from source, `includeBuild('../sleepium/1.21.1-neoforge')` (a checkout of a version's branch) in `settings.gradle` and then
 `compileOnly 'dev.lull:sleepium:1.0.0'`. Only `dev.lull.api` is meant for them. The
 build fails if the engine imports another mod's package (`checkEngineIndependent`).
 
