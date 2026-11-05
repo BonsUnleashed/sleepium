@@ -31,6 +31,9 @@ sleep, a ring event bus, parallel world generation, chunk I/O, a renderer with i
     ordering="NONE"
     side="BOTH"
 
+[[accessTransformers]]
+file="META-INF/accesstransformer.cfg"
+
 [[mixins]]
 config="${mod_id}.mixins.json"
 

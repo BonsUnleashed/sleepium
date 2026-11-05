@@ -368,6 +368,15 @@ public final class ParallelRender {
     static final boolean DISPATCH_UNTOUCHED = !MixinTouch.touched("net/minecraft/client/renderer/entity/EntityRenderDispatcher", "render")
             && !MixinTouch.touched("net/minecraft/client/renderer/LevelRenderer", "renderEntity");
 
+    /**
+     * A burning entity's flame drawn by the worker, where render draws it (after the renderer, before the offset is
+     * undone): renderFlame reads the atlas' fire sprites and the rotation made from the camera's orientation, both fixed
+     * while the frame's entities are drawn. Burning mobs (zombies at noon, a fight with fire) went to the render thread
+     * before - in a horde nearly all of them. A mod's mixin in renderFlame keeps them there (-Dlab.prender.flame=false: always).
+     */
+    static final boolean FLAME_ON_WORKERS = !"false".equals(System.getProperty("lab.prender.flame"))
+            && !MixinTouch.touched("net/minecraft/client/renderer/entity/EntityRenderDispatcher", "renderFlame");
+
     /** -Dlab.prender.why=true: why entities stayed on the render thread (counts in the report) */
     private static final boolean WHY = Boolean.getBoolean("lab.prender.why");
     static final long[] WHY_N = new long[8];
@@ -387,7 +396,7 @@ public final class ParallelRender {
         Minecraft mc = Minecraft.getInstance();
         EntityRenderDispatcher d = mc.getEntityRenderDispatcher();
         if (LIB_UNSAFE.get(d.getRenderer(e).getClass())) return no(3);
-        if (buffers != mc.renderBuffers().bufferSource() || e instanceof AbstractClientPlayer || e.hasCustomName() || e.displayFireAnimation()
+        if (buffers != mc.renderBuffers().bufferSource() || e instanceof AbstractClientPlayer || e.hasCustomName() || e.displayFireAnimation() && !FLAME_ON_WORKERS
                 || d.shouldRenderHitBoxes()) return no(4);
         if (listened) return no(5);
         if (dev.lull.api.Compat.parallelRenderExcluded(e)) return no(6);
@@ -442,6 +451,8 @@ public final class ParallelRender {
 
     private static final RenderCache.Recorder VERIFY_REC = new RenderCache.Recorder();
     private static final RenderCache.Rec VERIFY_OUT = new RenderCache.Rec();
+    /** verify mode: mismatches per entity type (in the report) */
+    private static final java.util.Map<String, Long> MISMATCH_TYPES = new java.util.TreeMap<>();
 
     /** The same entity rendered on the render thread with the vanilla renderers, compared byte for byte. */
     private static void verify(LevelRendererInvoker inv, Job j) {
@@ -450,7 +461,8 @@ public final class ParallelRender {
         VERIFY_REC.finish(VERIFY_OUT);
         verified++;
         if (!VERIFY_OUT.sameAs(j.out)) {
-            if (mismatches++ < 5) System.out.println("[sleep/opt] parallel render: mismatch for " + j.entity.getType() + ": " + describe(VERIFY_OUT, j.out));
+            MISMATCH_TYPES.merge(j.entity.getType().toShortString(), 1L, Long::sum);
+            if (mismatches++ < Integer.getInteger("lab.prender.verifyPrint", 5)) System.out.println("[sleep/opt] parallel render: mismatch for " + j.entity.getType() + ": " + describe(VERIFY_OUT, j.out));
         }
     }
 
@@ -493,8 +505,12 @@ public final class ParallelRender {
         pose.pushPose();
         pose.translate(x + off.x(), y + off.y(), z + off.z());
         r.render(e, yaw, pt, pose, rec, light);
-        pose.translate(-off.x(), -off.y(), -off.z());
         EntityRenderDispatcher d = Minecraft.getInstance().getEntityRenderDispatcher();
+        if (e.displayFireAnimation()) {
+            EntityRenderDispatcherInvoker di = (EntityRenderDispatcherInvoker) d;
+            di.sleep$renderFlame(pose, rec, e, Mth.rotationAroundAxis(Mth.Y_AXIS, di.sleep$cameraOrientation(), new org.joml.Quaternionf()));
+        }
+        pose.translate(-off.x(), -off.y(), -off.z());
         if (d.options.entityShadows().get() && ((EntityRenderDispatcherInvoker) d).sleep$shouldRenderShadow() && !e.isInvisible()) {
             float f = ((dev.lull.opt.EntityRendererAccessor) r).sleep$shadowRadius(e);
             if (f > 0.0F) {
@@ -516,6 +532,6 @@ public final class ParallelRender {
             System.out.println(w);
         }
         return String.format(java.util.Locale.ROOT, "parallel render: %d workers, jobs %d, on workers %d (render thread helped %d), on the render thread %d, failed %d, refused %d, journaled calls %d, part records merged in %.0f ms%s", THREADS, jobs, parallel,
-                helped, sequential, failed, refused, journaled, mergeNanos / 1e6, (WORKER_REFUSED.isEmpty() ? "" : ", kept on the render thread " + WORKER_REFUSED) + (VERIFY ? ", verified " + verified + ", mismatches " + mismatches : ""));
+                helped, sequential, failed, refused, journaled, mergeNanos / 1e6, (WORKER_REFUSED.isEmpty() ? "" : ", kept on the render thread " + WORKER_REFUSED) + (VERIFY ? ", verified " + verified + ", mismatches " + mismatches + (MISMATCH_TYPES.isEmpty() ? "" : " " + MISMATCH_TYPES) : ""));
     }
 }

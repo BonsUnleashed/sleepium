@@ -15,6 +15,13 @@ public interface EntityRenderDispatcherInvoker {
     @Accessor("shouldRenderShadow")
     boolean sleep$shouldRenderShadow();
 
+    /** the flame on a burning entity (reads the atlas' fire sprites; the rotation from the camera, as render does) */
+    @Invoker("renderFlame")
+    void sleep$renderFlame(PoseStack pose, MultiBufferSource buffers, Entity entity, org.joml.Quaternionf rotation);
+
+    @Accessor("cameraOrientation")
+    org.joml.Quaternionf sleep$cameraOrientation();
+
     @Invoker("renderShadow")
     static void sleep$renderShadow(PoseStack pose, MultiBufferSource buffers, Entity entity, float weight, float partialTicks, LevelReader level, float size) {
         throw new AssertionError();

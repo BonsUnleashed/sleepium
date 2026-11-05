@@ -76,6 +76,37 @@ final class ClientMeter {
         cpuAtStart = processCpu();
         threadsAtStart = threadCpu();
         stopAtNanos = startNanos + seconds * 1_000_000_000L;
+        secondAt = startNanos;
+        secondFrom = 0;
+    }
+
+    /**
+     * -Dsleep.clientAuto.timeline=true: a log line per second of the window (scenes that change while measured): frames
+     * and the slowest frame of that second, the integrated server's mean tick over its last 20 ticks, the entities.
+     */
+    private static final boolean TIMELINE = Boolean.getBoolean("sleep.clientAuto.timeline");
+    private static long secondAt;
+    private static int secondFrom;
+
+    private static void timelineLine(long now) {
+        long worst = 0;
+        for (int i = secondFrom; i < n; i++) worst = Math.max(worst, frames[i]);
+        int frames1 = n - secondFrom;
+        secondFrom = n;
+        secondAt = now;
+        Minecraft mc = Minecraft.getInstance();
+        var server = mc.getSingleplayerServer();
+        double srv = Double.NaN;
+        if (server != null) {
+            long[] times = server.getTickTimesNanos();   // the last 100 ticks' durations, ns (read racily: a monitor)
+            int tc = server.getTickCount();
+            long sum = 0;
+            for (int k = 1; k <= 20; k++) sum += times[Math.floorMod(tc - k, times.length)];
+            srv = sum / 20 / 1e6;
+        }
+        SleepMod.LOGGER.info(String.format(Locale.ROOT, "sleepclient timeline '%s' t=%d fps=%d worst=%.1fms server=%.1fms entities=%d %s",
+                label, Math.round((now - startNanos) / 1e9), frames1, worst / 1e6, srv,
+                mc.level != null ? mc.level.getEntityCount() : -1, mc.levelRenderer.getEntityStatistics()));
     }
 
     private static long cpuAtStart;
@@ -131,6 +162,7 @@ final class ClientMeter {
         lastPre = now;
         preNanos = now;
         allocAtPre = ThreadAlloc.current();
+        if (TIMELINE && now - secondAt >= 1_000_000_000L) timelineLine(now);
         if (now >= stopAtNanos) {
             stopAtNanos = -1;
             finish();

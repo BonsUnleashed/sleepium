@@ -102,6 +102,12 @@ public final class SectionLists {
         return visible;
     }
 
+    /** ChunkMultiDraw.drawTranslucent: the visible sections whose translucent layer is not empty, in the visible order */
+    public static ObjectArrayList<SectionRenderDispatcher.RenderSection> translucent(ObjectArrayList<SectionRenderDispatcher.RenderSection> visible) {
+        refresh(visible);
+        return TRANSLUCENT;
+    }
+
     /** renderLevel's block entity loop: only the sections that have renderable block entities. */
     public static ObjectArrayList<SectionRenderDispatcher.RenderSection> blockEntities(ObjectArrayList<SectionRenderDispatcher.RenderSection> visible) {
         refresh(visible);

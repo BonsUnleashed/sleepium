@@ -948,6 +948,9 @@ public final class ChunkMultiDraw {
         resorts++;
     }
 
+    /** -Dlab.chunkmd.translucentList=false: drawTranslucent walks every visible section again (A/B) */
+    static final boolean TRANSLUCENT_LIST = !"false".equals(System.getProperty("lab.chunkmd.translucentList"));
+
     /**
      * The translucent layer's draw: the visible sections backwards (vanilla's order), one command each, one call.
      * False (nothing drawn): a visible non-empty section has no current copy - the caller draws the vanilla way.
@@ -960,6 +963,9 @@ public final class ChunkMultiDraw {
         if (!PENDING_COMPILED.isEmpty()) drainCompiled();
         int[] ps = programState(shader.getId());
         if (ps == null) return false;
+        // SectionLists: only the sections with a non-empty translucent layer, in the same order (the loop below skips the
+        // rest anyway: a pass over every visible section's compiled layers was 9 % of the render thread)
+        if (SECTION_LISTS && TRANSLUCENT_LIST) visible = SectionLists.translucent(visible);
         int cap = visible.size();
         if (staging.capacity() < 16 * cap + 16) {
             MemoryUtil.memFree(staging);

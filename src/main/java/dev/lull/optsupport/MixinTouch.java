@@ -176,6 +176,8 @@ public final class MixinTouch {
         }
         INDEX = m;
         System.out.println("[sleep/opt] foreign mixin index: " + m.size() + " target classes; Block: " + m.get("net/minecraft/world/level/block/Block"));
+        String dump = System.getProperty("sleep.mixinIndex.dump");   // -Dsleep.mixinIndex.dump=net/minecraft/...: what the index has for that class
+        if (dump != null) System.out.println("[sleep/opt] foreign mixin index, " + dump + ": " + m.get(dump));
         return m;
     }
 

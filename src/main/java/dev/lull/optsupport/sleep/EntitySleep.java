@@ -1342,6 +1342,11 @@ public final class EntitySleep {
         REFUSED.merge(why, 1L, Long::sum);
     }
 
+    /** an assumed-zero field's value: a number 0 or a boolean false (1.20.1's isLazy / isInsidePortal are booleans) */
+    private static boolean zero(Object v) {
+        return v instanceof Boolean b ? !b : v instanceof Character ch ? ch == 0 : ((Number) v).longValue() == 0;
+    }
+
     private static void trySleep(ES s, Level level) {
         Entity e = s.e;
         EClass c = s.c;
@@ -1349,7 +1354,7 @@ public final class EntitySleep {
         s.k = -1;
         if (NO_SLEEP_FOR.contains(e.getClass().getSimpleName())) { fail(s, "debug: never sleeps"); return; }
         for (int i : c.nulls) if (get(c.f[i], e) != null) { fail(s, "needs null " + c.f[i].getName()); return; }
-        for (int i : c.zeros) if (((Number) get(c.f[i], e)).longValue() != 0) { fail(s, "needs zero " + c.f[i].getName()); return; }
+        for (int i : c.zeros) if (!zero(get(c.f[i], e))) { fail(s, "needs zero " + c.f[i].getName()); return; }
         for (int i : c.entityRefs) if (get(c.f[i], e) != null) { fail(s, "holds entity " + c.f[i].getName()); return; }
         if (e.isPassenger() || e.isVehicle()) { fail(s, "riding"); return; }
         long drawDeadline = Long.MAX_VALUE;

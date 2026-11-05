@@ -145,6 +145,7 @@
     "LightTimingMixin"
   ],
   "client": [
+    "SpriteInterpolateMixin",
     "SectionLayerMaskMixin",
     "AmbientChunksMixin",
     "AmbientParticleSkipMixin",
