@@ -2,7 +2,42 @@
 
 Versions follow [Semantic Versioning](https://semver.org): a patch release fixes, a minor release adds, a major
 release changes the API (`dev.lull.api`) or the settings in a way that needs attention. Jars are named
-`sleepium-<version>+mc<minecraft version>.jar`.
+`sleepium-<version>+mc<minecraft version>-<loader>.jar` (before 1.1.0 without the loader).
+
+## 1.1.0 - 2026-11-06
+
+**Minecraft 1.20.1 / Forge is supported** (`sleepium-1.1.0+mc1.20.1-forge.jar`, Forge 47.4.9 or newer, Java 17 or
+newer), next to 1.21.1 / NeoForge (`sleepium-1.1.0+mc1.21.1-neoforge.jar`). Jars now name the loader too.
+
+Both versions:
+
+- **Next to other optimisation mods, the gains are no longer lost.** Tested one mod at a time and as a pack:
+  - Entity sleep works next to mods that change `Entity` (Lithium, Radium, Canary - most packs): before, no item ever
+    slept with them. The analyses now read what other mods' mixins change as it runs. Items with Lithium 4.32 -> 3.37
+    ms per tick; with Radium on 1.20.1 3.92 ms against Radium's own 5.58. Exact (world hashes).
+  - ModernFix no longer turns off the collision shape cache and with it the collision memo (mobs with ModernFix 4.13 ->
+    3.17 ms per tick on 1.20.1).
+  - Iris / Oculus (without a shaderpack), Embeddium and ImmediatelyFast no longer keep the render cache on its slow
+    path: client_entities with Embeddium 137 -> 845 fps, Oculus 238 -> 440-464, ImmediatelyFast 371 -> 681 (1.20.1);
+    Iris + Sodium 377 -> 570, ImmediatelyFast 809 -> 1 149 (1.21.1). Frames as before, bit for bit.
+  - Iris / Oculus no longer keep every entity on the render thread: entities are drawn on workers and merged inside the
+    dispatcher, where those mods' state is set (a horde of burning zombies with Oculus + Embeddium 559 -> 718 fps,
+    with Iris + Sodium 636 -> 805).
+- Burning entities are drawn on the parallel render workers (the flame where vanilla draws it).
+- Interpolated animated textures (`interpolate` in .mcmeta) are blended over the images' memory - pixel for pixel as
+  vanilla, several times faster (a mod's 512x512 effect texture: 12 % -> 3.8 % of the render thread).
+- Translucent blocks are drawn from a kept list of sections (no pass over every visible section).
+
+1.20.1 only - what the port needed beyond the 1.21.1 engine:
+
+- Entity sleep on Forge (entities are capability providers), the collision memo with production (SRG) names, entity
+  data read without 1.20.1's lock and from an array.
+- On an Intel N100 production server: items 114.9 -> 10.7 ms per tick, mobs 22.2 -> 13.25. A Cursed Fate fight on the
+  client: 87 -> 600-646 fps; with Oculus + Embeddium 289 -> 408-423.
+- Not on 1.20.1: the adapters for Veil / Sable / Create Aeronautics (those mods are 1.21.1 only).
+
+The repository now keeps a branch per Minecraft version and loader; `main` is the front page with the documentation
+for all versions (`docs/`).
 
 ## 1.0.3+mc1.21.1 - 2026-11-03
 
