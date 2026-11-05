@@ -181,6 +181,11 @@ public final class ParallelRender {
         MultiBufferSource buffers;
         boolean parallel;
         volatile boolean done, ok;
+        /** INNER: the renderer call's arguments and pose (the dispatcher's offset on the identity), compared at the merge */
+        float yaw;
+        int light;
+        final org.joml.Matrix4f innerPose = new org.joml.Matrix4f();
+        final org.joml.Matrix3f innerNormal = new org.joml.Matrix3f();
         final RenderCache.Rec out = new RenderCache.Rec();
         final List<com.mojang.blaze3d.pipeline.RenderCall> calls = new ArrayList<>();
         /** records of model parts drawn from VRAM (GeckoLib bones), queued at the merge */
@@ -369,6 +374,34 @@ public final class ParallelRender {
             && !MixinTouch.touched("net/minecraft/client/renderer/LevelRenderer", "renderEntity");
 
     /**
+     * Another mod's mixin in EntityRenderDispatcher.render or LevelRenderer.renderEntity (Iris: the entity id a pack's
+     * shaders read, set around the renderer): a job is merged through vanilla's renderEntity instead, one level down -
+     * RenderCacheMixin's redirect of render's call to the renderer takes the job's bytes (innerMerge). The worker
+     * records the renderer alone; renderEntity and the dispatcher - every injection in them, the flame, the shadow -
+     * run on the render thread as vanilla's, and the renderer's bytes are written inside them, where those mods' state
+     * is set. Not when either is overwritten or the calls the merge goes through are redirected by another mod.
+     * -Dlab.prender.inner=false: such entities stay on the render thread.
+     */
+    static final boolean INNER = (!DISPATCH_UNTOUCHED || Boolean.getBoolean("lab.prender.forceInner")) && !"false".equals(System.getProperty("lab.prender.inner"))
+            && cacheHooked()
+            && !MixinTouch.overwritten("net/minecraft/client/renderer/entity/EntityRenderDispatcher", "render")
+            && !MixinTouch.redirected("net/minecraft/client/renderer/entity/EntityRenderDispatcher", "render", "render")
+            && !MixinTouch.overwritten("net/minecraft/client/renderer/LevelRenderer", "renderEntity")
+            && !MixinTouch.redirected("net/minecraft/client/renderer/LevelRenderer", "renderEntity", "render");
+
+    /** RenderCacheMixin's redirect is in the dispatcher (not given way, its flag on): its handler is among the class' methods */
+    private static boolean cacheHooked() {
+        for (java.lang.reflect.Method m : EntityRenderDispatcher.class.getDeclaredMethods()) if (m.getName().endsWith("sleep$cached")) return true;
+        return false;
+    }
+
+    static {
+        if (!DISPATCH_UNTOUCHED)
+            System.out.println("[sleep/opt] parallel render: another mod's mixin in EntityRenderDispatcher.render / LevelRenderer.renderEntity; merged inside them: "
+                    + INNER + " (render cache " + cacheHooked() + ")");
+    }
+
+    /**
      * A burning entity's flame drawn by the worker, where render draws it (after the renderer, before the offset is
      * undone): renderFlame reads the atlas' fire sprites and the rotation made from the camera's orientation, both fixed
      * while the frame's entities are drawn. Burning mobs (zombies at noon, a fight with fire) went to the render thread
@@ -390,13 +423,13 @@ public final class ParallelRender {
 
     private static boolean eligible(Entity e, MultiBufferSource buffers) {
         // a shaderpack: the ids its vertices carry come from render-thread state (ShaderIds)
-        if (!DISPATCH_UNTOUCHED) return no(0);
+        if (!DISPATCH_UNTOUCHED && !INNER) return no(0);
         if (dev.lull.shaders.ShaderPipeline.active) return no(1);
         if (!WORKER_REFUSED.isEmpty() && WORKER_REFUSED.contains(e.getType())) return no(2);
         Minecraft mc = Minecraft.getInstance();
         EntityRenderDispatcher d = mc.getEntityRenderDispatcher();
         if (LIB_UNSAFE.get(d.getRenderer(e).getClass())) return no(3);
-        if (buffers != mc.renderBuffers().bufferSource() || e instanceof AbstractClientPlayer || e.hasCustomName() || e.displayFireAnimation() && !FLAME_ON_WORKERS
+        if (buffers != mc.renderBuffers().bufferSource() || e instanceof AbstractClientPlayer || e.hasCustomName() || e.displayFireAnimation() && !FLAME_ON_WORKERS && !INNER
                 || d.shouldRenderHitBoxes()) return no(4);
         if (listened) return no(5);
         if (dev.lull.api.Compat.parallelRenderExcluded(e)) return no(6);
@@ -408,6 +441,45 @@ public final class ParallelRender {
 
 
     /** After the loop: every job in order. */
+    /** the job whose bytes the dispatcher's renderer call takes (INNER), and whether it took them */
+    private static Job innerArmed;
+    private static boolean merged;
+    public static long mergeFallbacks;
+
+    /**
+     * RenderCacheMixin, in place of EntityRenderDispatcher.render's renderer call: while a job is merged and the call is
+     * the one the worker made (entity, yaw, partial tick, light, buffers and the pose with the offset - an injection
+     * before it may have changed them), its parts, side effects and bytes go in here; false: the renderer renders.
+     */
+    public static boolean innerMerge(Entity e, float yaw, float pt, PoseStack pose, MultiBufferSource buffers, int light) {
+        Job j = innerArmed;
+        if (j == null || j.entity != e) return false;
+        innerArmed = null;
+        if (yaw != j.yaw || pt != j.pt || light != j.light || buffers != j.buffers || !pose.last().pose().equals(j.innerPose)
+                || !pose.last().normal().equals(j.innerNormal)) {
+            mergeFallbacks++;
+            j.calls.clear();
+            j.parts.clear();
+            return false;
+        }
+        if (j.parts.size() > 0) {
+            long t0 = System.nanoTime();
+            boolean ok = PartBatch.mergeJob(j.parts, j.buffers);
+            mergeNanos += System.nanoTime() - t0;
+            if (!ok) {   // a record's type is not a batch here: the object the vanilla way, without the job's side effects
+                mergeFallbacks++;
+                j.calls.clear();
+                return false;
+            }
+        }
+        for (int c = 0; c < j.calls.size(); c++) j.calls.get(c).execute();   // the job's deferred side effects, in place
+        journaled += j.calls.size();
+        j.calls.clear();
+        RenderCache.append(j.out, buffers);
+        merged = true;
+        return true;
+    }
+
     public static void drain(LevelRenderer lr) {
         LevelRendererInvoker inv = (LevelRendererInvoker) lr;
         for (int i = 0; i < size; i++) {
@@ -422,6 +494,20 @@ public final class ParallelRender {
                     }
                 }
                 j.await();
+                if (j.ok && INNER) {   // through vanilla's renderEntity: the dispatcher's renderer call takes the job (innerMerge)
+                    if (VERIFY) verify(inv, j);
+                    innerArmed = j;
+                    merged = false;
+                    try {
+                        inv.sleep$renderEntity(j.entity, j.camX, j.camY, j.camZ, j.pt, j.pose, j.buffers);
+                    } finally {
+                        innerArmed = null;
+                    }
+                    if (merged) parallel++;
+                    else sequential++;
+                    j.entity = null;
+                    continue;
+                }
                 if (j.ok && j.parts.size() > 0) {
                     long t0 = System.nanoTime();
                     boolean merged = PartBatch.mergeJob(j.parts, j.buffers);
@@ -457,7 +543,12 @@ public final class ParallelRender {
     /** The same entity rendered on the render thread with the vanilla renderers, compared byte for byte. */
     private static void verify(LevelRendererInvoker inv, Job j) {
         VERIFY_REC.reset();
-        inv.sleep$renderEntity(j.entity, j.camX, j.camY, j.camZ, j.pt, new PoseStack(), VERIFY_REC);
+        if (INNER) {   // the job holds the renderer's output alone: the render thread's renderer at the same pose
+            PoseStack ps = new PoseStack();
+            ps.last().pose().set(j.innerPose);
+            ps.last().normal().set(j.innerNormal);
+            Minecraft.getInstance().getEntityRenderDispatcher().getRenderer(j.entity).render(j.entity, j.yaw, j.pt, ps, VERIFY_REC, j.light);
+        } else inv.sleep$renderEntity(j.entity, j.camX, j.camY, j.camZ, j.pt, new PoseStack(), VERIFY_REC);
         VERIFY_REC.finish(VERIFY_OUT);
         verified++;
         if (!VERIFY_OUT.sameAs(j.out)) {
@@ -504,6 +595,17 @@ public final class ParallelRender {
         Vec3 off = r.getRenderOffset(e, pt);
         pose.pushPose();
         pose.translate(x + off.x(), y + off.y(), z + off.z());
+        if (INNER) {   // the renderer alone: the dispatcher's flame and shadow are drawn by the dispatcher at the merge
+            j.yaw = yaw;
+            j.light = light;
+            j.innerPose.set(pose.last().pose());
+            j.innerNormal.set(pose.last().normal());
+            r.render(e, yaw, pt, pose, rec, light);
+            pose.popPose();
+            if (rec.unsupported) return false;
+            rec.finish(j.out);
+            return true;
+        }
         r.render(e, yaw, pt, pose, rec, light);
         EntityRenderDispatcher d = Minecraft.getInstance().getEntityRenderDispatcher();
         if (e.displayFireAnimation()) {

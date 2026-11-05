@@ -24,6 +24,8 @@ public abstract class RenderCacheMixin {
             target = "Lnet/minecraft/client/renderer/entity/EntityRenderer;render(Lnet/minecraft/world/entity/Entity;FFLcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/MultiBufferSource;I)V"))
     @SuppressWarnings({"unchecked", "rawtypes"})
     private void sleep$cached(EntityRenderer r, Entity e, float yaw, float pt, PoseStack pose, MultiBufferSource buffers, int light) {
+        // a ParallelRender job merged inside the dispatcher (another mod's mixin in render: ParallelRender.INNER)
+        if (dev.lull.optsupport.ParallelRender.innerMerge(e, yaw, pt, pose, buffers, light)) return;
         dev.lull.DrawStats.phaseBegin(8);
         try {
             cached(r, e, yaw, pt, pose, buffers, light);
