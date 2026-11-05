@@ -8,6 +8,8 @@ modId = "${mod_id}"
 version = "${mod_version}"
 displayName = "${mod_name}"
 displayURL = "https://modrinth.com/mod/sleepium"
+# the mod list tells of a newer version (update.json on the repository's front page, updated with each release)
+updateJSONURL = "https://raw.githubusercontent.com/ha7gawa/sleepium/main/update.json"
 authors = "${mod_authors}"
 description = '''
 Minecraft performance that keeps the game exact: idle block entities and entities sleep until the exact tick vanilla
