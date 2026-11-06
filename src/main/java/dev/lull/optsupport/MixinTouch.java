@@ -459,6 +459,34 @@ public final class MixinTouch {
         }
     }
 
+    /**
+     * The mixin configs of other mods whose mixins change method {@code name} of {@code internalName} (applied or
+     * pending), for the log: which mods are in a method. Only the index's (a mod's jar not applied yet): "index".
+     */
+    public static Set<String> touchers(String internalName, String name) {
+        Set<String> out = new java.util.TreeSet<>();
+        try {
+            ClassInfo info = ClassInfo.fromCache(internalName);
+            if (info != null) {
+                Set<IMixinInfo> mixins = new HashSet<>(info.getAppliedMixins());
+                if (PENDING != null && PENDING.get(info) instanceof Collection<?> c) for (Object o : c) if (o instanceof IMixinInfo mi) mixins.add(mi);
+                for (IMixinInfo mi : mixins) {
+                    if (mi.getClassName().startsWith("dev.lull.") || mi.getClassName().startsWith("dev.probe.")) continue;
+                    Set<String> one = new HashSet<>();
+                    collect(mi, one);
+                    boolean wild = false;
+                    for (String w : one) if (w.startsWith(WILD)) wild = true;
+                    if (one.contains(ALL) || one.contains(name) || wild && wildTouches(internalName, name, null, one))
+                        out.add(mi.getConfig().getName());
+                }
+            }
+        } catch (Throwable t) {
+            out.add("?");
+        }
+        if (out.isEmpty() && touched(internalName, name)) out.add("index");
+        return out;
+    }
+
     /** Diagnostics: the touched method names of a class. */
     public static Set<String> touchedMethods(String internalName) {
         return TOUCHED.computeIfAbsent(internalName, MixinTouch::compute);

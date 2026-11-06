@@ -173,6 +173,7 @@ public final class OptMixinPlugin implements IMixinConfigPlugin {
 
     @Override
     public void onLoad(String mixinPackage) {
+        dev.lull.optsupport.LateEventSites.register();
         if (Boolean.getBoolean("lab.opt.universal")) {
             // -Dlab.opt.except=A,B: universal without those (A/B of one part)
             java.util.Set<String> except = new java.util.HashSet<>(java.util.Arrays.asList(System.getProperty("lab.opt.except", "").split(",")));
@@ -192,8 +193,9 @@ public final class OptMixinPlugin implements IMixinConfigPlugin {
     @Override public List<String> getMixins() { return null; }
     @Override public void preApply(String targetClassName, ClassNode targetClass, String mixinClassName, IMixinInfo mixinInfo) {}
     @Override public void postApply(String targetClassName, ClassNode targetClass, String mixinClassName, IMixinInfo mixinInfo) {
-        if (mixinClassName.endsWith(".EventSiteMixin") || mixinClassName.endsWith(".ClientEventSiteMixin"))
-            dev.lull.optsupport.EventSiteTransformer.transform(targetClass);
+        if ((mixinClassName.endsWith(".EventSiteMixin") || mixinClassName.endsWith(".ClientEventSiteMixin"))
+                && !dev.lull.optsupport.LateEventSites.mark(targetClass.name))   // (at the end of the class' transformation)
+            dev.lull.optsupport.EventSiteTransformer.transform(targetClass, false, null);
         if (mixinClassName.endsWith(".WriteBarrierMixin"))
             dev.lull.optsupport.sleep.WriteBarrier.transform(targetClass);
         if (mixinClassName.endsWith(".WorldgenAllocAp2Mixin"))
