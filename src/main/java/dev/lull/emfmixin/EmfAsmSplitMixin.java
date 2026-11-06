@@ -16,7 +16,7 @@ import org.spongepowered.asm.mixin.injection.ModifyVariable;
 @Pseudo
 @Mixin(targets = "traben.entity_model_features.models.animation.math.asm.ASMParser", remap = false)
 public abstract class EmfAsmSplitMixin {
-    @ModifyVariable(method = "compileOrNull", at = @At("STORE"), require = 1)
+    @ModifyVariable(method = "compileOrNull", at = @At("STORE"), require = 0)   // an EMF without this spot: no cut, no crash
     private static byte[] sleep$split(byte[] bytes) {
         return dev.lull.optsupport.EmfSplit.split(bytes, MethodHandles.lookup().lookupClass().getClassLoader());
     }
