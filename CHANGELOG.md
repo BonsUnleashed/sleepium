@@ -4,6 +4,18 @@ Versions follow [Semantic Versioning](https://semver.org): a patch release fixes
 release changes the API (`dev.lull.api`) or the settings in a way that needs attention. Jars are named
 `sleepium-<version>+mc<minecraft version>-<loader>.jar` (before 1.1.0 without the loader).
 
+## 1.1.4 - 2026-11-07
+
+- **World creation crashed with datapacks that make the world very tall** (found testing JJThunder To The Max):
+  `ArrayIndexOutOfBoundsException` in the aquifer generation once the world reaches past y 2047. Sleepium's aquifer
+  shortcut read grid points whose height no longer fits the game's packed block positions; such cells now take the
+  game's own path. The generated terrain is the same as without Sleepium (per-chunk hashes compared).
+- **Next to C2ME, chunk saving could fail** and world generation stall (crash reports, "Failed to save chunk"): C2ME
+  saves chunks on its own threads, and Sleepium's off-thread chunk saving shared its state between threads. Each
+  thread now has its own; checked byte for byte against the game's own encoding (286 628 sections, 0 differences).
+- With JJThunder To The Max on a 16-thread CPU (pre-generating with Chunky): vanilla 30 chunks/s, C2ME 48,
+  C2ME + Sleepium 56, Sleepium alone 93.
+
 ## 1.1.3 - 2026-11-06
 
 - **Event hooks next to other mods: no more conflicts, and the speed-up is back.** Sleepium rewrites the loader's
