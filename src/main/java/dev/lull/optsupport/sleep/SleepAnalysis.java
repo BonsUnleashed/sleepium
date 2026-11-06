@@ -302,7 +302,7 @@ final class SleepAnalysis {
                     return true;
                 }
             };
-            framesCache.put(m, cached = new Frames(an.analyze(owner, m), ed));
+            framesCache.put(m, cached = new Frames(dev.lull.ClassBytes.analyze(an, owner, m), ed));
         }
         List<int[]> edges = cached.edges();
         Frame<SourceValue>[] fr = cached.fr();
@@ -1902,7 +1902,7 @@ final class SleepAnalysis {
                 if (!m.name.equals("<init>")) continue;
                 Frame<SourceValue>[] fr;
                 try {
-                    fr = new Analyzer<>(new SourceInterpreter()).analyze(decl, m);
+                    fr = dev.lull.ClassBytes.analyze(new Analyzer<>(new SourceInterpreter()), decl, m);
                 } catch (AnalyzerException e) {
                     return false;
                 }
@@ -2477,7 +2477,7 @@ final class SleepAnalysis {
         nothingOwned.put(key, false);   // recursion: conservative
         boolean ok;
         try {
-            Frame<SourceValue>[] fr = new Analyzer<>(new SourceInterpreter()).analyze(owner, t);
+            Frame<SourceValue>[] fr = dev.lull.ClassBytes.analyze(new Analyzer<>(new SourceInterpreter()), owner, t);
             ok = true;
             AbstractInsnNode[] in = t.instructions.toArray();
             for (int i = 0; i < in.length && ok; i++) {

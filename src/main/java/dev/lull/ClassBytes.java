@@ -66,6 +66,31 @@ public final class ClassBytes {
         return cn;
     }
 
+    /**
+     * An analyzer run on code whose max stack / locals may be too small: other mods' mixins leave them to the class
+     * writer (transformClass hands the pre-mixin values on), and ASM's COMPUTE_MAXS cannot size it either - in code
+     * without frames it undersizes a catch handler (Entity.tryCheckInsideBlocks: 2 where NEW DUP ALOAD needs 3). The
+     * sizes only bound the analyzer's frames, so they grow until the analysis fits. (Collections Of Optimizations: 15
+     * entity classes' analyses failed with "Insufficient maximum stack size", their entities never slept.)
+     */
+    public static <V extends org.objectweb.asm.tree.analysis.Value> org.objectweb.asm.tree.analysis.Frame<V>[] analyze(
+            org.objectweb.asm.tree.analysis.Analyzer<V> an, String owner, org.objectweb.asm.tree.MethodNode m) throws org.objectweb.asm.tree.analysis.AnalyzerException {
+        for (int grown = 0; ; grown++) {
+            try {
+                return an.analyze(owner, m);
+            } catch (org.objectweb.asm.tree.analysis.AnalyzerException e) {
+                String msg = String.valueOf(e.getMessage());
+                boolean stack = msg.contains("Insufficient maximum stack size");
+                if (!stack && !msg.contains("inexistant local variable") || grown == 12) throw e;
+                if (stack) m.maxStack = Math.min(0xFFFF, Math.max(m.maxStack * 2, m.maxStack + 4));
+                else m.maxLocals = Math.min(0xFFFF, Math.max(m.maxLocals * 2, m.maxLocals + 4));
+            }
+        }
+    }
+
+    /** set while readRunning puts a class through Mixin's transformer again (a copy for the analyses, not the class) */
+    public static final ThreadLocal<Boolean> REREAD = new ThreadLocal<>();
+
     /** classes read with what other mods' mixins change in them as it runs (readRunning) */
     private static final java.util.Set<String> MERGED = java.util.concurrent.ConcurrentHashMap.newKeySet();
 
@@ -117,7 +142,12 @@ public final class ClassBytes {
             if (!(env.getActiveTransformer() instanceof org.spongepowered.asm.mixin.transformer.IMixinTransformer t)) return null;
             ClassNode raw = new ClassNode();
             new ClassReader(in).accept(raw, ClassReader.EXPAND_FRAMES);
-            t.transformClass(env, internalName.replace('/', '.'), raw);
+            REREAD.set(Boolean.TRUE);
+            try {
+                t.transformClass(env, internalName.replace('/', '.'), raw);
+            } finally {
+                REREAD.remove();
+            }
             ClassNode cn = new ClassNode();
             raw.accept(Names.SRG ? new ClassRemapper(cn, OFFICIAL) : cn);
             for (org.objectweb.asm.tree.MethodNode m : cn.methods)
