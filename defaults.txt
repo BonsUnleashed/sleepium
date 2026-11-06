@@ -182,6 +182,10 @@
 -Dlab.opt.RenderCacheBlockEntityMixin=true
 -Dlab.opt.RenderCacheClockMixin=true
 -Dlab.opt.RenderCacheMixin=true
+# the render cache learns which fields change without changing what is drawn and leaves them out of the hash: another
+# mod's per-tick field on every entity (Collections Of Optimizations' coo$fireImmuneTime) re-recorded every entity
+# every frame - 94-188 fps instead of 2 115-2 150 (verify: 0 mismatches in 9.1 M replays, frame hashes unchanged)
+-Dlab.rcache.learnFields=true
 -Dlab.prender.listenersOnWorkers=true
 -Dlab.opt.EntityDataNoLockMixin=true
 -Dlab.opt.EntityFluidLoopMixin=true
