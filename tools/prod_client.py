@@ -12,6 +12,7 @@ import json
 import os
 import subprocess
 import sys
+import time
 import urllib.request
 
 ap = argparse.ArgumentParser()
@@ -23,6 +24,7 @@ ap.add_argument('--keep-mods', action='store_true')
 ap.add_argument('--jvm', default='')
 ap.add_argument('--game', default='', help='extra game arguments, e.g. "--quickPlayMultiplayer localhost"')
 ap.add_argument('--secs', type=int, default=0, help='kill the game after this many seconds (0: wait for it)')
+ap.add_argument('--stall', type=int, default=180, help='kill the game when its log has not grown for this many seconds (0: never)')
 a = ap.parse_args()
 
 root = os.path.abspath(a.dir)
@@ -122,9 +124,41 @@ cmd = [a.java, '-Xmx3G'] + expand(v['arguments']['jvm']) + a.jvm.split() + [v['m
 cmd = [c for c in cmd if '${' not in c]   # quick-play / demo placeholders left unset
 log = open(os.path.join(root, 'console.log'), 'w', encoding='utf-8', errors='replace')
 p = subprocess.Popen(cmd, cwd=root, stdout=log, stderr=subprocess.STDOUT)
-try:
-    p.wait(timeout=a.secs or None)
-except subprocess.TimeoutExpired:
-    p.kill()
-    print('killed after', a.secs, 's')
+
+
+def kill(why):
+    # the whole tree: a pack's crash helper (Crash Assistant) is the game's child and keeps a window open after a crash
+    subprocess.run(['taskkill', '/T', '/F', '/PID', str(p.pid)], capture_output=True)
+    print('killed:', why)
+
+
+# a crash or a stall ends the run at once instead of at --secs (a crashed pack otherwise waits on its crash window)
+CRASH = ('---- Minecraft Crash Report', 'MixinApplyError', 'MixinTransformerError', 'Crash report saved', 'Failed to load mods', 'Exception in thread "main"')
+t0, size, still = time.time(), -1, time.time()
+while p.poll() is None:
+    time.sleep(2)
+    now = time.time()
+    if a.secs and now - t0 > a.secs:
+        kill('after %d s' % a.secs)
+        break
+    n = os.path.getsize(log.name)
+    if n != size:
+        size, still = n, now
+    elif a.stall and now - still > a.stall:
+        # a deadlock or a game paused under a screen: the threads say which (console.jstack.txt beside the log)
+        jstack = os.path.join(os.path.dirname(a.java), 'jstack.exe')
+        if os.path.exists(jstack):
+            with open(os.path.join(root, 'console.jstack.txt'), 'w', encoding='utf-8', errors='replace') as f:
+                subprocess.run([jstack, '-l', str(p.pid)], stdout=f, stderr=subprocess.STDOUT, timeout=60)
+        kill('no log output for %d s' % a.stall)
+        break
+    with open(log.name, encoding='utf-8', errors='replace') as f:
+        f.seek(max(0, n - 200000))
+        tail = f.read()
+    hit = next((c for c in CRASH if c in tail), None)
+    if hit:
+        time.sleep(3)   # the report's lines
+        kill('crash (%s)' % hit)
+        break
+p.wait()
 print('exit', p.returncode)

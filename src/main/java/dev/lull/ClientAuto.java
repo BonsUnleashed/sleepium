@@ -93,6 +93,8 @@ public final class ClientAuto {
     private static final String SERVER = System.getProperty("sleep.clientAuto.server");
     /** -Dsleep.clientAuto.world=NAME: open this existing save (its folder in saves/) instead of a fresh world */
     private static final String OPEN = System.getProperty("sleep.clientAuto.world");
+    private static String menuSeen;
+    private static int menuTicks;
     /** -Dsleep.clientAuto.tp="x y z yaw pitch": where the scene is looked at from (default: the sky platform's view) */
     private static final String SCENE_TP = "tp @s " + System.getProperty("sleep.clientAuto.tp", "24 258 4 0 25").replace(',', ' ');   // commas allowed (JVM flags split on spaces)
     /** -Dsleep.clientAuto.sceneWait=S: the scene is measured no earlier than S seconds after it was built (scenes that change for a while) */
@@ -396,7 +398,13 @@ public final class ClientAuto {
                     log("loading warnings screen dismissed (a player would click Proceed)");
                     mc.setScreen(new TitleScreen());
                 }
-                if (mc.screen instanceof TitleScreen) {
+                // a pack's own main menu in its place (FancyMenu's): the game is loaded once no overlay is left and the
+                // same screen stays 10 s - the world is opened from it as from the title screen
+                String menu = mc.getOverlay() == null && mc.screen != null && !(mc.screen instanceof TitleScreen) ? mc.screen.getClass().getName() : null;
+                menuTicks = menu != null && menu.equals(menuSeen) ? menuTicks + 1 : 0;
+                menuSeen = menu;
+                if (menuTicks == 200) log("the menu " + menu + " taken for the title screen");
+                if (mc.screen instanceof TitleScreen || menuTicks == 200) {
                     log(String.format(Locale.ROOT, "title screen at %.1f s since JVM start", sinceJvm()));
                     // remember what we change, restored before the client closes (options.txt is shared with manual play)
                     savedVsync = mc.options.enableVsync().get();
@@ -441,6 +449,15 @@ public final class ClientAuto {
                 }
             }
             case JOIN -> {
+                // in the world but a screen over it (a pack's welcome or a mod's notice; the game pauses under it):
+                // closed after 10 s as a player would, by its name in the log
+                String over = mc.level != null && mc.player != null && mc.screen != null ? mc.screen.getClass().getName() : null;
+                menuTicks = over != null && over.equals(menuSeen) ? menuTicks + 1 : 0;
+                menuSeen = over;
+                if (menuTicks == 200) {
+                    log("the screen " + over + " over the world closed (a player would press Esc)");
+                    mc.setScreen(null);
+                }
                 if (mc.level != null && mc.player != null && mc.screen == null) {
                     for (Runnable r : READY) r.run();   // other mods' work once the world is up (the framework's bake)
                     joinedAt = System.nanoTime();
