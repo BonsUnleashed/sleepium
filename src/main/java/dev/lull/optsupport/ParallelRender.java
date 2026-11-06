@@ -305,7 +305,7 @@ public final class ParallelRender {
                 renderPinned = true;
                 System.out.println("[sleep/opt] parallel render: render thread pinned to mask " + Long.toHexString(RENDER_PIN) + " " + dev.lab.runtime.OsThreads.pinCurrent(RENDER_PIN));
             }
-            ensureSets();
+            setsChecked = false;
             listened = EventSites.renderListened();   // once per frame
         }
         Job j = size < QUEUE.size() ? QUEUE.get(size) : null;
@@ -328,8 +328,22 @@ public final class ParallelRender {
         j.parallel = eligible(e, buffers);
         j.claimed.set(!j.parallel);   // set last: a stale pool entry of this reused job may run it only when it is a complete parallel job
         jobs++;
-        if (j.parallel) pool().execute(j);
+        if (j.parallel) {
+            if (!setsChecked) {   // the renderer sets when an entity first goes to the workers: never, when none does
+                ensureSets();
+                setsChecked = true;
+            }
+            pool().execute(j);
+        }
     }
+
+    /**
+     * Whether this frame checked the renderer sets: they are built for the first entity that goes to the workers, not
+     * for the first frame - next to mods that keep every entity on the render thread (Oculus, EMF in the dispatcher)
+     * they cost a pause when the world opens (16 s in the Biohazard pack: every renderer and model of 473 mods, four
+     * times) and memory, for nothing.
+     */
+    private static boolean setsChecked;
 
     /**
      * (-Dsleep.parallel.stack=true: a worker's failure printed with where it happened)
