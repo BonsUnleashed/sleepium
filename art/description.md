@@ -2,6 +2,14 @@
 
 **A performance engine for Minecraft 1.21.1 (NeoForge) and 1.20.1 (Forge) that makes servers and clients cheaper to run without changing what the game computes.**
 
+> **Using C2ME? Use Sleepium 1.1.4 or newer, and check your world.** Before 1.1.4, Sleepium together with C2ME (or
+> another mod that saves chunks on its own threads) could save chunks with parts missing. That was my bug, found and
+> fixed in 1.1.4. Signs of it: `No key palette in MapLike[{}]` in the log, chunks that look hollow or do not appear.
+> 1.1.4 saves correctly (tested: a world generated with C2ME, the game restarted, every chunk read back without an
+> error), but it cannot restore data that was never written. If you played with C2ME on an older version, regenerate
+> the broken chunks - delete them with MCA Selector, or the region files of that area in `saves/<world>/region` - or
+> start a new world. Anything built in those chunks is lost when they regenerate.
+
 A hopper with nothing to do, a resting item stack, a furnace waiting for fuel: in vanilla each of them runs its full
 tick 20 times a second only to find out that nothing happened. Sleepium proves from the class's own bytecode and from
 what it observes that a tick only moves clocks, takes the object off the tick ("puts it to sleep") and wakes it at
