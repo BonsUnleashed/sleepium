@@ -94,6 +94,22 @@ public final class ClientAuto {
     private static final String SERVER = System.getProperty("sleep.clientAuto.server");
     /** -Dsleep.clientAuto.world=NAME: open this existing save (its folder in saves/) instead of a fresh world */
     private static final String OPEN = System.getProperty("sleep.clientAuto.world");
+    private static String overSeen;
+    private static int overTicks;
+    private static final java.util.regex.Pattern CONFIRM = java.util.regex.Pattern.compile("(?i)\\s*(accept|done|next|ok|okay|continue|proceed|confirm|close|skip|i understand)\\s*");
+
+    /** a screen over the world: its confirming button pressed (as a player would), else the screen closed */
+    private static void dismiss(Minecraft mc, String name) {
+        for (var child : mc.screen.children()) {
+            if (child instanceof net.minecraft.client.gui.components.Button b && b.active && b.visible && CONFIRM.matcher(b.getMessage().getString()).matches()) {
+                log("the screen " + name + " over the world: '" + b.getMessage().getString() + "' pressed (as a player would)");
+                b.onPress();
+                return;
+            }
+        }
+        log("the screen " + name + " over the world closed (a player would press Esc)");
+        mc.setScreen(null);
+    }
     private static String menuSeen;
     private static int menuTicks;
     /** -Dsleep.clientAuto.tp="x y z yaw pitch": where the scene is looked at from (default: the sky platform's view) */
@@ -399,6 +415,19 @@ public final class ClientAuto {
         }
         Minecraft mc = Minecraft.getInstance();
         ticks++;
+        // a screen over the world (a pack's welcome, a mod's notice - MCA's DestinyScreen comes back until it is
+        // accepted; the game pauses under it): after 10 s answered as a player would - its confirming button
+        // pressed, else closed (Esc); ClientMeter counts the ticks a screen was open in a measured window
+        if (phase != Phase.TITLE && phase != Phase.DONE) {
+            String over = mc.level != null && mc.player != null && mc.screen != null
+                    && !(mc.screen instanceof net.minecraft.client.gui.screens.ChatScreen) && !mc.screen.getClass().getName().startsWith("dev.lull.") ? mc.screen.getClass().getName() : null;   // (our own: the settings tests)
+            overTicks = over != null && over.equals(overSeen) ? overTicks + 1 : 0;
+            overSeen = over;
+            if (overTicks >= 200) {   // answered; the same screen still there 10 s later (a next page: MCA's editor) is answered again
+                dismiss(mc, over);
+                overTicks = 0;
+            }
+        }
         switch (phase) {
             case TITLE -> {
                 if (ticks % 400 == 0) log("waiting for the title screen, now: " + (mc.screen == null ? "no screen" : mc.screen.getClass().getName())
@@ -467,15 +496,6 @@ public final class ClientAuto {
                 }
             }
             case JOIN -> {
-                // in the world but a screen over it (a pack's welcome or a mod's notice; the game pauses under it):
-                // closed after 10 s as a player would, by its name in the log
-                String over = mc.level != null && mc.player != null && mc.screen != null ? mc.screen.getClass().getName() : null;
-                menuTicks = over != null && over.equals(menuSeen) ? menuTicks + 1 : 0;
-                menuSeen = over;
-                if (menuTicks == 200) {
-                    log("the screen " + over + " over the world closed (a player would press Esc)");
-                    mc.setScreen(null);
-                }
                 if (mc.level != null && mc.player != null && mc.screen == null) {
                     for (Runnable r : READY) r.run();   // other mods' work once the world is up (the framework's bake)
                     joinedAt = System.nanoTime();
