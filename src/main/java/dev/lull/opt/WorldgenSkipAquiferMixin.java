@@ -98,7 +98,12 @@ public abstract class WorldgenSkipAquiferMixin implements dev.lull.optsupport.Ce
     @Nullable
     private Aquifer.FluidStatus sleep$cheapStatus(long loc) {
         int x = BlockPos.getX(loc), y = BlockPos.getY(loc), z = BlockPos.getZ(loc);
-        Aquifer.FluidStatus cached = this.aquiferCache[this.getIndex(this.gridX(x), this.gridY(y), this.gridZ(z))];
+        // a location outside the grid: its y wrapped in BlockPos' 12 bits (a world reaching past y 2047 - JJThunder To
+        // The Max: index -1475 of 1602, the world's creation crashed). Vanilla reads only the nearest location's status
+        // and a wrapped one is never the nearest; here the cell is left to vanilla's path
+        int idx = this.getIndex(this.gridX(x), this.gridY(y), this.gridZ(z));
+        if (idx < 0 || idx >= this.aquiferCache.length) return null;
+        Aquifer.FluidStatus cached = this.aquiferCache[idx];
         if (cached != null) return cached;
         int k1 = this.noiseChunk.preliminarySurfaceLevel(x, z) + 8;
         return y - 12 > k1 ? this.globalFluidPicker.computeFluid(x, y, z) : null;
@@ -120,7 +125,9 @@ public abstract class WorldgenSkipAquiferMixin implements dev.lull.optsupport.Ce
         for (int i3 = 0; i3 <= 1; i3++)
             for (int j3 = -1; j3 <= 1; j3++)
                 for (int k3 = 0; k3 <= 1; k3++) {
-                    Aquifer.FluidStatus s = sleep$cheapStatus(sleep$location(l + i3, i1 + j3, j1 + k3));
+                    long loc = sleep$location(l + i3, i1 + j3, j1 + k3);
+                    // y wrapped in BlockPos' 12 bits (a world past y 2047): vanilla never takes it as the nearest
+                    Aquifer.FluidStatus s = Math.floorDiv(BlockPos.getY(loc), 12) == i1 + j3 ? sleep$cheapStatus(loc) : null;
                     if (s == null) {
                         sleep$uni[idx] = 2;
                         return null;
