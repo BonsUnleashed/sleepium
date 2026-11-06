@@ -64,9 +64,12 @@ In packs, without Sleepium and with 1.1.0 (production clients):
 
 | | without | 1.1.0 |
 |---|---:|---:|
-| Biohazard, 473 mods (1.20.1), a new world, fps | 440 | 576 |
-| Entity Model Features + Fresh Animations, 144 mobs (1.20.1), fps | 20 | 93 |
-| Entity Model Features + Fresh Animations, 144 mobs (1.21.1), fps | 37 | 419 |
+| Biohazard, 473 mods (1.20.1), a new world, fps | 351-379 | 571-578 |
+| 144 Fresh Animations mobs + 450 other entities, EMF 3.2 (1.20.1), fps | 32-33 | 391-392 |
+| 144 Fresh Animations mobs + 450 other entities, EMF 3.3 (1.21.1), fps | 42-46 | 490-506 |
+
+Entity Model Features: its animations now run compiled (EMF before 3.3 left them to the interpreter) and its model
+parts are drawn from video memory - on the scene above with EMF 3.2, Sleepium 1.0 186 fps, 1.1.0 391.
 
 Entity sleep now works next to mods that change entities (Lithium, Radium, Canary); ModernFix no longer turns off the
 collision memo. Fixed: a crash at start with TerraBlender (Biomes O' Plenty, Regions Unexplored and many packs) in

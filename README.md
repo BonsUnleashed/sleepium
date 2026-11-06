@@ -26,8 +26,8 @@ or the [GitHub releases](../../releases). Each release has one jar per supported
 | 4 000 items on the ground, Intel N100 server, ms per tick (1.21.1) | 111 | 8.1 |
 | 4 000 items on the ground, Intel N100 server, ms per tick (1.20.1) | 115 | 10.7 |
 | A Cursed Fate fight (840 entities, burning mobs), fps, 1.20.1 | 87 | 600-646 |
-| The Biohazard pack (473 mods, 1.20.1), a new world, fps | 440 | 576 |
-| 144 mobs with Entity Model Features + Fresh Animations, fps, 1.21.1 | 37 | 419 |
+| The Biohazard pack (473 mods, 1.20.1), a new world, fps | 351-379 | 571-578 |
+| 144 Fresh Animations mobs (Entity Model Features 3.3) among 450 other entities, fps, 1.21.1 | 42-46 | 490-506 |
 
 How these were measured, on which hardware, and many more scenes: [docs/results.md](docs/results.md).
 

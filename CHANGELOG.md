@@ -20,12 +20,19 @@ Both versions:
   - Iris / Oculus (without a shaderpack), Embeddium and ImmediatelyFast no longer keep the render cache on its slow
     path: client_entities with Embeddium 137 -> 845 fps, Oculus 238 -> 440-464, ImmediatelyFast 371 -> 681 (1.20.1);
     Iris + Sodium 377 -> 570, ImmediatelyFast 809 -> 1 149 (1.21.1). Frames as before, bit for bit.
-  - Entity Model Features with Fresh Animations: a scene of 144 animated mobs 20 -> 93 fps (1.20.1), 37 -> 419
-    (1.21.1). Entities whose renderer such mods (EMF, ETF, Iris / Oculus) take part in stay on the render thread, as
-    before: those mods keep the entity being drawn in globals.
+- **Entity Model Features / Fresh Animations.** EMF before 3.3 compiles each model's animation into one method too
+  large for the JIT, so it ran in the interpreter (35 % of a frame): Sleepium cuts it into parts the JIT compiles - the
+  same instructions, the same results bit for bit (checked on 26 496 runs). EMF's model parts are drawn from video
+  memory like vanilla's. 144 Fresh Animations mobs among a test world's 450 other entities, Sleepium before this ->
+  with it: EMF 3.2 186 -> 391 fps, EMF 3.3 ~320 -> ~440 (1.20.1); EMF 3.3 ~370 -> ~500 (1.21.1); without Sleepium
+  32-46. Entities whose rendering EMF, ETF or Iris / Oculus take part in stay on the render thread: those mods keep the
+  entity being drawn in globals.
+- The parallel renderer's per-thread renderer sets are built only when an entity goes to the workers: next to mods
+  that keep every entity on the render thread (Oculus, EMF) the world no longer pauses when it opens (16 s in the
+  Biohazard pack).
 - **Crash at start with TerraBlender fixed** (1.0.x, both versions): TerraBlender makes methods Sleepium replaces public,
   and Mixin refused Sleepium's narrower ones. TerraBlender is in many packs (Biomes O' Plenty, Regions Unexplored, ...).
-  The full Biohazard pack (473 mods, 1.20.1): 440 -> 576 fps.
+  The whole Biohazard pack (473 mods, Fresh Animations included), a new world: 351-379 -> 571-578 fps (1.20.1).
 - A mod whose mixin config lists an empty (`null`) entry no longer hides the mods after it from Sleepium's check of
   other mods' changes (Sleep Tight's does): in a large pack Sleepium then did not step aside for Radium and the game
   did not start. Tested with the whole Biohazard pack (473 mods).

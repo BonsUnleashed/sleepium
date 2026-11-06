@@ -89,17 +89,19 @@ chart('cursedfate-fight.png', 'A Cursed Fate fight on the client (Minecraft 1.20
       note='Bars at the middle of each measured range. Next to Oculus the entities stay on the render thread (its per-entity state).')
 
 chart('packs-110.png', 'In modpacks: without Sleepium and with 1.1.0',
-      'production clients, frames per second, higher is better; RTX 4070 SUPER; EMF + FA: 144 mobs animated by Fresh Animations',
-      [('Biohazard, 473 mods (1.20.1)', 440, 576, '440', '576'),
-       ('EMF + Fresh Animations (1.20.1)', 20, 93, '20', '93'),
-       ('EMF + Fresh Animations (1.21.1)', 37, 419, '37', '419')],
-      ('without Sleepium (the same jars, optimisations off)', 'Sleepium 1.1.0'), 'fps',
+      'production clients, frames per second, higher is better; RTX 4070 SUPER; EMF: 144 Fresh Animations mobs among 450 entities',
+      [('Biohazard, 473 mods (1.20.1)', 369, 575, '351-379', '571-578'),
+       ('EMF 3.2 + Fresh Animations (1.20.1)', 32, 391, '32-33', '391-392'),
+       ('EMF 3.3 + Fresh Animations (1.21.1)', 44, 498, '42-46', '490-506')],
+      ('without Sleepium (the same jars, optimisations off)', 'Sleepium 1.1.0'), 'fps', label_w=600,
       note="The mob scenes: each version's saved test world plus the mobs, so they differ between the versions.")
 
 chart('next-to-mods-110.png', 'Next to other optimisation mods: what 1.1.0 brings back',
-      'client_entities (armour stands, item frames, chests, signs, mobs), frames per second, higher is better',
+      'client_entities (armour stands, item frames, chests, signs, mobs); EMF: 144 Fresh Animations mobs among 450 entities; fps',
       [('Embeddium (1.20.1)', 137, 845, '137', '845'), ('Oculus + Embeddium (1.20.1)', 238, 452, '238', '440-464'),
        ('ImmediatelyFast (1.20.1)', 371, 681, '371', '681'), ('Iris + Sodium, no pack (1.21.1)', 377, 570, '377', '570'),
-       ('ImmediatelyFast (1.21.1)', 809, 1149, '809', '1 149')],
-      ('Sleepium before 1.1.0, with the same mod', 'Sleepium 1.1.0'), 'fps',
-      note='Same machine and scene; frames bit for bit as before. Server: items next to Lithium 4.32 -> 3.37 ms per tick.')
+       ('ImmediatelyFast (1.21.1)', 809, 1149, '809', '1 149'),
+       ('EMF 3.2 + Fresh Animations (1.20.1)', 186, 391, '184-187', '391-392'),
+       ('EMF 3.3 + Fresh Animations (1.21.1)', 372, 498, '335-408', '490-506')],
+      ('Sleepium before 1.1.0, with the same mod', 'Sleepium 1.1.0'), 'fps', label_w=600,
+      note='Same machine; frames as before (EMF parts drawn from VRAM: to float rounding). Server: items next to Lithium 4.32 -> 3.37 ms/tick.')

@@ -47,7 +47,11 @@ comparison); Lithium helps fluids, redstone and pistons and slows items.
   the render thread, as before: those mods keep the entity being drawn in globals that their mixins in renderers and
   models read and write, so a worker would draw with another entity's state (with Fresh Animations, Entity Model
   Features crashed that way in a test build). Merging inside the dispatcher is there to try (`-Dlab.prender.inner=true`)
-  but not on. With Entity Model Features + Fresh Animations, 144 animated mobs: 37 -> 419 fps (1.21.1).
+  but not on.
+- **Entity Model Features**: its animations, which EMF before 3.3 leaves to the interpreter (a method over the JIT's
+  size limit), are cut into parts the JIT compiles (bit for bit the same results); its parts are drawn from video
+  memory. 144 Fresh Animations mobs among 450 other entities: EMF 3.2 on 1.20.1 186 -> 391 fps (Sleepium off 32),
+  EMF 3.3 on 1.21.1 ~370 -> ~500 (off 44); 1 440 mobs 12 -> 21 / 23 -> 27.
 - **TerraBlender** (and the many mods built on it) no longer crashes the game at start: it makes methods Sleepium
   replaces public, and Mixin refused Sleepium's narrower ones (1.0.x on 1.21.1 too).
 
@@ -85,8 +89,8 @@ items, mobs, redstone, villagers EXACT.
 | sodiumdynamiclights + Embeddium | | 863 | runs |
 | the whole set (13 mods), a horde of burning zombies | | 544 | entities on the render thread (Oculus, Embeddium in the dispatcher) |
 | a Cursed Fate fight with Oculus + Embeddium | 289 | 299 | |
-| the Biohazard pack (473 mods), a new world | 440 | 576 | starts, plays; Sleepium steps aside in 38 places |
-| Entity Model Features + ETF + Fresh Animations, 144 mobs | 20 | 93 | |
+| the Biohazard pack (473 mods), a new world | 351-379 | 571-578 | starts, plays; Sleepium steps aside in 38 places |
+| Entity Model Features 3.2 + ETF + Fresh Animations, 144 mobs among 450 entities | 32-33 | 391-392 | |
 
 Where Sleepium steps aside on 1.20.1: with Embeddium / Oculus the chunk renderer and a few render hooks (their own),
 with Radium / Canary collisions, entity sections, POI search and brains (theirs), with ModernFix parts of world
