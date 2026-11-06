@@ -19,7 +19,8 @@ import org.objectweb.asm.tree.analysis.SourceValue;
 /**
  * Rewrites {@code MinecraftForge.EVENT_BUS.post(event)} into an invokedynamic bound to {@link EventSites} wherever the
  * receiver is that static field and the event's exact class is known from its {@code new E(...)} (directly or through
- * a local). Every other post is left as it is. Called from OptMixinPlugin.postApply for EventSiteMixin's targets.
+ * a local). Every other post is left as it is. Called at the end of the class' transformation for EventSiteMixin's
+ * targets (LateEventSites), or from OptMixinPlugin.postApply when Mixin's extensions are out of reach.
  */
 public final class EventSiteTransformer {
     private static final String BUS = "net/minecraftforge/eventbus/api/IEventBus";
@@ -30,22 +31,36 @@ public final class EventSiteTransformer {
 
     private EventSiteTransformer() {}
 
-    public static void transform(ClassNode cn) {
-        int before = rewritten, leftBefore = leftAlone;
+    /**
+     * {@code late}: the class as every mod's mixins left it (LateEventSites), {@code before} its posts per method before
+     * them (null: not counted). Otherwise (postApply, before other mods' late injectors) a method another mod's mixins
+     * touch is left alone.
+     */
+    public static void transform(ClassNode cn, boolean late, java.util.Map<String, Integer> before) {
+        int was = rewritten, leftBefore = leftAlone;
+        java.util.Map<String, java.util.Set<String>> named = new java.util.TreeMap<>();   // method -> other mods' mixin configs in it
+        java.util.Map<String, Integer> now = postsPerMethod(cn);
+        if (before != null)   // posts gone since: another mod wrapped or redirected them - theirs, not rewritten
+            for (java.util.Map.Entry<String, Integer> e : before.entrySet())
+                if (e.getValue() > (now == null ? 0 : now.getOrDefault(e.getKey(), 0))) {
+                    String name = e.getKey().substring(0, e.getKey().indexOf('('));
+                    named.put(name, MixinTouch.touchers(cn.name, name));
+                }
         for (MethodNode m : cn.methods) {
             boolean has = false;
             for (AbstractInsnNode in : m.instructions) if (isPost(in)) { has = true; break; }
             if (!has) continue;
-            // another mod's mixin in this method: left alone. A MixinExtras wrap of the same post keeps the call
-            // instruction this would replace and later builds its wrapper around it - the two together were invalid
+            // postApply: another mod's mixin in this method - left alone. A MixinExtras wrap of the same post keeps the
+            // call instruction this would replace and later builds its wrapper around it - the two together were invalid
             // bytecode (VerifyError: operand stack underflow in CommonHooks.onEntityIncomingDamage, a player's server)
-            if (MixinTouch.touched(cn.name, m.name)) {
+            if (!late && MixinTouch.touched(cn.name, m.name)) {
                 for (AbstractInsnNode in : m.instructions) if (isPost(in)) leftAlone++;
+                named.put(m.name, MixinTouch.touchers(cn.name, m.name));
                 continue;
             }
             Frame<SourceValue>[] fr;
             try {
-                fr = new Analyzer<>(new SourceInterpreter()).analyze(cn.name, m);
+                fr = dev.lull.ClassBytes.analyze(new Analyzer<>(new SourceInterpreter()), cn.name, m);   // (other mods' code: sizes from before it)
             } catch (Exception e) {
                 continue;
             }
@@ -64,8 +79,41 @@ public final class EventSiteTransformer {
                 rewritten++;
             }
         }
-        System.out.println("[sleep/opt] event sites: " + cn.name + " " + (rewritten - before) + " post calls rewritten"
-                + (leftAlone > leftBefore ? ", " + (leftAlone - leftBefore) + " left alone (other mods' mixins in their methods)" : ""));
+        if (dev.lull.ClassBytes.REREAD.get() != null) {   // (readRunning's copy for the analyses: counted and logged once, as loaded)
+            rewritten = was;
+            leftAlone = leftBefore;
+            return;
+        }
+        System.out.println("[sleep/opt] event sites: " + cn.name + " " + (rewritten - was) + " post calls rewritten"
+                + (late ? " after every other transformation" : "")
+                + (leftAlone > leftBefore ? ", " + (leftAlone - leftBefore) + " left alone (other mods' mixins in their methods)" : "")
+                + named(late ? "posts other mods wrap, left to them: " : "", named));
+    }
+
+    /** posts per method ("name" + desc), null when the class has none */
+    public static java.util.Map<String, Integer> postsPerMethod(ClassNode cn) {
+        java.util.Map<String, Integer> out = null;
+        for (MethodNode m : cn.methods)
+            for (AbstractInsnNode in : m.instructions)
+                if (isPost(in)) {
+                    if (out == null) out = new java.util.HashMap<>();
+                    out.merge(m.name + m.desc, 1, Integer::sum);
+                }
+        return out;
+    }
+
+    /**
+     * The methods and the mods (their mixin configs) in them, for a player's log: "onLivingTick (coo.mixins.json)".
+     * (A VerifyError on a player's server named a method; which mod wrapped it latest.log did not say.)
+     */
+    private static String named(String what, java.util.Map<String, java.util.Set<String>> named) {
+        if (named.isEmpty()) return "";
+        java.util.Map<String, java.util.List<String>> byMods = new java.util.TreeMap<>();   // one mod in many methods: one entry
+        named.forEach((m, mods) -> byMods.computeIfAbsent(mods.isEmpty() ? "?" : String.join(", ", mods), k -> new java.util.ArrayList<>()).add(m));
+        StringBuilder b = new StringBuilder("; " + what);
+        byMods.forEach((mods, ms) -> b.append(ms.size() > 8 ? String.join(", ", ms.subList(0, 8)) + " +" + (ms.size() - 8) : String.join(", ", ms))
+                .append(" (").append(mods).append(") "));
+        return b.toString().stripTrailing();
     }
 
     private static boolean isPost(AbstractInsnNode in) {
