@@ -47,11 +47,14 @@ public final class AsyncChunkSave {
     public static final AtomicLong deferred = new AtomicLong(), sections = new AtomicLong(), verified = new AtomicLong(), mismatches = new AtomicLong(),
             waitedReads = new AtomicLong(), vanilla = new AtomicLong();
 
-    /** set on the main thread around ChunkSerializer.write while a save is deferred */
-    private static boolean deferring;
-    private static List<Object[]> collecting;
-    /** the palette jobs of the chunk tag just written (ChunkMap.save: write, then storage write) */
-    private static List<Object[]> lastPending;
+    /**
+     * Per thread: set around ChunkSerializer.write while this thread defers a save. Other threads write chunks too -
+     * C2ME saves on its own workers (11-06, JJThunder To The Max with C2ME: their palettes went into the main thread's
+     * list, NPE in fill, crash reports); a thread without its own deferred save always encodes the vanilla way.
+     */
+    private static final ThreadLocal<List<Object[]>> COLLECTING = new ThreadLocal<>();
+    /** per thread: the palette jobs of the chunk tag just written (ChunkMap.save: write, then storage write) */
+    private static final ThreadLocal<List<Object[]>> LAST_PENDING = new ThreadLocal<>();
     /** per position: completes once that position's latest deferred save has been handed to the IOWorker */
     private static final ConcurrentHashMap<Long, CompletableFuture<Void>> STORED = new ConcurrentHashMap<>();
 
@@ -73,28 +76,27 @@ public final class AsyncChunkSave {
 
     /** ChunkMap.save's ChunkSerializer.write, main thread. */
     public static CompoundTag write(ChunkStorage storage, net.minecraft.server.level.ServerLevel level, ChunkAccess chunk) {
-        lastPending = null;
+        LAST_PENDING.remove();
         if (!shouldDefer(storage, chunk)) {
             vanilla.incrementAndGet();
             return net.minecraft.world.level.chunk.storage.ChunkSerializer.write(level, chunk);
         }
         List<Object[]> list = new ArrayList<>(48);
-        deferring = true;
-        collecting = list;
+        COLLECTING.set(list);
         try {
             CompoundTag tag = net.minecraft.world.level.chunk.storage.ChunkSerializer.write(level, chunk);
-            lastPending = list;
+            LAST_PENDING.set(list);
             return tag;
         } finally {
-            deferring = false;
-            collecting = null;
+            COLLECTING.remove();
         }
     }
 
     /** ChunkSerializer.write's palette encodes (every Codec.encodeStart there goes through here). */
     @SuppressWarnings({"unchecked", "rawtypes"})
     public static DataResult encode(Codec codec, DynamicOps ops, Object value) {
-        if (!deferring || !(value instanceof PalettedContainer<?> pc) || ops != NbtOps.INSTANCE) return codec.encodeStart(ops, value);
+        List<Object[]> collecting;
+        if (!(value instanceof PalettedContainer<?> pc) || ops != NbtOps.INSTANCE || (collecting = COLLECTING.get()) == null) return codec.encodeStart(ops, value);
         CompoundTag placeholder = new CompoundTag();
         Tag reference = VERIFY ? (Tag) codec.encodeStart(ops, value).getOrThrow(false, e -> {}) : null;
         collecting.add(new Object[] {placeholder, pc.copy(), codec, reference});
@@ -103,8 +105,8 @@ public final class AsyncChunkSave {
 
     /** ChunkMap.save's storage write, main thread (1.20.1: ChunkStorage.write returns nothing, IOWorker's future is dropped). */
     public static void store(ChunkStorage storage, ChunkPos pos, CompoundTag tag) {
-        List<Object[]> jobs = lastPending;
-        lastPending = null;
+        List<Object[]> jobs = LAST_PENDING.get();
+        LAST_PENDING.remove();
         if (jobs == null || jobs.isEmpty()) {
             storage.write(pos, tag);
             return;
