@@ -51,6 +51,13 @@ final class ClientMeter {
         bus.addListener(EventPriority.HIGHEST, net.neoforged.neoforge.client.event.ClientTickEvent.Pre.class, e -> tickStart = System.nanoTime());
         bus.addListener(EventPriority.LOWEST, net.neoforged.neoforge.client.event.ClientTickEvent.Post.class, e -> {
             if (stopAtNanos > 0 && tickStart != 0 && nt < ticks.length) ticks[nt++] = System.nanoTime() - tickStart;
+            if (stopAtNanos > 0) {   // a screen over the world in the window
+                var m = net.minecraft.client.Minecraft.getInstance();
+                if (m.level != null && m.screen != null && !(m.screen instanceof net.minecraft.client.gui.screens.ChatScreen)) {
+                    screenTicks++;
+                    screenName = m.screen.getClass().getSimpleName();
+                }
+            }
         });
         bus.addListener(RegisterClientCommandsEvent.class, e -> e.getDispatcher().register(
                 Commands.literal(SleepMod.DEV ? "sleepclient" : "sleepiumclient").then(Commands.literal("run")
@@ -62,11 +69,17 @@ final class ClientMeter {
                                 }))))));
     }
 
+    /** client ticks of the measured window with a screen over the world (the game paused or covered: not play) */
+    static int screenTicks;
+    static String screenName;
+
     static boolean running() {
         return stopAtNanos >= 0;
     }
 
     static void start(int seconds, String l) {
+        screenTicks = 0;
+        screenName = null;
         nt = 0;
         n = 0;
         lastPre = 0;
@@ -251,8 +264,9 @@ final class ClientMeter {
         SleepMod.LOGGER.info("\n{}", sb);
         if (mc.player != null) {
             mc.player.displayClientMessage(Component.literal(String.format(Locale.ROOT,
-                    "sleepclient '%s': %.0f fps, frame p50 %.2f / p99 %.2f ms, %.0f KiB/frame, CPU %.2f cores / %.3f ms per frame, client tick mean %.3f / p99 %.3f ms -> %s",
-                    label, n / secs, f.p50() / 1e6, f.p99() / 1e6, a.mean() / 1024, cpuSecs / secs, cpuSecs * 1e3 / Math.max(1, n), t.mean() / 1e6, t.p99() / 1e6, file.getFileName())), false);
+                    "sleepclient '%s': %.0f fps, frame p50 %.2f / p99 %.2f ms, %.0f KiB/frame, CPU %.2f cores / %.3f ms per frame, client tick mean %.3f / p99 %.3f ms -> %s%s",
+                    label, n / secs, f.p50() / 1e6, f.p99() / 1e6, a.mean() / 1024, cpuSecs / secs, cpuSecs * 1e3 / Math.max(1, n), t.mean() / 1e6, t.p99() / 1e6, file.getFileName(),
+                    screenTicks > 0 ? "; A SCREEN OVER THE WORLD " + screenTicks + " ticks (" + screenName + "): not play" : "")), false);
         }
     }
 }
