@@ -90,7 +90,7 @@ public abstract class FluidSpreadMixin {
      * @reason the same search with stamped arrays instead of per-call hash maps and pairs
      */
     @Overwrite
-    protected Map<Direction, FluidState> getSpread(Level level, BlockPos pos, BlockState state) {
+    public Map<Direction, FluidState> getSpread(Level level, BlockPos pos, BlockState state) {
         if (!FluidCaches.fastSpread(this.getClass()) || !FluidCaches.onServerThread()) return sleep$vanillaSpread(level, pos, state);
         FluidCaches c = FluidCaches.begin();
         if (c == null) return sleep$vanillaSpread(level, pos, state);   // nested

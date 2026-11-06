@@ -4,6 +4,7 @@
   "package": "dev.lull.geomixin",
   "plugin": "dev.lull.geomixin.GeoMixinPlugin",
   "compatibilityLevel": "JAVA_21",
+  "overwrites": { "conformVisibility": true },
   "client": [
     "GeoModelWorkerMixin",
     "MolangActorMixin",

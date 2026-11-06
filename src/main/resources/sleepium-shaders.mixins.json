@@ -4,6 +4,7 @@
   "package": "dev.lull.shadermixin",
   "plugin": "dev.lull.shadermixin.ShaderMixinPlugin",
   "compatibilityLevel": "JAVA_21",
+  "overwrites": { "conformVisibility": true },
   "client": [
     "ShaderArmorIdsMixin",
     "ShaderBinaryCompileMixin",

@@ -3,6 +3,7 @@
   "minVersion": "0.8",
   "package": "dev.lull.mixin",
   "compatibilityLevel": "JAVA_21",
+  "overwrites": { "conformVisibility": true },
   "mixins": [
     "SeedEntitiesMixin",
     "SeedLevelMixin",

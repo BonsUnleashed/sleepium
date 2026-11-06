@@ -4,6 +4,7 @@
   "package": "dev.lull.veilmixin",
   "plugin": "dev.lull.veilmixin.VeilMixinPlugin",
   "compatibilityLevel": "JAVA_21",
+  "overwrites": { "conformVisibility": true },
   "client": [
     "VeilShaderPatchMixin"
   ],

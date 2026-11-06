@@ -229,28 +229,33 @@ public final class MixinTouch {
                     String name = cfg.config();
                     if (Boolean.getBoolean("sleep.mixinIndex.debug")) System.out.println("[sleep/opt] mixin index: " + info.moduleName() + " " + name + " -> " + file.findResource(name));
                     if (name.startsWith("sleepium") || name.startsWith("probe")) continue;
-                    java.nio.file.Path json = file.findResource(name);
-                    if (json == null || !java.nio.file.Files.exists(json)) continue;
-                    com.google.gson.JsonObject o = com.google.gson.JsonParser.parseString(java.nio.file.Files.readString(json)).getAsJsonObject();
-                    if (!o.has("package")) continue;
-                    String pkg = o.get("package").getAsString();
-                    if (pkg.startsWith("dev.lull") || pkg.startsWith("dev.probe")) continue;
-                    for (String key : new String[] {"mixins", "client", "server"}) {
-                        if (!o.has(key) || !o.get(key).isJsonArray()) continue;
-                        for (var e : o.getAsJsonArray(key)) {
-                            java.nio.file.Path bytes = file.findResource((pkg + "." + e.getAsString()).replace('.', '/') + ".class");
-                            if (bytes != null && java.nio.file.Files.exists(bytes)) indexClass(java.nio.file.Files.readAllBytes(bytes), m);
-                        }
-                    }
-                    // a config plugin may add mixins of its package the lists do not name (its getMixins: Embeddium's
-                    // lists are empty): every @Mixin class under the package counts (one the plugin then declines too)
-                    if (o.has("plugin")) {
-                        java.nio.file.Path root = file.findResource(pkg.replace('.', '/'));
-                        if (root != null && java.nio.file.Files.isDirectory(root))
-                            try (var walk = java.nio.file.Files.walk(root)) {
-                                for (java.nio.file.Path c : (Iterable<java.nio.file.Path>) walk::iterator)
-                                    if (c.toString().endsWith(".class")) indexClass(java.nio.file.Files.readAllBytes(c), m);
+                    try {
+                        java.nio.file.Path json = file.findResource(name);
+                        if (json == null || !java.nio.file.Files.exists(json)) continue;
+                        com.google.gson.JsonObject o = com.google.gson.JsonParser.parseString(java.nio.file.Files.readString(json)).getAsJsonObject();
+                        if (!o.has("package") || !o.get("package").isJsonPrimitive()) continue;
+                        String pkg = o.get("package").getAsString();
+                        if (pkg.startsWith("dev.lull") || pkg.startsWith("dev.probe")) continue;
+                        for (String key : new String[] {"mixins", "client", "server"}) {
+                            if (!o.has(key) || !o.get(key).isJsonArray()) continue;
+                            for (var e : o.getAsJsonArray(key)) {
+                                if (!e.isJsonPrimitive()) continue;   // Mixin skips a null entry (Sleep Tight's list ends in one)
+                                java.nio.file.Path bytes = file.findResource((pkg + "." + e.getAsString()).replace('.', '/') + ".class");
+                                if (bytes != null && java.nio.file.Files.exists(bytes)) indexClass(java.nio.file.Files.readAllBytes(bytes), m);
                             }
+                        }
+                        // a config plugin may add mixins of its package the lists do not name (its getMixins: Embeddium's
+                        // lists are empty): every @Mixin class under the package counts (one the plugin then declines too)
+                        if (o.has("plugin")) {
+                            java.nio.file.Path root = file.findResource(pkg.replace('.', '/'));
+                            if (root != null && java.nio.file.Files.isDirectory(root))
+                                try (var walk = java.nio.file.Files.walk(root)) {
+                                    for (java.nio.file.Path c : (Iterable<java.nio.file.Path>) walk::iterator)
+                                        if (c.toString().endsWith(".class")) indexClass(java.nio.file.Files.readAllBytes(c), m);
+                                }
+                        }
+                    } catch (Throwable t) {   // one mod's config the index cannot read: the other mods' still counted
+                        System.out.println("[sleep/opt] foreign mixin index: " + name + " not read: " + t);
                     }
                 }
             }
