@@ -4,6 +4,7 @@
   "package": "dev.lull.opt",
   "plugin": "dev.lull.opt.OptMixinPlugin",
   "compatibilityLevel": "JAVA_17",
+  "overwrites": { "conformVisibility": true },
   "refmap": "sleepium.refmap.json",
   "mixins": [
     "GoalSelectorMixin",

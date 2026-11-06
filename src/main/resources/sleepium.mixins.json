@@ -4,6 +4,7 @@
   "package": "dev.lull.mixin",
   "plugin": "dev.lull.mixin.SleepMixinPlugin",
   "compatibilityLevel": "JAVA_17",
+  "overwrites": { "conformVisibility": true },
   "refmap": "sleepium.refmap.json",
   "mixins": [
     "BootMixin",

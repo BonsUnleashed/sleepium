@@ -25,7 +25,7 @@ public abstract class SpriteInterpolateMixin {
      * @reason the blend over the images' memory (see the class comment)
      */
     @Overwrite
-    void uploadInterpolatedFrame(int x, int y, SpriteContents.Ticker ticker) {
+    public void uploadInterpolatedFrame(int x, int y, SpriteContents.Ticker ticker) {
         SpriteContents.AnimatedTexture anim = ticker.animationInfo;
         List<SpriteContents.FrameInfo> frames = anim.frames;
         SpriteContents.FrameInfo info = frames.get(ticker.frame);

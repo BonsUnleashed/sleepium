@@ -4,6 +4,7 @@
   "package": "dev.lull.geomixin",
   "plugin": "dev.lull.geomixin.GeoMixinPlugin",
   "compatibilityLevel": "JAVA_17",
+  "overwrites": { "conformVisibility": true },
   "refmap": "sleepium.refmap.json",
   "client": [
     "AnimStreamMixin",

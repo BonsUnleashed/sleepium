@@ -30,7 +30,7 @@ public abstract class WorldgenAllocSurfaceContextMixin {
      * @reason same lazy biome lookup, one reusable supplier per context instead of two objects per block
      */
     @Overwrite
-    protected void updateY(int stoneDepthAbove, int stoneDepthBelow, int waterHeight, int blockX, int blockY, int blockZ) {
+    public void updateY(int stoneDepthAbove, int stoneDepthBelow, int waterHeight, int blockX, int blockY, int blockZ) {
         this.lastUpdateY++;
         LazyBiome b = sleep$biome;
         if (b == null) sleep$biome = b = new LazyBiome(biomeGetter, pos);

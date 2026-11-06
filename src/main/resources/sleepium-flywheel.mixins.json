@@ -4,6 +4,7 @@
   "package": "dev.lull.flwmixin",
   "plugin": "dev.lull.flwmixin.FlwMixinPlugin",
   "compatibilityLevel": "JAVA_17",
+  "overwrites": { "conformVisibility": true },
   "refmap": "sleepium.refmap.json",
   "client": [
     "FlwExecutorMixin"

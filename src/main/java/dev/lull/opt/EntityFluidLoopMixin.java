@@ -34,7 +34,7 @@ public abstract class EntityFluidLoopMixin {
      * @reason Forge's stream pipelines as loops (see the class comment)
      */
     @Overwrite
-    protected boolean updateInWaterStateAndDoFluidPushing() {
+    public boolean updateInWaterStateAndDoFluidPushing() {
         Entity self = (Entity) (Object) this;
         this.fluidHeight.clear();
         this.forgeFluidTypeHeight.clear();

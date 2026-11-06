@@ -4,6 +4,7 @@
   "package": "dev.lull.catmixin",
   "plugin": "dev.lull.catmixin.CatnipMixinPlugin",
   "compatibilityLevel": "JAVA_17",
+  "overwrites": { "conformVisibility": true },
   "refmap": "sleepium.refmap.json",
   "client": [
     "SbbCacheWorkerMixin",

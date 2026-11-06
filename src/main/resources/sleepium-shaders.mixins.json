@@ -4,6 +4,7 @@
   "package": "dev.lull.shadermixin",
   "plugin": "dev.lull.shadermixin.ShaderMixinPlugin",
   "compatibilityLevel": "JAVA_17",
+  "overwrites": { "conformVisibility": true },
   "refmap": "sleepium.refmap.json",
   "client": [
     "ShaderArmorIdsMixin",
