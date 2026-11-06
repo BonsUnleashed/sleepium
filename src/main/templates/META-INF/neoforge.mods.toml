@@ -48,6 +48,8 @@ config="sleepium-geo.mixins.json"
 [[mixins]]
 config="sleepium-flywheel.mixins.json"
 [[mixins]]
+config="sleepium-emf.mixins.json"
+[[mixins]]
 config="sleepium-catnip.mixins.json"
 [[mixins]]
 config="sleepium-veil.mixins.json"

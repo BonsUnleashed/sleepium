@@ -1,0 +1,16 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "dev.lull.emfmixin",
+  "plugin": "dev.lull.emfmixin.EmfMixinPlugin",
+  "compatibilityLevel": "JAVA_21",
+  "overwrites": { "conformVisibility": true },
+  "client": [
+    "EmfAsmSplitMixin",
+    "EmfPartGpuMixin",
+    "ModelPartCubesAccessor"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

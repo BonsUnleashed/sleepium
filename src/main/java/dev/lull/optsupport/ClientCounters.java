@@ -36,6 +36,7 @@ public final class ClientCounters {
                 + (Boolean.getBoolean("lab.opt.EntityBatchMixin") ? "; " + EntityBatch.report() : "")
                 + (Boolean.getBoolean("lab.opt.RenderCacheMixin") ? "; " + RenderCache.report() : "")
                 + (Boolean.getBoolean("lab.opt.ParallelEntitiesMixin") ? "; " + ParallelRender.report() : "")
+                + (EmfSplit.classes.get() > 0 ? "; " + EmfSplit.report() : "")
                 + (Boolean.getBoolean("lab.opt.PartBatchMixin") ? "; " + PartBatch.report() + "; " + Materials.report() : "") + extra()
                 + (Boolean.getBoolean("lab.opt.SectionListsMixin") ? "; " + SectionLists.report() : "")
                 + (Boolean.getBoolean("lab.opt.BlockMeshMemoMixin") ? "; " + BlockMeshMemo.report() : "")

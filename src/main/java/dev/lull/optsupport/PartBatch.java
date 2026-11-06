@@ -282,13 +282,30 @@ public final class PartBatch {
     private static final PoseStack IDENTITY = new PoseStack();
 
     /** The part's geometry in the arena (recorded once through the vanilla compile), or null if it cannot be. */
-    private static int[] geometry(ModelPart part, PartCompiler compiler) {
-        int[] g = GEOMETRY.get(part);
+    private static int[] geometry(Object key, PartCompiler compiler) {
+        int[] g = GEOMETRY.get(key);
         if (g != null) return g;
         GEOM.reset();
         compiler.sleep$geometry(IDENTITY.last(), GEOM);
-        return upload(part);
+        return upload(key);
     }
+
+    /**
+     * As capture, with the geometry under another key than the part: a part whose cubes are swapped (Entity Model
+     * Features' variants assign each variant's own cube list) keys it by the cube list, one geometry per variant.
+     */
+    public static boolean capture(Object key, PoseStack.Pose pose, VertexConsumer buffer, int light, int overlay, int color, PartCompiler compiler) {
+        RenderType type = batchedType(buffer);
+        if (type == null) return false;
+        int[] g = geometry(key, compiler);
+        if (g[0] < 0) return false;
+        queue(QUEUES, type, (BufferBuilder) buffer, g, pose, light, overlay, color);
+        parts++;
+        emfParts++;
+        return true;
+    }
+
+    public static long emfParts;
 
     /** What GEOM recorded, into the arena under this key ({-1, 0} if empty or not whole quads). */
     private static int[] upload(Object key) {
@@ -1320,8 +1337,8 @@ public final class PartBatch {
 
     public static String report() {
         SbbRecorder rcd = sbbRecorder;
-        return (rcd != null ? rcd.report() + "; " : "") + String.format(java.util.Locale.ROOT, "part batch: SuperByteBuffer calls %d, parts %d (not taken %d %s %s %s, UV shift %d, level light %d); shaders patched %s, parts %d, GeckoLib bones %d (from workers %d, jobs refused at merge %d), multi-draws %d, geometries %d (%.1f MB), lost %d; resident draws %d, uploads %d (arena %.1f MB); persistent records %d, draws %d, uploads %d; level-lit parts %d (refused %d); %s",
-                sbbCalls, sbbParts, sbbRefused, java.util.Arrays.toString(SBB_WHY), SBB_CONSUMERS, SBB_TYPES, sbbShift, sbbLevelLight, PATCHED, parts, geoParts, jobMerged, jobRefused, draws, geometries, (double) used * STRIDE / 1048576.0, fallbacks, residentDraws, residentUploads,
+        return (rcd != null ? rcd.report() + "; " : "") + String.format(java.util.Locale.ROOT, "part batch: SuperByteBuffer calls %d, parts %d (not taken %d %s %s %s, UV shift %d, level light %d); shaders patched %s, parts %d (EMF %d), GeckoLib bones %d (from workers %d, jobs refused at merge %d), multi-draws %d, geometries %d (%.1f MB), lost %d; resident draws %d, uploads %d (arena %.1f MB); persistent records %d, draws %d, uploads %d; level-lit parts %d (refused %d); %s",
+                sbbCalls, sbbParts, sbbRefused, java.util.Arrays.toString(SBB_WHY), SBB_CONSUMERS, SBB_TYPES, sbbShift, sbbLevelLight, PATCHED, parts, emfParts, geoParts, jobMerged, jobRefused, draws, geometries, (double) used * STRIDE / 1048576.0, fallbacks, residentDraws, residentUploads,
                 (double) RES_ARENA.capacity * RES_ARENA.stride / 1048576.0, pUsed - pFreeN, persistDraws, persistUploads, litParts, litRefused,
                 LightBoxes.report());
     }
