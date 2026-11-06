@@ -35,7 +35,9 @@ public final class SleepOptions {
         all = new ArrayList<>();
         try (InputStream in = SleepOptions.class.getResourceAsStream("/assets/sleepium/options.tsv")) {
             if (in != null) {
-                for (String line : new String(in.readAllBytes(), StandardCharsets.UTF_8).split("\n")) {
+                // any line end: split at "\n" alone, a CRLF file (core.autocrlf) left "\r" in the last column - every
+                // option "part of" a flag named "\r": every switch locked and shown OFF (1.0.x - 1.1.1)
+                for (String line : new String(in.readAllBytes(), StandardCharsets.UTF_8).split("\\R")) {
                     String[] c = line.split("\t", -1);
                     if (c.length >= 4) all.add(new Option(c[0], c[1], "true".equals(c[2]), c[3],
                             c.length >= 5 && !c[4].isEmpty() ? java.util.List.of(c[4].split(",")) : java.util.List.of()));
