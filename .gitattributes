@@ -1,0 +1,10 @@
+
+# The jar's text resources as the repository has them (LF), whatever core.autocrlf says: a CRLF options.tsv left a
+# "\r" in its last column and locked every switch of the settings screen (1.0.x - 1.1.1)
+src/main/resources/**/*.tsv text eol=lf
+src/main/resources/**/*.txt text eol=lf
+src/main/resources/**/*.json text eol=lf
+src/main/resources/**/*.toml text eol=lf
+src/main/resources/**/*.cfg text eol=lf
+src/main/templates/**/*.toml text eol=lf
+defaults.txt text eol=lf
