@@ -163,7 +163,7 @@ public final class PosEscape {
             if (in instanceof VarInsnNode v && v.var == posSlot && v.getOpcode() >= Opcodes.ISTORE && v.getOpcode() <= Opcodes.ASTORE) return no(m.name + " reassigns pos");
         Frame<SourceValue>[] fr;
         try {
-            fr = new Analyzer<>(new SourceInterpreter()).analyze(r.owner(), m);
+            fr = dev.lull.ClassBytes.analyze(new Analyzer<>(new SourceInterpreter()), r.owner(), m);
         } catch (Exception e) {
             return false;
         }
