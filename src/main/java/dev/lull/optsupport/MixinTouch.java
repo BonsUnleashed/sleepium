@@ -35,6 +35,15 @@ public final class MixinTouch {
 
     private MixinTouch() {}
 
+    /**
+     * A config of the engine or its framework (not indexed). The foreign test config (testmods.foreign: stand-ins for
+     * other mods' mixins) counts as foreign when its mixins are applied, -Dsleep.foreignTest=true.
+     */
+    private static boolean ours(String config) {
+        if (config.startsWith("sleepium-foreign-test")) return !Boolean.getBoolean("sleep.foreignTest");
+        return config.startsWith("sleepium") || config.startsWith("probe");
+    }
+
     /** Is method {@code name} of class {@code internalName} changed by some foreign mixin? */
     public static boolean touched(String internalName, String name) {
         return touched(internalName, name, null);
@@ -178,7 +187,7 @@ public final class MixinTouch {
             for (org.spongepowered.asm.mixin.transformer.Config c : org.spongepowered.asm.mixin.Mixins.getConfigs()) {
                 org.spongepowered.asm.mixin.extensibility.IMixinConfig mc = c.getConfig();
                 if (mc == null) continue;
-                if (mc.getName().startsWith("sleepium") || mc.getName().startsWith("probe")) continue;   // (the engine's and its framework's)
+                if (ours(mc.getName())) continue;   // (the engine's and its framework's)
                 String pkg = mc.getMixinPackage();
                 if (pkg == null) continue;
                 if (!pkg.isEmpty() && !pkg.endsWith(".")) pkg += ".";
@@ -234,7 +243,7 @@ public final class MixinTouch {
                 var file = info.getFile();
                 for (String name : mixinConfigs(file)) {
                     if (Boolean.getBoolean("sleep.mixinIndex.debug")) System.out.println("[sleep/opt] mixin index: " + info.moduleName() + " " + name + " -> " + file.findResource(name));
-                    if (name.startsWith("sleepium") || name.startsWith("probe")) continue;
+                    if (ours(name)) continue;
                     try {
                         java.nio.file.Path json = file.findResource(name);
                         if (json == null || !java.nio.file.Files.exists(json)) continue;
