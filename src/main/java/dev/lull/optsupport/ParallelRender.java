@@ -117,6 +117,7 @@ public final class ParallelRender {
     /** From EntityRenderDispatcher.onResourceManagerReload: the worker renderer sets are built again. */
     public static void reloaded() {
         epoch++;
+        CHECKS.clear();
     }
 
     // ------------------------------------------------------------------ per-worker renderer sets
@@ -396,9 +397,13 @@ public final class ParallelRender {
      * worker records the renderer alone; the dispatcher - with every injection in it, the flame, the shadow - runs on
      * the render thread as vanilla's, and the renderer's bytes are written inside it, where those mods' state is set.
      * Not when render is overwritten or its renderer call redirected by another mod (the merge would not be reached),
-     * nor when renderEntity is (as above). -Dlab.prender.inner=false: such entities stay on the render thread.
+     * nor when renderEntity is (as above). Off unless -Dlab.prender.inner=true (11-06): the mods that wrap the dispatcher keep the entity being drawn in
+     * globals that their own mixins in the renderer and its models read and write (Entity Model Features: the
+     * animated entity's variables; ETF, Oculus with a shaderpack: the entity's textures and id) - on a worker those are
+     * another entity's, a data race (EMF + Fresh Animations crashed the render cache's fingerprint with a
+     * ConcurrentModificationException). Such entities stay on the render thread, as in 1.0.3.
      */
-    static final boolean INNER = (!DISPATCH_UNTOUCHED || Boolean.getBoolean("lab.prender.forceInner")) && !"false".equals(System.getProperty("lab.prender.inner"))
+    static final boolean INNER = (!DISPATCH_UNTOUCHED || Boolean.getBoolean("lab.prender.forceInner")) && (Boolean.getBoolean("lab.prender.inner") || Boolean.getBoolean("lab.prender.forceInner"))
             && cacheHooked()
             && !MixinTouch.overwritten("net/minecraft/client/renderer/entity/EntityRenderDispatcher", "render")
             && !MixinTouch.redirected("net/minecraft/client/renderer/entity/EntityRenderDispatcher", "render", "render")
@@ -453,11 +458,63 @@ public final class ParallelRender {
             innerArmed = j;
             return false;
         }
+        if (sampled(j)) {   // rendered here once more, inside renderEntity where other mods' state is set: the same bytes?
+            VERIFY_REC.reset();
+            Minecraft.getInstance().getEntityRenderDispatcher().render(e, x, y, z, yaw, pt, pose, VERIFY_REC, light);
+            if (mismatch(j, j.buffers)) return true;
+        }
         return take(j, j.buffers);
     }
 
     /** the job whose bytes the dispatcher's renderer call takes (INNER), set by merge for that one call */
     private static Job innerArmed;
+
+    /**
+     * A job is rendered on a worker before the render thread reaches the call it is merged into; what another mod's
+     * injection around that call sets for the renderer to read (Entity Model Features' animated entity in static fields,
+     * a shaderpack's entity id in Iris / Oculus) is not set on the worker. So the first CHECK_FIRST jobs of each entity
+     * type, and one in CHECK_EVERY after, are rendered once more at the merge, the vanilla way, inside that call, and
+     * compared byte for byte: a difference puts the vanilla bytes in the frame and, the CHECK_LIMIT-th time, keeps the
+     * type on the render thread. Learned by observation, for any mod. -Dlab.prender.check=false: off.
+     */
+    private static final boolean CHECK = !"false".equals(System.getProperty("lab.prender.check"));
+    private static final int CHECK_FIRST = Integer.getInteger("lab.prender.checkFirst", 8);
+    private static final int CHECK_EVERY = Integer.getInteger("lab.prender.checkEvery", 512);
+    private static final int CHECK_LIMIT = 2;
+    /** render thread: per entity type {jobs merged, mismatches}; counted again after a resource reload */
+    private static final java.util.IdentityHashMap<net.minecraft.world.entity.EntityType<?>, int[]> CHECKS = new java.util.IdentityHashMap<>();
+    private static long checked, checkMismatches;
+
+    /** Is this merge one of the checked ones? (render thread) */
+    private static boolean sampled(Job j) {
+        if (!CHECK || j.parts.size() > 0) return false;   // parts: our own path for GeckoLib bones (verify mode checks it)
+        int[] c = CHECKS.get(j.entity.getType());
+        if (c == null) CHECKS.put(j.entity.getType(), c = new int[2]);
+        int n = c[0]++;
+        return n < CHECK_FIRST || n % CHECK_EVERY == 0;
+    }
+
+    /**
+     * VERIFY_REC holds the vanilla render made in place: the same bytes - false, the job is taken; others - the vanilla
+     * bytes go into the frame instead (the job's side effects dropped: the vanilla render made its own), true.
+     */
+    private static boolean mismatch(Job j, MultiBufferSource buffers) {
+        VERIFY_REC.finish(VERIFY_OUT);
+        checked++;
+        if (VERIFY_OUT.sameAs(j.out)) return false;
+        checkMismatches++;
+        net.minecraft.world.entity.EntityType<?> type = j.entity.getType();
+        if (++CHECKS.get(type)[1] == CHECK_LIMIT) {
+            WORKER_REFUSED.add(type);
+            System.out.println("[sleep/opt] parallel render: " + type + " kept on the render thread: rendered inside the call another mod wraps, it differs from the worker's ("
+                    + describe(VERIFY_OUT, j.out).split("\n")[0] + ")");
+        }
+        j.calls.clear();
+        j.parts.clear();
+        RenderCache.append(VERIFY_OUT, buffers);
+        merged = true;
+        return true;
+    }
 
     /**
      * RenderCacheMixin, in place of EntityRenderDispatcher.render's renderer call: while a job is merged and the
@@ -474,6 +531,11 @@ public final class ParallelRender {
             j.calls.clear();
             j.parts.clear();
             return false;
+        }
+        if (sampled(j)) {   // rendered here once more, inside the dispatcher where other mods' state is set: the same bytes?
+            VERIFY_REC.reset();
+            Minecraft.getInstance().getEntityRenderDispatcher().getRenderer(e).render(e, yaw, pt, pose, VERIFY_REC, light);
+            if (mismatch(j, buffers)) return true;
         }
         return take(j, buffers);
     }
@@ -694,6 +756,6 @@ public final class ParallelRender {
             System.out.println(w);
         }
         return String.format(java.util.Locale.ROOT, "parallel render: %d workers, jobs %d, on workers %d (render thread helped %d), on the render thread %d (of them merges that fell back %d), failed %d, refused %d, journaled calls %d, part records merged in %.0f ms%s", THREADS, jobs, parallel,
-                helped, sequential, mergeFallbacks, failed, refused, journaled, mergeNanos / 1e6, (WORKER_REFUSED.isEmpty() ? "" : ", kept on the render thread " + WORKER_REFUSED) + (VERIFY ? ", verified " + verified + ", mismatches " + mismatches + (MISMATCH_TYPES.isEmpty() ? "" : " " + MISMATCH_TYPES) + (SELF_TYPES.isEmpty() ? "" : ", of them also between two render-thread renders " + SELF_TYPES) : ""));
+                helped, sequential, mergeFallbacks, failed, refused, journaled, mergeNanos / 1e6, (WORKER_REFUSED.isEmpty() ? "" : ", kept on the render thread " + WORKER_REFUSED) + (CHECK ? ", checked in place " + checked + (checkMismatches > 0 ? " (differed " + checkMismatches + ")" : "") : "") + (VERIFY ? ", verified " + verified + ", mismatches " + mismatches + (MISMATCH_TYPES.isEmpty() ? "" : " " + MISMATCH_TYPES) + (SELF_TYPES.isEmpty() ? "" : ", of them also between two render-thread renders " + SELF_TYPES) : ""));
     }
 }
