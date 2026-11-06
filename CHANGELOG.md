@@ -6,6 +6,13 @@ release changes the API (`dev.lull.api`) or the settings in a way that needs att
 
 ## 1.1.4 - 2026-11-07
 
+> **If you played with Sleepium before 1.1.4 together with C2ME** (or another mod that saves chunks on its own
+> threads): chunks saved during that time may be broken - parts of them missing, the log saying
+> `No key palette in MapLike[{}]`, terrain that looks hollow or does not appear. 1.1.4 saves them correctly from now on
+> (checked by generating with C2ME, restarting and reading every chunk back: no errors), but it cannot bring back data
+> that was never written. Regenerate those chunks: delete them with MCA Selector (or the region files of that area in
+> `saves/<world>/region`), or start a new world. Anything built in those chunks is lost when they regenerate.
+
 - **World creation crashed with datapacks that make the world very tall** (found testing JJThunder To The Max):
   `ArrayIndexOutOfBoundsException` in the aquifer generation once the world reaches past y 2047. Sleepium's aquifer
   shortcut read grid points whose height no longer fits the game's packed block positions; such cells now take the
