@@ -1,0 +1,17 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "dev.lull.emfmixin",
+  "plugin": "dev.lull.emfmixin.EmfMixinPlugin",
+  "compatibilityLevel": "JAVA_17",
+  "overwrites": { "conformVisibility": true },
+  "refmap": "sleepium.refmap.json",
+  "client": [
+    "EmfAsmSplitMixin",
+    "EmfPartGpuMixin",
+    "ModelPartCubesAccessor"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}
