@@ -4,6 +4,21 @@ Versions follow [Semantic Versioning](https://semver.org): a patch release fixes
 release changes the API (`dev.lull.api`) or the settings in a way that needs attention. Jars are named
 `sleepium-<version>+mc<minecraft version>-<loader>.jar` (before 1.1.0 without the loader).
 
+## 1.1.3 - 2026-11-06
+
+- **Event hooks next to other mods: no more conflicts, and the speed-up is back.** Sleepium rewrites the loader's
+  event posts so an event nobody listens to costs nothing. It now does this after every other mod's changes to the
+  class (including MixinExtras' wraps), so a post another mod wraps simply stays theirs and every other post is still
+  rewritten. 1.1.1 avoided the crash by leaving whole methods alone - next to Collections Of Optimizations that was
+  every event of the client hooks. The log now names the methods whose events other mods wrap and the mods' mixin
+  configs, e.g. `posts other mods wrap, left to them: onLivingTick (collections_of_optimizations.mixins.json)`.
+- **Entity sleep next to mods that inject into entities** (GitHub issue #1, Collections Of Optimizations): the
+  analysis of 15 entity kinds (items, minecarts, item frames...) failed with "Insufficient maximum stack size", so
+  those entities never slept. The analysis now sizes the code other mods changed itself.
+- The render cache learns, by default, which entity fields change without changing what is drawn (a mod's
+  per-tick field re-recorded every entity every frame): the client_entities world with Collections Of
+  Optimizations 94-188 -> about 2 190 fps.
+
 ## 1.1.2 - 2026-11-06
 
 - **The settings screen works again** (broken since 1.1.0, reported on CurseForge): every switch was locked and shown
