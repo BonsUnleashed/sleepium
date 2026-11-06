@@ -4,6 +4,17 @@ Versions follow [Semantic Versioning](https://semver.org): a patch release fixes
 release changes the API (`dev.lull.api`) or the settings in a way that needs attention. Jars are named
 `sleepium-<version>+mc<minecraft version>-<loader>.jar` (before 1.1.0 without the loader).
 
+## 1.1.1 - 2026-11-06
+
+- **A NeoForge server did not start next to some mods** (reported on CurseForge): `VerifyError: Operand stack
+  underflow` in `CommonHooks.onEntityIncomingDamage`. Another mod wraps that method's event post (MixinExtras), and
+  Sleepium's rewrite of NeoForge's event posts replaced the very instruction the wrap is built around. Sleepium now
+  leaves every such method alone: a method another mod's mixin changes keeps NeoForge's own post. Reproduced with a
+  stand-in mod (the same crash before, a started server after); without such mods nothing changes. Workaround for
+  1.1.0: `-Dlab.opt.EventSiteMixin=false` in the server's `user_jvm_args.txt`.
+- Entity Model Features: the hook of the animation cut is optional again - an EMF version without that spot runs
+  without the cut instead of not starting.
+
 ## 1.1.0 - 2026-11-06
 
 **Minecraft 1.20.1 / Forge is supported** (`sleepium-1.1.0+mc1.20.1-forge.jar`, Forge 47.4.9 or newer, Java 17 or
