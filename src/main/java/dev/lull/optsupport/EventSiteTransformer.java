@@ -26,16 +26,23 @@ public final class EventSiteTransformer {
     private static final String POST_DESC = "(Lnet/neoforged/bus/api/Event;)Lnet/neoforged/bus/api/Event;";
     private static final Handle BSM = new Handle(Opcodes.H_INVOKESTATIC, "dev/lull/optsupport/EventSites", "bootstrap",
             "(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;Ljava/lang/Class;)Ljava/lang/invoke/CallSite;", false);
-    public static int rewritten, skipped;
+    public static int rewritten, skipped, leftAlone;
 
     private EventSiteTransformer() {}
 
     public static void transform(ClassNode cn) {
-        int before = rewritten;
+        int before = rewritten, leftBefore = leftAlone;
         for (MethodNode m : cn.methods) {
             boolean has = false;
             for (AbstractInsnNode in : m.instructions) if (isPost(in)) { has = true; break; }
             if (!has) continue;
+            // another mod's mixin in this method: left alone. A MixinExtras wrap of the same post keeps the call
+            // instruction this would replace and later builds its wrapper around it - the two together were invalid
+            // bytecode (VerifyError: operand stack underflow in CommonHooks.onEntityIncomingDamage, a player's server)
+            if (MixinTouch.touched(cn.name, m.name)) {
+                for (AbstractInsnNode in : m.instructions) if (isPost(in)) leftAlone++;
+                continue;
+            }
             Frame<SourceValue>[] fr;
             try {
                 fr = new Analyzer<>(new SourceInterpreter()).analyze(cn.name, m);
@@ -57,7 +64,8 @@ public final class EventSiteTransformer {
                 rewritten++;
             }
         }
-        System.out.println("[sleep/opt] event sites: " + cn.name + " " + (rewritten - before) + " post calls rewritten");
+        System.out.println("[sleep/opt] event sites: " + cn.name + " " + (rewritten - before) + " post calls rewritten"
+                + (leftAlone > leftBefore ? ", " + (leftAlone - leftBefore) + " left alone (other mods' mixins in their methods)" : ""));
     }
 
     private static boolean isPost(AbstractInsnNode in) {

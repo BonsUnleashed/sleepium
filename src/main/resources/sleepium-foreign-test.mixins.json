@@ -4,6 +4,6 @@
   "package": "testmods.foreign",
   "plugin": "testmods.foreign.ForeignPlugin",
   "compatibilityLevel": "JAVA_21",
-  "mixins": ["ForeignFurnaceMixin"],
+  "mixins": ["ForeignFurnaceMixin", "ForeignPostWrapMixin"],
   "injectors": { "defaultRequire": 1 }
 }
