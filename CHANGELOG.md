@@ -4,6 +4,14 @@ Versions follow [Semantic Versioning](https://semver.org): a patch release fixes
 release changes the API (`dev.lull.api`) or the settings in a way that needs attention. Jars are named
 `sleepium-<version>+mc<minecraft version>-<loader>.jar` (before 1.1.0 without the loader).
 
+## 1.1.2 - 2026-11-06
+
+- **The settings screen works again** (broken since 1.1.0, reported on CurseForge): every switch was locked and shown
+  OFF, with "(part of ␍)" next to the names. The screen's catalogue went into the jar with Windows line ends and
+  each option was read as part of a flag named by a stray line end. The optimisations themselves were never off -
+  only the screen showed them wrong and could not change them. The catalogue is read with any line ends now, and the
+  jar's text files are packed as the repository has them.
+
 ## 1.1.1 - 2026-11-06
 
 - **A NeoForge server did not start next to some mods** (reported on CurseForge): `VerifyError: Operand stack
