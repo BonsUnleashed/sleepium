@@ -45,7 +45,7 @@ Intel N100, production server, milliseconds per tick:
 | 1 024 idle hoppers | 6.68 | 2.4 |
 
 The fights from a player's Cursed Fate videos (840 entities, zombies burning at noon, black holes and supernovas):
-**87 -> 600-646 fps**; with Oculus + Embeddium installed 289 -> 408-423 fps.
+**87 -> 600-646 fps**; with Oculus + Embeddium installed 289 -> 299 fps (next to Oculus the entities stay on the render thread).
 
 ## New in 1.1.0: the gains kept next to other optimisation mods
 
@@ -60,8 +60,17 @@ Tested one mod at a time and as a pack (Biohazard: Project Genesis' optimisation
 | ImmediatelyFast (1.21.1), client fps | 809 | 1 149 |
 | Lithium (1.21.1), 4 000 items, ms per tick | 4.32 | 3.37 |
 
+In packs, without Sleepium and with 1.1.0 (production clients):
+
+| | without | 1.1.0 |
+|---|---:|---:|
+| Biohazard, 473 mods (1.20.1), a new world, fps | 440 | 576 |
+| Entity Model Features + Fresh Animations, 144 mobs (1.20.1), fps | 20 | 93 |
+| Entity Model Features + Fresh Animations, 144 mobs (1.21.1), fps | 37 | 419 |
+
 Entity sleep now works next to mods that change entities (Lithium, Radium, Canary); ModernFix no longer turns off the
-collision memo; Iris and Oculus no longer keep entities off the render workers. Exact: world and frame hashes as before.
+collision memo. Fixed: a crash at start with TerraBlender (Biomes O' Plenty, Regions Unexplored and many packs) in
+1.0.x. Exact: world and frame hashes as before.
 
 ## Water and glass in one draw (1.0.3)
 

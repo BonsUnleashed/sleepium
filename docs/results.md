@@ -285,7 +285,8 @@ default): most of what is left between the versions on light servers is vanilla'
 <p align="center"><img src="../art/gallery/forge-1201-n100.png" width="720" alt="1.20.1 server on an Intel N100"></p>
 
 Client, the fights from a player's Cursed Fate videos (840 entities, zombies burning at noon, the set's effects; RTX
-4070 SUPER): vanilla 87 fps, Sleepium 600-646; with Oculus + Embeddium installed 289 -> 408-423.
+4070 SUPER): vanilla 87 fps, Sleepium 600-646; with Oculus + Embeddium installed 289 -> 299 (next to Oculus the
+entities stay on the render thread).
 
 <p align="center"><img src="../art/gallery/cursedfate-fight.png" width="720" alt="A Cursed Fate fight on the client"></p>
 

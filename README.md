@@ -26,10 +26,12 @@ or the [GitHub releases](../../releases). Each release has one jar per supported
 | 4 000 items on the ground, Intel N100 server, ms per tick (1.21.1) | 111 | 8.1 |
 | 4 000 items on the ground, Intel N100 server, ms per tick (1.20.1) | 115 | 10.7 |
 | A Cursed Fate fight (840 entities, burning mobs), fps, 1.20.1 | 87 | 600-646 |
-| The same fight with Oculus + Embeddium installed, fps | 289 | 408-423 |
+| The Biohazard pack (473 mods, 1.20.1), a new world, fps | 440 | 576 |
+| 144 mobs with Entity Model Features + Fresh Animations, fps, 1.21.1 | 37 | 419 |
 
 How these were measured, on which hardware, and many more scenes: [docs/results.md](docs/results.md).
 
+<p align="center"><img src="art/gallery/packs-110.png" width="720" alt="Client fps in modpacks, without Sleepium and with 1.1.0"></p>
 <p align="center"><img src="art/gallery/next-to-mods-110.png" width="720" alt="Client fps next to other optimisation mods, before 1.1.0 and with 1.1.0"></p>
 <p align="center"><img src="art/gallery/forge-1201-n100.png" width="720" alt="Server time per tick on an Intel N100, Minecraft 1.20.1 / Forge, vanilla vs Sleepium"></p>
 

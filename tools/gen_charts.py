@@ -84,8 +84,17 @@ chart('forge-1201-n100.png', 'Minecraft 1.20.1 / Forge on an Intel N100 server',
 
 chart('cursedfate-fight.png', 'A Cursed Fate fight on the client (Minecraft 1.20.1)',
       '840 entities, zombies burning at noon, the set\'s effects; frames per second, higher is better; RTX 4070 SUPER',
-      [('no other mods', 87, 623, '87', '600-646'), ('with Oculus + Embeddium', 289, 416, '289', '408-423')],
-      ('without Sleepium', 'Sleepium 1.1.0'), 'fps', note='Bars at the middle of each measured range.')
+      [('no other mods', 87, 623, '87', '600-646'), ('with Oculus + Embeddium', 289, 299, '289', '299')],
+      ('without Sleepium', 'Sleepium 1.1.0'), 'fps',
+      note='Bars at the middle of each measured range. Next to Oculus the entities stay on the render thread (its per-entity state).')
+
+chart('packs-110.png', 'In modpacks: without Sleepium and with 1.1.0',
+      'production clients, frames per second, higher is better; RTX 4070 SUPER; EMF + FA: 144 mobs animated by Fresh Animations',
+      [('Biohazard, 473 mods (1.20.1)', 440, 576, '440', '576'),
+       ('EMF + Fresh Animations (1.20.1)', 20, 93, '20', '93'),
+       ('EMF + Fresh Animations (1.21.1)', 37, 419, '37', '419')],
+      ('without Sleepium (the same jars, optimisations off)', 'Sleepium 1.1.0'), 'fps',
+      note="The mob scenes: each version's saved test world plus the mobs, so they differ between the versions.")
 
 chart('next-to-mods-110.png', 'Next to other optimisation mods: what 1.1.0 brings back',
       'client_entities (armour stands, item frames, chests, signs, mobs), frames per second, higher is better',

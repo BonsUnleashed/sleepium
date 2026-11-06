@@ -43,8 +43,13 @@ comparison); Lithium helps fluids, redstone and pistons and slows items.
 - **Iris / Sodium without a shaderpack** and **ImmediatelyFast**: their batching buffer sources no longer keep the
   render cache from drawing from video memory - client_entities with Iris + Sodium 377 -> 570 fps, with ImmediatelyFast
   809 -> 1 149 fps, frames bit for bit the same as before.
-- **Iris in `EntityRenderDispatcher.render`** no longer keeps every entity on the render thread: jobs are merged inside
-  the dispatcher, where Iris' state is set (a horde of burning zombies with Iris + Sodium 636 -> 805 fps).
+- **Mods in `EntityRenderDispatcher.render`** (Iris / Oculus, ETF, Entity Model Features, Embeddium) keep entities on
+  the render thread, as before: those mods keep the entity being drawn in globals that their mixins in renderers and
+  models read and write, so a worker would draw with another entity's state (with Fresh Animations, Entity Model
+  Features crashed that way in a test build). Merging inside the dispatcher is there to try (`-Dlab.prender.inner=true`)
+  but not on. With Entity Model Features + Fresh Animations, 144 animated mobs: 37 -> 419 fps (1.21.1).
+- **TerraBlender** (and the many mods built on it) no longer crashes the game at start: it makes methods Sleepium
+  replaces public, and Mixin refused Sleepium's narrower ones (1.0.x on 1.21.1 too).
 
 ## Minecraft 1.20.1 / Forge
 
@@ -78,8 +83,10 @@ items, mobs, redstone, villagers EXACT.
 | ImmediatelyFast 1.5.5 | | 681 | frame = without other mods |
 | EntityCulling, ModernFix, FerriteCore, Radium, Canary, Create | | 1 615-1 929 | run, no failures |
 | sodiumdynamiclights + Embeddium | | 863 | runs |
-| the whole set (13 mods), a horde of burning zombies | | 726 (was 544) | 5.68 M of 5.72 M entities on workers |
-| a Cursed Fate fight with Oculus + Embeddium | 289 | 408-423 | |
+| the whole set (13 mods), a horde of burning zombies | | 544 | entities on the render thread (Oculus, Embeddium in the dispatcher) |
+| a Cursed Fate fight with Oculus + Embeddium | 289 | 299 | |
+| the Biohazard pack (473 mods), a new world | 440 | 576 | starts, plays; Sleepium steps aside in 38 places |
+| Entity Model Features + ETF + Fresh Animations, 144 mobs | 20 | 93 | |
 
 Where Sleepium steps aside on 1.20.1: with Embeddium / Oculus the chunk renderer and a few render hooks (their own),
 with Radium / Canary collisions, entity sections, POI search and brains (theirs), with ModernFix parts of world

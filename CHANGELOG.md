@@ -20,9 +20,15 @@ Both versions:
   - Iris / Oculus (without a shaderpack), Embeddium and ImmediatelyFast no longer keep the render cache on its slow
     path: client_entities with Embeddium 137 -> 845 fps, Oculus 238 -> 440-464, ImmediatelyFast 371 -> 681 (1.20.1);
     Iris + Sodium 377 -> 570, ImmediatelyFast 809 -> 1 149 (1.21.1). Frames as before, bit for bit.
-  - Iris / Oculus no longer keep every entity on the render thread: entities are drawn on workers and merged inside the
-    dispatcher, where those mods' state is set (a horde of burning zombies with Oculus + Embeddium 559 -> 718 fps,
-    with Iris + Sodium 636 -> 805).
+  - Entity Model Features with Fresh Animations: a scene of 144 animated mobs 20 -> 93 fps (1.20.1), 37 -> 419
+    (1.21.1). Entities whose renderer such mods (EMF, ETF, Iris / Oculus) take part in stay on the render thread, as
+    before: those mods keep the entity being drawn in globals.
+- **Crash at start with TerraBlender fixed** (1.0.x, both versions): TerraBlender makes methods Sleepium replaces public,
+  and Mixin refused Sleepium's narrower ones. TerraBlender is in many packs (Biomes O' Plenty, Regions Unexplored, ...).
+  The full Biohazard pack (473 mods, 1.20.1): 440 -> 576 fps.
+- A mod whose mixin config lists an empty (`null`) entry no longer hides the mods after it from Sleepium's check of
+  other mods' changes (Sleep Tight's does): in a large pack Sleepium then did not step aside for Radium and the game
+  did not start. Tested with the whole Biohazard pack (473 mods).
 - Burning entities are drawn on the parallel render workers (the flame where vanilla draws it).
 - Interpolated animated textures (`interpolate` in .mcmeta) are blended over the images' memory - pixel for pixel as
   vanilla, several times faster (a mod's 512x512 effect texture: 12 % -> 3.8 % of the render thread).
@@ -33,7 +39,7 @@ Both versions:
 - Entity sleep on Forge (entities are capability providers), the collision memo with production (SRG) names, entity
   data read without 1.20.1's lock and from an array.
 - On an Intel N100 production server: items 114.9 -> 10.7 ms per tick, mobs 22.2 -> 13.25. A Cursed Fate fight on the
-  client: 87 -> 600-646 fps; with Oculus + Embeddium 289 -> 408-423.
+  client: 87 -> 600-646 fps (with Oculus + Embeddium 289 -> 299: the entities stay on the render thread).
 - Not on 1.20.1: the adapters for Veil / Sable / Create Aeronautics (those mods are 1.21.1 only).
 
 The repository now keeps a branch per Minecraft version and loader; `main` is the front page with the documentation
