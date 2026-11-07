@@ -183,6 +183,8 @@
     "PartTypeMixin",
     "PartShardMixin",
     "PartFrameMixin",
+    "ItemGpuMixin",
+    "SpriteImageAccessor",
     "ShaderStateShardAccessor",
     "VertexSortDirectMixin",
     "MeshDataAccessor",
