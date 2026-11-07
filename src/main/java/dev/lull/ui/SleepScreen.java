@@ -86,6 +86,30 @@ public final class SleepScreen extends Screen {
         onClose();
     }
 
+    /** the Flags page, searching for name */
+    private void goTo(String name) {
+        page = FLAGS;
+        filter = name;
+        rebuildWidgets();
+    }
+
+    /** the dev probe (-Dsleep.ui.partofTest): Flags showing the first part whose parent is on the screen; that parent's name */
+    String probeShowPart() {
+        for (SleepOptions.Option o : SleepOptions.all()) {
+            if (o.partOf().isEmpty() || SleepConfig.launchFlag(o.key())) continue;
+            String parent = o.partOf().get(0);
+            if (SleepOptions.all().stream().noneMatch(p -> p.key().equals(parent))) continue;
+            goTo(o.shortName());
+            return parent.substring(parent.lastIndexOf('.') + 1).replaceAll("Mixin$", "");
+        }
+        return null;
+    }
+
+    /** the dev probe: what clicking that part's switch does */
+    void probeClickPart(String parentName) {
+        goTo(parentName);
+    }
+
     Screen parent() {
         return parent;
     }
@@ -279,15 +303,24 @@ public final class SleepScreen extends Screen {
                 continue;
             boolean locked = SleepConfig.launchFlag(o.key());
             boolean part = !o.partOf().isEmpty();
-            Button toggle = Button.builder(Component.empty(), x -> desired.put(o.key(), !desired.get(o.key()))).size(70, 20).build();
-            toggle.active = !locked && !part;
+            String parent = part ? o.partOf().get(0) : null;
+            String parentName = part ? parent.substring(parent.lastIndexOf('.') + 1).replaceAll("Mixin$", "") : null;
+            // a part is switched by its parent: clicking it goes there (Flags, searching for the parent); a parent not on
+            // the screen (an experimental flag set only at launch) leaves the part locked
+            boolean parentShown = part && SleepOptions.all().stream().anyMatch(p -> p.key().equals(parent));
+            Button toggle = Button.builder(Component.empty(), x -> {
+                if (part) goTo(parentName);
+                else desired.put(o.key(), !desired.get(o.key()));
+            }).size(70, 20).build();
+            toggle.active = !locked && (!part || parentShown);
             MutableComponent tip = Component.literal(o.shortName()).withStyle(ChatFormatting.WHITE).append(" ")
                     .append(Component.literal(o.key()).withStyle(ChatFormatting.DARK_GRAY)).append("\n")
                     .append(o.description().isEmpty() ? Component.translatable("sleepium.ui.nodesc") : Component.literal(o.description()))
                     .append(" ").append(Component.translatable(o.byDefault() ? "sleepium.ui.default.on" : "sleepium.ui.default.off").withStyle(ChatFormatting.DARK_GRAY));
             if (locked) tip.append(" ").append(Component.translatable("sleepium.ui.locked", o.key()).withStyle(ChatFormatting.GOLD));
             String parts = String.join(", ", o.partOf().stream().map(k -> k.substring(k.lastIndexOf('.') + 1).replaceAll("Mixin$", "")).toList());
-            if (part) tip.append(" ").append(Component.translatable("sleepium.ui.partof.tip", parts).withStyle(ChatFormatting.AQUA));
+            if (part) tip.append(" ").append((parentShown ? Component.translatable("sleepium.ui.partof.tip", parts)
+                    : Component.translatable("sleepium.ui.partof.hidden", parts, parent)).withStyle(ChatFormatting.AQUA));
             MutableComponent label = Component.literal(o.shortName());
             if (part) label.append(Component.translatable("sleepium.ui.partof", parts).withStyle(ChatFormatting.DARK_GRAY));
             if (!o.byDefault()) label.append(Component.translatable("sleepium.ui.experimental").withStyle(ChatFormatting.DARK_AQUA));

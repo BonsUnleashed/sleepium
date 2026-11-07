@@ -54,6 +54,7 @@ public final class SleepUi {
     /** -Dsleep.ui.shot=<dir>: a dev probe - opens the screen on the title screen, saves each tab to dir, quits */
     private static final String SHOT = System.getProperty("sleep.ui.shot");
     private static int shotFrame;
+    private static String partofParent;
 
     private static void shots() {
         Minecraft mc = Minecraft.getInstance();
@@ -77,6 +78,22 @@ public final class SleepUi {
             }
         }
         if (f == 90) mc.setScreen(new SleepScreen(mc.screen, 0));
+        if (System.getProperty("sleep.ui.partofTest") != null) {   // a part's switch shown (partof-0), clicked (partof-1)
+            if (f == 100 && mc.screen instanceof SleepScreen s) partofParent = s.probeShowPart();
+            if (f == 140 && mc.screen instanceof SleepScreen s && partofParent != null) s.probeClickPart(partofParent);
+            if (f == 130 || f == 170) {
+                try (var img = net.minecraft.client.Screenshot.takeScreenshot(mc.getMainRenderTarget())) {
+                    java.nio.file.Path out = java.nio.file.Path.of(SHOT).resolve("partof-" + (f == 130 ? 0 : 1) + ".png");
+                    java.nio.file.Files.createDirectories(out.getParent());
+                    img.writeToFile(out);
+                } catch (Exception ex) {
+                    System.out.println("[sleep/ui] shot: " + ex);
+                }
+                System.out.println("[sleep/ui] partof test: parent " + partofParent);
+            }
+            if (f == 180) mc.stop();
+            return;
+        }
         int[] at = {120, 160, 200, 240, 280, 320};
         for (int i = 0; i < at.length; i++) {
             if (f != at[i]) continue;
