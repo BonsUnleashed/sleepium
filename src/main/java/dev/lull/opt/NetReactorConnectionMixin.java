@@ -80,7 +80,7 @@ public abstract class NetReactorConnectionMixin implements NetReactor.Batched {
         if (this.getSending() == PacketFlow.CLIENTBOUND) {
             if (packetProtocol == ConnectionProtocol.PLAY && current == ConnectionProtocol.PLAY) {
                 Object entry = sendListener == null ? packet : new NetReactor.WithListener(packet, sendListener);
-                if (NetReactor.onServerThread()) {
+                if (NetReactor.batching()) {
                     boolean full, mark;
                     synchronized (this.sleep$lock) {
                         this.sleep$filling.add(entry);
