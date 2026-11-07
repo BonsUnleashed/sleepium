@@ -600,11 +600,6 @@ final class SleepAnalysis {
         for (Class<?> c = beClass; c != null && c != Object.class; c = c.getSuperclass()) beChain.add(internal(c));
         this.chain = beChain;
         this.beCls = beClass;
-        // a sleeping block entity learns of changes to its contents from the probes on vanilla's container and
-        // block-entity methods; a mod's class overriding one of them without calling super on every exit (Farmer's
-        // Delight's basket: setItem writes its list directly) changes it unseen - such a class does not sleep
-        String bypass = probeBypass(beClass);
-        if (bypass != null) return new Plan(false, bypass, List.of(), List.of());
         // ticker candidates in the block's class chain and its interfaces (a default getTicker, as mods write it): lambdas
         // producing a BlockEntityTicker whose 4th parameter fits this BE, and ticker objects made with NEW (a class
         // implementing BlockEntityTicker: its tick(Level, BlockPos, BlockState, BE) is the ticker)
@@ -659,7 +654,20 @@ final class SleepAnalysis {
             Map.entry("stillValid", "(Lnet/minecraft/world/entity/player/Player;)Z"), Map.entry("m_6542_", "(Lnet/minecraft/world/entity/player/Player;)Z"),
             Map.entry("setChanged", "()V"), Map.entry("m_6596_", "()V"));
 
-    /** a mod class in the chain overriding a probed method with an exit that misses super; null when there is none */
+    /**
+     * A sleeping block entity learns of changes to its contents from the probes on vanilla's container and block-entity
+     * methods; a mod's class overriding one of them without calling super on every exit (PneumaticCraft's setChanged,
+     * Farmer's Delight's basket's setItem) changes them unseen. The reason, or null when every probe sees its writes.
+     * SleepEngine then verifies such a class by value (its item lists) instead of trusting the probes.
+     */
+    static String probeBypassOf(Class<?> beClass) {
+        try {
+            return new SleepAnalysis(beClass.getClassLoader()).probeBypass(beClass);
+        } catch (RuntimeException | LinkageError e) {
+            return "class not readable: " + e;
+        }
+    }
+
     private String probeBypass(Class<?> beClass) {
         for (Class<?> c = beClass; c != null && c != Object.class; c = c.getSuperclass()) {
             String name = internal(c);

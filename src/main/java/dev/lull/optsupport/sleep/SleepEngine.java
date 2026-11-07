@@ -49,15 +49,41 @@ public final class SleepEngine {
 
     enum State { AWAKE, ASLEEP, NEVER }
 
+    /**
+     * Value verification of sleepers' item lists: "auto" (default) for classes whose mod code bypasses the probes
+     * (SleepAnalysis.probeBypassOf), "all" for every class (a second net under the probes; tests), "off": such classes
+     * do not sleep.
+     */
+    static final String DEEP = System.getProperty("lab.sleep.deepVerify", "auto");
+    static long deepChecks, deepWakes;
+
     /** Per class: plan + compiled snapshot. */
     static final class ClassInfo {
         final SleepAnalysis.Plan plan;
         final SnapCompiler.Snapper snapper;
         final int[] clockSlot;       // position of each plan clock in plan.watch
         final boolean[] isClock;     // per watch slot
+        /** verified by value while asleep: the NonNullList fields (its item lists) of the whole class chain */
+        final boolean deep;
+        final Field[] lists;
 
         ClassInfo(SleepAnalysis.Plan plan) {
+            this(plan, false, null);
+        }
+
+        ClassInfo(SleepAnalysis.Plan plan, boolean deep, Class<?> beClass) {
             this.plan = plan;
+            List<Field> ls = new ArrayList<>();
+            if (deep) {
+                for (Class<?> c = beClass; c != null && c != Object.class; c = c.getSuperclass())
+                    for (Field f : c.getDeclaredFields())
+                        if (!java.lang.reflect.Modifier.isStatic(f.getModifiers()) && net.minecraft.core.NonNullList.class.isAssignableFrom(f.getType())) {
+                            f.setAccessible(true);
+                            ls.add(f);
+                        }
+            }
+            this.deep = deep;
+            this.lists = ls.toArray(new Field[0]);
             List<Field> w = plan.watch();
             this.snapper = plan.eligible() ? SnapCompiler.compile(w) : null;
             clockSlot = new int[plan.clocks().size()];
@@ -82,6 +108,8 @@ public final class SleepEngine {
         State state = State.AWAKE;
         long[] prev, cur;                        // two snapshot buffers, swapped every observed tick
         Object[] refs;                           // asleep: the referenced objects of the reference slots, for verifyAsleep
+        net.minecraft.world.item.ItemStack[][] deepCopy;   // asleep, a deep class: its item lists as they were
+        List<Object[]> neighbours;               // asleep: read neighbours that bypass the probes {be, lists, copies}
         long[] rates, prevRates;
         boolean prevValid;
         long prevTick = Long.MIN_VALUE, prevReadHash;
@@ -178,13 +206,133 @@ public final class SleepEngine {
         if (s == null || s.state != State.ASLEEP) return true;
         // only the block entity's own fields (the cache lines the skip reads anyway): primitives by value, references by
         // identity. Changes inside referenced containers arrive as events (container hooks, setChanged, block updates).
-        if (s.info.snapper.same(be, s.prev, s.refs)) {
+        if (s.info.snapper.same(be, s.prev, s.refs) && (!s.info.deep && s.neighbours == null || sameLists(s))) {
             verifiedSkips++;
             return true;
         }
         externalWakes++;
         request(s, "external change");
         return false;
+    }
+
+    private static final Map<Class<?>, String> BYPASS = new java.util.concurrent.ConcurrentHashMap<>();
+    private static final Map<Class<?>, Field[]> LISTS = new java.util.concurrent.ConcurrentHashMap<>();
+
+    /** why this block-entity class bypasses the probes (cached), or null */
+    static String bypassOf(Class<?> c) {
+        String r = BYPASS.computeIfAbsent(c, k -> {
+            if (TEST_BYPASS.contains(k.getSimpleName())) return "test bypass";
+            String b = SleepAnalysis.probeBypassOf(k);
+            return b == null ? "" : b;
+        });
+        return r.isEmpty() ? null : r;
+    }
+
+    /** the NonNullList fields (item lists) of a block-entity class and its superclasses */
+    static Field[] listsOf(Class<?> beClass) {
+        return LISTS.computeIfAbsent(beClass, k -> {
+            List<Field> ls = new ArrayList<>();
+            for (Class<?> c = k; c != null && c != Object.class; c = c.getSuperclass())
+                for (Field f : c.getDeclaredFields())
+                    if (!java.lang.reflect.Modifier.isStatic(f.getModifiers()) && net.minecraft.core.NonNullList.class.isAssignableFrom(f.getType())) {
+                        try {
+                            f.setAccessible(true);
+                            ls.add(f);
+                        } catch (RuntimeException e) {
+                            // an inaccessible list: the class is checked without it (its probes still count)
+                        }
+                    }
+            return ls.toArray(new Field[0]);
+        });
+    }
+
+    /** the block entity at a position, straight from its loaded chunk (no creation, no probe), or null */
+    private static BlockEntity beAt(Level level, long pos) {
+        BlockPos p = BlockPos.of(pos);
+        net.minecraft.world.level.chunk.LevelChunk c = level.getChunkSource().getChunkNow(p.getX() >> 4, p.getZ() >> 4);
+        return c == null ? null : c.getBlockEntities().get(p);
+    }
+
+    /** copies of a block entity's item lists */
+    private static net.minecraft.world.item.ItemStack[][] copyOf(Object be, Field[] lists) {
+        net.minecraft.world.item.ItemStack[][] out = new net.minecraft.world.item.ItemStack[lists.length][];
+        try {
+            for (int i = 0; i < out.length; i++) {
+                List<?> l = (List<?>) lists[i].get(be);
+                if (l == null) continue;
+                net.minecraft.world.item.ItemStack[] c = new net.minecraft.world.item.ItemStack[l.size()];
+                for (int j = 0; j < c.length; j++)
+                    c[j] = l.get(j) instanceof net.minecraft.world.item.ItemStack st ? st.copy() : net.minecraft.world.item.ItemStack.EMPTY;
+                out[i] = c;
+            }
+        } catch (ReflectiveOperationException e) {
+            return null;
+        }
+        return out;
+    }
+
+    /** a block entity's item lists against copies (item, count, components) */
+    private static boolean sameAs(Object be, Field[] lists, net.minecraft.world.item.ItemStack[][] copy) {
+        if (copy == null) return true;
+        try {
+            for (int i = 0; i < lists.length; i++) {
+                List<?> l = (List<?>) lists[i].get(be);
+                net.minecraft.world.item.ItemStack[] c = copy[i];
+                if (l == null ? c != null : c == null || l.size() != c.length) return false;
+                if (l == null) continue;
+                for (int j = 0; j < c.length; j++)
+                    if (!(l.get(j) instanceof net.minecraft.world.item.ItemStack st) || !net.minecraft.world.item.ItemStack.matches(st, c[j])) return false;
+            }
+            return true;
+        } catch (ReflectiveOperationException | RuntimeException e) {
+            return false;
+        }
+    }
+
+    /** a deep class' item lists against their copies from when it fell asleep (item, count, components) */
+    private static boolean sameLists(Sleeper s) {
+        deepChecks++;
+        if (s.info.deep && !sameAs(s.be, s.info.lists, s.deepCopy)) {
+            deepWakes++;
+            return false;
+        }
+        List<Object[]> nb = s.neighbours;
+        if (nb != null)
+            for (int i = 0; i < nb.size(); i++) {
+                Object[] n = nb.get(i);
+                if (!sameAs(n[0], (Field[]) n[1], (net.minecraft.world.item.ItemStack[][]) n[2])) {
+                    deepWakes++;
+                    return false;
+                }
+            }
+        return true;
+    }
+
+    /** copies of a deep class' item lists (at sleep entry) */
+    private static net.minecraft.world.item.ItemStack[][] copyLists(Sleeper s) {
+        return copyOf(s.be, s.info.lists);
+    }
+
+    /**
+     * At sleep entry: the read neighbours whose class bypasses the probes - their writes reach no probe, so a change of
+     * their item lists is found by value (a vanilla hopper under PneumaticCraft's chest)
+     */
+    private static void watchNeighbours(Sleeper s) {
+        s.neighbours = null;
+        Level level = s.be.getLevel();
+        if (level == null) return;
+        long own = s.be.getBlockPos().asLong();
+        LongArrayList rp = s.lastReadPos;
+        for (int i = 0; i < rp.size(); i++) {
+            long p = rp.getLong(i);
+            if (p == own) continue;
+            BlockEntity n = beAt(level, p);
+            if (n == null || bypassOf(n.getClass()) == null) continue;
+            Field[] lists = listsOf(n.getClass());
+            if (lists.length == 0) continue;
+            if (s.neighbours == null) s.neighbours = new ArrayList<>(2);
+            s.neighbours.add(new Object[] {n, lists, copyOf(n, lists)});
+        }
     }
 
     // stats
@@ -228,6 +376,8 @@ public final class SleepEngine {
         s.woken = false;
         h(s).sleep$setWakeAt(Long.MIN_VALUE);
         java.util.Arrays.fill(s.refs, null);   // do not keep replaced objects alive
+        s.deepCopy = null;
+        s.neighbours = null;
         // the snapshot taken now is the "before" of this tick: one verifying tick may put it back to sleep
         s.info.snapper.snap(s.be, s.prev);
         s.prevValid = true;
@@ -300,8 +450,12 @@ public final class SleepEngine {
                 p = new SleepAnalysis.Plan(false, "inaccessible clock", p.clocks(), p.conds());
             if (p.eligible() && excluded)
                 p = new SleepAnalysis.Plan(false, "excluded through dev.lull.api.Compat", p.clocks(), p.conds());
-            ClassInfo ci = new ClassInfo(p);
+            String bypass = p.eligible() ? bypassOf(c) : null;
+            if (bypass != null && "off".equals(DEEP)) p = new SleepAnalysis.Plan(false, bypass, p.clocks(), p.conds());
+            boolean deep = p.eligible() && ("all".equals(DEEP) || bypass != null);
+            ClassInfo ci = new ClassInfo(p, deep, c);
             System.out.println("[sleep/sleep] " + name + ": " + (p.eligible() ? "ELIGIBLE " : "no: ") + p.reason()
+                    + (deep ? " [verified by value, " + ci.lists.length + " item list(s)" + (bypass != null ? ": " + bypass : "") + "]" : "")
                     + "  clocks=" + p.clocks().stream().map(f -> f == null ? "?" : f.getName()).toList()
                     + " conds=" + p.conds().stream().map(SleepAnalysis.Cond::text).toList()
                     + (p.eligible() ? " watch=" + p.watch().stream().map(Field::getName).toList() + (SnapCompiler.failure != null ? " SNAP FALLBACK: " + SnapCompiler.failure : " (compiled snapshot)") : ""));
@@ -414,6 +568,8 @@ public final class SleepEngine {
         s.state = State.ASLEEP;
         s.woken = false;
         s.info.snapper.refs(s.be, s.refs);   // reference for verifyAsleep (s.prev holds the primitive slots)
+        if (s.info.deep) s.deepCopy = copyLists(s);
+        watchNeighbours(s);
         subscribe(s);
         entered++;
     }
@@ -565,7 +721,20 @@ public final class SleepEngine {
     }
 
     /** A block changed, a block entity was marked changed, or a container slot was set at this position. */
+    /**
+     * Test only (-Dsleep.test.bypass=FurnaceBlockEntity,...): these block-entity classes are treated as bypassing the
+     * probes - their container / setChanged wake-ups are dropped and the analysis reports them - a mod like
+     * PneumaticCraft simulated on vanilla's scenes, so exactness shows whether value verification covers it
+     */
+    static final java.util.Set<String> TEST_BYPASS = java.util.Set.of(System.getProperty("sleep.test.bypass", "").split(","));
+
     public static void onPos(Level level, BlockPos pos, String reason) {
+        if (TEST_BYPASS.size() > 1 || !TEST_BYPASS.contains("")) {
+            if (("container".equals(reason) || "changed".equals(reason)) && level != null) {
+                BlockEntity t = beAt(level, pos.asLong());
+                if (t != null && TEST_BYPASS.contains(t.getClass().getSimpleName())) return;
+            }
+        }
         if (EntitySleep.ON && level != null && !level.isClientSide) EntitySleep.onPos(level, pos);
         if (BY_POS.isEmpty() || level == null || level.isClientSide) return;
         List<Sleeper> l = BY_POS.get(pos.asLong());
