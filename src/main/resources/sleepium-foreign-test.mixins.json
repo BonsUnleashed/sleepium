@@ -4,6 +4,14 @@
   "package": "testmods.foreign",
   "plugin": "testmods.foreign.ForeignPlugin",
   "compatibilityLevel": "JAVA_21",
-  "mixins": ["ForeignFurnaceMixin", "ForeignPostWrapMixin"],
-  "injectors": { "defaultRequire": 1 }
+  "mixins": [
+    "ForeignFurnaceMixin",
+    "ForeignPostWrapMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  },
+  "client": [
+    "ForeignModifyArgMixin"
+  ]
 }
