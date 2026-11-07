@@ -17,6 +17,6 @@ import org.spongepowered.asm.mixin.injection.Redirect;
 public abstract class ForgeBusMixin {
     @Redirect(method = "<clinit>", at = @At(value = "INVOKE", target = "Lnet/minecraftforge/eventbus/api/BusBuilder;build()Lnet/minecraftforge/eventbus/api/IEventBus;"))
     private static IEventBus sleep$wrap(BusBuilder builder) {
-        return new CompositeEventBus(builder.build());
+        return new CompositeEventBus((net.minecraftforge.eventbus.BusBuilderImpl) builder);   // the bus itself, not a wrapper
     }
 }
