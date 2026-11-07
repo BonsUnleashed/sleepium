@@ -21,6 +21,7 @@ public final class MixinYield {
 
     /** True when our mixin overwrites a method of the target that a foreign mixin touches (decided once per mixin). */
     public static boolean yields(String targetClassName, String mixinClassName) {
+        if (Boolean.getBoolean("lab.yield.off")) return false;   // (tests: the conflict itself, nothing of ours gives way)
         Boolean d = DECIDED.get(mixinClassName);
         if (d == null) DECIDED.put(mixinClassName, d = yields0(targetClassName, mixinClassName));
         return d;
@@ -85,6 +86,21 @@ public final class MixinYield {
         }
         String target = targetClassName.replace('.', '/');
         for (String key : MixinTouch.redirectKeys(cn)) {   // a @Redirect of ours on a call another mod redirects too: one of them fails to load
+            int bar = key.indexOf('|');
+            if (MixinTouch.redirected(target, key.substring(0, bar), key.substring(bar + 1))) {
+                yielded++;
+                System.out.println("[sleep/opt] " + mixinClassName.substring(mixinClassName.lastIndexOf('.') + 1) + " not applied: the call to "
+                        + key.substring(bar + 1) + " in " + targetClassName + "#" + key.substring(0, bar) + " is redirected by another mod's mixin");
+                return true;
+            }
+            if (MixinTouch.argsModified(target, key.substring(0, bar), key.substring(bar + 1))) {   // their @ModifyArg(s) after our redirect
+                yielded++;
+                System.out.println("[sleep/opt] " + mixinClassName.substring(mixinClassName.lastIndexOf('.') + 1) + " not applied: another mod's mixin changes the arguments of the call to "
+                        + key.substring(bar + 1) + " in " + targetClassName + "#" + key.substring(0, bar));
+                return true;
+            }
+        }
+        for (String key : MixinTouch.argKeys(cn)) {   // a @ModifyArg(s) of ours on a call another mod redirects
             int bar = key.indexOf('|');
             if (MixinTouch.redirected(target, key.substring(0, bar), key.substring(bar + 1))) {
                 yielded++;

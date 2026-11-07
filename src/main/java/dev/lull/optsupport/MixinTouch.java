@@ -128,6 +128,8 @@ public final class MixinTouch {
 
     /** foreign @Redirects by target class: "method|invoked name" (filled with the index) */
     private static final Map<String, Set<String>> REDIRECTS = new java.util.HashMap<>();
+    /** foreign @ModifyArg / @ModifyArgs by target class: "method|invoked name" (filled with the index) */
+    private static final Map<String, Set<String>> ARGMODS = new java.util.HashMap<>();
 
     /** Does a foreign mixin @Redirect the call to {@code invoked} inside {@code method} of this class? */
     public static boolean redirected(String internalName, String method, String invoked) {
@@ -138,12 +140,37 @@ public final class MixinTouch {
         return r != null && (r.contains(method + "|" + invoked) || r.contains(ALL + "|" + invoked));
     }
 
+    /**
+     * Does a foreign mixin change the arguments of the call to {@code invoked} inside {@code method} of this class
+     * (@ModifyArg / @ModifyArgs)? Next to a @Redirect of the same call one of them fails: after the redirect the call is
+     * the handler's, the receiver first, and the argument indices point elsewhere.
+     */
+    public static boolean argsModified(String internalName, String method, String invoked) {
+        index();
+        Set<String> r = ARGMODS.get(internalName);
+        method = official(method);
+        invoked = official(invoked);
+        return r != null && (r.contains(method + "|" + invoked) || r.contains(ALL + "|" + invoked));
+    }
+
+    private static final Set<String> REDIRECT = Set.of("Lorg/spongepowered/asm/mixin/injection/Redirect;"),
+            ARG_MODIFIERS = Set.of("Lorg/spongepowered/asm/mixin/injection/ModifyArg;", "Lorg/spongepowered/asm/mixin/injection/ModifyArgs;");
+
     /** "method|invoked name" of every @Redirect of a mixin class (the invoked name from its @At target). */
     static List<String> redirectKeys(ClassNode cn) {
+        return callKeys(cn, REDIRECT);
+    }
+
+    /** "method|invoked name" of every @ModifyArg / @ModifyArgs of a mixin class. */
+    static List<String> argKeys(ClassNode cn) {
+        return callKeys(cn, ARG_MODIFIERS);
+    }
+
+    private static List<String> callKeys(ClassNode cn, Set<String> kinds) {
         List<String> out = new java.util.ArrayList<>();
         for (MethodNode m : cn.methods)
             for (AnnotationNode a : annotations(m)) {
-                if (!"Lorg/spongepowered/asm/mixin/injection/Redirect;".equals(a.desc) || a.values == null) continue;
+                if (!kinds.contains(a.desc) || a.values == null) continue;
                 List<String> methods = new java.util.ArrayList<>();
                 String invoked = null;
                 for (int i = 0; i + 1 < a.values.size(); i += 2) {
@@ -206,11 +233,12 @@ public final class MixinTouch {
                             continue;
                         }
                         Set<String> methods = new HashSet<>();
-                        List<String> reds, ows;
+                        List<String> reds, args, ows;
                         REFMAP.set(refMapper(mc, cn.name));
                         try {
                             collect(cn, methods);
                             reds = redirectKeys(cn);
+                            args = argKeys(cn);
                             ows = overwriteNames(cn);
                         } finally {
                             REFMAP.remove();
@@ -218,6 +246,7 @@ public final class MixinTouch {
                         for (String target : targets(cn)) {
                             m.computeIfAbsent(target, k -> new HashSet<>()).addAll(methods);
                             if (!reds.isEmpty()) REDIRECTS.computeIfAbsent(target, k -> new HashSet<>()).addAll(reds);
+                            if (!args.isEmpty()) ARGMODS.computeIfAbsent(target, k -> new HashSet<>()).addAll(args);
                             if (!ows.isEmpty()) OVERWRITES.computeIfAbsent(target, k -> new HashSet<>()).addAll(ows);
                         }
                     }
@@ -356,11 +385,12 @@ public final class MixinTouch {
         List<String> ts = targets(cn);
         if (ts.isEmpty()) return;
         Set<String> methods = new HashSet<>();
-        List<String> reds, ows;
+        List<String> reds, args, ows;
         REFMAP.set(refMapEntries(refmap, cn.name));
         try {
             collect(cn, methods);
             reds = redirectKeys(cn);
+            args = argKeys(cn);
             ows = overwriteNames(cn);
         } finally {
             REFMAP.remove();
@@ -368,6 +398,7 @@ public final class MixinTouch {
         for (String target : ts) {
             m.computeIfAbsent(target, k -> new HashSet<>()).addAll(methods);
             if (!reds.isEmpty()) REDIRECTS.computeIfAbsent(target, k -> new HashSet<>()).addAll(reds);
+            if (!args.isEmpty()) ARGMODS.computeIfAbsent(target, k -> new HashSet<>()).addAll(args);
             if (!ows.isEmpty()) OVERWRITES.computeIfAbsent(target, k -> new HashSet<>()).addAll(ows);
         }
     }
