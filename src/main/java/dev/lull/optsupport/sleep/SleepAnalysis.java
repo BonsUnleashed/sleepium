@@ -600,6 +600,11 @@ final class SleepAnalysis {
         for (Class<?> c = beClass; c != null && c != Object.class; c = c.getSuperclass()) beChain.add(internal(c));
         this.chain = beChain;
         this.beCls = beClass;
+        // a sleeping block entity learns of changes to its contents from the probes on vanilla's container and
+        // block-entity methods; a mod's class overriding one of them without calling super on every exit (Farmer's
+        // Delight's basket: setItem writes its list directly) changes it unseen - such a class does not sleep
+        String bypass = probeBypass(beClass);
+        if (bypass != null) return new Plan(false, bypass, List.of(), List.of());
         // ticker candidates in the block's class chain and its interfaces (a default getTicker, as mods write it): lambdas
         // producing a BlockEntityTicker whose 4th parameter fits this BE, and ticker objects made with NEW (a class
         // implementing BlockEntityTicker: its tick(Level, BlockPos, BlockState, BE) is the ticker)
@@ -644,6 +649,69 @@ final class SleepAnalysis {
         for (Field c : clocks.values()) if (c != null) watch.putIfAbsent(dev.lull.Names.official(c.getName()), c);   // (keys: Mojang names, as the bytecode reads them)
         return new Plan(true, "ok: " + tickers.size() + " ticker(s), watching " + watch.size() + " field(s)", List.copyOf(clocks.values()),
                 List.copyOf(conds), List.copyOf(watch.values()));
+    }
+
+    /** the methods the sleep probes hook in vanilla's classes (Mojang names, then 1.20.1's SRG ones), by descriptor */
+    private static final Map<String, String> PROBED = Map.ofEntries(
+            Map.entry("setItem", "(ILnet/minecraft/world/item/ItemStack;)V"), Map.entry("m_6836_", "(ILnet/minecraft/world/item/ItemStack;)V"),
+            Map.entry("removeItem", "(II)Lnet/minecraft/world/item/ItemStack;"), Map.entry("m_7407_", "(II)Lnet/minecraft/world/item/ItemStack;"),
+            Map.entry("removeItemNoUpdate", "(I)Lnet/minecraft/world/item/ItemStack;"), Map.entry("m_8016_", "(I)Lnet/minecraft/world/item/ItemStack;"),
+            Map.entry("stillValid", "(Lnet/minecraft/world/entity/player/Player;)Z"), Map.entry("m_6542_", "(Lnet/minecraft/world/entity/player/Player;)Z"),
+            Map.entry("setChanged", "()V"), Map.entry("m_6596_", "()V"));
+
+    /** a mod class in the chain overriding a probed method with an exit that misses super; null when there is none */
+    private String probeBypass(Class<?> beClass) {
+        for (Class<?> c = beClass; c != null && c != Object.class; c = c.getSuperclass()) {
+            String name = internal(c);
+            if (name.startsWith("net/minecraft/")) break;   // vanilla's own classes carry the probes
+            ClassNode cn = node(name);
+            if (cn == null) return "class not readable: " + c.getSimpleName();
+            for (MethodNode m : cn.methods) {
+                String desc = PROBED.get(m.name);
+                if (desc == null || !desc.equals(m.desc) || (m.access & (Opcodes.ACC_STATIC | Opcodes.ACC_ABSTRACT | Opcodes.ACC_BRIDGE)) != 0) continue;
+                if (!superOnEveryExit(m)) return "overrides " + m.name + " in " + c.getSimpleName() + " without super on every path (the probes would not see it)";
+            }
+        }
+        return null;
+    }
+
+    /** every normal exit of m passes an INVOKESPECIAL of the same name and descriptor (super) */
+    private static boolean superOnEveryExit(MethodNode m) {
+        AbstractInsnNode[] ins = m.instructions.toArray();
+        if (ins.length == 0) return false;
+        boolean[] blocked = new boolean[ins.length], seen = new boolean[ins.length];
+        boolean any = false;
+        for (int i = 0; i < ins.length; i++)
+            if (ins[i] instanceof MethodInsnNode mi && mi.getOpcode() == Opcodes.INVOKESPECIAL && mi.name.equals(m.name) && mi.desc.equals(m.desc)) {
+                blocked[i] = true;
+                any = true;
+            }
+        if (!any) return false;
+        java.util.ArrayDeque<Integer> st = new java.util.ArrayDeque<>();
+        st.push(0);
+        while (!st.isEmpty()) {
+            int i = st.pop();
+            if (i < 0 || i >= ins.length || seen[i] || blocked[i]) continue;
+            seen[i] = true;
+            AbstractInsnNode in = ins[i];
+            int op = in.getOpcode();
+            if (op >= Opcodes.IRETURN && op <= Opcodes.RETURN) return false;   // an exit without super
+            if (op == Opcodes.ATHROW) continue;
+            if (in instanceof JumpInsnNode j) {
+                st.push(m.instructions.indexOf(j.label));
+                if (op == Opcodes.GOTO) continue;
+            } else if (in instanceof TableSwitchInsnNode t) {
+                st.push(m.instructions.indexOf(t.dflt));
+                for (LabelNode l : t.labels) st.push(m.instructions.indexOf(l));
+                continue;
+            } else if (in instanceof LookupSwitchInsnNode t) {
+                st.push(m.instructions.indexOf(t.dflt));
+                for (LabelNode l : t.labels) st.push(m.instructions.indexOf(l));
+                continue;
+            }
+            st.push(i + 1);
+        }
+        return true;
     }
 
     /** The block class, its superclasses and every interface they implement (a mod's getTicker may be a default method). */
