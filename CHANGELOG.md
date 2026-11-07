@@ -4,6 +4,20 @@ Versions follow [Semantic Versioning](https://semver.org): a patch release fixes
 release changes the API (`dev.lull.api`) or the settings in a way that needs attention. Jars are named
 `sleepium-<version>+mc<minecraft version>-<loader>.jar` (before 1.1.0 without the loader).
 
+## 1.1.5 - 2026-11-07
+
+- **1.21.1: joining online-mode servers could hang on "Encrypting..." and time out** (GitHub issue #2). On the
+  client, Sleepium's network decoder ended up in front of the decryption step and read encrypted bytes as packet
+  frames. It now sits behind the decryption, as it already did on 1.20.1. Tested with a real encrypted login: the
+  1.1.4 client timed out, 1.1.5 joins every time, and Sleepium's network compression still works after it.
+- **Crash at startup next to mods that change the same entity render call** (a mod with `mixins.marrelics.json`,
+  reported on CurseForge): Sleepium's entity and block entity render caches now wrap that call instead of replacing
+  it, so other mods' changes to it keep working and the caches stay on (before, the fix would have been to switch the
+  cache off: 1 443 -> 255 fps on our test scene; now 1 411). For Sleepium's other call replacements, another mod
+  changing the same call's arguments now makes Sleepium step aside instead of crashing.
+- **Crash next to Gnetum** (and other mods that reach into the event bus' internals): Sleepium's event bus is now a
+  real event bus of the loader, not a wrapper around one, so such mods find what they expect.
+
 ## 1.1.4 - 2026-11-07
 
 > **If you played with Sleepium before 1.1.4 together with C2ME** (or another mod that saves chunks on its own
