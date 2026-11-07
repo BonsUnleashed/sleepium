@@ -113,18 +113,30 @@ public final class CompositeEventBus extends EventBus {
     public CompositeEventBus(net.minecraftforge.eventbus.BusBuilderImpl builder) {
         super(builder);
         this.delegate = this;   // (the fields read below are EventBus' own, on this instance)
-        Consumer<BusProbe> probe = e -> {};
-        super.addListener(EventPriority.NORMAL, false, BusProbe.class, probe);
-        ListenerList pl = EventListenerHelper.getListenerList(BusProbe.class);
+        // the bus id: EventBus' own field (the eventbus module is open). Not unregister(): it walks every event's
+        // listener list, and with mods constructed in parallel (a mod touching MinecraftForge in its constructor,
+        // Immersive Fixes) a list another thread is creating is not sized for this id yet - AIOOBE, the game did not
+        // start (1.1.5-1.1.6)
         int id = -1;
-        for (int i = 0; i < 4096 && id < 0; i++) {
-            try {
-                if (pl.getListeners(i).length > 0) id = i;
-            } catch (RuntimeException end) {
-                break;   // past the lists' size
+        try {
+            var f = EventBus.class.getDeclaredField("busID");
+            f.setAccessible(true);
+            id = f.getInt(this);
+        } catch (ReflectiveOperationException | RuntimeException e) {
+            // found below instead
+        }
+        if (id < 0) {   // a probe listener on an event nobody posts: found, then left (removing it is the race above)
+            Consumer<BusProbe> probe = e -> {};
+            super.addListener(EventPriority.NORMAL, false, BusProbe.class, probe);
+            ListenerList pl = EventListenerHelper.getListenerList(BusProbe.class);
+            for (int i = 0; i < 4096 && id < 0; i++) {
+                try {
+                    if (pl.getListeners(i).length > 0) id = i;
+                } catch (RuntimeException end) {
+                    break;   // past the lists' size
+                }
             }
         }
-        super.unregister(probe);
         if (id < 0) throw new IllegalStateException("cannot find the event bus' id");
         this.busId = id;
         boolean phases = true;
