@@ -13,6 +13,10 @@ release changes the API (`dev.lull.api`) or the settings in a way that needs att
   other mod's changes, so this kind of conflict cannot happen silently again. Measured with ModernFix: tasks 23 ms ->
   0.08 ms; the spawn area of a new world prepared in 17.0 s instead of 19.5 s (2.6 s instead of 7.0 s on a flat world).
   1.21.1 was not affected.
+- **1.20.1: the game could crash at startup next to some mods** (reported with Immersive Fixes): a mod that touches
+  Forge's event bus while other mods are still loading in parallel hit a race in how Sleepium sets up its event bus
+  ("Index ... out of bounds", "Could not initialize class MinecraftForge"). Sleepium no longer does the step that
+  raced. It happened mostly in bigger packs and not every time.
 - **1.21.1: a crash when drawing the first entity with EntityBatch switched off** in the settings (or when it steps
   aside for another mod). Parts that other optimisations rely on are now kept on whenever any of them is.
 

@@ -21,7 +21,7 @@
     "1.20.1-recommended": "1.1.7"
   },
   "1.20.1": {
-    "1.1.7": "Fixes the server reacting up to a tick late next to ModernFix (players' actions, chunk loading).",
+    "1.1.7": "Fixes the server reacting up to a tick late next to ModernFix, and a startup crash next to some mods (Immersive Fixes).",
     "1.1.6": "Fixes singleplayer worlds taking minutes to open next to ModernFix and mods that wait for server data while loading (ALI + JEI); \"part of\" switches in the settings take you to their parent.",
     "1.1.5": "Fixes crashes next to mods that change the entity render call or reach into the event bus (Gnetum).",
     "1.1.4": "Fixes world creation crashing with very tall worldgen datapacks and chunk saving failing next to C2ME.",
