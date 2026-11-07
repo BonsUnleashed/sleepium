@@ -4,6 +4,19 @@ Versions follow [Semantic Versioning](https://semver.org): a patch release fixes
 release changes the API (`dev.lull.api`) or the settings in a way that needs attention. Jars are named
 `sleepium-<version>+mc<minecraft version>-<loader>.jar` (before 1.1.0 without the loader).
 
+## 1.1.6 - 2026-11-07
+
+- **Singleplayer: joining a world could take minutes next to ModernFix and mods that wait for server data while
+  loading** (reported with Advanced Loot Info + JEI in Project Infinity: 120 s instead of 30). While the game is on
+  its loading or pause screen, the built-in server does not run its normal tick, and ModernFix replaces the server's
+  idle wait. Those were the two moments Sleepium's network batching sent what it had collected, so packets sent then
+  waited until the game was unpaused: ALI asked for its loot data three times and gave up. Sleepium now batches only
+  inside the server tick, where the send at its end always comes; everything the server sends outside a tick goes out
+  at once, as without Sleepium. Tested in Project Infinity: ALI gets its data the same second, the world opens in
+  38 s. On servers nearly every packet is still batched (1 278 of 1 279 in our test).
+- **Settings screen:** a switch marked "(part of X)" now takes you to X when clicked, instead of being a grey button
+  that does nothing.
+
 ## 1.1.5 - 2026-11-07
 
 - **1.21.1: joining online-mode servers could hang on "Encrypting..." and time out** (GitHub issue #2). On the
