@@ -4,6 +4,18 @@ Versions follow [Semantic Versioning](https://semver.org): a patch release fixes
 release changes the API (`dev.lull.api`) or the settings in a way that needs attention. Jars are named
 `sleepium-<version>+mc<minecraft version>-<loader>.jar` (before 1.1.0 without the loader).
 
+## 1.1.7 - 2026-11-07
+
+- **1.20.1 with ModernFix: the server reacted up to a tick late** (servers and singleplayer). ModernFix replaces the
+  server's idle wait, and Sleepium's wake-up saver (it skips waking a thread that is not waiting) never saw that wait,
+  so everything handed to the server thread - players' actions, finished chunks - waited for the next tick: 23 ms on
+  average instead of 0.1 ms. Sleepium now adds its hooks to methods that another mod or the game overrides, after every
+  other mod's changes, so this kind of conflict cannot happen silently again. Measured with ModernFix: tasks 23 ms ->
+  0.08 ms; the spawn area of a new world prepared in 17.0 s instead of 19.5 s (2.6 s instead of 7.0 s on a flat world).
+  1.21.1 was not affected.
+- **1.21.1: a crash when drawing the first entity with EntityBatch switched off** in the settings (or when it steps
+  aside for another mod). Parts that other optimisations rely on are now kept on whenever any of them is.
+
 ## 1.1.6 - 2026-11-07
 
 - **Singleplayer: joining a world could take minutes next to ModernFix and mods that wait for server data while
