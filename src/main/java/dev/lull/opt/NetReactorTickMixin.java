@@ -8,9 +8,14 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-/** NetReactor: the end of the server tick is a flush point (what the tick sent leaves as one task per connection). */
+/** NetReactor: sends inside the server tick are batched; its end is a flush point (one task per connection). */
 @Mixin(MinecraftServer.class)
 public abstract class NetReactorTickMixin {
+    @Inject(method = "tickServer", at = @At("HEAD"))
+    private void sleep$start(BooleanSupplier hasTimeLeft, CallbackInfo ci) {
+        NetReactor.onTickStart();
+    }
+
     @Inject(method = "tickServer", at = @At("RETURN"))
     private void sleep$flush(BooleanSupplier hasTimeLeft, CallbackInfo ci) {
         NetReactor.onServerTick();
