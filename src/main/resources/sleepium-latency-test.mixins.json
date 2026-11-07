@@ -1,0 +1,13 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "testmods.latency",
+  "plugin": "testmods.latency.TaskLatencyPlugin",
+  "compatibilityLevel": "JAVA_21",
+  "mixins": [
+    "TaskLatencyMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

@@ -95,6 +95,12 @@ public final class LateEventSites implements IExtension {
         ClassNode cn = context.getClassNode();
         java.util.Map<String, Integer> before = BEFORE.remove(cn.name);
         if (MARKED.remove(cn.name)) EventSiteTransformer.transform(cn, true, before);
+        OverrideHooks.apply(cn);
+    }
+
+    /** true when the extension runs (postApply after every other mixin) */
+    public static boolean active() {
+        return registry != null;
     }
 
     @Override public void export(MixinEnvironment env, String name, boolean force, ClassNode classNode) {}
