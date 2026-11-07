@@ -17,6 +17,6 @@ import org.spongepowered.asm.mixin.injection.Redirect;
 public abstract class NeoForgeBusMixin {
     @Redirect(method = "<clinit>", at = @At(value = "INVOKE", target = "Lnet/neoforged/bus/api/BusBuilder;build()Lnet/neoforged/bus/api/IEventBus;"))
     private static IEventBus sleep$wrap(BusBuilder builder) {
-        return new CompositeEventBus(builder.build());
+        return new CompositeEventBus((net.neoforged.bus.BusBuilderImpl) builder);   // the bus itself, not a wrapper
     }
 }

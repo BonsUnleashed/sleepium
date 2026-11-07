@@ -15,9 +15,12 @@ import net.neoforged.bus.api.IEventBus;
 import net.neoforged.bus.api.IEventExceptionHandler;
 
 /**
- * exp/bus-composite: wraps NeoForge.EVENT_BUS (installed by dev.lull.opt.NeoForgeBusMixin).
+ * exp/bus-composite: NeoForge.EVENT_BUS (installed by dev.lull.opt.NeoForgeBusMixin) - an EventBus itself, built from
+ * NeoForge's own builder, not a wrapper around one: mods that reach into the bus' internals (Gnetum: privateLookupIn
+ * EventBus, its shutdown / exceptionHandler fields, its private getListenerList and doPostChecks, NeoForge.EVENT_BUS
+ * cast to EventBus) find the real state - one state, the listeners included (up to 1.1.4 a wrapper: ClassCastException).
  *
- * <p>Registration, unregistration, start() and phase posts are delegated unchanged to the real EventBus.
+ * <p>Registration, unregistration, start() and phase posts are EventBus' own (super), unchanged.
  * {@link #post(Event)} dispatches through a {@link CompositeDispatcher} generated for the event's listener list.
  * A rebuilt list is detected by array identity: {@code ListenerList.getListeners()} returns a new array after any
  * (un)registration, so no invalidation hooks are needed.
@@ -26,7 +29,7 @@ import net.neoforged.bus.api.IEventExceptionHandler;
  * wrapper simply falls back to the delegate), and the exception handler, called with index -1 because the unrolled
  * code does not know which listener threw.
  */
-public final class CompositeEventBus implements IEventBus {
+public final class CompositeEventBus extends EventBus {
     private static final CompositeDispatcher.Dispatch EMPTY = e -> {};
 
     /** Inlinable no-listener fast path in post() ({@code -Dlab.opt.busFastPath=false} disables it for A/B). */
@@ -98,8 +101,9 @@ public final class CompositeEventBus implements IEventBus {
         }
     };
 
-    public CompositeEventBus(IEventBus built) {
-        this.delegate = (EventBus) built;
+    public CompositeEventBus(net.neoforged.bus.BusBuilderImpl builder) {
+        super(builder);
+        this.delegate = this;   // (the fields below are EventBus' own, read on this instance)
         try {
             MethodHandles.Lookup lookup = MethodHandles.privateLookupIn(EventBus.class, MethodHandles.lookup());
             this.shutdown = lookup.findVarHandle(EventBus.class, "shutdown", boolean.class);
@@ -114,9 +118,10 @@ public final class CompositeEventBus implements IEventBus {
         } catch (ReflectiveOperationException e) {
             throw new IllegalStateException("cannot wrap EventBus", e);
         }
-        System.out.println("[sleep/opt] NeoForge.EVENT_BUS wrapped by CompositeEventBus");
+        System.out.println("[sleep/opt] NeoForge.EVENT_BUS is a CompositeEventBus (an EventBus of its own)");
     }
 
+    /** the EventBus holding the listeners: this one (it was a wrapped bus up to 1.1.4) */
     public EventBus delegate() {
         return delegate;
     }
@@ -180,7 +185,7 @@ public final class CompositeEventBus implements IEventBus {
         if (PHYSICAL_CLIENT && ParallelRender.inJob() && mayHaveListeners(event.getClass())) throw ParallelRender.REFUSE_LISTENED;
         if (fallbackAlways || (boolean) shutdown.getVolatile(delegate)) {
             if (STATS) count(4, holders.get(event.getClass()));
-            return delegate.post(event);   // identical vanilla behaviour (incl. returning early when shut down)
+            return super.post(event);   // identical vanilla behaviour (incl. returning early when shut down)
         }
         Holder h = holders.get(event.getClass());
         Built b = h.built;
@@ -188,7 +193,7 @@ public final class CompositeEventBus implements IEventBus {
             ListenerList list = lookupList(event.getClass());
             if (list == null) {
                 if (STATS) count(3, h);
-                return delegate.post(event);   // first ever post of this type: let the bus create the list
+                return super.post(event);   // first ever post of this type: let the bus create the list
             }
             b = build(h, list, list.getListeners());
         }
@@ -234,22 +239,22 @@ public final class CompositeEventBus implements IEventBus {
         }
     }
 
-    // ---- everything else: straight delegation
+    // ---- everything else: EventBus' own (super)
 
     @Override public <T extends Event> T post(EventPriority phase, T event) {
         if (STATS) count(5, holders.get(event.getClass()));
-        return delegate.post(phase, event);
+        return super.post(phase, event);
     }
     // listener changes: every allocation-free event site back to the normal post, before and after (EventSites)
-    @Override public void register(Object target) { EventSites.invalidate(); delegate.register(target); EventSites.invalidate(); }
-    @Override public void unregister(Object object) { EventSites.invalidate(); delegate.unregister(object); EventSites.invalidate(); }
-    @Override public void start() { EventSites.invalidate(); delegate.start(); EventSites.invalidate(); }
-    @Override public <T extends Event> void addListener(Consumer<T> consumer) { EventSites.invalidate(); delegate.addListener(consumer); EventSites.invalidate(); }
-    @Override public <T extends Event> void addListener(Class<T> eventType, Consumer<T> consumer) { EventSites.invalidate(); delegate.addListener(eventType, consumer); EventSites.invalidate(); }
-    @Override public <T extends Event> void addListener(EventPriority priority, Consumer<T> consumer) { EventSites.invalidate(); delegate.addListener(priority, consumer); EventSites.invalidate(); }
-    @Override public <T extends Event> void addListener(EventPriority priority, Class<T> eventType, Consumer<T> consumer) { EventSites.invalidate(); delegate.addListener(priority, eventType, consumer); EventSites.invalidate(); }
-    @Override public <T extends Event> void addListener(EventPriority priority, boolean receiveCanceled, Consumer<T> consumer) { EventSites.invalidate(); delegate.addListener(priority, receiveCanceled, consumer); EventSites.invalidate(); }
-    @Override public <T extends Event> void addListener(EventPriority priority, boolean receiveCanceled, Class<T> eventType, Consumer<T> consumer) { EventSites.invalidate(); delegate.addListener(priority, receiveCanceled, eventType, consumer); EventSites.invalidate(); }
-    @Override public <T extends Event> void addListener(boolean receiveCanceled, Consumer<T> consumer) { EventSites.invalidate(); delegate.addListener(receiveCanceled, consumer); EventSites.invalidate(); }
-    @Override public <T extends Event> void addListener(boolean receiveCanceled, Class<T> eventType, Consumer<T> consumer) { EventSites.invalidate(); delegate.addListener(receiveCanceled, eventType, consumer); EventSites.invalidate(); }
+    @Override public void register(Object target) { EventSites.invalidate(); super.register(target); EventSites.invalidate(); }
+    @Override public void unregister(Object object) { EventSites.invalidate(); super.unregister(object); EventSites.invalidate(); }
+    @Override public void start() { EventSites.invalidate(); super.start(); EventSites.invalidate(); }
+    @Override public <T extends Event> void addListener(Consumer<T> consumer) { EventSites.invalidate(); super.addListener(consumer); EventSites.invalidate(); }
+    @Override public <T extends Event> void addListener(Class<T> eventType, Consumer<T> consumer) { EventSites.invalidate(); super.addListener(eventType, consumer); EventSites.invalidate(); }
+    @Override public <T extends Event> void addListener(EventPriority priority, Consumer<T> consumer) { EventSites.invalidate(); super.addListener(priority, consumer); EventSites.invalidate(); }
+    @Override public <T extends Event> void addListener(EventPriority priority, Class<T> eventType, Consumer<T> consumer) { EventSites.invalidate(); super.addListener(priority, eventType, consumer); EventSites.invalidate(); }
+    @Override public <T extends Event> void addListener(EventPriority priority, boolean receiveCanceled, Consumer<T> consumer) { EventSites.invalidate(); super.addListener(priority, receiveCanceled, consumer); EventSites.invalidate(); }
+    @Override public <T extends Event> void addListener(EventPriority priority, boolean receiveCanceled, Class<T> eventType, Consumer<T> consumer) { EventSites.invalidate(); super.addListener(priority, receiveCanceled, eventType, consumer); EventSites.invalidate(); }
+    @Override public <T extends Event> void addListener(boolean receiveCanceled, Consumer<T> consumer) { EventSites.invalidate(); super.addListener(receiveCanceled, consumer); EventSites.invalidate(); }
+    @Override public <T extends Event> void addListener(boolean receiveCanceled, Class<T> eventType, Consumer<T> consumer) { EventSites.invalidate(); super.addListener(receiveCanceled, eventType, consumer); EventSites.invalidate(); }
 }
