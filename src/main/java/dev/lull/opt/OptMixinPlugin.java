@@ -151,6 +151,10 @@ public final class OptMixinPlugin implements IMixinConfigPlugin {
         if (on && simple.equals("PersistentPoolsMixin")
                 && (Boolean.getBoolean("lab.opt.all") || Boolean.getBoolean("lab.opt.LabPoolsMixin"))) on = false;
         // A/B of the client-side ones with the server-side ones on: -Dlab.opt.noClient=true
+        // an accessor / invoker mixin only opens fields and methods, it changes nothing: on whenever any part is,
+        // since support code of several parts reaches it (EntityBatch.commutes from PartBatch and the render cache:
+        // with EntityBatch off, or given way, loading its accessors crashed the first entity drawn)
+        if (!on && sleep$accessorOnly(mixinClassName) && sleep$anyOn()) on = true;
         if (on && Boolean.getBoolean("lab.opt.noClient") && (simple.startsWith("Section") && simple.contains("Layer") || simple.startsWith("Ambient") || simple.startsWith("Shader") || simple.startsWith("ClientEventSite") || simple.startsWith("Pose") || simple.startsWith("BulkData") || simple.startsWith("VertexSort") || simple.startsWith("EntityBatch") || simple.startsWith("RenderCache") || simple.startsWith("Parallel") || simple.startsWith("Part") || simple.startsWith("ShaderStateShard") || simple.startsWith("MeshData") || simple.startsWith("SectionLists") || simple.startsWith("ClientBiome") || simple.startsWith("UniformDedupe") || simple.startsWith("SamplerUnit") || simple.startsWith("ModelPartQuat") || simple.startsWith("ModelPartIter") || simple.startsWith("CubicSampler") || simple.startsWith("OverworldFog") || simple.startsWith("EntityCullNoAlloc") || simple.startsWith("FrustumInvoker") || simple.startsWith("ItemFrameOffset") || simple.startsWith("ClientLight") || simple.startsWith("BlockMesh") || simple.startsWith("ClientLevelLightQueue") || simple.startsWith("EntityLightNoAlloc") || simple.startsWith("BlockEntityCullNoAlloc") || simple.startsWith("ClientChunkCacheBiome") || simple.startsWith("LevelRendererVisible") || simple.startsWith("EntityRender") || simple.startsWith("LevelRendererInvoker") || simple.startsWith("BufferBuilder") || simple.startsWith("BufferSource") || simple.startsWith("Composite") || simple.startsWith("Chunk") && !simple.startsWith("ChunkCache"))) on = false;
         if (on && simple.equals("CondWakeMixin")) {
             // tell() skips the wake-up unless the thread said it is parking: every wait for tasks must say so, also the
@@ -168,6 +172,40 @@ public final class OptMixinPlugin implements IMixinConfigPlugin {
             System.out.println("[sleep/opt] applying " + simple + " -> " + targetClassName);
         }
         return on;
+    }
+
+    private static Boolean anyOn;
+    private static final java.util.Map<String, Boolean> ACCESSOR_ONLY = new java.util.concurrent.ConcurrentHashMap<>();
+
+    /** some lab.opt flag is on (the engine is not in its vanilla mode) */
+    private static boolean sleep$anyOn() {
+        if (anyOn == null) {
+            boolean any = false;
+            for (String k : System.getProperties().stringPropertyNames())
+                if (k.startsWith("lab.opt.") && "true".equals(System.getProperty(k)) && !k.equals("lab.opt.defaults")) any = true;
+            anyOn = any;
+        }
+        return anyOn;
+    }
+
+    /** an interface mixin whose every method is an @Accessor or @Invoker */
+    private static boolean sleep$accessorOnly(String mixinClassName) {
+        return ACCESSOR_ONLY.computeIfAbsent(mixinClassName, n -> {
+            try {
+                ClassNode cn = org.spongepowered.asm.service.MixinService.getService().getBytecodeProvider().getClassNode(n);
+                if ((cn.access & org.objectweb.asm.Opcodes.ACC_INTERFACE) == 0 || cn.methods.isEmpty()) return false;
+                for (org.objectweb.asm.tree.MethodNode m : cn.methods) {
+                    boolean ok = false;
+                    for (List<org.objectweb.asm.tree.AnnotationNode> l : java.util.Arrays.asList(m.visibleAnnotations, m.invisibleAnnotations))
+                        if (l != null) for (org.objectweb.asm.tree.AnnotationNode a : l)
+                            if (a.desc.equals("Lorg/spongepowered/asm/mixin/gen/Accessor;") || a.desc.equals("Lorg/spongepowered/asm/mixin/gen/Invoker;")) ok = true;
+                    if (!ok) return false;
+                }
+                return true;
+            } catch (Throwable t) {
+                return false;
+            }
+        });
     }
 
     /**
