@@ -20,6 +20,7 @@ ap.add_argument('--java', default=r'F:\forminecrfatmods\jdk-21.0.2\bin\java.exe'
 ap.add_argument('--server-mods', default='')
 ap.add_argument('--client-mods', default='')
 ap.add_argument('--client-jvm', default='')
+ap.add_argument('--server-jvm', default='', help='JVM flags for the server (e.g. -Dsleep.test.encrypt=true: an encrypted login offline)')
 ap.add_argument('--secs', type=int, default=60)
 ap.add_argument('--port', default='25570')
 a = ap.parse_args()
@@ -34,7 +35,7 @@ for m in filter(None, a.server_mods.split(',')):
     shutil.copy(m, mods)
 shutil.rmtree(os.path.join(a.server, 'world'), ignore_errors=True)
 slog = open(os.path.join(a.server, 'console.log'), 'w', encoding='utf-8', errors='replace')
-server = subprocess.Popen([a.java, '-Xmx2G', '@libraries/net/neoforged/neoforge/21.1.251/win_args.txt', 'nogui'], cwd=a.server,
+server = subprocess.Popen([a.java, '-Xmx2G'] + a.server_jvm.split() + ['@libraries/net/neoforged/neoforge/21.1.251/win_args.txt', 'nogui'], cwd=a.server,
                           stdin=subprocess.PIPE, stdout=slog, stderr=subprocess.STDOUT, text=True)
 t0 = time.time()
 while time.time() - t0 < 240:

@@ -1,0 +1,9 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "testmods.encrypt",
+  "plugin": "testmods.encrypt.EncryptTestPlugin",
+  "compatibilityLevel": "JAVA_21",
+  "mixins": ["EncryptOfflineMixin"],
+  "injectors": { "defaultRequire": 1 }
+}

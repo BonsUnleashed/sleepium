@@ -44,6 +44,9 @@ config="${mod_id}-opt.mixins.json"
 config="sleepium-foreign-test.mixins.json"
 
 [[mixins]]
+config="sleepium-encrypt-test.mixins.json"
+
+[[mixins]]
 config="sleepium-geo.mixins.json"
 [[mixins]]
 config="sleepium-flywheel.mixins.json"
