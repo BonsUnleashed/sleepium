@@ -152,6 +152,18 @@ public final class OptMixinPlugin implements IMixinConfigPlugin {
                 && (Boolean.getBoolean("lab.opt.all") || Boolean.getBoolean("lab.opt.LabPoolsMixin"))) on = false;
         // A/B of the client-side ones with the server-side ones on: -Dlab.opt.noClient=true
         if (on && Boolean.getBoolean("lab.opt.noClient") && (simple.startsWith("Section") && simple.contains("Layer") || simple.startsWith("Ambient") || simple.startsWith("Shader") || simple.startsWith("ClientEventSite") || simple.startsWith("Pose") || simple.startsWith("BulkData") || simple.startsWith("VertexSort") || simple.startsWith("EntityBatch") || simple.startsWith("RenderCache") || simple.startsWith("Parallel") || simple.startsWith("Part") || simple.startsWith("ShaderStateShard") || simple.startsWith("MeshData") || simple.startsWith("SectionLists") || simple.startsWith("ClientBiome") || simple.startsWith("UniformDedupe") || simple.startsWith("SamplerUnit") || simple.startsWith("ModelPartQuat") || simple.startsWith("ModelPartIter") || simple.startsWith("CubicSampler") || simple.startsWith("OverworldFog") || simple.startsWith("EntityCullNoAlloc") || simple.startsWith("FrustumInvoker") || simple.startsWith("ItemFrameOffset") || simple.startsWith("ClientLight") || simple.startsWith("BlockMesh") || simple.startsWith("ClientLevelLightQueue") || simple.startsWith("EntityLightNoAlloc") || simple.startsWith("BlockEntityCullNoAlloc") || simple.startsWith("ClientChunkCacheBiome") || simple.startsWith("LevelRendererVisible") || simple.startsWith("EntityRender") || simple.startsWith("LevelRendererInvoker") || simple.startsWith("BufferBuilder") || simple.startsWith("BufferSource") || simple.startsWith("Composite") || simple.startsWith("Chunk") && !simple.startsWith("ChunkCache"))) on = false;
+        if (on && simple.equals("CondWakeMixin")) {
+            // tell() skips the wake-up unless the thread said it is parking: every wait for tasks must say so, also the
+            // ones that override BlockableEventLoop.waitForTasks (ModernFix's MinecraftServer one). They are reached
+            // only from the late extension; without it a skipped wake-up could cost a whole tick: CondWake stays off
+            if (!dev.lull.optsupport.LateEventSites.register()) {
+                System.out.println("[sleep/opt] CondWakeMixin off: overrides of waitForTasks cannot be hooked (Mixin's extensions out of reach)");
+                return false;
+            }
+            if (!dev.lull.optsupport.OverrideHooks.any())
+                dev.lull.optsupport.OverrideHooks.add("CondWake", "net/minecraft/util/thread/BlockableEventLoop", Set.of("waitForTasks", "m_5667_"), "()V",
+                        "dev/lull/optsupport/WakeFlags.arm", "dev/lull/optsupport/WakeFlags.disarm");
+        }
         if (on) {
             System.out.println("[sleep/opt] applying " + simple + " -> " + targetClassName);
         }

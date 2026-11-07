@@ -1,0 +1,14 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "testmods.latency",
+  "plugin": "testmods.latency.TaskLatencyPlugin",
+  "compatibilityLevel": "JAVA_17",
+  "refmap": "sleepium.refmap.json",
+  "mixins": [
+    "TaskLatencyMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

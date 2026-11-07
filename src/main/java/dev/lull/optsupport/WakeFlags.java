@@ -27,6 +27,15 @@ public final class WakeFlags {
         return FLAGS.computeIfAbsent(Thread.currentThread(), t -> new AtomicBoolean());
     }
 
+    /** CondWake's hooks, also in the overrides of waitForTasks (OverrideHooks): about to wait for tasks / done */
+    public static void arm() {
+        current().set(true);
+    }
+
+    public static void disarm() {
+        current().set(false);
+    }
+
     public static AtomicBoolean of(Thread t) {
         return FLAGS.get(t);
     }
