@@ -289,8 +289,13 @@ public final class ParallelRender {
         System.out.println("[sleep/opt] parallel render: " + Thread.currentThread().getName() + " pinned to mask " + Long.toHexString(PIN_WORKERS[i]) + " " + ok);
     }
 
+    /** Test only (-Dsleep.test.skipDraw=ItemEntity,ExperienceOrb): entities of these classes are not drawn (a ceiling). */
+    private static final java.util.Set<String> TEST_SKIP = java.util.Set.of(System.getProperty("sleep.test.skipDraw", "").split(","));
+    private static final boolean TEST_SKIP_ON = !TEST_SKIP.contains("");
+
     /** LevelRenderer's entity loop, per entity (in place of renderEntity). */
     public static void enqueue(LevelRenderer lr, Entity e, double camX, double camY, double camZ, float pt, PoseStack pose, MultiBufferSource buffers) {
+        if (TEST_SKIP_ON && TEST_SKIP.contains(e.getClass().getSimpleName())) return;
         if (size == 0) {
             if (RENDER_PIN != 0 && !renderPinned) {
                 renderPinned = true;

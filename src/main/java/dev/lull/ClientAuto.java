@@ -121,6 +121,16 @@ public final class ClientAuto {
     /** -Dsleep.clientAuto.shot=S: a screenshot S seconds into the measured window, nothing frozen (moving scenes) */
     private static final double SHOT_S = Double.parseDouble(System.getProperty("sleep.clientAuto.shot", "-1"));   // seconds, fractions allowed
     private static int shotAt = -1;
+    /**
+     * -Dsleep.clientAuto.ab=dev.lull.optsupport.ItemGpu#enabled@S: an in-process A/B of a render switch (a static boolean
+     * field) - S seconds into the measured window (time frozen before it: cmdAt 0:tick_freeze; animated textures
+     * stopped) frame A as it is, the field flipped, frame B a second later, the field restored; both saved and compared
+     * pixel by pixel. The same entities in the same state in both frames - two runs cannot give that (a dropped item's
+     * bob phase is random on the client).
+     */
+    private static final String AB = System.getProperty("sleep.clientAuto.ab");
+    private static int abAt = -1, abStep;
+    private static com.mojang.blaze3d.platform.NativeImage abA;
     /** -Dsleep.clientAuto.gamemode=survival: the game mode once the terrain is ready (default spectator) */
     private static final String GAMEMODE = System.getProperty("sleep.clientAuto.gamemode", "spectator");
     /** -Dsleep.clientAuto.cmdAt=S:command[|S:command...]: server commands S seconds into the measured window (e.g. 10:reload) */
@@ -218,6 +228,12 @@ public final class ClientAuto {
             shotsBase = ticks;
             Minecraft.getInstance().options.hideGui = !Boolean.getBoolean("sleep.clientAuto.shotGui");
         }
+        if (AB != null) {
+            abAt = ticks + (int) Math.round(Double.parseDouble(AB.substring(AB.indexOf('@') + 1)) * 20);
+            dev.lull.optsupport.ClientCounters.freezeTextures = true;
+            Minecraft.getInstance().options.hideGui = true;
+            Minecraft.getInstance().options.glintSpeed().set(0.0);   // the glint moves with the wall clock, not the ticks
+        }
         if (SHOT_S >= 0) {
             shotAt = ticks + (int) Math.round(SHOT_S * 20);
             Minecraft.getInstance().options.hideGui = !Boolean.getBoolean("sleep.clientAuto.shotGui");   // shotGui: the HUD in the shot
@@ -283,6 +299,53 @@ public final class ClientAuto {
                     log("shot " + i + " failed: " + e);
                 }
             }
+        }
+    }
+
+    private static void abTick(Minecraft mc) {
+        try {
+            String cls = AB.substring(0, AB.indexOf('#')), name = AB.substring(AB.indexOf('#') + 1, AB.indexOf('@'));
+            java.lang.reflect.Field f = Class.forName(cls).getDeclaredField(name);
+            f.setAccessible(true);
+            Path dir = SleepOut.dir(mc.gameDirectory.toPath(), "frame", LABEL);
+            Files.createDirectories(dir);
+            if (abStep == 0) {
+                abA = net.minecraft.client.Screenshot.takeScreenshot(mc.getMainRenderTarget());
+                abA.writeToFile(dir.resolve("ab-" + LABEL + "-A.png"));
+                f.setBoolean(null, !f.getBoolean(null));
+                log("ab: frame A taken, " + name + " -> " + f.getBoolean(null));
+                abStep = 1;
+                abAt = ticks + 20;
+                return;
+            }
+            abAt = -1;
+            f.setBoolean(null, !f.getBoolean(null));
+            try (com.mojang.blaze3d.platform.NativeImage b = net.minecraft.client.Screenshot.takeScreenshot(mc.getMainRenderTarget());
+                 com.mojang.blaze3d.platform.NativeImage a = abA;
+                 com.mojang.blaze3d.platform.NativeImage d = new com.mojang.blaze3d.platform.NativeImage(a.getWidth(), a.getHeight(), false)) {
+                b.writeToFile(dir.resolve("ab-" + LABEL + "-B.png"));
+                long differ = 0, small = 0;
+                int max = 0;
+                for (int y = 0; y < a.getHeight(); y++)
+                    for (int x = 0; x < a.getWidth(); x++) {
+                        int pa = a.getPixelRGBA(x, y), pb = b.getPixelRGBA(x, y), m = 0;
+                        for (int s = 0; s < 24; s += 8) m = Math.max(m, Math.abs((pa >> s & 255) - (pb >> s & 255)));
+                        if (m > 0) {
+                            differ++;
+                            if (m <= 2) small++;
+                        }
+                        max = Math.max(max, m);
+                        // the difference image: differing pixels bright (red: more than 2 levels, yellow: up to 2), the rest dimmed
+                        int g = ((pa & 255) + (pa >> 8 & 255) + (pa >> 16 & 255)) / 12;
+                        d.setPixelRGBA(x, y, m == 0 ? 0xFF000000 | g * 0x010101 : m <= 2 ? 0xFF00FFFF : 0xFF0000FF);
+                    }
+                d.writeToFile(dir.resolve("ab-" + LABEL + "-diff.png"));
+                log(String.format(Locale.ROOT, "ab %s: %d of %d pixels differ (%.4f %%), %d of them by 1-2 levels; largest channel difference %d",
+                        name, differ, (long) a.getWidth() * a.getHeight(), 100.0 * differ / ((long) a.getWidth() * a.getHeight()), small, max));
+            }
+        } catch (Exception e) {
+            abAt = -1;
+            log("ab failed: " + e);
         }
     }
 
@@ -391,6 +454,7 @@ public final class ClientAuto {
             frameHash(Minecraft.getInstance());
         }
         shotsTick(Minecraft.getInstance());
+        if (abAt >= 0 && ticks >= abAt) abTick(Minecraft.getInstance());
         if (hashAt >= 0 && ticks >= hashAt) {
             // only when the renderer is idle: every section built and uploaded (the scene's sections may still be queued)
             Minecraft m = Minecraft.getInstance();
