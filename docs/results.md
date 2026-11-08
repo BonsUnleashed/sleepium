@@ -78,6 +78,7 @@ the same game with Sleepium's optimisations off.
 | crowd, N100, client tick, ms | 155 / 149 | 18.0 / 18.9 | 16.0 / 15.3 | 8.0 | 19.8 |
 | drops, host, fps (1.21.1) | 182 | 1 066 | 2 094 | | |
 | drops, host, fps (1.20.1, dev client) | 128 | 980 | 1 621 | | |
+| drops, host, fps (1.20.1, production client, two runs each) | | 461 / 444 | 660 / 691 | | |
 | drops, N100, fps / client tick, ms (two runs each) | | 130-132 / 12.6-11.8 | 136 / 9.5 | | |
 
 On the N100 the crowd runs on one pre-generated world copied for every run: a fresh world kept generating chunks during

@@ -32,8 +32,14 @@ release changes the API (`dev.lull.api`) or the settings in a way that needs att
 - **Entity analysis could fail next to a mod that patches the bytecode library (ASM)** ("analysis failed:
   method.tryCatchBlocks is null" in the log; those entities then simply ticked the vanilla way). Sleepium now handles
   it (reported by I3AT5).
+- **Block-entity sleep: mods' machines are analysed the whole way.** A mod's ticker that calls its block entity
+  through an interface (Industrial Foregoing and Functional Storage machines, PneumaticCraft blocks) was skipped by
+  the analysis, and those machines were allowed to sleep on what Sleepium observed while they ran alone. They kept
+  working the same as in vanilla (checked), but without a proof; now their tick is analysed, and a machine sleeps only
+  when it is proven it may. Found by placing every block of 13 popular mods (1 843 blocks) and reading the verdicts.
 - **Block-entity sleep is checked by value where a mod's block entity bypasses Sleepium's hooks**, so a sleeping
-  machine wakes up exactly when its items change, whatever way the mod changes them.
+  machine wakes up exactly when its items change, whatever way the mod changes them; a block entity whose items
+  cannot be read that way does not sleep.
 - **Two small costs found in a 200-mod pack's profile:** Sleepium's tick timer built the name of every dimension as
   a string every tick, and its event bus read one flag the slow way on every event (together about 1.5 % of the
   server thread in that pack).
