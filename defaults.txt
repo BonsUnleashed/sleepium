@@ -2,6 +2,7 @@
 -Dlab.opt.AsyncChunkSaveMixin=true
 -Dlab.opt.AsyncChunkSaveStorageMixin=true
 -Dlab.opt.BlockCollisionMemoMixin=true
+-Dlab.opt.BlockCollisionsFastMixin=true
 -Dlab.opt.BlockEntityCullNoAllocMixin=true
 -Dlab.opt.BlockMeshDirtyMixin=true
 -Dlab.opt.BlockMeshMemoMixin=true
