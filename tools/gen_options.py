@@ -17,7 +17,7 @@ OUT = os.path.join(ROOT, 'src', 'main', 'resources', 'assets', 'sleepium', 'opti
 GROUPS = [
     ('lighting', r'^(Light|ShaderLight|ClientLight)'),
     ('chunks', r'^(Chunk(Multi|Section|Shader|Upload)|Section(Layer|Lists|ModCount)|BlockMesh|VertexSort|SamplerUnit|Uniform|ShaderSampler|Frame|RenderCache|RenderCall|OverworldFog|AmbientParticle|ItemFrame|Texture|ParallelReload|ClientBiome|ClientChunkCacheBiome)'),
-    ('entities_render', r'^(EntityBatch|Part|ModelPart|PoseStack|EntityCull|EntityLight|BlockEntityCull|Vec3FromRgb)'),
+    ('entities_render', r'^(EntityBatch|ItemGpu|Part|ModelPart|PoseStack|EntityCull|EntityLight|BlockEntityCull|Vec3FromRgb)'),
     ('animation', r'^(Geo|Molang|Keyframe|AnimStream)'),
     ('threads', r'^(MainReactor|Reactor|ParallelEntities|LabPools|PersistentPools|MailboxBatch|NeoForgeBus)'),
     ('network', r'^Net'),
@@ -35,6 +35,7 @@ META = {'universal'}
 
 # flags that switch several mixins (no class of their own), described here
 DESCRIPTIONS = {
+    'ItemGpuMixin': 'Items in the world (on the ground, in frames, in hands) drawn from GPU memory: a pose per item each frame instead of its vertices, no sorting of their quads. About 2x fps with a thousand dropped items.',
     'FrameGarbageMixin': 'The per-frame garbage fixes in one switch: fog colour, frustum and light checks of entities and block entities, item frames, memoized lookups - without allocating every frame.',
     'GeoParallelMixin': 'GeckoLib models rendered on Sleepium\'s render workers (with ParallelEntities): their model and Molang work off the render thread.',
     'GeoPartsMixin': 'GeckoLib bones drawn from GPU memory (with PartBatch): only bone poses are uploaded per frame, not their vertices.',
@@ -54,8 +55,7 @@ GEO_PART_OF = {'GeoModelWorkerMixin': ['GeoParallelMixin', 'ParallelEntitiesMixi
 
 # off by default, shown in their groups (key, group, description)
 EXPERIMENTAL = [
-    ('lab.chunkmd.occlusion', 'chunks', 'GPU occlusion culling of chunk sections (two phases, exact). Pays off where most of the loaded terrain is hidden.'),
-    ('lab.opt.ItemGpuMixin', 'entities_render', 'Items in the world (on the ground, in frames, in hands) drawn from GPU memory: a pose per item each frame instead of its vertices, no sorting of their quads. About 2x fps with a thousand dropped items; a few pixels can differ from vanilla where two faces of one item have exactly equal depth.'),
+    ('lab.chunkmd.occlusion', 'chunks', 'GPU occlusion culling of chunk sections (two phases, exact). Pays off where most of the loaded terrain is hidden.'),
 ]
 
 ANNOTATIONS = r'(?:@[\w.]+(?:\((?:[^()]|\([^()]*\))*\))?\s*)*'
