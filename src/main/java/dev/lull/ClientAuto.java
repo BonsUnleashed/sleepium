@@ -123,13 +123,13 @@ public final class ClientAuto {
     private static int shotAt = -1;
     /**
      * -Dsleep.clientAuto.ab=dev.lull.optsupport.ItemGpu#enabled@S: an in-process A/B of a render switch (a static boolean
-     * field) - S seconds into the measured window (time frozen before it: cmdAt 0:tick_freeze; animated textures
-     * stopped) frame A as it is, the field flipped, frame B a second later, the field restored; both saved and compared
-     * pixel by pixel. The same entities in the same state in both frames - two runs cannot give that (a dropped item's
-     * bob phase is random on the client).
+     * field) - S seconds into the measured window, inside one client tick, the frame rendered twice with the same partial
+     * tick (animated textures stopped, the glint still): A as it is, B with the field flipped (then restored); both saved
+     * and compared pixel by pixel. The same entities in the same state in both frames - two runs cannot give that (a
+     * dropped item's bob phase is random on the client).
      */
     private static final String AB = System.getProperty("sleep.clientAuto.ab");
-    private static int abAt = -1, abStep;
+    private static int abAt = -1;
     private static com.mojang.blaze3d.platform.NativeImage abA;
     /** -Dsleep.clientAuto.gamemode=survival: the game mode once the terrain is ready (default spectator) */
     private static final String GAMEMODE = System.getProperty("sleep.clientAuto.gamemode", "spectator");
@@ -309,18 +309,18 @@ public final class ClientAuto {
             f.setAccessible(true);
             Path dir = SleepOut.dir(mc.gameDirectory.toPath(), "frame", LABEL);
             Files.createDirectories(dir);
-            if (abStep == 0) {
-                abA = net.minecraft.client.Screenshot.takeScreenshot(mc.getMainRenderTarget());
-                abA.writeToFile(dir.resolve("ab-" + LABEL + "-A.png"));
-                f.setBoolean(null, !f.getBoolean(null));
-                log("ab: frame A taken, " + name + " -> " + f.getBoolean(null));
-                abStep = 1;
-                abAt = ticks + 20;
-                return;
-            }
             abAt = -1;
+            abA = abFrame(mc);
+            abA.writeToFile(dir.resolve("ab-" + LABEL + "-A.png"));
             f.setBoolean(null, !f.getBoolean(null));
-            try (com.mojang.blaze3d.platform.NativeImage b = net.minecraft.client.Screenshot.takeScreenshot(mc.getMainRenderTarget());
+            log("ab: frame A taken, " + name + " -> " + f.getBoolean(null));
+            com.mojang.blaze3d.platform.NativeImage bImg;
+            try {
+                bImg = abFrame(mc);
+            } finally {
+                f.setBoolean(null, !f.getBoolean(null));
+            }
+            try (com.mojang.blaze3d.platform.NativeImage b = bImg;
                  com.mojang.blaze3d.platform.NativeImage a = abA;
                  com.mojang.blaze3d.platform.NativeImage d = new com.mojang.blaze3d.platform.NativeImage(a.getWidth(), a.getHeight(), false)) {
                 b.writeToFile(dir.resolve("ab-" + LABEL + "-B.png"));
@@ -347,6 +347,16 @@ public final class ClientAuto {
             abAt = -1;
             log("ab failed: " + e);
         }
+    }
+
+    /** One frame rendered now into the main target as runTick renders it (the partial tick unchanged), read back. */
+    private static com.mojang.blaze3d.platform.NativeImage abFrame(Minecraft mc) {
+        mc.getMainRenderTarget().bindWrite(true);
+        net.minecraft.client.renderer.FogRenderer.setupNoFog();
+        com.mojang.blaze3d.systems.RenderSystem.enableCull();
+        mc.gameRenderer.render(mc.getTimer(), true);
+        mc.getMainRenderTarget().unbindWrite();
+        return net.minecraft.client.Screenshot.takeScreenshot(mc.getMainRenderTarget());
     }
 
     private static void frameHash(Minecraft mc) {

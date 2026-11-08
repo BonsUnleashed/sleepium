@@ -55,6 +55,7 @@ GEO_PART_OF = {'GeoModelWorkerMixin': ['GeoParallelMixin', 'ParallelEntitiesMixi
 # off by default, shown in their groups (key, group, description)
 EXPERIMENTAL = [
     ('lab.chunkmd.occlusion', 'chunks', 'GPU occlusion culling of chunk sections (two phases, exact). Pays off where most of the loaded terrain is hidden.'),
+    ('lab.opt.ItemGpuMixin', 'entities_render', 'Items in the world (on the ground, in frames, in hands) drawn from GPU memory: a pose per item each frame instead of its vertices, no sorting of their quads. About 2x fps with a thousand dropped items; a few pixels can differ from vanilla where two faces of one item have exactly equal depth.'),
 ]
 
 ANNOTATIONS = r'(?:@[\w.]+(?:\((?:[^()]|\([^()]*\))*\))?\s*)*'

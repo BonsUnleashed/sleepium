@@ -11,7 +11,7 @@ lab.opt.ChunkCacheClearMixin	saving	true	Drop ChunkCacheMixin's entry whenever v
 lab.opt.ChunkCacheMixin	saving	true	exp/chunk-cache: one-chunk lookup cache in Level for getBlockState / getChunkAt (getFluidState, getBlockEntity, setBlock...).	
 lab.opt.ChunkMultiDrawMixin	chunks	true	exp/chunk-multidraw (client): the opaque chunk layers through ChunkMultiDraw (one multi-draw per region).	
 lab.opt.ChunkSectionMixin	chunks	true	ChunkMultiDraw: tags the section's layer buffers; a reset (origin change, release) frees its arena entries.	lab.opt.ChunkMultiDrawMixin
-lab.opt.ChunkShaderPatchMixin	chunks	true	ChunkMultiDraw: the vanilla chunk vertex shaders get the multi-draw offset path (see ChunkMultiDraw.patch).	lab.opt.ChunkMultiDrawMixin,lab.opt.PartBatchMixin
+lab.opt.ChunkShaderPatchMixin	chunks	true	ChunkMultiDraw: the vanilla chunk vertex shaders get the multi-draw offset path (see ChunkMultiDraw.patch); the entity shaders the residents' path.	lab.opt.ChunkMultiDrawMixin,lab.opt.PartBatchMixin
 lab.opt.ChunkTickMemoChunkMixin	ticks	true	ChunkTickMemoMixin: the remembered answer and its epoch on the chunk.	lab.opt.ChunkTickMemoMixin
 lab.opt.ChunkTickMemoEpochMixin	ticks	true	ChunkTickMemoMixin: every write of the chunk-visibility map goes through here.	lab.opt.ChunkTickMemoMixin
 lab.opt.ChunkTickMemoMixin	ticks	true	exp/chunk-tick-memo: see ChunkTickMemo.	
@@ -84,15 +84,15 @@ lab.opt.NetBulk	network	true	Large server data sent once by content hash: cached
 lab.opt.NetCoalesce	network	true	A flush's packets sent as one frame of a per-connection compressed stream (clients with Sleepium only): 45-52 % fewer bytes on movement traffic.	
 lab.opt.NetReactor	network	true	Network reactor, stage A: outbound batching.	
 lab.opt.NetReactorConnectionMixin	network	true	NetReactor: a server connection in the PLAY protocol batches the server thread's sends (see NetReactor).	lab.opt.NetReactor
-lab.opt.NetReactorTickMixin	network	true	NetReactor: the end of the server tick is a flush point (what the tick sent leaves as one task per connection).	lab.opt.NetReactor
+lab.opt.NetReactorTickMixin	network	true	NetReactor: sends inside the server tick are batched; its end is a flush point (one task per connection).	lab.opt.NetReactor
 lab.opt.NetReactorWaitMixin	network	true	NetReactor without MainReactor: before the server thread sleeps (vanilla's waitForTasks) its pending batches go out.	lab.opt.MainReactor
 lab.opt.OverworldFogMixin	chunks	true	exp/frame-garbage (client): the overworld's brightness-dependent fog colour (a multiply per fetched colour, 216 per frame) remembered per input colour instance and brightness: with Vec3FromRgbMixin the inputs are the same few instances, and the function is pure (the same product of the same doubles)	lab.opt.FrameGarbageMixin
 lab.opt.ParallelEntitiesMixin	threads	true	exp/parallel-render (client): the entity loop of renderLevel queues its entities (ParallelRender starts the eligible ones on workers at once) and the queue is drained in order right after the loop, before the batch is ended.	
 lab.opt.ParallelReloadMixin	chunks	true	ParallelEntitiesMixin: the worker renderer sets follow a resource reload.	lab.opt.ParallelEntitiesMixin
 lab.opt.PartBatchMixin	entities_render	true	exp/part-batch (client, render cache v3): a model part's compile becomes a queued record (pose, light, overlay, colour) drawn from its VRAM geometry, when PartBatch can take it; otherwise the vanilla compile.	
-lab.opt.PartDrawMixin	entities_render	true	PartBatchMixin: the queued parts of the render type being drawn, right after its batch (program still bound).	lab.opt.PartBatchMixin
-lab.opt.PartFrameMixin	entities_render	true	PartBatchMixin: no queued part outlives the level render.	lab.opt.PartBatchMixin
-lab.opt.PartTypeMixin	entities_render	true	PartBatchMixin: which render type's batch is being drawn.	lab.opt.PartBatchMixin
+lab.opt.PartDrawMixin	entities_render	true	PartBatchMixin: the queued parts of the render type being drawn, right after its batch (program still bound); ItemGpu's before it.	lab.opt.PartBatchMixin,lab.opt.ItemGpuMixin
+lab.opt.PartFrameMixin	entities_render	true	PartBatchMixin: no queued part outlives the level render.	lab.opt.PartBatchMixin,lab.opt.ItemGpuMixin
+lab.opt.PartTypeMixin	entities_render	true	PartBatchMixin: which render type's batch is being drawn.	lab.opt.PartBatchMixin,lab.opt.ItemGpuMixin
 lab.opt.PersistentPoolsMixin	threads	true	exp/persistent-pools: stop the engine from re-creating its worker threads.	
 lab.opt.PoiColumnMixin	saving	true	exp/poi-columns: every POI range query (villager jobs, beds and meeting points, bees, portals, lightning rods, lodestones, modded POI types) goes through getInChunk for each chunk of the square: vanilla boxes 24 section indices, builds a SectionPos and does a hash lookup per section, then filters Op	
 lab.opt.PoseStackPoolMixin	entities_render	true	exp/pose-pool (client): every pushPose allocated a Pose with a new Matrix4f and Matrix3f (18 % of the render thread's allocation in an entity-heavy scene).	
@@ -105,6 +105,7 @@ lab.opt.ReactorTickMixin	threads	true	WorldgenReactor: FullRing's feedback — e
 lab.opt.RenderCacheBlockEntityMixin	chunks	true	exp/render-cache (client): the block entity renderer call of setupAndRender goes through RenderCache.	lab.opt.RenderCacheMixin
 lab.opt.RenderCacheClockMixin	chunks	true	The render cache's animation probe also moves the wall clock (GLFW time): renderers that animate by it (GeckoLib's block entities: RenderUtil.getCurrentTick() = Blaze3D.getTime() * 20) otherwise record the same output twice and are taken for static.	lab.opt.RenderCacheMixin
 lab.opt.RenderCacheMixin	chunks	true	exp/render-cache (client): the entity renderer call of EntityRenderDispatcher.render goes through RenderCache (the dispatcher's own flame, shadow and hitbox stay as they are).	
+lab.rcache.learnFields	ticks	true		
 lab.opt.RenderCallJournalMixin	chunks	true	ParallelRender: render-thread work a renderer defers from a worker job (RenderSystem.setShaderTexture and the other "off the render thread: record it" calls) is kept in the job and run on the render thread when the job is merged, in job order, instead of at the next frame's queue flush.	lab.opt.ParallelEntitiesMixin
 lab.opt.SamplerUnitDedupeMixin	chunks	true	exp/uniform-dedupe (client): ShaderInstance.apply sets each sampler uniform to its texture unit on every apply; the unit of a sampler never changes for a program, so after the first time the call is skipped (per program instance, per location, forgotten when the instance's program changes).	lab.opt.UniformDedupeMixin
 lab.opt.ScoutBlockEntityMixin	ticks	true	exp/parallel-tick-scout (measurement only): a block entity tick is a task.	
@@ -131,6 +132,8 @@ lab.opt.ShapeCacheMixin	ticks	true	exp/shape-cache: the context-taking getCollis
 lab.opt.SignalPathMixin	ticks	true	exp/signal-path: the redstone signal queries of every Level without a new BlockPos per neighbour.	
 lab.opt.SignalProofStateMixin	ticks	true	Goes with SignalPathMixin: the per-state proof flags.	lab.opt.SignalPathMixin
 lab.opt.SleepMixin	ticks	true	Sleeping block entities: an idle block entity's tick is skipped (proven from its bytecode and observed) and woken at the exact tick vanilla would act.	
+lab.opt.SpriteInterpolateMixin	ticks	true	An interpolated animated texture's frame blended over the images' memory (SpriteMix), the same pixels as vanilla's per-pixel getPixelRGBA / setPixelRGBA loop; an image vanilla's checks would refuse goes the vanilla way (and throws as it does).	
+lab.analysis.running	ticks	true		
 lab.opt.StructurePlaceLockMixin	worldgen	true	exp/parallel-worldgen: one StructureStart is shared by every chunk its pieces cover, and pieces keep mutable state across chunks (MineShaftCorridor.hasPlacedSpider, ScatteredFeaturePiece's heightPosition and bounding box moved by updateAverageGroundHeight, the temples' placed-chest flags, modded pie	lab.opt.ParallelWorldgenMixin
 lab.opt.TagCacheMixin	ticks	true	exp/tag-cache: Holder.Reference.is(TagKey) is a Set.contains with record hashing and equals on every call.	
 lab.opt.TextureIdWorkerMixin	chunks	true	ParallelRender: AbstractTexture.getId() inside a worker job.	lab.opt.ParallelEntitiesMixin
@@ -175,3 +178,4 @@ lab.opt.AllocTrim	saving	true	AllocTrim (lab.opt.AllocTrim): temporary arrays va
 lab.opt.ChunkIo	saving	true	Chunk storage without blocking (lab.opt.ChunkIo, every IOWorker: chunks, entities, POI; notes/38).	
 lab.opt.ParallelWorldgenMixin	worldgen	true	exp/parallel-worldgen: hand SURFACE/CARVERS/FEATURES to ParallelGen's pool instead of running them inside the single worldgen mailbox actor.	
 lab.chunkmd.occlusion	chunks	false	GPU occlusion culling of chunk sections (two phases, exact). Pays off where most of the loaded terrain is hidden.	
+lab.opt.ItemGpuMixin	entities_render	false	Items in the world (on the ground, in frames, in hands) drawn from GPU memory: a pose per item each frame instead of its vertices, no sorting of their quads. About 2x fps with a thousand dropped items; a few pixels can differ from vanilla where two faces of one item have exactly equal depth.	

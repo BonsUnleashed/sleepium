@@ -102,6 +102,23 @@ public final class PartBatch {
         pre.append("struct ProbePart { mat4 pose; vec4 n0; vec4 n1; vec4 n2; vec4 color; ivec4 lo; };\n");
         pre.append("layout(std430) buffer ProbeParts { ProbePart probeParts[]; };\n");
         pre.append("uniform int ProbePartMode;\n");
+        // mode 7 (ItemGpu): position and normal as JOML computes them on the CPU (Vector3f.mulPosition / Matrix3f.transform
+        // without Math.fma: m00 x + (m10 y + (m20 z + m30)), every product and sum rounded on its own); `precise` keeps the
+        // compiler from fusing or reordering them, so the vertex is vanilla's to the bit (without the extension: as before)
+        pre.append("#ifdef GL_ARB_gpu_shader5\n#define PROBE_PRECISE precise\n#else\n#define PROBE_PRECISE\n#endif\n");
+        pre.append("vec3 probeJoml4(mat4 m, vec3 p) {\n");
+        pre.append("    PROBE_PRECISE float x0 = m[2][0] * p.z; PROBE_PRECISE float x1 = x0 + m[3][0]; PROBE_PRECISE float x2 = m[1][0] * p.y; PROBE_PRECISE float x3 = x2 + x1;"
+                + " PROBE_PRECISE float x4 = m[0][0] * p.x; PROBE_PRECISE float x = x4 + x3;\n");
+        pre.append("    PROBE_PRECISE float y0 = m[2][1] * p.z; PROBE_PRECISE float y1 = y0 + m[3][1]; PROBE_PRECISE float y2 = m[1][1] * p.y; PROBE_PRECISE float y3 = y2 + y1;"
+                + " PROBE_PRECISE float y4 = m[0][1] * p.x; PROBE_PRECISE float y = y4 + y3;\n");
+        pre.append("    PROBE_PRECISE float z0 = m[2][2] * p.z; PROBE_PRECISE float z1 = z0 + m[3][2]; PROBE_PRECISE float z2 = m[1][2] * p.y; PROBE_PRECISE float z3 = z2 + z1;"
+                + " PROBE_PRECISE float z4 = m[0][2] * p.x; PROBE_PRECISE float z = z4 + z3;\n");
+        pre.append("    return vec3(x, y, z);\n}\n");
+        pre.append("vec3 probeJoml3(vec4 c0, vec4 c1, vec4 c2, vec3 v) {\n");
+        pre.append("    PROBE_PRECISE float x0 = c2.x * v.z; PROBE_PRECISE float x1 = c1.x * v.y; PROBE_PRECISE float x2 = x1 + x0; PROBE_PRECISE float x3 = c0.x * v.x; PROBE_PRECISE float x = x3 + x2;\n");
+        pre.append("    PROBE_PRECISE float y0 = c2.y * v.z; PROBE_PRECISE float y1 = c1.y * v.y; PROBE_PRECISE float y2 = y1 + y0; PROBE_PRECISE float y3 = c0.y * v.x; PROBE_PRECISE float y = y3 + y2;\n");
+        pre.append("    PROBE_PRECISE float z0 = c2.z * v.z; PROBE_PRECISE float z1 = c1.z * v.y; PROBE_PRECISE float z2 = z1 + z0; PROBE_PRECISE float z3 = c0.z * v.x; PROBE_PRECISE float z = z3 + z2;\n");
+        pre.append("    return vec3(x, y, z);\n}\n");
         pre.append("uniform vec3 ProbeLight0;\nuniform vec3 ProbeLight1;\n");   // mode 4: the level's light directions (block shaders have none)
         if (EXTRA) {   // mode 5: persistent records (by base instance), their turn about an axis computed from the time; mode 6: light transform
             pre.append("struct ProbeSpin { vec4 turn; vec4 sprites; vec4 scroll; };\n");
@@ -153,11 +170,14 @@ public final class PartBatch {
             pre.append("        probe_Position = (probe_d.pose * vec4(Position, 1.0)).xyz;\n");
             pre.append("        vec3 probe_n = mat3(probe_d.n0.xyz, probe_d.n1.xyz, probe_d.n2.xyz) * Normal;\n");
         }
-        pre.append("        if (ProbePartMode == 1) probe_n = normalize(probe_n);\n");
-        // mode 7 (ItemGpu): a face normal is normalised where the pose does not trust its normals; a baked one (flag 16) never
-        pre.append("        if (ProbePartMode == 7 && probe_d.n1.w > 0.5 && (int(ProbeFlags + 0.5) & 16) == 0) probe_n = normalize(probe_n);\n");   // mode 3 (GeckoLib bones): as emitted, not normalised
+        pre.append("        if (ProbePartMode == 1) probe_n = normalize(probe_n);\n");   // mode 3 (GeckoLib bones): as emitted, not normalised
         // GeckoLib's fixInvertedFlatCube: on a flat cube's axes a negative (posed) component is flipped: abs()
         pre.append("        if (ProbePartMode == 3) { int probe_f = int(ProbeFlags + 0.5); if ((probe_f & 1) != 0) probe_n.x = abs(probe_n.x); if ((probe_f & 2) != 0) probe_n.y = abs(probe_n.y); if ((probe_f & 4) != 0) probe_n.z = abs(probe_n.z); }\n");
+        pre.append("        if (ProbePartMode == 7) {\n");   // ItemGpu: vanilla's arithmetic (probeJoml4 / probeJoml3); the normalisation after it
+        pre.append("            probe_Position = probeJoml4(probe_d.pose, Position);\n");
+        pre.append("            vec3 probe_nj = probeJoml3(probe_d.n0, probe_d.n1, probe_d.n2, Normal);\n");
+        pre.append("            probe_n = probe_d.n1.w > 0.5 && (int(ProbeFlags + 0.5) & 16) == 0 ? normalize(probe_nj) : probe_nj;\n");
+        pre.append("        }\n");
         pre.append("        probe_Normal = trunc(clamp(probe_n, -1.0, 1.0) * 127.0) / 127.0;\n");   // as BufferBuilder packs it
         pre.append("        probe_Color = probe_d.color;\n");
         // mode 4 (Create's SuperByteBuffer): the diffuse it computes on the CPU - min(1, (max(0, L0.n) + max(0, L1.n)) * 0.6 + 0.4)
@@ -187,7 +207,7 @@ public final class PartBatch {
             }
         }
         pre.append("    }");
-        String out = head.replaceFirst("#version 150", "#version 150\n#extension GL_ARB_shader_draw_parameters : require\n#extension GL_ARB_shader_storage_buffer_object : require\n#extension GL_ARB_explicit_attrib_location : require")
+        String out = head.replaceFirst("#version 150", "#version 150\n#extension GL_ARB_shader_draw_parameters : require\n#extension GL_ARB_shader_storage_buffer_object : require\n#extension GL_ARB_explicit_attrib_location : require\n#extension GL_ARB_gpu_shader5 : enable")
                 + pre + body;
         PATCHED.add(name);
         return out;
