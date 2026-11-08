@@ -179,5 +179,6 @@ lab.opt.LightSnapshotMixin	lighting	true	LightSnapshot: a light storage map reme
 lab.opt.AllocTrim	saving	true	AllocTrim (lab.opt.AllocTrim): temporary arrays vanilla allocates per call in hot paths, reused per thread instead.	
 lab.opt.ChunkIo	saving	true	Chunk storage without blocking (lab.opt.ChunkIo, every IOWorker: chunks, entities, POI; notes/38).	
 lab.opt.ParallelWorldgenMixin	worldgen	true	exp/parallel-worldgen: hand SURFACE/CARVERS/FEATURES to ParallelGen's pool instead of running them inside the single worldgen mailbox actor.	
+lab.opt.OffThreadEntity	worldgen	true	Entities that a mod adds to the world from another thread (a mob spawn handler during world generation) go where they belong: into the chunk being generated, or onto the server thread. Mods that add entities the normal way are not affected.	
 lab.sleep.ObservedModSleep	ticks	false	Machines of mods whose tick the analysis cannot follow (Industrial Foregoing, Functional Storage, PneumaticCraft...) sleep on what Sleepium observes, as before 1.1.8: idle machines cost less, but their sleep is not proven exact.	
 lab.chunkmd.occlusion	chunks	false	GPU occlusion culling of chunk sections (two phases, exact). Pays off where most of the loaded terrain is hidden.	

@@ -6,6 +6,8 @@
   "compatibilityLevel": "JAVA_21",
   "overwrites": { "conformVisibility": true },
   "mixins": [
+    "OffThreadEntityAddMixin",
+    "OffThreadEntityRegionMixin",
     "GoalSelectorMixin",
     "CondWakeMixin",
     "MailboxBatchMixin",

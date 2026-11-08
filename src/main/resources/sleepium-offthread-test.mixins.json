@@ -1,0 +1,13 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "testmods.offthread",
+  "plugin": "testmods.offthread.OffThreadPlugin",
+  "compatibilityLevel": "JAVA_21",
+  "mixins": [
+    "OffThreadSpawnMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

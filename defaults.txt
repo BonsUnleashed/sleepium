@@ -189,3 +189,4 @@
 -Dlab.opt.AllocTrim=true
 -Dlab.opt.ChunkIo=true
 -Dlab.opt.ParallelWorldgenMixin=true
+-Dlab.opt.OffThreadEntity=true

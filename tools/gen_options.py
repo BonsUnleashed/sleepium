@@ -21,7 +21,7 @@ GROUPS = [
     ('animation', r'^(Geo|Molang|Keyframe|AnimStream)'),
     ('threads', r'^(MainReactor|Reactor|ParallelEntities|LabPools|PersistentPools|MailboxBatch|NeoForgeBus)'),
     ('network', r'^Net'),
-    ('worldgen', r'^(Worldgen|GenScout|CubicSampler|ParallelWorldgen|StructurePlace)'),
+    ('worldgen', r'^(Worldgen|GenScout|CubicSampler|ParallelWorldgen|StructurePlace|OffThreadEntity)'),
     ('saving', r'^(AsyncChunkSave|ChunkIo|ChunkCache|UnloadRecheck|AllocTrim|PoiColumn|SectionStorage)'),
     ('ticks', r'.'),   # the rest: server ticks, mobs, collisions, redstone, fluids, events
 ]
@@ -41,6 +41,7 @@ DESCRIPTIONS = {
     'GeoPartsMixin': 'GeckoLib bones drawn from GPU memory (with PartBatch): only bone poses are uploaded per frame, not their vertices.',
     'NetBulk': 'Large server data sent once by content hash: cached on the client\'s disk, resumed, deltas only, paced to the connection.',
     'NetCoalesce': 'A flush\'s packets sent as one frame of a per-connection compressed stream (clients with Sleepium only): 45-52 % fewer bytes on movement traffic.',
+    'OffThreadEntity': 'Entities that a mod adds to the world from another thread (a mob spawn handler during world generation) go where they belong: into the chunk being generated, or onto the server thread. Mods that add entities the normal way are not affected.',
     'SleepMixin': 'Sleeping block entities: an idle block entity\'s tick is skipped (proven from its bytecode and observed) and woken at the exact tick vanilla would act.',
     'WorldgenAlloc': 'World generation without per-call allocation: noise, surface rules, ores, density functions and random sources reuse their buffers.',
     'WorldgenFeatureAlloc': 'Feature placement and joints without per-call allocation.',

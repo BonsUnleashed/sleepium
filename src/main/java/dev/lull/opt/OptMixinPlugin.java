@@ -44,6 +44,8 @@ public final class OptMixinPlugin implements IMixinConfigPlugin {
             on = Boolean.getBoolean("lab.opt.all") || Boolean.getBoolean("lab.opt.JobSiteIndex");
         if (simple.equals("WriteBarrierMixin"))   // the write barrier of mob parts (WriteBarrier, WB)
             on = Boolean.getBoolean("lab.opt.WriteBarrier");
+        if (simple.startsWith("OffThreadEntity"))   // one feature: entities added from another thread go where they belong
+            on = Boolean.getBoolean("lab.opt.all") || Boolean.getBoolean("lab.opt.OffThreadEntity");
         if (simple.startsWith("MoveMemo"))   // one feature: an unchanged move of a living entity skipped
             on = Boolean.getBoolean("lab.opt.all") || Boolean.getBoolean("lab.opt.MoveMemo");
         // mob sleep's runtime (notes/47): draws recorded, goal selectors' and attribute maps' modification counters
