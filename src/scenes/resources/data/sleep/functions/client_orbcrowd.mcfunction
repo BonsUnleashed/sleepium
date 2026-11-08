@@ -1,6 +1,8 @@
 # sleep:client_orbcrowd - a mass kill around the player (a player's test, 11-08): 2000 experience orbs and 1500 items
 # that can be picked up, on a floor 36 blocks from the camera; with -Dsleep.clientAuto.cmdAt=0:tp_@p_24_258_40 and a
 # survival player the player lands in the middle at the start of the window: the orbs follow, merge and are picked up.
+kill @e[type=!minecraft:player,x=0,y=240,z=0,dx=64,dy=40,dz=80]
+# (re-entrant: a saved world with the scene in it gets it anew)
 gamerule doDaylightCycle false
 gamerule doWeatherCycle false
 gamerule doMobSpawning false
