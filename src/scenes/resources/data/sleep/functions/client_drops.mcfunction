@@ -8,6 +8,9 @@ time set noon
 weather clear
 fill 0 249 16 48 249 64 minecraft:smooth_stone
 fill 23 257 3 25 257 5 minecraft:glass
+# (re-entrant: a saved world with the scene in it gets it anew, not twice)
+kill @e[type=minecraft:item]
+kill @e[type=minecraft:experience_orb]
 summon minecraft:item 1.5 250 17.5 {Item:{id:"minecraft:diamond_sword",Count:1b},PickupDelay:32767s,Age:-32768s,Motion:[0.0,0.0,0.0]}
 summon minecraft:item 2.5 250 17.5 {Item:{id:"minecraft:iron_ingot",Count:1b},PickupDelay:32767s,Age:-32768s,Motion:[0.0,0.0,0.0]}
 summon minecraft:item 3.5 250 17.5 {Item:{id:"minecraft:cobblestone",Count:1b},PickupDelay:32767s,Age:-32768s,Motion:[0.0,0.0,0.0]}
