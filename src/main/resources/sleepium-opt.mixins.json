@@ -207,6 +207,7 @@
     "EntityCullNoAllocMixin",
     "FrustumInvoker",
     "ItemFrameOffsetMixin",
+    "NameTagSkipMixin",
     "EntityLightNoAllocMixin",
     "UtilMemoizeMixin",
     "ClientLightAsyncMixin",

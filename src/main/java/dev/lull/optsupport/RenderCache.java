@@ -214,7 +214,8 @@ public final class RenderCache {
         /** Moves everything recorded into rec (cleared first). */
         void finish(Rec rec) {
             rec.clear();
-            for (RenderType t : order) {
+            for (int i = 0; i < order.size(); i++) {   // (indexed: no iterator per recorded object)
+                RenderType t = order.get(i);
                 RecordingBuilder b = builders.get(t);
                 if (b.n > 0) {
                     rec.add(t, b.mem, b.n * b.vertexSize, b.n);

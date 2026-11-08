@@ -116,6 +116,11 @@ public final class EventSites {
      * One of them has a listener now, asked of the bus (a mod's listener must not run on a worker); cheap, callers ask
      * once per frame (listeners can be added at any time).
      */
+    /** RenderNameTagEvent has a listener now (NameTagSkipMixin, client only; asked every call: a mod may register one later) */
+    public static boolean nameTagListened() {
+        return !(MinecraftForge.EVENT_BUS instanceof CompositeEventBus cb) || cb.mayHaveListeners(net.minecraftforge.client.event.RenderNameTagEvent.class);
+    }
+
     public static boolean renderListened() {
         if (!(MinecraftForge.EVENT_BUS instanceof CompositeEventBus cb)) return true;
         for (Class<?> c : RenderEvents.ENTITY_RENDER_EVENTS) if (cb.mayHaveListeners(c)) return true;
