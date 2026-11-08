@@ -87,7 +87,20 @@ public final class CompositeEventBus extends EventBus {
     }
 
     private final EventBus delegate;
-    private final VarHandle shutdown;
+    /**
+     * EventBus.shutdown, read on every post: a VarHandle the JIT folds into a plain volatile read only from a static
+     * final field (an instance field went through VarHandleGuards' checks on each call: 0.9 % of the server thread in
+     * a 200-mod pack's profile)
+     */
+    private static final VarHandle SHUTDOWN = shutdownHandle();
+
+    private static VarHandle shutdownHandle() {
+        try {
+            return MethodHandles.privateLookupIn(EventBus.class, MethodHandles.lookup()).findVarHandle(EventBus.class, "shutdown", boolean.class);
+        } catch (ReflectiveOperationException e) {
+            return null;   // the constructor reports it
+        }
+    }
     private final boolean fallbackAlways;
     private final IEventExceptionHandler exceptionHandler;
     private final Object listenerLists;
@@ -106,7 +119,7 @@ public final class CompositeEventBus extends EventBus {
         this.delegate = this;   // (the fields below are EventBus' own, read on this instance)
         try {
             MethodHandles.Lookup lookup = MethodHandles.privateLookupIn(EventBus.class, MethodHandles.lookup());
-            this.shutdown = lookup.findVarHandle(EventBus.class, "shutdown", boolean.class);
+            if (SHUTDOWN == null) throw new NoSuchFieldException("EventBus.shutdown");
             this.fallbackAlways = (boolean) lookup.findVarHandle(EventBus.class, "checkTypesOnDispatch", boolean.class).get(delegate);
             this.exceptionHandler = (IEventExceptionHandler) lookup.findVarHandle(EventBus.class, "exceptionHandler",
                     IEventExceptionHandler.class).get(delegate);
@@ -134,7 +147,7 @@ public final class CompositeEventBus extends EventBus {
             // matters for exactness is checked; anything else goes to the full path.
             Built b = holders.get(event.getClass()).built;
             if (b != null && b.source().length == 0 && b.list().getListeners() == b.source() && !fallbackAlways
-                    && !(boolean) shutdown.getVolatile(delegate)) {
+                    && !(boolean) SHUTDOWN.getVolatile(delegate)) {
                 return event;
             }
         }
@@ -146,7 +159,7 @@ public final class CompositeEventBus extends EventBus {
      * that is not known yet (type never posted): callers may skip building and posting an event only on false.
      */
     public boolean hasListeners(Class<?> type) {
-        if (fallbackAlways || (boolean) shutdown.getVolatile(delegate)) return true;
+        if (fallbackAlways || (boolean) SHUTDOWN.getVolatile(delegate)) return true;
         Built b = holders.get(type).built;
         if (b != null) return b.list().getListeners().length > 0;
         ListenerList list = lookupList(type);
@@ -159,7 +172,7 @@ public final class CompositeEventBus extends EventBus {
      * find then are its parent types' listeners.
      */
     public boolean mayHaveListeners(Class<?> type) {
-        if (fallbackAlways || (boolean) shutdown.getVolatile(delegate)) return true;
+        if (fallbackAlways || (boolean) SHUTDOWN.getVolatile(delegate)) return true;
         Built b = holders.get(type).built;
         if (b != null) return b.list().getListeners().length > 0;
         ListenerList list = lookupList(type);
@@ -183,7 +196,7 @@ public final class CompositeEventBus extends EventBus {
         // the listener must not run there; the job goes to the render thread and the type stays there
         // (client only: ParallelRender is a client class; touching it on a dedicated server loads client classes)
         if (PHYSICAL_CLIENT && ParallelRender.inJob() && mayHaveListeners(event.getClass())) throw ParallelRender.REFUSE_LISTENED;
-        if (fallbackAlways || (boolean) shutdown.getVolatile(delegate)) {
+        if (fallbackAlways || (boolean) SHUTDOWN.getVolatile(delegate)) {
             if (STATS) count(4, holders.get(event.getClass()));
             return super.post(event);   // identical vanilla behaviour (incl. returning early when shut down)
         }
