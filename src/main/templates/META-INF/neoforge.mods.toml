@@ -50,6 +50,9 @@ config="sleepium-encrypt-test.mixins.json"
 config="sleepium-latency-test.mixins.json"
 
 [[mixins]]
+config="sleepium-stimulate-test.mixins.json"
+
+[[mixins]]
 config="sleepium-geo.mixins.json"
 [[mixins]]
 config="sleepium-flywheel.mixins.json"

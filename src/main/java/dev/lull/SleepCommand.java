@@ -359,10 +359,24 @@ final class SleepCommand {
                     var be = level.getBlockEntity(p);
                     if (be != null) {
                         bes++;
-                        String nbt = be.saveWithoutMetadata(reg).toString();
+                        // a mod's block entity that throws while saving (PneumaticCraft's door placed without a colour)
+                        // is a row of its own, not the end of the hash: the exception is the same in both runs
+                        String nbt;
+                        try {
+                            nbt = be.saveWithoutMetadata(reg).toString();
+                        } catch (RuntimeException e) {
+                            nbt = "error: " + e;
+                        }
                         h = h * 31 + nbt.hashCode();
                         // -Dsleep.hashClientNbt=true: what the block entity sends to clients too (Create's client NBT)
-                        String client = Boolean.getBoolean("sleep.hashClientNbt") ? be.getUpdateTag(reg).toString() : null;
+                        String client = null;
+                        if (Boolean.getBoolean("sleep.hashClientNbt")) {
+                            try {
+                                client = be.getUpdateTag(reg).toString();
+                            } catch (RuntimeException e) {
+                                client = "error: " + e;
+                            }
+                        }
                         if (client != null) h = h * 31 + client.hashCode();
                         if (BE_ROWS != null) BE_ROWS.add(p.toShortString() + " " + level.getBlockState(p) + " " + nbt + (client != null ? " client=" + client : ""));
                     }

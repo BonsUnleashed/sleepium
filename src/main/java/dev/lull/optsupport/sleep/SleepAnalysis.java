@@ -760,7 +760,7 @@ final class SleepAnalysis {
      * Null when the call is not of this kind; a method that cannot be resolved refuses the class.
      */
     private String[] selfDispatch(MethodInsnNode mi, Frame<SourceValue>[] fr, int i, MethodNode m, Set<String> beChain, Class<?> beClass) {
-        if (entityMode || mi.getOpcode() == Opcodes.INVOKESTATIC || beChain.contains(mi.owner)
+        if (SleepEngine.observedModSleep() || entityMode || mi.getOpcode() == Opcodes.INVOKESTATIC || beChain.contains(mi.owner)
                 || !onThis(fr[i], Type.getArgumentTypes(mi.desc).length + 1, fr, m)) return null;
         String decl = ownerOf(internal(beClass), mi.name, mi.desc);
         MethodNode target = decl == null ? null : method(decl, mi.name, mi.desc);

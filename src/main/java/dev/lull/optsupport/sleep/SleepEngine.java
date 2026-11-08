@@ -55,6 +55,16 @@ public final class SleepEngine {
      * do not sleep.
      */
     static final String DEEP = System.getProperty("lab.sleep.deepVerify", "auto");
+
+    /**
+     * -Dlab.sleep.ObservedModSleep (off by default; a setting): mods' block entities whose tick the analysis cannot
+     * follow (a ticker calling the block entity through a mod's interface, contents in an item handler object) sleep
+     * on what is observed while they run, as before 1.1.8 - faster idle machines, not proven exact. Read when a class
+     * is analysed (a change takes a restart).
+     */
+    static boolean observedModSleep() {
+        return Boolean.getBoolean("lab.sleep.ObservedModSleep");
+    }
     static long deepChecks, deepWakes;
 
     /** Per class: plan + compiled snapshot. */
@@ -388,6 +398,7 @@ public final class SleepEngine {
         s.stable = 0;
         s.observeFrom = Long.MIN_VALUE;
         WAKES.merge(reason, 1L, Long::sum);
+        if (SleepCoverage.ON) SleepCoverage.woke(s.be);
     }
 
     /** Apply the pending time to the clock fields (rate x skipped ticks); the block entity may keep sleeping. */
@@ -395,6 +406,7 @@ public final class SleepEngine {
         long k = h(s).sleep$skipped();
         h(s).sleep$setSkipped(0);
         if (k <= 0) return;
+        if (SleepCoverage.ON) SleepCoverage.skipped(s.be, k);
         List<Field> clocks = s.info.plan.clocks();
         for (int c = 0; c < clocks.size(); c++) {
             long r = s.rates[c];
@@ -453,7 +465,7 @@ public final class SleepEngine {
             String bypass = p.eligible() ? bypassOf(c) : null;
             if (bypass != null && "off".equals(DEEP)) p = new SleepAnalysis.Plan(false, bypass, p.clocks(), p.conds());
             // its contents live where value verification cannot see them (a mod's item handler object): no proof, no sleep
-            if (bypass != null && p.eligible() && listsOf(c).length == 0)
+            if (bypass != null && p.eligible() && listsOf(c).length == 0 && !observedModSleep())
                 p = new SleepAnalysis.Plan(false, bypass + "; no item list to verify it by value", p.clocks(), p.conds());
             boolean deep = p.eligible() && ("all".equals(DEEP) || bypass != null);
             ClassInfo ci = new ClassInfo(p, deep, c);
@@ -575,6 +587,7 @@ public final class SleepEngine {
         watchNeighbours(s);
         subscribe(s);
         entered++;
+        if (SleepCoverage.ON) SleepCoverage.entered(s.be);
     }
 
     /** Ticks until the relation between clock and threshold (or the game time residue) can change. */
@@ -731,7 +744,12 @@ public final class SleepEngine {
      */
     static final java.util.Set<String> TEST_BYPASS = java.util.Set.of(System.getProperty("sleep.test.bypass", "").split(","));
 
+    /** Test only (-Dsleep.test.dropWakes=changed,container): these wake reasons are dropped for every class - the
+     *  negative control of tools/mod_exactness.py (a scene that cannot tell this from the real engine proves nothing) */
+    static final java.util.Set<String> TEST_DROP = java.util.Set.of(System.getProperty("sleep.test.dropWakes", "").split(","));
+
     public static void onPos(Level level, BlockPos pos, String reason) {
+        if (TEST_DROP.contains(reason)) return;
         if (TEST_BYPASS.size() > 1 || !TEST_BYPASS.contains("")) {
             if (("container".equals(reason) || "changed".equals(reason)) && level != null) {
                 BlockEntity t = beAt(level, pos.asLong());
