@@ -4,6 +4,27 @@ Versions follow [Semantic Versioning](https://semver.org): a patch release fixes
 release changes the API (`dev.lull.api`) or the settings in a way that needs attention. Jars are named
 `sleepium-<version>+mc<minecraft version>-<loader>.jar` (before 1.1.0 without the loader).
 
+## 1.1.9 - unreleased (draft)
+
+- **Fixed: dropped items were slower next to ImmediatelyFast in 1.1.8** (ImmediatelyFast is in most modpacks). Sleepium
+  prepared items for the graphics card, then could not use its buffers and drew them again the normal way - twice the
+  work. Now items are drawn by the graphics card next to ImmediatelyFast too. 1 128 dropped items + 1 081 orbs, 1.21.1:
+  1.1.7 1 057 fps, 1.1.8 498, now 1 765; 1.20.1: 1.1.8 159, now 261. The picture is the same as before, up to a few
+  pixels of graphics-card rounding.
+- **Entities that a mod adds from another thread go where they belong** (GitHub #4, I3AT5). Some mods react to the
+  starting mobs of a newly generated chunk by adding extra mobs straight into the live world from a world-generation
+  thread (Easy Mob Spawn Control; Cupboard warns "add an entity from offthread"), which can occasionally cause trouble,
+  with or without Sleepium. Now such an entity goes into the chunk being generated, or is added on the server thread.
+  Mods that add entities the normal way are not affected. A setting (World generation -> OffThreadEntity), on by default.
+- **New setting, off by default: ObservedModSleep** (Ticks & mobs). Mods' machines whose tick Sleepium's analysis
+  cannot follow (Industrial Foregoing, Functional Storage, PneumaticCraft...) sleep on what Sleepium observes, as they
+  did before 1.1.8. Faster for idle machines; in our checks the result matched vanilla, but it is not proven, so it
+  stays off unless you turn it on.
+- **Checking Sleepium against mods, first steps** (see "Help wanted" in 1.1.8): every block of a mod is placed, fed and
+  drained through the standard item / energy / fluid connections, put to sleep and woken, and compared with vanilla
+  tick by tick; a deliberately broken wake-up must be caught. First results on Industrial Foregoing, Functional
+  Storage, PneumaticCraft and Farmer's Delight: no differences caused by Sleepium.
+
 ## 1.1.8 - 2026-11-08
 
 - **Dropped items are drawn by the graphics card.** Items on the ground, in item frames and in mobs' hands no longer
