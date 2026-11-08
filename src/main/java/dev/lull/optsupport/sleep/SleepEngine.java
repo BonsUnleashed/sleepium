@@ -452,6 +452,9 @@ public final class SleepEngine {
                 p = new SleepAnalysis.Plan(false, "excluded through dev.lull.api.Compat", p.clocks(), p.conds());
             String bypass = p.eligible() ? bypassOf(c) : null;
             if (bypass != null && "off".equals(DEEP)) p = new SleepAnalysis.Plan(false, bypass, p.clocks(), p.conds());
+            // its contents live where value verification cannot see them (a mod's item handler object): no proof, no sleep
+            if (bypass != null && p.eligible() && listsOf(c).length == 0)
+                p = new SleepAnalysis.Plan(false, bypass + "; no item list to verify it by value", p.clocks(), p.conds());
             boolean deep = p.eligible() && ("all".equals(DEEP) || bypass != null);
             ClassInfo ci = new ClassInfo(p, deep, c);
             System.out.println("[sleep/sleep] " + name + ": " + (p.eligible() ? "ELIGIBLE " : "no: ") + p.reason()

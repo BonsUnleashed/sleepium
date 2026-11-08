@@ -632,13 +632,16 @@ final class SleepAnalysis {
         for (String[] t : tickers) {
             MethodNode m = method(t[0], t[1], t[2]);
             if (m == null) return new Plan(false, "ticker method not found " + t[1], List.of(), List.of());
-            follow(t[0], m, 0, seen, beChain, beClass);
+            follow(t[0], m, 0, seen, beChain, beClass, tickerSelf(t, m, beChain));
             if (reject != null) break;
         }
         // conditions are gathered in a second pass, once all clocks are known
         if (reject == null) {
             seen.clear();
-            for (String[] t : tickers) branches(t[0], method(t[0], t[1], t[2]), 0, seen, beChain, beClass);
+            for (String[] t : tickers) {
+                MethodNode tm = method(t[0], t[1], t[2]);
+                branches(t[0], tm, 0, seen, beChain, beClass, tickerSelf(t, tm, beChain));
+            }
         }
         if (reject != null) return new Plan(false, reject, List.copyOf(clocks.values()), List.copyOf(conds));
         for (Field c : clocks.values()) if (c != null) watch.putIfAbsent(dev.lull.Names.official(c.getName()), c);   // (keys: Mojang names, as the bytecode reads them)
@@ -747,6 +750,39 @@ final class SleepAnalysis {
         return null;
     }
 
+    /**
+     * The ticker's locals holding the block entity: its 4th parameter (the ticker lambda's "be"), and "this" when the
+     * ticker is a method of the block entity's own class chain. A call on them through any type is the block entity's own.
+     */
+    private static int tickerSelf(String[] t, MethodNode m, Set<String> beChain) {
+        if (m == null) return 0;
+        boolean inst = (m.access & Opcodes.ACC_STATIC) == 0;
+        Type[] a = Type.getArgumentTypes(m.desc);
+        int slot = inst ? 1 : 0;
+        for (int k = 0; k < 3 && k < a.length; k++) slot += a[k].getSize();
+        int mask = slot < 31 ? 1 << slot : 0;
+        if (inst && beChain.contains(t[0])) mask |= 1;
+        return mask;
+    }
+
+    /**
+     * A call on the block entity itself through a type outside its class chain - a mod's ticker calling
+     * ((ITickableBlockEntity) be).serverTick(...): what runs is decided by the block entity's class, so the call is
+     * resolved there and followed as the block entity's own code (before, the analysis skipped it and never saw the tick).
+     * Null when the call is not of this kind; a method that cannot be resolved refuses the class.
+     */
+    private String[] selfDispatch(MethodInsnNode mi, Frame<SourceValue>[] fr, int i, MethodNode m, Set<String> beChain, Class<?> beClass) {
+        if (entityMode || mi.getOpcode() == Opcodes.INVOKESTATIC || beChain.contains(mi.owner)
+                || !onThis(fr[i], Type.getArgumentTypes(mi.desc).length + 1, fr, m)) return null;
+        String decl = ownerOf(internal(beClass), mi.name, mi.desc);
+        MethodNode target = decl == null ? null : method(decl, mi.name, mi.desc);
+        if (target == null || (target.access & Opcodes.ACC_ABSTRACT) != 0) {
+            if (reject == null) reject = "calls " + simple(mi.owner) + "." + mi.name + " on the block entity, not resolved in its class";
+            return new String[0];
+        }
+        return new String[] {decl};
+    }
+
     // ---------------------------------------------------------------- pass 1: clocks and hidden state
 
     private void follow(String owner, MethodNode m, int depth, Set<String> seen, Set<String> beChain, Class<?> beClass) throws AnalyzerException {
@@ -829,6 +865,16 @@ final class SleepAnalysis {
                     if (containsGameTime(operand(fr[i], k, fr, m, 0))) reject = "game time passed to " + simple(mi.owner) + "." + mi.name;
                 if (reject != null) break;
                 if (crossContext(fr, i, mi, m, depth, seen, true)) continue;
+                String[] own = selfDispatch(mi, fr, i, m, beChain, beClass);
+                if (own != null) {
+                    if (own.length == 0) break;
+                    if (depth >= MAX_DEPTH) {
+                        reject = "own call graph deeper than " + MAX_DEPTH + " (" + mi.name + ")";
+                        break;
+                    }
+                    follow(own[0], method(own[0], mi.name, mi.desc), depth + 1, seen, beChain, beClass, calleeMask(fr[i], mi, fr, m));
+                    continue;
+                }
                 if (beChain.contains(mi.owner) && depth >= MAX_DEPTH) {
                     reject = "own call graph deeper than " + MAX_DEPTH + " (" + mi.name + ")";
                     break;
@@ -979,6 +1025,9 @@ final class SleepAnalysis {
                 String decl = mi.getOpcode() == Opcodes.INVOKESTATIC || mi.getOpcode() == Opcodes.INVOKESPECIAL ? ownerOf(mi.owner, mi.name, mi.desc) : ownerOf(internal(beClass), mi.name, mi.desc);
                 MethodNode target = decl == null ? null : method(decl, mi.name, mi.desc);
                 if (target != null && (target.access & Opcodes.ACC_ABSTRACT) == 0) branches(decl, target, depth + 1, seen, beChain, beClass, calleeMask(fr[i], mi, fr, m));
+            } else if (in[i] instanceof MethodInsnNode md && depth < MAX_DEPTH) {
+                String[] own = selfDispatch(md, fr, i, m, beChain, beClass);
+                if (own != null && own.length == 1) branches(own[0], method(own[0], md.name, md.desc), depth + 1, seen, beChain, beClass, calleeMask(fr[i], md, fr, m));
             }
         }
     }
@@ -2354,6 +2403,10 @@ final class SleepAnalysis {
                 for (int k = s - 3; k < s; k++) if (k >= 0 && af.getStack(k) == v) pos = s - 1 - k;   // 0 = top
                 if (pos < 0) return false;
                 v = df.getStack(df.getStackSize() - (pos == 1 ? 2 : 1));
+            } else if (op == Opcodes.CHECKCAST) {
+                // ((ITickableBlockEntity) be): a cast is the same object
+                if (df == null || df.getStackSize() < 1) return false;
+                v = df.getStack(df.getStackSize() - 1);
             } else break;
         }
         if (v.insns.size() != 1 || !(v.insns.iterator().next() instanceof VarInsnNode vi) || vi.getOpcode() != Opcodes.ALOAD || vi.var >= 31) return false;
