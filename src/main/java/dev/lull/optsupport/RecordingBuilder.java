@@ -21,6 +21,24 @@ import org.lwjgl.system.MemoryUtil;
  * never written (as in BufferBuilder): RenderCache compares and copies them as they are.
  */
 public final class RecordingBuilder extends DefaultedVertexConsumer implements BufferVertexConsumer {
+    /** one thread writes a builder at a time: its matrix helpers' vectors */
+    private final org.joml.Vector3f scratch = new org.joml.Vector3f();
+    private final org.joml.Vector4f scratch4 = new org.joml.Vector4f();
+
+    /** VertexConsumer's default, the same JOML call into the builder's own vector (it made one per vertex) */
+    @Override
+    public VertexConsumer vertex(org.joml.Matrix4f matrix, float x, float y, float z) {
+        org.joml.Vector4f v = matrix.transform(scratch4.set(x, y, z, 1.0F));
+        return this.vertex((double) v.x(), (double) v.y(), (double) v.z());
+    }
+
+    /** VertexConsumer's default, the same JOML call into the builder's own vector (it made one per vertex) */
+    @Override
+    public VertexConsumer normal(org.joml.Matrix3f matrix, float x, float y, float z) {
+        org.joml.Vector3f v = matrix.transform(scratch.set(x, y, z));
+        return this.normal(v.x(), v.y(), v.z());
+    }
+
     final VertexFormat format;
     final VertexFormat.Mode mode;
     /** the render type this builder records (set by RenderCache.Recorder) */
