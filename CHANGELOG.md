@@ -43,6 +43,17 @@ release changes the API (`dev.lull.api`) or the settings in a way that needs att
 - **Two small costs found in a 200-mod pack's profile:** Sleepium's tick timer built the name of every dimension as
   a string every tick, and its event bus read one flag the slow way on every event (together about 1.5 % of the
   server thread in that pack).
+- **Help wanted: checking Sleepium against mods.** Sleepium lets a block entity sleep only when it can prove from the code that skipping its tick changes nothing,
+  and every release is checked against vanilla scene by scene. Mods are where that proof is hardest: a mod's machine
+  may keep its state in its own objects, use its own inventories and energy, or tick in ways our tests have not seen
+  yet. This release found and closed one such gap (machines whose tick goes through an interface) by placing every
+  block of 13 popular mods and reading what the analysis made of them. Next we want an automatic check that works for
+  any mod: every machine fed and drained through the standard item / energy / fluid connections, put to sleep and
+  woken in every way a player can, and compared with vanilla tick by tick.
+
+  If you know a mod whose machines behave differently with Sleepium, know a good way to test this kind of thing, or
+  want to help run such checks on your pack, please open an issue on GitHub or leave a comment - we will be grateful.
+  A link to the mod or the pack is enough: we download mods only from their official pages.
 
 ## 1.1.7 - 2026-11-07
 

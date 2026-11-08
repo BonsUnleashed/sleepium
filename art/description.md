@@ -53,6 +53,20 @@ orbs and items collide with blocks for less (every result the same as vanilla's)
 Many experience orbs at once? Sleepium works well together with [Clumps](https://modrinth.com/mod/clumps), which
 merges them: the orb crowd above runs at 996 fps (Clumps alone: 128), on the Intel N100 at 89 fps (Clumps alone: 29).
 
+## Help wanted: checking Sleepium against mods
+
+Sleepium lets a block entity sleep only when it can prove from the code that skipping its tick changes nothing,
+and every release is checked against vanilla scene by scene. Mods are where that proof is hardest: a mod's machine
+may keep its state in its own objects, use its own inventories and energy, or tick in ways our tests have not seen
+yet. This release found and closed one such gap (machines whose tick goes through an interface) by placing every
+block of 13 popular mods and reading what the analysis made of them. Next we want an automatic check that works for
+any mod: every machine fed and drained through the standard item / energy / fluid connections, put to sleep and
+woken in every way a player can, and compared with vanilla tick by tick.
+
+If you know a mod whose machines behave differently with Sleepium, know a good way to test this kind of thing, or
+want to help run such checks on your pack, please open an issue on GitHub or leave a comment - we will be grateful.
+A link to the mod or the pack is enough: we download mods only from their official pages.
+
 ## New in 1.1.0: Minecraft 1.20.1 / Forge
 
 The whole engine on Forge 47 (Java 17 or newer): sleeping block entities and entities, the event engine, exact memos,
