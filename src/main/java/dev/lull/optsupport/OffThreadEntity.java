@@ -54,7 +54,7 @@ public final class OffThreadEntity {
 
     private static void log(String where) {
         String who = StackWalker.getInstance().walk(s -> s.map(StackWalker.StackFrame::getClassName)
-                .filter(c -> !c.startsWith("net.minecraft.") && !c.startsWith("net.neoforged.") && !c.startsWith("dev.lull.") && !c.startsWith("dev.lab.")
+                .filter(c -> !c.startsWith("net.minecraft.") && !c.startsWith("net.neoforged.") && !c.startsWith("dev.lull.") && !c.startsWith("dev.lab.") && !c.startsWith("com.mojang.")
                         && !c.startsWith("java.") && !c.startsWith("org.spongepowered.") && !c.startsWith("com.llamalad7."))
                 .findFirst().orElse("?"));
         if (LOGGED.add(who))
