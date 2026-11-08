@@ -58,7 +58,8 @@ GEO_PART_OF = {'GeoModelWorkerMixin': ['GeoParallelMixin', 'ParallelEntitiesMixi
                'GeoTextureDimsMixin': ['GeoParallelMixin', 'ParallelEntitiesMixin'], 'GeoCubesMixin': ['GeoPartsMixin', 'PartBatchMixin']}
 
 # off by default, shown in their groups (key, group, description); 1.20.1: lab.chunkmd.occlusion waits for chunk multi-draw
-EXPERIMENTAL = [
+EXPERIMENTAL = [
+    ('lab.sleep.ObservedModSleep', 'ticks', 'Machines of mods whose tick the analysis cannot follow (Industrial Foregoing, Functional Storage, PneumaticCraft...) sleep on what Sleepium observes, as before 1.1.8: idle machines cost less, but their sleep is not proven exact.'),
 ]
 
 ANNOTATIONS = r'(?:@[\w.]+(?:\((?:[^()]|\([^()]*\))*\))?\s*)*'

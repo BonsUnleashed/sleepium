@@ -519,9 +519,22 @@ public final class SleepCommand {
                     var be = level.getBlockEntity(p);
                     if (be != null) {
                         bes++;
-                        String nbt = be.saveWithoutMetadata().toString();
+                        // a mod's block entity that throws while saving is a row of its own, not the end of the hash
+                        String nbt;
+                        try {
+                            nbt = be.saveWithoutMetadata().toString();
+                        } catch (RuntimeException e) {
+                            nbt = "error: " + e;
+                        }
                         h = h * 31 + nbt.hashCode();
-                        String client = Boolean.getBoolean("sleep.hashClientNbt") ? String.valueOf(be.getUpdateTag()) : null;
+                        String client = null;
+                        if (Boolean.getBoolean("sleep.hashClientNbt")) {
+                            try {
+                                client = String.valueOf(be.getUpdateTag());
+                            } catch (RuntimeException e) {
+                                client = "error: " + e;
+                            }
+                        }
                         if (client != null) h = h * 31 + client.hashCode();
                         if (BE_ROWS != null) BE_ROWS.add(p.toShortString() + " " + level.getBlockState(p) + " " + nbt + (client != null ? " client=" + client : ""));
                     }
