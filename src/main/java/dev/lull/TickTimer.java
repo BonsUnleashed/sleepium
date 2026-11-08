@@ -39,6 +39,8 @@ final class TickTimer {
     private long startedAtNanos = System.nanoTime();
 
     private final Map<String, LevelStats> levels = new LinkedHashMap<>();
+    /** the same stats by the level's dimension key (one object per dimension): no name string built every tick */
+    private final java.util.IdentityHashMap<Object, LevelStats> byKey = new java.util.IdentityHashMap<>();
 
     static final class LevelStats {
         long start, sum, max, ticks;
@@ -81,7 +83,11 @@ final class TickTimer {
         if (level.isClientSide()) {
             return;
         }
-        LevelStats s = levels.computeIfAbsent(level.dimension().location().toString(), k -> new LevelStats());
+        LevelStats s = byKey.get(level.dimension());
+        if (s == null) {   // first tick of this dimension (or after a reset): its name once, for the report
+            s = levels.computeIfAbsent(level.dimension().location().toString(), k -> new LevelStats());
+            byKey.put(level.dimension(), s);
+        }
         long now = System.nanoTime();
         if (pre) {
             s.start = now;
@@ -99,6 +105,7 @@ final class TickTimer {
         intervalCount = 0;
         lastPre = 0;
         levels.clear();
+        byKey.clear();
         startedAtNanos = System.nanoTime();
     }
 
