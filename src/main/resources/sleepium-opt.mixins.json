@@ -191,6 +191,8 @@
     "PartTypeMixin",
     "PartShardMixin",
     "PartFrameMixin",
+    "ItemGpuMixin",
+    "SpriteImageAccessor",
     "ShaderStateShardAccessor",
     "ClientBiomeMemoMixin",
     "ClientChunkCacheBiomeMixin",

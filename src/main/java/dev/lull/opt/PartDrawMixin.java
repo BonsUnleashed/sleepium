@@ -20,4 +20,10 @@ public abstract class PartDrawMixin {
     private void sleep$parts(Matrix4f modelView, Matrix4f projection, ShaderInstance shader, CallbackInfo ci) {
         PartBatch.afterDraw(shader);
     }
+
+    /** ItemGpu: the type's item records right before its batch (they must not come after its sorted translucent quads). */
+    @Inject(method = "_drawWithShader", at = @At(value = "INVOKE", target = "Lcom/mojang/blaze3d/vertex/VertexBuffer;draw()V"))
+    private void sleep$items(Matrix4f modelView, Matrix4f projection, ShaderInstance shader, CallbackInfo ci) {
+        PartBatch.beforeDraw(shader, (VertexBuffer) (Object) this);
+    }
 }

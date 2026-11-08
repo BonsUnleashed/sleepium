@@ -103,6 +103,7 @@
     "DrawStatsMixin",
     "DrawStatsObjectsMixin",
     "DrawStatsEntitiesMixin",
+    "DrawStatsItemSkipMixin",
     "DrawStatsDispatchMixin",
     "DrawStatsFrameMixin",
     "DrawStatsLevelMixin",
