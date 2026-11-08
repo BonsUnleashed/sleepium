@@ -14,6 +14,10 @@ import java.util.TreeMap;
  * changed. Applied by GameDefaults before the defaults and before any flag is read: a launch flag ({@code -Dkey=...})
  * still wins over the file, the file over the defaults. Most flags are read once at start (mixins apply when their
  * class loads): the screen says when a change needs a restart.
+ *
+ * <p>The file documents itself: on the first start (a dedicated server too: it has no settings screen) and on every save
+ * it lists every switch of the catalogue (options.tsv) by group with its description and default, commented out unless
+ * set - a server owner edits it like any config. An existing file is only rewritten by the screen's save.
  */
 public final class SleepConfig {
     private SleepConfig() {}
@@ -45,7 +49,10 @@ public final class SleepConfig {
         loaded = true;
         for (String k : System.getProperties().stringPropertyNames()) if (engineKey(k)) LAUNCH.add(k);
         Path f = file();
-        if (!Files.exists(f)) return;
+        if (!Files.exists(f)) {
+            write(f, Map.of());   // the documented catalogue, every line commented: the defaults stay the jar's
+            return;
+        }
         try {
             int set = 0;
             for (String line : Files.readAllLines(f, StandardCharsets.UTF_8)) {
@@ -89,16 +96,66 @@ public final class SleepConfig {
     public static synchronized void save(Map<String, String> values) {
         FILE.clear();
         FILE.putAll(values);
-        StringBuilder sb = new StringBuilder("# Sleepium settings (written by the settings screen; a -D launch flag wins over a line here)\n");
-        for (var e : FILE.entrySet()) {
+        for (var e : FILE.entrySet()) if (!LAUNCH.contains(e.getKey())) System.setProperty(e.getKey(), e.getValue());
+        write(file(), FILE);
+    }
+
+    /**
+     * The file with every switch of the catalogue, by group: its description, then {@code key=value} when set here, else
+     * the line commented out with its default; keys set here that the catalogue does not know at the end.
+     */
+    private static void write(Path f, Map<String, String> values) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("# Sleepium settings\n");
+        sb.append("#\n");
+        sb.append("# Every switch of Sleepium with what it does and its default. A line key=value here wins over the default;\n");
+        sb.append("# a line starting with # uses the default (so a new version's defaults reach you). A -Dkey=value launch flag\n");
+        sb.append("# wins over this file. The in-game settings screen (Options -> Sleepium...) writes this file too.\n");
+        sb.append("# Most switches take effect after a restart (a server: edit, then restart it). true = on, false = off.\n");
+        sb.append("# Switches marked \"part of\" belong to another one: switching that one off switches them off too.\n");
+        Map<String, String> groups = groupNames();
+        Map<String, java.util.List<dev.lull.ui.SleepOptions.Option>> byGroup = dev.lull.ui.SleepOptions.byGroup();
+        Set<String> known = new HashSet<>();
+        for (var g : byGroup.entrySet()) {
+            if (g.getValue().isEmpty()) continue;
+            sb.append("\n# ==== ").append(groups.getOrDefault(g.getKey(), g.getKey())).append(" ====\n");
+            String gd = groups.get(g.getKey() + ".desc");
+            if (gd != null) sb.append("# ").append(gd).append('\n');
+            for (var o : g.getValue()) {
+                known.add(o.key());
+                sb.append("\n# ").append(o.description().isEmpty() ? o.shortName() : o.description()).append('\n');
+                if (!o.partOf().isEmpty()) sb.append("# (part of ").append(String.join(", ", o.partOf())).append(")\n");
+                String v = values.get(o.key());
+                if (v != null) sb.append(o.key()).append('=').append(v).append('\n');
+                else sb.append('#').append(o.key()).append('=').append(o.byDefault()).append('\n');
+            }
+        }
+        boolean other = false;
+        for (var e : values.entrySet()) {
+            if (known.contains(e.getKey())) continue;
+            if (!other) sb.append("\n# ==== Other settings ====\n");
+            other = true;
             sb.append(e.getKey()).append('=').append(e.getValue()).append('\n');
-            if (!LAUNCH.contains(e.getKey())) System.setProperty(e.getKey(), e.getValue());
         }
         try {
-            Files.createDirectories(file().getParent());
-            Files.writeString(file(), sb, StandardCharsets.UTF_8);
-        } catch (IOException e) {
-            System.out.println("[sleep/opt] settings: could not write " + file() + ": " + e);
+            Files.createDirectories(f.getParent());
+            Files.writeString(f, sb, StandardCharsets.UTF_8);
+        } catch (IOException | RuntimeException e) {
+            System.out.println("[sleep/opt] settings: could not write " + f + ": " + e);
         }
+    }
+
+    /** the groups' names and descriptions as the screen shows them (en_us.json: sleepium.ui.group.<g>[.desc]) */
+    private static Map<String, String> groupNames() {
+        Map<String, String> m = new TreeMap<>();
+        try (java.io.InputStream in = SleepConfig.class.getResourceAsStream("/assets/sleepium/lang/en_us.json")) {
+            if (in == null) return m;
+            java.util.regex.Matcher x = java.util.regex.Pattern.compile("\"sleepium\\.ui\\.group\\.([\\w.]+)\"\\s*:\\s*\"((?:[^\"\\\\]|\\\\.)*)\"")
+                    .matcher(new String(in.readAllBytes(), StandardCharsets.UTF_8));
+            while (x.find()) m.put(x.group(1), x.group(2).replace("\\\"", "\""));
+        } catch (IOException e) {
+            // the keys stand in for the names
+        }
+        return m;
     }
 }
