@@ -12,6 +12,7 @@ import net.minecraft.world.phys.shapes.VoxelShape;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Overwrite;
 import org.spongepowered.asm.mixin.Shadow;
+import org.spongepowered.asm.mixin.Unique;
 
 /**
  * Goes with BlockCollisionMemoMixin: the block collision of a move (Entity.collideBoundingBox) is a pure function of
@@ -33,6 +34,21 @@ public abstract class EntityCollideMemoMixin {
     }
 
     /**
+     * The miss path: CollideKernel (vanilla's shapes and math without their garbage) on the owner thread when no other
+     * mod's mixin is in that path, else vanilla's collectColliders + collideWithShapes.
+     */
+    @Unique
+    private static Vec3 sleep$collide(@Nullable Entity entity, Vec3 vec, AABB collisionBox, AABB bb, Level level, List<VoxelShape> potentialHits) {
+        if (dev.lull.optsupport.CollideKernel.ON && dev.lull.optsupport.CollideKernel.usable() && BlockCollisionMemo.usable(level)) {
+            if (dev.lull.optsupport.CollideKernel.CHECK && dev.lull.optsupport.CollideKernel.vanilla == null)
+                dev.lull.optsupport.CollideKernel.vanilla = (e, v, cb, b, l, ph) -> collideWithShapes(v, cb, collectColliders(e, l, ph, b));
+            Vec3 r = dev.lull.optsupport.CollideKernel.of(level).collide(entity, vec, collisionBox, bb, level, potentialHits);
+            if (r != null) return r;
+        }
+        return collideWithShapes(vec, collisionBox, collectColliders(entity, level, potentialHits, bb));
+    }
+
+    /**
      * @author probe (lab.opt.BlockCollisionMemoMixin)
      * @reason memoized block collision for repeated identical moves; vanilla body otherwise
      */
@@ -41,7 +57,7 @@ public abstract class EntityCollideMemoMixin {
         AABB bb = collisionBox.expandTowards(vec);
         if (dev.lull.optsupport.sleep.SleepEngine.HOOKS) dev.lull.optsupport.sleep.SleepEngine.readRegion(bb);
         if (entity == null || !BlockCollisionMemo.MOVE_SLOTS || !potentialHits.isEmpty() || !BlockCollisionMemo.usable(level) || level.getWorldBorder().isInsideCloseToBorder(entity, bb)) {
-            return collideWithShapes(vec, collisionBox, collectColliders(entity, level, potentialHits, bb));
+            return sleep$collide(entity, vec, collisionBox, bb, level, potentialHits);
         }
         BlockCollisionMemo.Holder holder = (BlockCollisionMemo.Holder) entity;
         BlockCollisionMemo m = holder.sleep$collideMemo();
@@ -59,7 +75,7 @@ public abstract class EntityCollideMemoMixin {
             return r;
         }
         BlockCollisionMemo.collideMisses++;
-        Vec3 r = collideWithShapes(vec, collisionBox, collectColliders(entity, level, potentialHits, bb));
+        Vec3 r = sleep$collide(entity, vec, collisionBox, bb, level, potentialHits);
         if (m == null) holder.sleep$setCollideMemo(m = new BlockCollisionMemo());
         m.valid = BlockCollisionMemo.worthRecording(m, collisionBox) && BlockCollisionMemo.record(level, m, bb);
         if (m.valid) {
