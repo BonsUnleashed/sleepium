@@ -14,6 +14,23 @@ import org.lwjgl.system.MemoryUtil;
  * fast-path bytes too (colour as RGBA bytes, packed overlay / light as two shorts, normal bytes).
  */
 public final class RecordingBuilder implements VertexConsumer {
+    /** one thread writes a builder at a time: its matrix helpers' vectors */
+    private final org.joml.Vector3f scratch = new org.joml.Vector3f();
+
+    /** VertexConsumer's default, the same JOML call into the builder's own vector (it made one per vertex) */
+    @Override
+    public VertexConsumer addVertex(org.joml.Matrix4f pose, float x, float y, float z) {
+        org.joml.Vector3f v = pose.transformPosition(x, y, z, scratch);
+        return this.addVertex(v.x(), v.y(), v.z());
+    }
+
+    /** VertexConsumer's default, the same JOML call into the builder's own vector (it made one per vertex) */
+    @Override
+    public VertexConsumer setNormal(com.mojang.blaze3d.vertex.PoseStack.Pose pose, float normalX, float normalY, float normalZ) {
+        org.joml.Vector3f v = pose.transformNormal(normalX, normalY, normalZ, scratch);
+        return this.setNormal(v.x(), v.y(), v.z());
+    }
+
     final VertexFormat format;
     /** the render type this builder records (set by RenderCache.Recorder) */
     public net.minecraft.client.renderer.RenderType type;

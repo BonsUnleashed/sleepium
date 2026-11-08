@@ -204,6 +204,7 @@
     "FrustumInvoker",
     "ItemFrameOffsetMixin",
     "NameTagSkipMixin",
+    "VertexNoAllocMixin",
     "EntityLightNoAllocMixin",
     "BlockEntityCullNoAllocMixin",
     "UtilMemoizeMixin",

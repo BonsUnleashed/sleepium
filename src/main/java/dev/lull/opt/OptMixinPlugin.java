@@ -100,7 +100,7 @@ public final class OptMixinPlugin implements IMixinConfigPlugin {
         // exp/frame-garbage: one flag for the per-frame garbage fixes
         if (simple.equals("Vec3FromRgbMixin") || simple.equals("OverworldFogMixin") || simple.equals("EntityCullNoAllocMixin") || simple.equals("FrustumInvoker")
                 || simple.equals("ItemFrameOffsetMixin") || simple.equals("EntityLightNoAllocMixin") || simple.equals("BlockEntityCullNoAllocMixin")
-                || simple.equals("UtilMemoizeMixin") || simple.equals("NameTagSkipMixin"))
+                || simple.equals("UtilMemoizeMixin") || simple.equals("NameTagSkipMixin") || simple.equals("VertexNoAllocMixin"))
             on = Boolean.getBoolean("lab.opt.all") || Boolean.getBoolean("lab.opt.FrameGarbageMixin");
         if (simple.equals("ClientLightCallbackMixin") || simple.equals("ClientLevelLightQueueAccessor") || simple.equals("ClientLightJoinMixin"))
             on = Boolean.getBoolean("lab.opt.all") || Boolean.getBoolean("lab.opt.ClientLightAsyncMixin");
