@@ -46,6 +46,8 @@ public final class OptMixinPlugin implements IMixinConfigPlugin {
             on = Boolean.getBoolean("lab.opt.WriteBarrier");
         if (simple.equals("WriteBarrierSampleMixin"))   // its sampling window (1.21.1: NeoForge's EntityTickEvent Pre / Post)
             on = Boolean.getBoolean("lab.opt.WriteBarrier") && Integer.getInteger("lab.wb.sample", 0) > 0;
+        if (simple.startsWith("OffThreadEntity"))   // one feature: entities added from another thread go where they belong
+            on = Boolean.getBoolean("lab.opt.all") || Boolean.getBoolean("lab.opt.OffThreadEntity");
         if (simple.startsWith("MoveMemo"))   // one feature: an unchanged move of a living entity skipped
             on = Boolean.getBoolean("lab.opt.all") || Boolean.getBoolean("lab.opt.MoveMemo");
         // mob sleep's runtime (notes/47): draws recorded, goal selectors' and attribute maps' modification counters

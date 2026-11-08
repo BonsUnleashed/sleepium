@@ -191,3 +191,4 @@
 -Dlab.prender.listenersOnWorkers=true
 -Dlab.opt.EntityDataNoLockMixin=true
 -Dlab.opt.EntityFluidLoopMixin=true
+-Dlab.opt.OffThreadEntity=true
