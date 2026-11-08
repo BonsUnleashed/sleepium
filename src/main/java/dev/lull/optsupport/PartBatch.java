@@ -453,8 +453,15 @@ public final class PartBatch {
         return ok && partsAllowed();
     }
 
+    /** frames ended (endFrame) and the last frame whose job merge refused item records (a buffer source not taking them) */
+    private static volatile long frame, itemRefusedFrame = Long.MIN_VALUE / 2;
+    private static volatile int itemBackoff = 120;
+
     /** Workers: whether the type is known to take item records (else asked through the job's journal). */
     static boolean itemTypeKnown(RenderType t) {
+        // records the merge would refuse are work done twice (1.1.8 next to ImmediatelyFast: 1 057 -> 498 fps on dropped
+        // items, 1.21.1): after a refusal none for a while (itemBackoff), then tried again
+        if (frame - itemRefusedFrame < itemBackoff) return false;
         if (itemTypes.contains(t)) return true;
         if (ASKED_ITEM.add(t)) ParallelRender.journal(() -> {
             ASKED_ITEM.remove(t);
@@ -469,15 +476,24 @@ public final class PartBatch {
     }
 
     /**
-     * Render thread: the builder is the level's buffer source's own fixed buffer of the type (vanilla's Sheets: drawn
-     * once per frame, after the entities) and the type takes item records.
+     * Render thread: the builder belongs to the level's buffer source and the type takes item records. Vanilla's source:
+     * its own fixed buffer of the type (Sheets: drawn once per frame, after the entities). Another mod's source in its
+     * place (ImmediatelyFast's BatchableBufferSource, a BufferSource subclass): a type it draws from pending builders it
+     * keeps per type (consolidating geometry) - it may draw a type in more than one piece a frame, so the records are
+     * drawn before the type's next draw and the queue is emptied there (beforeDraw): each record exactly once.
      */
     static boolean itemTarget(RenderType t, BufferBuilder bb, net.minecraft.client.renderer.MultiBufferSource buffers) {
-        if (buffers != net.minecraft.client.Minecraft.getInstance().renderBuffers().bufferSource() || buffers.getClass() != net.minecraft.client.renderer.MultiBufferSource.BufferSource.class)
-            return false;
-        dev.lull.opt.BufferSourceAccessor a = (dev.lull.opt.BufferSourceAccessor) buffers;
-        return a.sleep$fixed().get(t) == bb && a.sleep$started().contains(bb) && itemTypeOk(t);
+        if (buffers != net.minecraft.client.Minecraft.getInstance().renderBuffers().bufferSource()) return false;
+        if (buffers.getClass() == net.minecraft.client.renderer.MultiBufferSource.BufferSource.class) {
+            dev.lull.opt.BufferSourceAccessor a = (dev.lull.opt.BufferSourceAccessor) buffers;
+            return a.sleep$fixed().get(t) == bb && a.sleep$started().contains(bb) && itemTypeOk(t);
+        }
+        return ITEM_OTHER_SOURCES && buffers instanceof net.minecraft.client.renderer.MultiBufferSource.BufferSource
+                && t.canConsolidateConsecutiveGeometry() && itemTypeOk(t);
     }
+
+    /** -Dlab.itemgpu.otherSources=false: item records only with vanilla's level buffer source (as before 1.1.9) */
+    static final boolean ITEM_OTHER_SOURCES = !"false".equals(System.getProperty("lab.itemgpu.otherSources"));
 
     /** Render thread: one item model's record (white: the colours are the geometry's). */
     static void queueItem(RenderType t, BufferBuilder bb, int first, int quads, PoseStack.Pose pose, int light, int overlay) {
@@ -511,6 +527,7 @@ public final class PartBatch {
         Queue q = ITEM_QUEUES.get(t);
         if (q == null || q.n == 0) return;
         drawQueue(shader, q, 7);
+        q.n = 0;   // drawn (the records were copied to the driver): a later draw of the type this frame does not repeat them
         vb.bind();
     }
 
@@ -1245,7 +1262,13 @@ public final class PartBatch {
                         && buffers.getBuffer(last) instanceof BufferBuilder bb && itemTarget(last, bb, buffers);
             else ok = buffers.getBuffer(last) instanceof BufferBuilder bb && EntityBatch.typeOf(bb) == last;
             if (!ok) {
-                if (lastItem) ItemGpu.refused++;
+                if (lastItem) {
+                    ItemGpu.refused++;
+                    // the source takes no item records: workers stop recording them for a while, twice as long after each
+                    // refusal that follows a retry (up to 7 680 frames), back to 120 once a merge takes them
+                    if (frame - itemRefusedFrame <= itemBackoff + 2) itemBackoff = Math.min(itemBackoff * 2, 7680);
+                    itemRefusedFrame = frame;
+                }
                 jobRefused++;
                 parts.n = 0;
                 return false;
@@ -1260,6 +1283,7 @@ public final class PartBatch {
                 lastItem = parts.item[i];
                 bb = (BufferBuilder) buffers.getBuffer(last);
                 q = (lastItem ? ITEM_QUEUES : GEO_QUEUES).get(last);
+                if (lastItem && itemBackoff != 120) itemBackoff = 120;   // the source takes item records again
             }
             if (q == null || q.n == q.cap || ((dev.lull.opt.BufferBuilderAccessor) bb).sleep$vertices() == 0) q = slot(lastItem ? ITEM_QUEUES : GEO_QUEUES, last, bb);
             MemoryUtil.memCopy(parts.mem + 144L * i, q.mem + 144L * q.n, 144);
@@ -1527,6 +1551,7 @@ public final class PartBatch {
 
     /** End of a frame's level render: nothing queued may outlive it (a type never drawn this frame). */
     public static void endFrame() {
+        frame++;
         ASKED.clear();   // a request journaled by a job that then failed was dropped: asked again next frame
         ASKED_GEO.clear();
         ASKED_ITEM.clear();
