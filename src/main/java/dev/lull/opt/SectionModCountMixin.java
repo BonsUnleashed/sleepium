@@ -14,8 +14,25 @@ import org.spongepowered.asm.mixin.injection.Redirect;
  * states (setBlockState, both paths, and the client packet read); these are the only writers of the container.
  */
 @Mixin(LevelChunkSection.class)
-public abstract class SectionModCountMixin implements BlockCollisionMemo.Counted {
+public abstract class SectionModCountMixin implements BlockCollisionMemo.Counted, dev.lull.optsupport.CollisionMask.Holder {
     @Unique private int sleep$mod;
+    /** CollisionMask: which cells can collide, built at counter value sleep$maskAt */
+    @Unique private long[] sleep$maskBits;
+    @Unique private int sleep$maskAt;
+
+    @Override
+    public long[] sleep$mask() {
+        long[] m = sleep$maskBits;
+        if (m == null) {
+            m = sleep$maskBits = new long[64];
+            sleep$maskAt = sleep$mod - 1;
+        }
+        if (sleep$maskAt != sleep$mod) {
+            dev.lull.optsupport.CollisionMask.build((net.minecraft.world.level.chunk.LevelChunkSection) (Object) this, m);
+            sleep$maskAt = sleep$mod;
+        }
+        return m;
+    }
 
     @Override
     public int sleep$mod() {

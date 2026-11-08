@@ -60,6 +60,8 @@ public final class OptMixinPlugin implements IMixinConfigPlugin {
             on = Boolean.getBoolean("lab.opt.all") || Boolean.getBoolean("lab.opt.ShapeCacheMixin") || Boolean.getBoolean("lab.opt.BlockCollisionMemoMixin");
         if (simple.equals("SectionModCountMixin") || simple.equals("EntityCollisionMemoMixin") || simple.equals("EntityCollideMemoMixin"))
             on = Boolean.getBoolean("lab.opt.all") || Boolean.getBoolean("lab.opt.BlockCollisionMemoMixin");
+        if (simple.equals("BlockCollisionsFastMixin"))   // the masks live in SectionModCountMixin, built from ShapeCacheMixin's shapes
+            on = Boolean.getBoolean("lab.opt.all") || Boolean.getBoolean("lab.opt.BlockCollisionsFastMixin") && Boolean.getBoolean("lab.opt.BlockCollisionMemoMixin");
         if (simple.equals("EntitySectionCollidableMixin") || simple.equals("EntityStorageCollidableMixin") || simple.equals("LevelEntityGetterAdapterAccessor"))
             on = Boolean.getBoolean("lab.opt.all") || Boolean.getBoolean("lab.opt.EntityCollisionSkipMixin");
         if (simple.equals("VoxelShapeAccessor"))

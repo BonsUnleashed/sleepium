@@ -162,5 +162,8 @@ public final class BlockCollisionMemo {
     /** Implemented on BlockState (ShapeCacheMixin): collision shape proven to depend on the state alone. */
     public interface StaticShape {
         boolean sleep$staticShape();
+
+        /** the state's collision shape when it is static (the very object every call returns), else null */
+        net.minecraft.world.phys.shapes.VoxelShape sleep$staticCollision();
     }
 }

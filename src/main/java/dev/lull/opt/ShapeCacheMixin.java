@@ -48,6 +48,11 @@ public abstract class ShapeCacheMixin implements BlockCollisionMemo.StaticShape 
         return sleep$collision != null;
     }
 
+    @Override
+    public VoxelShape sleep$staticCollision() {
+        return sleep$collision;
+    }
+
     @Inject(method = "initCache", at = @At("TAIL"))
     private void sleep$initCache(CallbackInfo ci) {
         Block block = getBlock();

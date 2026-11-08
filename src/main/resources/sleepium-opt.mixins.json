@@ -101,6 +101,7 @@
     "LevelEntityGetterAdapterAccessor",
     "BlockCollisionMemoMixin",
     "SectionModCountMixin",
+    "BlockCollisionsFastMixin",
     "EntityCollisionMemoMixin",
     "WriteBarrierMixin",
     "NeighborQueueMixin",
