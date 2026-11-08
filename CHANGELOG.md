@@ -4,6 +4,40 @@ Versions follow [Semantic Versioning](https://semver.org): a patch release fixes
 release changes the API (`dev.lull.api`) or the settings in a way that needs attention. Jars are named
 `sleepium-<version>+mc<minecraft version>-<loader>.jar` (before 1.1.0 without the loader).
 
+## 1.1.8 - 2026-11-08
+
+- **Dropped items are drawn by the graphics card.** Items on the ground, in item frames and in mobs' hands no longer
+  rebuild their 3D model every frame: the model is kept in video memory and only its position is sent. A field of
+  1 128 dropped items and 1 081 experience orbs: 1 066 -> 2 094 fps (1.21.1), 980 -> 1 621 fps (1.20.1); vanilla 182 / 128.
+  The picture can differ from vanilla in a few pixels (float rounding on the graphics card). It switches itself off
+  next to Iris and ImmediatelyFast (items are then drawn the vanilla way) and can be turned off in the settings
+  (Entity rendering -> ItemGpu).
+- **Experience orbs and other moving entities collide with blocks for less.** Sleepium now knows, per chunk section,
+  which blocks can never collide (air, grass, flowers...) and skips them without reading them; experience orbs, which
+  ask about collisions every tick without saying who asks, now use Sleepium's collision memory too; and an entity's
+  move no longer builds lists and objects for every block it passes. Every result is the same as vanilla's, checked
+  against vanilla tens of millions of times. A crowd of 2 000 orbs and 1 500 items being picked up: 194 -> 215 fps
+  (vanilla: 1 fps); on an Intel N100 laptop-class PC 23 -> 25 fps (vanilla: 1 fps). Servers: 7-13 % less time per tick
+  with many orbs, items, mobs or villagers (11-14 % on the N100).
+- **Tip: Sleepium and [Clumps](https://modrinth.com/mod/clumps) work well together.** Clumps merges experience orbs
+  (it changes how orbs behave, which Sleepium itself never does). In the orb crowd above: Sleepium + Clumps 996 fps,
+  Clumps alone 128; on the Intel N100 89 fps against 29 with Clumps alone.
+- **Less garbage per frame:** shader values, name tags of entities whose name is not shown, and the vertices of every
+  renderer no longer create throwaway objects.
+- **Servers: `config/sleepium.properties` is created on the first start** (it was only written by the in-game
+  settings screen, which servers do not have), with every switch, what it does and its default, all commented out so
+  new defaults keep reaching you. Remove the `#` in front of a line to change it, then restart (GitHub issue by I3AT5).
+- **1.20.1: the settings screen was missing 56 switches** (chunk rendering, entity batching, GeckoLib and others): they
+  were on, but could not be switched off. They are all there now.
+- **Entity analysis could fail next to a mod that patches the bytecode library (ASM)** ("analysis failed:
+  method.tryCatchBlocks is null" in the log; those entities then simply ticked the vanilla way). Sleepium now handles
+  it (reported by I3AT5).
+- **Block-entity sleep is checked by value where a mod's block entity bypasses Sleepium's hooks**, so a sleeping
+  machine wakes up exactly when its items change, whatever way the mod changes them.
+- **Two small costs found in a 200-mod pack's profile:** Sleepium's tick timer built the name of every dimension as
+  a string every tick, and its event bus read one flag the slow way on every event (together about 1.5 % of the
+  server thread in that pack).
+
 ## 1.1.7 - 2026-11-07
 
 - **1.20.1 with ModernFix: the server reacted up to a tick late** (servers and singleplayer). ModernFix replaces the

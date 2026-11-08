@@ -62,6 +62,39 @@ The world after N ticks is the same as vanilla's in every scene where vanilla it
 
 ## Results
 
+### Items and experience orbs (1.1.8, 2026-11-08)
+
+Two scenes from players' reports (a Cursed Fate fight, 2 000 cows killed): **drops** - 1 128 dropped items of 8 kinds
+and 1 081 experience orbs lying one block apart; **crowd** - 2 000 orbs and 1 500 items around a survival player who
+lands in the middle and picks them up (the orbs fly to the player, merge and are collected). Host: Ryzen + RTX 4070
+SUPER; N100: Intel N100, 4 cores, integrated graphics. Production clients (the release jar) unless noted; "vanilla" is
+the same game with Sleepium's optimisations off.
+
+| scene, client | vanilla | 1.1.7 | 1.1.8 | 1.1.8 + Clumps | vanilla + Clumps |
+|---|---:|---:|---:|---:|---:|
+| crowd, host, fps | 1 | 194 | 215-219 | 996 | 128 |
+| crowd, N100, fps (two runs each) | 1 / 1 | 24 / 22 | 24 / 27 | 89 | 29 |
+| crowd, N100, worst frames (p99), ms | 4 114 / 3 093 | 418 / 287 | 389 / 211 | 61 | 549 |
+| crowd, N100, client tick, ms | 155 / 149 | 18.0 / 18.9 | 16.0 / 15.3 | 8.0 | 19.8 |
+| drops, host, fps (1.21.1) | 182 | 1 066 | 2 094 | | |
+| drops, host, fps (1.20.1, dev client) | 128 | 980 | 1 621 | | |
+| drops, N100, fps / client tick, ms (two runs each) | | 130-132 / 12.6-11.8 | 136 / 9.5 | | |
+
+On the N100 the crowd runs on one pre-generated world copied for every run: a fresh world kept generating chunks during
+the measurement (45 % of the CPU) and made the numbers noise. The N100's fps in the drops scene is bound by its
+graphics; what 1.1.8 removes there is CPU time (the client tick) and stutter. Clumps merges experience orbs, which
+changes how they behave in the game; Sleepium never does, it only makes the same game cheaper.
+
+Server, ms per tick, the same ticks in both (production NeoForge; the host with deterministic stepping, the N100 with
+vanilla's /tick query):
+
+| scene | host: 1.1.7 | host: 1.1.8 | N100: 1.1.7 | N100: 1.1.8 |
+|---|---:|---:|---:|---:|
+| 900 experience orbs over 30 kinds of floor | 5.39 | 4.70 | 20.85 | 18.23 |
+| 4 000 items | 7.78 | 7.25 | 24.98 | 22.10 |
+| mobs | 7.15 | 6.50 | 28.63 | 25.55 |
+| villagers | | | 28.90 | 24.92 |
+
 ### Server, N100 (2026-11-01)
 
 `h2h.py` on a NeoForge 1.21.1 server with the built jar: a fresh flat world per server, 40 s warm-up per scene, then

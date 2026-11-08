@@ -38,6 +38,21 @@ Client, entity / block-entity scene (armour stands, item frames, chests, signs, 
 - Intel N100: **39 → 117 fps**, garbage 3 952 → 113 KiB per frame
 - Ryzen 7 5800X + RTX 4070 SUPER: **67 → 1 514 fps**; 300 animated mobs 175 → 1 782 fps
 
+## New in 1.1.8: items and experience orbs
+
+Dropped items, items in frames and in mobs' hands are drawn by the graphics card from video memory, and experience
+orbs and items collide with blocks for less (every result the same as vanilla's).
+
+| | vanilla | Sleepium 1.1.7 | Sleepium 1.1.8 |
+|---|---:|---:|---:|
+| 1 128 dropped items + 1 081 experience orbs on the ground, fps, 1.21.1 | 182 | 1 066 | 2 094 |
+| the same, fps, 1.20.1 | 128 | 980 | 1 621 |
+| 2 000 experience orbs + 1 500 items being picked up, fps, 1.21.1 | 1 | 194 | 215-219 |
+| the same on an Intel N100 with integrated graphics, fps | 1 | 22-24 | 24-27 |
+
+Many experience orbs at once? Sleepium works well together with [Clumps](https://modrinth.com/mod/clumps), which
+merges them: the orb crowd above runs at 996 fps (Clumps alone: 128), on the Intel N100 at 89 fps (Clumps alone: 29).
+
 ## New in 1.1.0: Minecraft 1.20.1 / Forge
 
 The whole engine on Forge 47 (Java 17 or newer): sleeping block entities and entities, the event engine, exact memos,
