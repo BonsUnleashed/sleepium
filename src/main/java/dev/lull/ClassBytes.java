@@ -49,8 +49,22 @@ public final class ClassBytes {
             ClassReader r = new ClassReader(in);
             if (Names.SRG) r.accept(new ClassRemapper(cn, OFFICIAL), flags);
             else r.accept(cn, flags);
-            return cn;
+            return complete(cn);
         }
+    }
+
+    /**
+     * A node's method lists as the analyses expect them. Stock ASM creates every method's lists; a mod that patches ASM to
+     * save memory may leave an empty one null (an I3AT5 pack: "method.tryCatchBlocks is null" in Analyzer, every entity
+     * of two mods refused). A list null there was never filled - ClassWriter could not write the method otherwise.
+     */
+    public static ClassNode complete(ClassNode cn) {
+        for (org.objectweb.asm.tree.MethodNode m : cn.methods) {
+            if (m.tryCatchBlocks == null) m.tryCatchBlocks = new java.util.ArrayList<>(0);
+            if (m.localVariables == null) m.localVariables = new java.util.ArrayList<>(0);
+            if (m.exceptions == null) m.exceptions = new java.util.ArrayList<>(0);
+        }
+        return cn;
     }
 
     /**
@@ -153,7 +167,7 @@ public final class ClassBytes {
             for (org.objectweb.asm.tree.MethodNode m : cn.methods)
                 for (org.objectweb.asm.tree.AbstractInsnNode i : m.instructions.toArray())
                     if (i instanceof org.objectweb.asm.tree.FrameNode) m.instructions.remove(i);
-            return cn;
+            return complete(cn);
         } catch (Throwable e) {
             System.out.println("[sleep/analysis] " + internalName + ": the running code not at hand: " + e);
             return null;
