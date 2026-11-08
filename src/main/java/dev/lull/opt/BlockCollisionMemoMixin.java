@@ -2,6 +2,7 @@ package dev.lull.opt;
 
 import dev.lull.optsupport.BlockCollisionMemo;
 import dev.lull.optsupport.OptCounters;
+import java.util.function.Consumer;
 import javax.annotation.Nullable;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.level.CollisionGetter;
@@ -14,6 +15,9 @@ import net.minecraft.world.phys.shapes.VoxelShape;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Unique;
+import org.spongepowered.asm.mixin.injection.At;
+import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
  * exp/collision-memo: resting entities ask the same block question every tick (items: noCollision on their deflated
@@ -33,6 +37,26 @@ public abstract class BlockCollisionMemoMixin implements CollisionGetter {
     @Shadow public abstract WorldBorder getWorldBorder();
 
     @Unique private static final boolean CHECK = Boolean.getBoolean("lab.opt.collisionMemoCheck");
+
+    /**
+     * The entity this level is ticking (guardEntityTick, the owner thread): a block question asked without an entity
+     * during its tick (ExperienceOrb: noCollision(box) every tick) is memoized in its slot. A memo is only ever valid over
+     * shapes that depend on nothing but the block (ShapePurity: not on the collision context), so the answer is the same
+     * with or without the entity; a stale or wrong owner costs hits, never correctness.
+     */
+    @Unique private Entity sleep$ticking;
+    /** -Dlab.opt.collisionMemoAnon=false: questions without an entity go to vanilla as before (A/B) */
+    @Unique private static final boolean ANON = !"false".equals(System.getProperty("lab.opt.collisionMemoAnon"));
+
+    @Inject(method = "guardEntityTick", at = @At("HEAD"))
+    private void sleep$tickBegin(Consumer<?> tick, Entity entity, CallbackInfo ci) {
+        sleep$ticking = entity;
+    }
+
+    @Inject(method = "guardEntityTick", at = @At("RETURN"))
+    private void sleep$tickEnd(Consumer<?> tick, Entity entity, CallbackInfo ci) {
+        sleep$ticking = null;
+    }
 
     /** Overrides the CollisionGetter default: same steps, block part memoized. */
     public boolean noCollision(@Nullable Entity entity, AABB collisionBox) {
@@ -119,9 +143,10 @@ public abstract class BlockCollisionMemoMixin implements CollisionGetter {
 
     @Unique
     private boolean sleep$blocksFree(@Nullable Entity entity, AABB box) {
-        if (entity == null || !BlockCollisionMemo.usable((Level) (Object) this)) return sleep$vanillaBlocksFree(entity, box);
+        Entity owner = entity != null ? entity : ANON ? sleep$ticking : null;   // no entity: the one being ticked keeps the memo
+        if (owner == null || !BlockCollisionMemo.usable((Level) (Object) this)) return sleep$vanillaBlocksFree(entity, box);
         CollisionGetter self = (CollisionGetter) (Object) this;
-        BlockCollisionMemo.Holder holder = (BlockCollisionMemo.Holder) entity;
+        BlockCollisionMemo.Holder holder = (BlockCollisionMemo.Holder) owner;
         BlockCollisionMemo m = holder.sleep$collisionMemo();
         if (m != null && m.valid && m.sameBox(box) && BlockCollisionMemo.unchanged(self, m, box)) {
             BlockCollisionMemo.hits++;
