@@ -3,6 +3,7 @@ lab.opt.AsyncChunkSaveMixin	saving	true	exp/async-chunk-save: see AsyncChunkSave
 lab.opt.AsyncChunkSaveStorageMixin	saving	true	AsyncChunkSaveMixin: reads wait for a pending save of their position; flush and close wait for all of them.	lab.opt.AsyncChunkSaveMixin
 lab.opt.BlockCollisionMemoMixin	ticks	true		
 lab.opt.BlockCollisionsFastMixin	ticks	true	exp/collision-mask: BlockCollisions' state read of a cell its section's mask (CollisionMask) proves can never collide answers air without reading the section - every collision query of every entity (moves, noCollision, supporting blocks) and of mods.	
+lab.opt.BlockMeshMemoMixin	chunks	true	exp/block-mesh-memo (client): tesselateBlock's AO / flat tesselation against the client level served from BlockMeshMemo while the section around the block is unchanged (pistons' moving blocks, falling blocks, …).	
 lab.opt.BlockMeshDirtyMixin	chunks	true	BlockMeshMemoMixin: the section marks vanilla makes for its chunk meshes (every block, light and chunk change goes through setSectionDirty), a renderer reset or a new level (everything stale), and the frame counter for eviction.	lab.opt.BlockMeshMemoMixin
 lab.opt.BrainFlatMixin	ticks	true	exp/brain-flat: universal for every Brain-driven mob (villagers, piglins, axolotls, frogs, allays, wardens, ...	
 lab.opt.BulkDataArraysMixin	ticks	true	exp/bulk-arrays (client): the short putBulkData overloads build new float[]{1,1,1,1} and int[]{light x4} per quad (13 % of the render thread's allocation in an entity-heavy scene: items in frames, held items, armour).	

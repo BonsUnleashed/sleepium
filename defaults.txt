@@ -4,6 +4,7 @@
 -Dlab.opt.BlockCollisionMemoMixin=true
 -Dlab.opt.BlockCollisionsFastMixin=true
 -Dlab.opt.BlockEntityCullNoAllocMixin=true
+-Dlab.opt.BlockMeshMemoMixin=true
 -Dlab.opt.BlockMeshDirtyMixin=true
 -Dlab.opt.BrainFlatMixin=true
 -Dlab.opt.BulkDataArraysMixin=true
