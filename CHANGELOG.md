@@ -18,8 +18,9 @@ release changes the API (`dev.lull.api`) or the settings in a way that needs att
   cache learned about light changes only after the new light was already in use. Now it knows before. (In our check
   the mismatches fell 17 times on 1.21.1 and 4 times on 1.20.1; what is left comes from the light being computed in
   the background while a frame is drawn.)
-- 1.20.1: blocks pushed by pistons and falling blocks are drawn from that cache, as on 1.21.1 (a scene with many moving
-  pistons: 790-979 -> 1 515-1 552 fps).
+- **1.20.1: moving blocks up to 1.9x faster.** Blocks pushed by pistons and falling blocks are now drawn from that cache,
+  as on 1.21.1: a scene with many moving pistons 790-979 -> 1 515-1 552 fps, the slowest frames (p99) 5.7-6.4 ->
+  2.9-3.3 ms.
 
 ## 1.1.9 - 2026-11-09
 
