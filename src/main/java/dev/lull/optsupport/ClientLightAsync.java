@@ -63,6 +63,28 @@ public final class ClientLightAsync {
         });
     }
 
+    /**
+     * Sections whose light the running job changes, from before the job publishes the new light (the head of
+     * swapSectionMap) until their marks are replayed on the render thread: what is drawn from a record of such a section
+     * (BlockMeshMemo) may hold the old light - those records count as stale meanwhile. Without it the memo replayed a
+     * moving block's old light for up to a frame (verify mode: 712 of 1.56M hits, all UV2).
+     */
+    private static final java.util.Set<Long> PENDING = java.util.concurrent.ConcurrentHashMap.newKeySet();
+    private static volatile boolean pendingAny;
+
+    /** the head of swapSectionMap on the light worker: the sections it is about to publish new light for */
+    public static void pending(it.unimi.dsi.fastutil.longs.LongSet sections) {
+        if (sections.isEmpty()) return;
+        var it = sections.iterator();
+        while (it.hasNext()) PENDING.add(it.nextLong());
+        pendingAny = true;
+    }
+
+    /** a section whose new light is published (or about to be) but not yet marked */
+    public static boolean lightPending(long section) {
+        return pendingAny && PENDING.contains(section);
+    }
+
     /** True on the light worker while it runs: the engine's callbacks are recorded, not run. */
     public static boolean onWorker() {
         return running && Thread.currentThread() == worker;
@@ -98,7 +120,10 @@ public final class ClientLightAsync {
         long[] marks;
         byte[] layers;
         synchronized (DIRTY) {
-            if (DIRTY.isEmpty()) return;
+            if (DIRTY.isEmpty()) {
+                if (!running) clearPending();
+                return;
+            }
             marks = DIRTY.toLongArray();
             layers = DIRTY_LAYER.toByteArray();
             DIRTY.clear();
@@ -115,6 +140,17 @@ public final class ClientLightAsync {
             else lr.setSectionDirty(SectionPos.x(p), SectionPos.y(p), SectionPos.z(p));
         }
         replayed += marks.length;
+        if (pendingAny) {   // the replayed marks make their sections' records stale from here on: no longer pending
+            for (long p : marks) PENDING.remove(p);
+            if (PENDING.isEmpty()) pendingAny = false;
+        }
+    }
+
+    /** nothing running and nothing left to replay: nothing can be pending */
+    private static void clearPending() {
+        if (!pendingAny) return;
+        pendingAny = false;
+        PENDING.clear();
     }
 
     public static String report() {
