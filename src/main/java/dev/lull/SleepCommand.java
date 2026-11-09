@@ -220,6 +220,12 @@ public final class SleepCommand {
                     say(ctx, "Stepping " + n + " tick(s)");
                     return 1;
                 })))
+                .then(Commands.literal("sprint").then(Commands.argument("time", IntegerArgumentType.integer(1)).executes(ctx -> {
+                    int n = IntegerArgumentType.getInteger(ctx, "time");
+                    TickControl.sprint(n);
+                    say(ctx, "Sprinting " + n + " tick(s)");
+                    return 1;
+                })))
                 .then(Commands.literal("query").executes(ctx -> {
                     for (String line : TickControl.query(ctx.getSource().getServer())) say(ctx, line);
                     return 1;

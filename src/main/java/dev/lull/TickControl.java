@@ -6,7 +6,7 @@ import net.minecraft.server.MinecraftServer;
 
 /**
  * The test tools' tick control on 1.20.1, which has no /tick yet (1.20.3 added it): /tick freeze | unfreeze |
- * step N | query, with 1.21's meaning and output, so tools/exactness.py and tools/bench.py run unchanged. Frozen, a
+ * step N | sprint N | query, with 1.21's meaning and output, so tools/exactness.py and tools/bench.py run unchanged. Frozen, a
  * level ticks only its chunk source without ticking chunks (forced chunks keep loading); each step runs one whole
  * server tick. The query reads the server's last 100 tick times.
  */
@@ -16,11 +16,19 @@ public final class TickControl {
     private static volatile boolean frozen;
     private static int steps;
     private static boolean stepping;
+    /** the pending steps run back to back: no wait for the next 50 ms between them (tools/quick_exactness.py) */
+    private static volatile boolean sprint;
 
     /** MinecraftServer.tickServer, at its start (server thread) */
     public static void beginTick() {
         stepping = frozen && steps > 0;
         if (stepping) steps--;
+        else sprint = false;
+    }
+
+    /** MinecraftServer.tickServer, at its end: a sprinted step lets the next tick start at once */
+    public static boolean sprinting() {
+        return sprint && stepping;
     }
 
     /** ServerLevel.tick: this tick runs only the chunk source */
@@ -35,6 +43,11 @@ public final class TickControl {
 
     public static void step(int n) {
         steps += n;
+    }
+
+    public static void sprint(int n) {
+        steps += n;
+        sprint = true;
     }
 
     public static boolean frozen() {

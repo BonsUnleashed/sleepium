@@ -13,6 +13,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(MinecraftServer.class)
 public abstract class TickControlServerMixin {
     @Shadow private int tickCount;
+    @Shadow private long nextTickTime;
 
     @Inject(method = "tickServer", at = @At("HEAD"))
     private void sleep$tickBegin(BooleanSupplier hasTimeLeft, CallbackInfo ci) {
@@ -27,5 +28,6 @@ public abstract class TickControlServerMixin {
     @Inject(method = "tickServer", at = @At("RETURN"))
     private void sleep$tickEnd(BooleanSupplier hasTimeLeft, CallbackInfo ci) {
         if (TickControl.levelFrozen()) tickCount--;
+        if (TickControl.sprinting()) nextTickTime = net.minecraft.Util.getMillis();   // the wait after this tick ends at once
     }
 }
