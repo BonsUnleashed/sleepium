@@ -778,8 +778,27 @@ public final class SleepEngine {
      * position change saw the old one, and a boat stopping in a sleeping item's box never woke it).
      */
     public static void onMove(Entity e, AABB from, AABB to) {
-        onEntity(e, "entity-moved", Math.min(from.minX, to.minX), Math.min(from.minY, to.minY), Math.min(from.minZ, to.minZ),
-                Math.max(from.maxX, to.maxX), Math.max(from.maxY, to.maxY), Math.max(from.maxZ, to.maxZ));
+        double ax = Math.min(from.minX, to.minX), ay = Math.min(from.minY, to.minY), az = Math.min(from.minZ, to.minZ),
+                bx = Math.max(from.maxX, to.maxX), by = Math.max(from.maxY, to.maxY), bz = Math.max(from.maxZ, to.maxZ);
+        // A move changes which entities are in the boxes that meet the old box or the new one, nothing else: both boxes
+        // together are a step. A jump (a new entity placed from the constructor's (0, 0, 0), a teleport, a portal) made
+        // one box from origin to destination, every section in it looked up: 384M lookups per entity loaded 64 000
+        // blocks out - world generation there ran at half vanilla's speed (11-09). Then each box on its own; their hull
+        // would only wake more sleepers, never fewer.
+        if (sections(ax, ay, az, bx, by, bz) > sections(from.minX, from.minY, from.minZ, from.maxX, from.maxY, from.maxZ)
+                + sections(to.minX, to.minY, to.minZ, to.maxX, to.maxY, to.maxZ)) {
+            onEntity(e, "entity-moved", from.minX, from.minY, from.minZ, from.maxX, from.maxY, from.maxZ);
+            onEntity(e, "entity-moved", to.minX, to.minY, to.minZ, to.maxX, to.maxY, to.maxZ);
+            return;
+        }
+        onEntity(e, "entity-moved", ax, ay, az, bx, by, bz);
+    }
+
+    /** the number of sections a box spans (as a long: a hull can be astronomically large) */
+    private static long sections(double ax, double ay, double az, double bx, double by, double bz) {
+        return ((long) SectionPos.posToSectionCoord(bx) - SectionPos.posToSectionCoord(ax) + 1)
+                * ((long) SectionPos.posToSectionCoord(by) - SectionPos.posToSectionCoord(ay) + 1)
+                * ((long) SectionPos.posToSectionCoord(bz) - SectionPos.posToSectionCoord(az) + 1);
     }
 
     static void onEntity(Entity e, String reason, double ax, double ay, double az, double bx, double by, double bz) {
