@@ -73,8 +73,11 @@ public final class BlockMeshMemo {
     }
 
     private static boolean valid(long sectionKey, long recorded) {
-        return recorded > floor && MARKS.get(sectionKey) < recorded;
+        return recorded > floor && MARKS.get(sectionKey) < recorded && !(LIGHT_PENDING && ClientLightAsync.lightPending(sectionKey));
     }
+
+    /** -Dlab.bmesh.lightPending=false: records of sections whose new light is not marked yet served anyway (1.1.9's way, for A/B) */
+    private static final boolean LIGHT_PENDING = !"false".equals(System.getProperty("lab.bmesh.lightPending"));
 
     // ------------------------------------------------------------------ records (per thread)
 

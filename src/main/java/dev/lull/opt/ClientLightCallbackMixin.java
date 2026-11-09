@@ -20,6 +20,14 @@ import org.spongepowered.asm.mixin.injection.At;
  */
 @Mixin(LayerLightSectionStorage.class)
 public abstract class ClientLightCallbackMixin {
+    @org.spongepowered.asm.mixin.Shadow @org.spongepowered.asm.mixin.Final protected it.unimi.dsi.fastutil.longs.LongSet sectionsAffectedByLightUpdates;
+
+    /** before the new light is published: its sections are pending until their marks are replayed (BlockMeshMemo) */
+    @org.spongepowered.asm.mixin.injection.Inject(method = "swapSectionMap", at = @At("HEAD"))
+    private void sleep$pending(org.spongepowered.asm.mixin.injection.callback.CallbackInfo ci) {
+        if (ClientLightAsync.onWorker()) ClientLightAsync.pending(sectionsAffectedByLightUpdates);
+    }
+
     @WrapOperation(method = "swapSectionMap", at = @At(value = "INVOKE",
             target = "Lnet/minecraft/world/level/chunk/LightChunkGetter;onLightUpdate(Lnet/minecraft/world/level/LightLayer;Lnet/minecraft/core/SectionPos;)V"))
     private void sleep$record(LightChunkGetter source, LightLayer layer, SectionPos pos, Operation<Void> original) {
