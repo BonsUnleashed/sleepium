@@ -9,7 +9,9 @@ release changes the API (`dev.lull.api`) or the settings in a way that needs att
 - **Fixed: dropped items were slower next to ImmediatelyFast in 1.1.8** (ImmediatelyFast is in most modpacks). Sleepium
   prepared items for the graphics card, then could not use its buffers and drew them again the normal way - twice the
   work. Now items are drawn by the graphics card next to ImmediatelyFast too. 1 128 dropped items + 1 081 orbs, 1.21.1:
-  1.1.7 1 057 fps, 1.1.8 498, now 1 765; 1.20.1: 1.1.8 159, now 261. The picture is the same as before, up to a few
+  1.1.7 1 057 fps, 1.1.8 498, now 1 765. On 1.20.1 entities drawn with transparency also
+  went the slow way next to it: the same items scene with more entities around, 1.1.8 159 fps, now 718 (681 without
+  ImmediatelyFast). The picture is the same as before, up to a few
   pixels of graphics-card rounding.
 - **Entities that a mod adds from another thread go where they belong** (GitHub #4, I3AT5). Some mods react to the
   starting mobs of a newly generated chunk by adding extra mobs straight into the live world from a world-generation
