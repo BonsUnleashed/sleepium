@@ -20,6 +20,10 @@ release changes the API (`dev.lull.api`) or the settings in a way that needs att
   trouble, with or without Sleepium. Now such an entity goes into the chunk being generated, or is added on the server
   thread. Mods that add entities the normal way are not affected. A setting (World generation -> OffThreadEntity), on
   by default.
+- **"Pose stack not empty" crashes name their cause** (GitHub #5). When an entity's rendering leaves a pose pushed
+  (a mod's renderer, or another mod's change to it), the game stops with this error after the entities are drawn,
+  without saying who. Sleepium now writes one line to the log first - "[sleep/opt] pose stack: ..." with the entity,
+  its renderer and the other mods' mixins in that renderer. Nothing else changes.
 - **New setting, off by default: ObservedModSleep** (Ticks & mobs). Mods' machines whose tick Sleepium's analysis
   cannot follow (Industrial Foregoing, Functional Storage, PneumaticCraft...) sleep on what Sleepium observes, as they
   did before 1.1.8. Faster for idle machines; in our checks the result matched vanilla, but it is not proven, so it
