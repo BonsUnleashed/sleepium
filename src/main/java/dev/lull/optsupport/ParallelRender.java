@@ -624,6 +624,7 @@ public final class ParallelRender {
         LevelRendererInvoker inv = (LevelRendererInvoker) lr;
         for (int i = 0; i < size; i++) {
             Job j = QUEUE.get(i);
+            boolean clean = j.pose.clear();   // (PoseStack.clear: only the base pose left)
             if (j.parallel) {
                 // helping instead of waiting: the queued jobs from here on that no worker has taken yet
                 for (int k = i; !j.done && k < size; k++) {
@@ -647,15 +648,53 @@ public final class ParallelRender {
                     }
                     if (merged) parallel++;
                     else sequential++;
+                    if (clean) leakCheck(j);
                     j.entity = null;
                     continue;
                 }
             }
             inv.sleep$renderEntity(j.entity, j.camX, j.camY, j.camZ, j.pt, j.pose, j.buffers);
             sequential++;
+            if (clean) leakCheck(j);
             j.entity = null;
         }
         size = 0;
+    }
+
+    /** entity types whose rendering left a pose pushed (each named once) */
+    private static final java.util.Set<net.minecraft.world.entity.EntityType<?>> LEAKED = new java.util.HashSet<>();
+
+    /**
+     * The frame's pose stack was at its base before this entity and is not after it: its rendering pushed a pose and
+     * did not pop it - vanilla's check after the entity loop then stops the game with "Pose stack not empty" (GitHub
+     * #5), which does not say who. Named here, with the renderer's class and the module (mod) it comes from; nothing
+     * is changed (the stack stays as the renderer left it, as without Sleepium).
+     */
+    private static void leakCheck(Job j) {
+        if (j.pose.clear() || j.entity == null || !LEAKED.add(j.entity.getType())) return;
+        Class<?> r = Minecraft.getInstance().getEntityRenderDispatcher().getRenderer(j.entity).getClass();
+        Module m = r.getModule();
+        System.out.println("[sleep/opt] pose stack: rendering " + net.minecraft.world.entity.EntityType.getKey(j.entity.getType()) + " (" + j.entity.getClass().getName()
+                + ", renderer " + r.getName() + (m.isNamed() ? ", module " + m.getName() : "") + ") left a pose pushed - a following \"Pose stack not empty\" crash comes from it"
+                + mixinsIn(r));
+    }
+
+    /**
+     * Other mods' mixins in a renderer's class and its superclasses (where a mod's change to a vanilla renderer is): the
+     * handler methods Mixin merged into them carry @MixinMerged with the mixin's name.
+     */
+    private static String mixinsIn(Class<?> c) {
+        java.util.Set<String> found = new java.util.TreeSet<>();
+        try {
+            for (; c != null && c != Object.class; c = c.getSuperclass())
+                for (java.lang.reflect.Method m : c.getDeclaredMethods()) {
+                    var mm = m.getAnnotation(org.spongepowered.asm.mixin.transformer.meta.MixinMerged.class);
+                    if (mm != null && !mm.mixin().startsWith("dev.lull.")) found.add(mm.mixin());
+                }
+        } catch (Throwable t) {
+            return "; (mixins: " + t + ")";
+        }
+        return found.isEmpty() ? "" : "; other mods' mixins in the renderer's classes: " + String.join(", ", found);
     }
 
     private static final RenderCache.Recorder VERIFY_REC = new RenderCache.Recorder();
