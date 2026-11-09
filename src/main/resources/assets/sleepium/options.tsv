@@ -145,6 +145,7 @@ lab.opt.VertexSortDirectMixin	chunks	true	VertexSortRadixMixin: the translucent 
 lab.opt.VertexSortRadixMixin	chunks	true	exp/quad-sort (client): carrier only.	
 lab.opt.GenScoutAquiferMixin	worldgen	true	Measurement only (lab.genscout): Aquifer.computeSubstance paths and results.	
 lab.opt.WorldgenAlloc	worldgen	true	World generation without per-call allocation: noise, surface rules, ores, density functions and random sources reuse their buffers.	
+lab.opt.WorldgenColumnMemoMixin	worldgen	true	exp/worldgen-column-memo: climate values that do not depend on height computed once per column of a chunk instead of for every 4x4x4 cell up the column (datapacks without flat_cache markers - JJThunder To The Max: generation ~2x faster; vanilla's own worldgen is marked already, unchanged).	
 lab.opt.WorldgenAllocAp2Mixin	worldgen	true	WorldgenAlloc (Ap2): no members; applying it lets OptMixinPlugin.postApply run ScratchArrays.transform on Ap2.	lab.opt.WorldgenAlloc
 lab.opt.WorldgenAllocDepthMixin	worldgen	true	WorldgenAlloc (randoms): the surface depth's per-column random, reused (see ReusableRandom).	lab.opt.WorldgenAlloc
 lab.opt.WorldgenAllocGradientMixin	worldgen	true	WorldgenAlloc (randoms): the vertical gradient condition's per-block random, reused (see ReusableRandom).	lab.opt.WorldgenAlloc

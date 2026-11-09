@@ -152,6 +152,7 @@
 -Dlab.opt.VertexSortRadixMixin=true
 -Dlab.opt.GenScoutAquiferMixin=true
 -Dlab.opt.WorldgenAlloc=true
+-Dlab.opt.WorldgenColumnMemoMixin=true
 -Dlab.opt.WorldgenAllocAp2Mixin=true
 -Dlab.opt.WorldgenAllocDepthMixin=true
 -Dlab.opt.WorldgenAllocGradientMixin=true

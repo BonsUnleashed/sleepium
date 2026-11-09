@@ -71,6 +71,17 @@ final class GenBench {
                         h = (h ^ id) * 1099511628211L;
                     }
         }
+        // the biome of every quart too (-Dsleep.genbench.biomes=false: blocks only, as before 11-09): a biome that changes
+        // no block would not show in the block states
+        if (!"false".equals(System.getProperty("sleep.genbench.biomes")))
+            for (var section : chunk.getSections())
+                for (int y = 0; y < 4; y++)
+                    for (int z = 0; z < 4; z++)
+                        for (int x = 0; x < 4; x++) {
+                            var b = section.getNoiseBiome(x, y, z);
+                            int id = b.unwrapKey().map(k -> k.location().hashCode()).orElse(0);
+                            h = (h ^ id) * 1099511628211L;
+                        }
         return h;
     }
 
