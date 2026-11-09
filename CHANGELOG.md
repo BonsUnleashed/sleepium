@@ -4,28 +4,30 @@ Versions follow [Semantic Versioning](https://semver.org): a patch release fixes
 release changes the API (`dev.lull.api`) or the settings in a way that needs attention. Jars are named
 `sleepium-<version>+mc<minecraft version>-<loader>.jar` (before 1.1.0 without the loader).
 
-## 1.1.9 - unreleased (draft)
+## 1.1.9 - 2026-11-09
 
-- **Fixed: dropped items were slower next to ImmediatelyFast in 1.1.8** (ImmediatelyFast is in most modpacks). Sleepium
-  prepared items for the graphics card, then could not use its buffers and drew them again the normal way - twice the
-  work. Now items are drawn by the graphics card next to ImmediatelyFast too. 1 128 dropped items + 1 081 orbs, 1.21.1:
-  1.1.7 1 057 fps, 1.1.8 498, now 1 765. On 1.20.1 entities drawn with transparency also
-  went the slow way next to it: the same items scene with more entities around, 1.1.8 159 fps, now 718 (681 without
-  ImmediatelyFast). The picture is the same as before, up to a few
-  pixels of graphics-card rounding.
+- **Fixed: 1.1.8 was slower next to ImmediatelyFast** (and other mods that batch the drawing the same way; ImmediatelyFast
+  is in most modpacks). Sleepium prepared dropped items for the graphics card, could not hand them to that mod's
+  buffers and then drew them again the normal way - twice the work. Now items, and on 1.20.1 also entities drawn with
+  transparency, go to the graphics card next to such mods too, and anything Sleepium adds to a batch is drawn exactly
+  once even when the mod draws that batch in several pieces. 1 128 dropped items + 1 081 experience orbs next to
+  ImmediatelyFast, 1.21.1: 1.1.7 1 057 fps, 1.1.8 498, 1.1.9 1 765. 1.20.1, the same items among more entities: 1.1.8
+  159 fps, 1.1.9 718 (681 without ImmediatelyFast). The picture is the same, up to a few pixels of graphics-card
+  rounding.
 - **Entities that a mod adds from another thread go where they belong** (GitHub #4, I3AT5). Some mods react to the
   starting mobs of a newly generated chunk by adding extra mobs straight into the live world from a world-generation
-  thread (Easy Mob Spawn Control; Cupboard warns "add an entity from offthread"), which can occasionally cause trouble,
-  with or without Sleepium. Now such an entity goes into the chunk being generated, or is added on the server thread.
-  Mods that add entities the normal way are not affected. A setting (World generation -> OffThreadEntity), on by default.
+  thread (Easy Mob Spawn Control; Cupboard warns "add an entity from offthread"), which can occasionally cause
+  trouble, with or without Sleepium. Now such an entity goes into the chunk being generated, or is added on the server
+  thread. Mods that add entities the normal way are not affected. A setting (World generation -> OffThreadEntity), on
+  by default.
 - **New setting, off by default: ObservedModSleep** (Ticks & mobs). Mods' machines whose tick Sleepium's analysis
   cannot follow (Industrial Foregoing, Functional Storage, PneumaticCraft...) sleep on what Sleepium observes, as they
   did before 1.1.8. Faster for idle machines; in our checks the result matched vanilla, but it is not proven, so it
   stays off unless you turn it on.
-- **Checking Sleepium against mods, first steps** (see "Help wanted" in 1.1.8): every block of a mod is placed, fed and
-  drained through the standard item / energy / fluid connections, put to sleep and woken, and compared with vanilla
-  tick by tick; a deliberately broken wake-up must be caught. First results on Industrial Foregoing, Functional
-  Storage, PneumaticCraft and Farmer's Delight: no differences caused by Sleepium.
+- **Checking Sleepium against mods, first steps** (see "Help wanted" in 1.1.8): every block of a mod is placed, fed
+  and drained through the standard item / energy / fluid connections, put to sleep and woken, and compared with
+  vanilla tick by tick; a deliberately broken wake-up must be caught. First results on Industrial Foregoing,
+  Functional Storage, PneumaticCraft and Farmer's Delight: no differences caused by Sleepium.
 
 ## 1.1.8 - 2026-11-08
 
