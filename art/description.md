@@ -38,6 +38,19 @@ Client, entity / block-entity scene (armour stands, item frames, chests, signs, 
 - Intel N100: **39 → 117 fps**, garbage 3 952 → 113 KiB per frame
 - Ryzen 7 5800X + RTX 4070 SUPER: **67 → 1 514 fps**; 300 animated mobs 175 → 1 782 fps
 
+## New in 1.1.9: a fix for ImmediatelyFast
+
+1.1.8 was slower next to ImmediatelyFast (in most modpacks): items were prepared for the graphics card and then drawn
+again the normal way. Fixed - items, and on 1.20.1 also transparent entities, now go to the graphics card next to it:
+
+| 1 128 dropped items + 1 081 experience orbs, next to ImmediatelyFast | Sleepium 1.1.7 | Sleepium 1.1.8 | Sleepium 1.1.9 |
+|---|---:|---:|---:|
+| fps, 1.21.1 | 1 057 | 498 | 1 765 |
+
+Also: entities that a mod adds from a world-generation thread go into the chunk being generated or onto the server
+thread (GitHub #4), and a new setting, off by default, ObservedModSleep - mods' machines that the analysis cannot
+follow sleep on what Sleepium observes, as before 1.1.8.
+
 ## New in 1.1.8: items and experience orbs
 
 Dropped items, items in frames and in mobs' hands are drawn by the graphics card from video memory, and experience
