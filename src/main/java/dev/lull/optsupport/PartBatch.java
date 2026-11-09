@@ -542,7 +542,9 @@ public final class PartBatch {
             return typeOk(t) && capable();
         // experiment (-Dlab.rcache.translucentResident): a sorted (translucent) type, drawn per object back to front
         return TRANSLUCENT_RESIDENT && t.sortOnUpload() && buffers instanceof net.minecraft.client.renderer.MultiBufferSource.BufferSource bs
-                && ((dev.lull.opt.BufferSourceAccessor) bs).sleep$started().get(t) == bb && typeOk(t) && capable();
+                && (((dev.lull.opt.BufferSourceAccessor) bs).sleep$started().get(t) == bb
+                    || OTHER_SOURCES && translucentOther && bs.getClass() != net.minecraft.client.renderer.MultiBufferSource.BufferSource.class)   // ImmediatelyFast
+                && typeOk(t) && capable();
     }
 
     /**
@@ -585,6 +587,9 @@ public final class PartBatch {
 
     /** -Dlab.rcache.fixedResident=false: cached segments of fixed buffers (Sheets) copied on the CPU every frame as before */
     public static final boolean FIXED_RESIDENT = !"false".equals(System.getProperty("lab.rcache.fixedResident"));
+
+    /** translucent residents with another mod's source (ImmediatelyFast); a plain field so the A/B tool can flip it */
+    public static boolean translucentOther = !"false".equals(System.getProperty("lab.rcache.translucentOther"));
 
     public static final boolean TRANSLUCENT_RESIDENT = !"false".equals(System.getProperty("lab.rcache.translucentResident"));
 
@@ -887,6 +892,8 @@ public final class PartBatch {
     public static long persistDraws, persistUploads;
 
     static final class PQueue {
+        /** the frame its records were last drawn in (afterDraw: at most once a frame) */
+        long drawnFrame = -1;
         long cmds = MemoryUtil.nmemAlloc(20L * 256);
         int cap = 256, n, maxIndices;
     }
@@ -1311,18 +1318,29 @@ public final class PartBatch {
         Queue q = QUEUES.get(t), r = RESIDENT.get(t), gq = GEO_QUEUES.get(t), sq = SBB_QUEUES.get(t);
         PQueue pq = PERSIST.isEmpty() ? null : PERSIST.get(t);
         Queue lq = LIT_QUEUES.isEmpty() ? null : LIT_QUEUES.get(t);
-        boolean parts = q != null && q.n > 0, res = r != null && r.n > 0, geo = gq != null && gq.n > 0, sbb = sq != null && sq.n > 0, per = pq != null && pq.n > 0,
-                lit = lq != null && lq.n > 0;
+        // a source that draws a type in more than one piece a frame (ImmediatelyFast): each queue is drawn after the
+        // type's next draw and emptied there, the persistent records once a frame - never twice (translucent ones would
+        // blend twice, opaque ones cost the GPU again)
+        boolean parts = q != null && q.n > 0, res = r != null && r.n > 0, geo = gq != null && gq.n > 0, sbb = sq != null && sq.n > 0,
+                per = pq != null && pq.n > 0 && pq.drawnFrame != frame, lit = lq != null && lq.n > 0;
         if (!parts && !res && !geo && !sbb && !per && !lit) return;
         if (lit) drawQueue(shader, lq, 6);
         if (parts) drawQueue(shader, q, 1);
         if (geo) drawQueue(shader, gq, 3);
         if (sbb) drawQueue(shader, sq, 4);
-        if (per) drawPersistent(shader, pq);
+        if (per) {
+            drawPersistent(shader, pq);
+            pq.drawnFrame = frame;
+        }
         if (res) {
             if (t.sortOnUpload()) sortBackToFront(r);
             drawQueue(shader, r, 2);
         }
+        if (lit) lq.n = 0;
+        if (parts) q.n = 0;
+        if (geo) gq.n = 0;
+        if (sbb) sq.n = 0;
+        if (res) r.n = 0;
         com.mojang.blaze3d.vertex.BufferUploader.invalidate();   // vanilla's bound buffer is no longer bound
         GL30C.glBindVertexArray(0);
     }
