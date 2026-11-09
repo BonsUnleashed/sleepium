@@ -56,6 +56,9 @@ config="sleepium-stimulate-test.mixins.json"
 config="sleepium-offthread-test.mixins.json"
 
 [[mixins]]
+config="sleepium-poseleak-test.mixins.json"
+
+[[mixins]]
 config="sleepium-geo.mixins.json"
 [[mixins]]
 config="sleepium-flywheel.mixins.json"
