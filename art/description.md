@@ -38,6 +38,18 @@ Client, entity / block-entity scene (armour stands, item frames, chests, signs, 
 - Intel N100: **39 → 117 fps**, garbage 3 952 → 113 KiB per frame
 - Ryzen 7 5800X + RTX 4070 SUPER: **67 → 1 514 fps**; 300 animated mobs 175 → 1 782 fps
 
+## New in 1.1.11: tall-world datapacks generate up to 2x faster
+
+Datapacks such as JJThunder To The Max make the game recompute "climate" values that do not depend on height for every
+4x4x4 cell of a very tall column. Sleepium now reads the datapack's functions, finds those parts and computes them once
+per column - the same world, block for block and biome for biome.
+
+| JJThunder To The Max + Chunky, chunks per second | vanilla | Sleepium 1.1.10 | Sleepium 1.1.11 |
+|---|---:|---:|---:|
+| 1.21.1 | 37 | 108-116 | 195-233 |
+
+A normal world and Biomes O' Plenty are unchanged (their climate is already computed once per column).
+
 ## New in 1.1.10: a fix for world generation far out
 
 On 1.21.1, generating new land far from the world's centre was slower with Sleepium than without it: each new mob's

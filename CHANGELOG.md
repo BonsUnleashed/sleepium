@@ -4,6 +4,18 @@ Versions follow [Semantic Versioning](https://semver.org): a patch release fixes
 release changes the API (`dev.lull.api`) or the settings in a way that needs attention. Jars are named
 `sleepium-<version>+mc<minecraft version>-<loader>.jar` (before 1.1.0 without the loader).
 
+## 1.1.11 - 2026-11-09
+
+- **World generation with datapacks like JJThunder To The Max: up to 2x faster.** To pick a biome, the game works out a
+  few "climate" values for every 4x4x4 block cell. Most of them do not depend on height, and vanilla's own world
+  generation marks those so they are computed once per column. Datapacks that leave the mark out make the game compute
+  them again for every cell up the column - in JJThunder's 2 000-block-tall world that is about 500 times per column,
+  over 60 % of all generation time. Sleepium now finds the parts that do not depend on height by reading the datapack's
+  own functions and computes them once per column. The result is the same world, block for block and biome for biome
+  (checked by comparing every generated chunk with the change on and off). JJThunder with Chunky: 108-116 -> 195-233
+  chunks per second (vanilla 37). A normal world and Biomes O' Plenty are already marked: no change there. A setting
+  (World generation -> WorldgenColumnMemoMixin), on by default; both 1.21.1 and 1.20.1.
+
 ## 1.1.10 - 2026-11-09
 
 - **Fixed: world generation far from the world's centre was slower than vanilla on 1.21.1.** Each mob placed in a new
