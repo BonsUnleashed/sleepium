@@ -25,6 +25,9 @@ dev/lull/opt/LevelRendererVisibleAccessor.java
 # culling and indirect commands, part batching's materials / coatings, the 1.21 VertexConsumer recorder, light boxes,
 # the bulk vertex path), and the mixins of pending renderer parts (QuadSort, ParallelRender)
 # the event bus step: the event-site rewrite (its mixins are pending above)
+# 1.21-only target: NeoForge's ClientHooks.isBlockEntityRendererVisible (the default box new AABB(pos)); Forge 1.20.1
+# tests frustum.isVisible(be.getRenderBoundingBox()), whose default box comes from the collision shape: another check
+dev/lull/opt/BlockEntityCullNoAllocMixin.java
 # 1.21-only target: UnloadRecheckMixin fixes 1.21's stop-time spin (isReadyForSaving re-queued at once); 1.20.1's
 # scheduleUnload re-attaches to the new getChunkToSave() future, no spin - on 1.20.1 it would only defer unloads
 dev/lull/opt/UnloadRecheckMixin.java

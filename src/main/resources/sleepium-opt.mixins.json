@@ -7,8 +7,6 @@
   "overwrites": { "conformVisibility": true },
   "refmap": "sleepium.refmap.json",
   "mixins": [
-    "BlockEntityCullNoAllocMixin",
-    "VoxelShapeBoundsMixin",
     "OffThreadEntityAddMixin",
     "OffThreadEntityRegionMixin",
     "GoalSelectorMixin",
