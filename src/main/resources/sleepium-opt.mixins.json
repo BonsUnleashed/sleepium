@@ -65,6 +65,7 @@
     "WorldgenShareRegionBiomeMixin",
     "WorldgenShareHolderMixin",
     "WorldgenShareCoordinateMixin",
+    "WorldgenColumnMemoMixin",
     "WorldgenShareSlicesMixin",
     "PersistentPoolsMixin",
     "LabPoolsMixin",
