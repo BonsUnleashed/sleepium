@@ -107,7 +107,8 @@ public final class OptMixinPlugin implements IMixinConfigPlugin {
                 || simple.equals("ItemFrameOffsetMixin") || simple.equals("EntityLightNoAllocMixin") || simple.equals("BlockEntityCullNoAllocMixin") || simple.equals("VoxelShapeBoundsMixin")
                 || simple.equals("UtilMemoizeMixin") || simple.equals("NameTagSkipMixin") || simple.equals("VertexNoAllocMixin"))
             on = Boolean.getBoolean("lab.opt.all") || Boolean.getBoolean("lab.opt.FrameGarbageMixin");
-        if (simple.equals("BlockEntityCullNoAllocMixin") && dev.lull.optsupport.MixinTouch.touched("net/minecraft/world/level/block/entity/BlockEntity", "getRenderBoundingBox"))
+        if (simple.equals("BlockEntityCullNoAllocMixin") && ("false".equals(System.getProperty("lab.opt.BlockEntityCullNoAllocMixin"))   // (its own off switch, for A/B)
+                || dev.lull.optsupport.MixinTouch.touched("net/minecraft/world/level/block/entity/BlockEntity", "getRenderBoundingBox")))
             on = false;   // (1.20.1: it becomes BlockEntity's own getRenderBoundingBox - not next to another mod's change of it)
         if (simple.equals("ClientLightCallbackMixin") || simple.equals("ClientLevelLightQueueAccessor") || simple.equals("ClientLightJoinMixin"))
             on = Boolean.getBoolean("lab.opt.all") || Boolean.getBoolean("lab.opt.ClientLightAsyncMixin");
