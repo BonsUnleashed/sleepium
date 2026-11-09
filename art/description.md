@@ -48,7 +48,7 @@ move from the centre to its place made Sleepium check everything in between. Fix
 | 1.21.1 | 55 | 20-34 | 123-126 |
 | next to ModernFix, Fast Noise and Lithostitched | 66-81 (those mods alone) | 31-33 | 105-126 |
 
-Also: blocks moved by pistons no longer show old light for a frame, and on 1.20.1 they are drawn from a cache as on
+Long teleports were slowed the same way (less) and are fixed too. Also: blocks moved by pistons no longer show old light for a frame, and on 1.20.1 they are drawn from a cache as on
 1.21.1.
 
 ## New in 1.1.9: a fix for ImmediatelyFast

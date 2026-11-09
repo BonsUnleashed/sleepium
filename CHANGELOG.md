@@ -11,7 +11,8 @@ release changes the API (`dev.lull.api`) or the settings in a way that needs att
   two points to see who that move might wake. Far out that is a huge area: 64 000 blocks from the centre, generation
   ran at about half vanilla's speed (20-34 chunks per second against 55). Now only the old and the new place are looked
   at: 123-126 chunks per second there, and next to ModernFix, Fast Noise and Lithostitched 105-126 (those mods alone:
-  66-81). Long teleports and portals were affected the same way. 1.20.1 did not show the slowdown in the same test; it
+  66-81). Long teleports were slowed the same way, less (20 armour stands sent 28 000 blocks: about one extra server
+  tick per teleport; the farther, the more), now they are not. 1.20.1 did not show the slowdown in the same test; it
   gets the same fix.
 - **Fixed: blocks moved by pistons could show the light of a moment ago for a frame.** Their drawing is cached, and the
   cache learned about light changes only after the new light was already in use. Now it knows before. (In our check
