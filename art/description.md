@@ -38,6 +38,19 @@ Client, entity / block-entity scene (armour stands, item frames, chests, signs, 
 - Intel N100: **39 → 117 fps**, garbage 3 952 → 113 KiB per frame
 - Ryzen 7 5800X + RTX 4070 SUPER: **67 → 1 514 fps**; 300 animated mobs 175 → 1 782 fps
 
+## New in 1.1.10: a fix for world generation far out
+
+On 1.21.1, generating new land far from the world's centre was slower with Sleepium than without it: each new mob's
+move from the centre to its place made Sleepium check everything in between. Fixed:
+
+| 576 new chunks 64 000 blocks from the centre, chunks per second | vanilla | Sleepium 1.1.9 | Sleepium 1.1.10 |
+|---|---:|---:|---:|
+| 1.21.1 | 55 | 20-34 | 123-126 |
+| next to ModernFix, Fast Noise and Lithostitched | 66-81 (those mods alone) | 31-33 | 105-126 |
+
+Also: blocks moved by pistons no longer show old light for a frame, and on 1.20.1 they are drawn from a cache as on
+1.21.1.
+
 ## New in 1.1.9: a fix for ImmediatelyFast
 
 1.1.8 was slower next to ImmediatelyFast (in most modpacks): items were prepared for the graphics card and then drawn

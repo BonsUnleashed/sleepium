@@ -1,6 +1,7 @@
 {
   "homepage": "https://modrinth.com/mod/sleepium",
   "1.21.1": {
+    "1.1.10": "Fixes world generation far from the centre being slower than vanilla (64 000 blocks out: 20-34 -> 123-126 chunks/s; vanilla 55), the same for long teleports; moving blocks' light a frame late.",
     "1.1.9": "Fixes 1.1.8 being slower next to ImmediatelyFast (dropped items 498 -> 1 765 fps); mods' entities added from a world-generation thread go where they belong; ObservedModSleep (off by default).",
     "1.1.8": "Dropped items drawn by the graphics card (about 2x fps with many items), cheaper collisions for orbs and items (exact), a documented sleepium.properties for servers, an ASM fix.",
     "1.1.7": "Fixes a crash when drawing entities with EntityBatch switched off; the same hooks fix as 1.20.1.",
@@ -17,12 +18,13 @@
     "1.0.0": "The first public release."
   },
   "promos": {
-    "1.21.1-latest": "1.1.9",
-    "1.21.1-recommended": "1.1.9",
-    "1.20.1-latest": "1.1.9",
-    "1.20.1-recommended": "1.1.9"
+    "1.21.1-latest": "1.1.10",
+    "1.21.1-recommended": "1.1.10",
+    "1.20.1-latest": "1.1.10",
+    "1.20.1-recommended": "1.1.10"
   },
   "1.20.1": {
+    "1.1.10": "The same fixes as 1.21.1; blocks moved by pistons drawn from a cache (790-979 -> 1 515-1 552 fps on a piston scene).",
     "1.1.9": "The same as 1.21.1: next to ImmediatelyFast items and transparent entities go to the graphics card again (159 -> 718 fps on an items scene); entities added from a world-generation thread; ObservedModSleep (off).",
     "1.1.8": "The same as 1.21.1: items drawn by the graphics card, cheaper collisions, the config file for servers; the settings screen shows the 56 missing switches.",
     "1.1.7": "Fixes the server reacting up to a tick late next to ModernFix, and a startup crash next to some mods (Immersive Fixes).",

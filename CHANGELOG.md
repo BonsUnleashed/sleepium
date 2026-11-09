@@ -4,16 +4,20 @@ Versions follow [Semantic Versioning](https://semver.org): a patch release fixes
 release changes the API (`dev.lull.api`) or the settings in a way that needs attention. Jars are named
 `sleepium-<version>+mc<minecraft version>-<loader>.jar` (before 1.1.0 without the loader).
 
-## 1.1.10 - unreleased (draft)
+## 1.1.10 - 2026-11-09
 
 - **Fixed: world generation far from the world's centre was slower than vanilla on 1.21.1.** Each mob placed in a new
   chunk is first created at the world's centre and then moved to its place; Sleepium looked at everything between the
   two points to see who that move might wake. Far out that is a huge area: 64 000 blocks from the centre, generation
   ran at about half vanilla's speed (20-34 chunks per second against 55). Now only the old and the new place are looked
-  at: 123-126 chunks per second there, and next to ModernFix, Fast Noise and Lithostitched 105-126 (they alone: 66-81).
-  Long teleports and portals were affected the same way. 1.20.1 did not show the slowdown in the same test; it gets the
-  same fix.
-- 1.20.1: blocks pushed by pistons and falling blocks are drawn from a cache, as on 1.21.1 (a scene with many moving
+  at: 123-126 chunks per second there, and next to ModernFix, Fast Noise and Lithostitched 105-126 (those mods alone:
+  66-81). Long teleports and portals were affected the same way. 1.20.1 did not show the slowdown in the same test; it
+  gets the same fix.
+- **Fixed: blocks moved by pistons could show the light of a moment ago for a frame.** Their drawing is cached, and the
+  cache learned about light changes only after the new light was already in use. Now it knows before. (In our check
+  the mismatches fell 17 times on 1.21.1 and 4 times on 1.20.1; what is left comes from the light being computed in
+  the background while a frame is drawn.)
+- 1.20.1: blocks pushed by pistons and falling blocks are drawn from that cache, as on 1.21.1 (a scene with many moving
   pistons: 790-979 -> 1 515-1 552 fps).
 
 ## 1.1.9 - 2026-11-09
