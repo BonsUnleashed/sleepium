@@ -1,7 +1,6 @@
 package dev.lull.optsupport;
 
 import java.lang.reflect.Constructor;
-import java.lang.reflect.RecordComponent;
 import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
@@ -42,6 +41,9 @@ public final class ColumnMemo {
             out = new DensityFunction[] {rewrite(r.temperature()), rewrite(r.vegetation()), rewrite(r.continents()), rewrite(r.erosion()),
                     rewrite(r.depth()), rewrite(r.ridges())};
             ROUTERS.put(r, out);
+            if (Boolean.getBoolean("lab.colmemo.why"))   // -Dlab.colmemo.why: how each climate function's tree was read
+                for (DensityFunction f : new DensityFunction[] {r.temperature(), r.vegetation(), r.continents(), r.erosion(), r.depth(), r.ridges()})
+                    System.out.println("[sleep/opt] column memo why: " + why(f, 0));
             routers++;
             System.out.println("[sleep/opt] column memo: " + (marked - before) + " climate subtrees computed once per column");
         }
@@ -49,6 +51,17 @@ public final class ColumnMemo {
     }
 
     // ------------------------------------------------------------------ the analysis (by structure, once per router)
+
+    private static String why(DensityFunction df, int depth) {
+        StringBuilder sb = new StringBuilder(df.getClass().getName().replace("net.minecraft.world.level.levelgen.", "")).append(df instanceof Record ? "(rec" : "(")
+                .append(yFree(df) ? " yfree" : "").append(readsNoise(df) ? " noise" : "").append(")");
+        if (depth < 2) {
+            sb.append("[");
+            for (DensityFunction c : children(df)) sb.append(why(c, depth + 1)).append(", ");
+            sb.append("]");
+        }
+        return sb.toString();
+    }
 
     /** the kinds known not to read y themselves (their children decide) */
     private static boolean pureOfY(String kind) {
@@ -68,11 +81,11 @@ public final class ColumnMemo {
     static boolean yFree(DensityFunction df) {
         if (df instanceof Mark) return true;
         String k = kind(df);
-        if (k.equals("Noise")) return component(df, "yScale") instanceof Double d && d == 0.0;
+        if (k.equals("Noise")) return nth(df, double.class, 1) instanceof Double d && d == 0.0;   // (xzScale, yScale)
         if (k.equals("ShiftedNoise"))
-            return component(df, "yScale") instanceof Double d && d == 0.0 && children(df).stream().allMatch(ColumnMemo::yFree);
+            return nth(df, double.class, 1) instanceof Double d && d == 0.0 && children(df).stream().allMatch(ColumnMemo::yFree);
         if (k.equals("Marker")) {
-            String type = String.valueOf(component(df, "type"));
+            String type = String.valueOf(nthEnum(df));
             if (type.equals("FlatCache") || type.equals("Cache2D")) return true;
             if (type.equals("CacheOnce")) return children(df).stream().allMatch(ColumnMemo::yFree);
             return false;
@@ -95,13 +108,13 @@ public final class ColumnMemo {
     /** a vanilla 2D cache already (flat_cache / cache_2d): left alone */
     private static boolean cached2D(DensityFunction df) {
         if (!kind(df).equals("Marker")) return false;
-        String type = String.valueOf(component(df, "type"));
+        String type = String.valueOf(nthEnum(df));
         return type.equals("FlatCache") || type.equals("Cache2D");
     }
 
     /** the largest y-free subtrees that read noise, marked; the rest rebuilt around them */
     static DensityFunction rewrite(DensityFunction df) {
-        if (kind(df).equals("HolderHolder")) return rewrite(((Holder<DensityFunction>) component(df, "function")).value());
+        if (kind(df).equals("HolderHolder")) return rewrite(((Holder<DensityFunction>) nth(df, Holder.class, 0)).value());
         if (cached2D(df)) return df;
         if (yFree(df) && readsNoise(df)) {
             marked++;
@@ -114,14 +127,12 @@ public final class ColumnMemo {
     /** a record of density functions with each density function component rewritten (canonical constructor) */
     private static DensityFunction rebuild(DensityFunction df) {
         try {
-            RecordComponent[] rc = df.getClass().getRecordComponents();
+            java.lang.reflect.Field[] rc = fields(df.getClass());
             Object[] args = new Object[rc.length];
             Class<?>[] types = new Class<?>[rc.length];
             boolean changed = false;
             for (int i = 0; i < rc.length; i++) {
-                var acc = rc[i].getAccessor();
-                acc.setAccessible(true);
-                Object v = acc.invoke(df);
+                Object v = rc[i].get(df);
                 types[i] = rc[i].getType();
                 if (v instanceof DensityFunction d && DensityFunction.class.isAssignableFrom(types[i])) {
                     DensityFunction w = rewrite(d);
@@ -139,39 +150,68 @@ public final class ColumnMemo {
         }
     }
 
-    /** a record's component by name (null when there is none) */
-    private static Object component(Object o, String name) {
+    /**
+     * A record's n-th component of the given type (null when there is none). By type and position, not by name: 1.20.1's
+     * production records carry SRG component names.
+     */
+    private static Object nth(Object o, Class<?> type, int n) {
         if (!(o instanceof Record)) return null;
         try {
-            for (RecordComponent c : o.getClass().getRecordComponents()) {
-                if (!c.getName().equals(name)) continue;
-                var acc = c.getAccessor();
-                acc.setAccessible(true);
-                return acc.invoke(o);
+            for (java.lang.reflect.Field c : fields(o.getClass())) {
+                if (!type.isAssignableFrom(c.getType()) || n-- > 0) continue;
+                return c.get(o);
             }
         } catch (ReflectiveOperationException | RuntimeException ignored) {
         }
         return null;
     }
 
+    /** a record's first enum component (a Marker's type) */
+    private static Object nthEnum(Object o) {
+        if (!(o instanceof Record)) return null;
+        try {
+            for (java.lang.reflect.Field c : fields(o.getClass())) {
+                if (!c.getType().isEnum()) continue;
+                return c.get(o);
+            }
+        } catch (ReflectiveOperationException | RuntimeException ignored) {
+        }
+        return null;
+    }
+
+    /**
+     * A record's component fields in component order (its non-static fields), accessible. Fields, not accessors: 1.20.1's
+     * production renames a record's accessor methods apart from its component names (RecordComponent.getAccessor finds
+     * nothing there).
+     */
+    private static java.lang.reflect.Field[] fields(Class<?> c) {
+        return FIELDS.computeIfAbsent(c, k -> {
+            java.util.ArrayList<java.lang.reflect.Field> out = new java.util.ArrayList<>();
+            for (java.lang.reflect.Field f : k.getDeclaredFields()) {
+                if (java.lang.reflect.Modifier.isStatic(f.getModifiers())) continue;
+                f.setAccessible(true);
+                out.add(f);
+            }
+            return out.toArray(new java.lang.reflect.Field[0]);
+        });
+    }
+
+    private static final Map<Class<?>, java.lang.reflect.Field[]> FIELDS = new java.util.concurrent.ConcurrentHashMap<>();
+
     /** the density functions a node reads: its record components, a spline's coordinates, a holder's value */
     private static List<DensityFunction> children(DensityFunction df) {
         java.util.ArrayList<DensityFunction> out = new java.util.ArrayList<>();
         if (kind(df).equals("HolderHolder")) {
-            out.add(((Holder<DensityFunction>) component(df, "function")).value());
+            out.add(((Holder<DensityFunction>) nth(df, Holder.class, 0)).value());
             return out;
         }
         if (kind(df).equals("Spline")) {
-            splineCoordinates(component(df, "spline"), out);
+            splineCoordinates(nth(df, Object.class, 0), out);   // its only component
             return out;
         }
         if (!(df instanceof Record)) return out;
         try {
-            for (RecordComponent c : df.getClass().getRecordComponents()) {
-                var acc = c.getAccessor();
-                acc.setAccessible(true);
-                if (acc.invoke(df) instanceof DensityFunction d) out.add(d);
-            }
+            for (java.lang.reflect.Field c : fields(df.getClass())) if (c.get(df) instanceof DensityFunction d) out.add(d);
         } catch (ReflectiveOperationException | RuntimeException e) {
             out.add(new Unknown());   // unreadable: counts as reading y
         }
@@ -181,13 +221,12 @@ public final class ColumnMemo {
     /** CubicSpline: a Multipoint's coordinate function and its values' splines; a Constant has none */
     private static void splineCoordinates(Object spline, List<DensityFunction> out) {
         if (!(spline instanceof Record)) return;
-        Object coord = component(spline, "coordinate");
-        if (coord != null) {
-            Object f = component(coord, "function");
-            if (f instanceof Holder<?> h && h.value() instanceof DensityFunction d) out.add(d);
-            else out.add(new Unknown());
-        }
-        if (component(spline, "values") instanceof List<?> values) for (Object v : values) splineCoordinates(v, out);
+        if (!kind(spline).equals("Multipoint")) return;   // CubicSpline.Constant: no coordinate
+        Object coord = nth(spline, Object.class, 0);   // Multipoint(coordinate, locations, values, derivatives, min, max)
+        Object f = coord == null ? null : nth(coord, Holder.class, 0);   // Spline.Coordinate(function)
+        if (f instanceof Holder<?> h && h.value() instanceof DensityFunction d) out.add(d);
+        else out.add(new Unknown());
+        if (nth(spline, List.class, 0) instanceof List<?> values) for (Object v : values) splineCoordinates(v, out);
     }
 
     /** stands for something the analysis cannot read: never y-free */
